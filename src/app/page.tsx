@@ -1,8 +1,23 @@
-import { Button, Card, Badge } from '@/components/ui';
+'use client';
+
+import { Button, Card, Badge, SearchBar, Navigation } from '@/components/ui';
 
 export default function Home() {
+  const handleSearch = (query: string, filters: string[]) => {
+    console.log('Search:', { query, filters });
+    // TODO: Implement search logic
+  };
+
+  const handleNavigate = (section: 'directory' | 'admin' | 'user' | 'home') => {
+    console.log('Navigate to:', section);
+    // TODO: Implement navigation
+  };
+
   return (
     <main className="min-h-screen">
+      {/* Navigation */}
+      <Navigation onNavigate={handleNavigate} />
+
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-heritage-midnight via-heritage-royal to-heritage-forest text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
@@ -18,7 +33,7 @@ export default function Home() {
               built for community, and inspired by the rich traditions of Black American
               and African history.
             </p>
-            <div className="flex flex-wrap justify-center gap-4">
+            <div className="flex flex-wrap justify-center gap-4 mb-12">
               <Button variant="primary" size="lg">
                 Explore Businesses
               </Button>
@@ -26,6 +41,12 @@ export default function Home() {
                 List Your Business
               </Button>
             </div>
+
+            {/* Search Bar with Category Filters */}
+            <SearchBar
+              onSearch={handleSearch}
+              placeholder="Search for restaurants, services, shops, and more..."
+            />
           </div>
         </div>
       </section>
