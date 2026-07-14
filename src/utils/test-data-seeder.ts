@@ -19,12 +19,16 @@ export interface TestBusiness {
   description?: string;
 }
 
+export type UserRole = "customer" | "business_owner" | "admin";
+
 export interface TestUser {
   id?: string;
   email?: string;
   firstName: string;
   lastName: string;
   formattedEmail: string;
+  role: UserRole;
+  associatedBusinessId?: string; // For business owners: links to a TestBusiness
 }
 
 export interface TestSeedData {
@@ -65,7 +69,7 @@ export function isTestEmail(email: string): boolean {
 }
 
 /**
- * Generates sample test business data
+ * Generates sample test business data with IDs
  */
 export function generateTestBusinesses(count: number = 5): TestBusiness[] {
   const businessTemplates = [
@@ -85,6 +89,7 @@ export function generateTestBusinesses(count: number = 5): TestBusiness[] {
     const name = `${template}${suffix}`;
 
     return {
+      id: `biz-${i + 1}`,
       name,
       formattedName: formatBusinessName(name),
       description: `Test business - ${name}`,
@@ -93,9 +98,13 @@ export function generateTestBusinesses(count: number = 5): TestBusiness[] {
 }
 
 /**
- * Generates sample test user data
+ * Generates sample test user data with role assignments
+ * Default distribution: customers, business_owners, admin per AC requirements
  */
-export function generateTestUsers(count: number = 5): TestUser[] {
+export function generateTestUsers(count: number = 5, businesses?: TestBusiness[]): TestUser[] {
+  // Default role distribution: 2 customers, 2 business owners, 1 admin
+  const roleDistribution: UserRole[] = ["customer", "customer", "business_owner", "business_owner", "admin"];
+
   const userTemplates = [
     { first: "John", last: "Doe" },
     { first: "Jane", last: "Smith" },
@@ -108,25 +117,38 @@ export function generateTestUsers(count: number = 5): TestUser[] {
     const template = userTemplates[i % userTemplates.length];
     const suffix = count > userTemplates.length ? `${i + 1}` : "";
     const fullName = `${template.first}${suffix} ${template.last}`;
+    const role = roleDistribution[i % roleDistribution.length];
 
-    return {
+    const user: TestUser = {
       firstName: template.first,
       lastName: template.last,
       formattedEmail: formatUserEmail(fullName),
+      role,
     };
+
+    // Associate business owners with businesses
+    if (role === "business_owner" && businesses && businesses.length > 0) {
+      const businessIndex = i % businesses.length;
+      user.associatedBusinessId = businesses[businessIndex].id;
+    }
+
+    return user;
   });
 }
 
 /**
- * Generates complete test seed data
+ * Generates complete test seed data with role associations
+ * Business owners are automatically associated with seeded businesses
  */
 export function generateTestSeedData(
   businessCount: number = 5,
   userCount: number = 5
 ): TestSeedData {
+  const businesses = generateTestBusinesses(businessCount);
+  const users = generateTestUsers(userCount, businesses);
   return {
-    businesses: generateTestBusinesses(businessCount),
-    users: generateTestUsers(userCount),
+    businesses,
+    users,
   };
 }
 
