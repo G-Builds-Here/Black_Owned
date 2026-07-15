@@ -30,3 +30,9 @@ export type { TabsProps, Tab } from './Tabs';
 
 export { Accordion, AccordionTrigger, AccordionContent } from './Accordion';
 export type { AccordionProps, AccordionItem } from './Accordion';
+
+export { default as BusinessCard } from './BusinessCard';
+export type { BusinessCardProps, Business } from './BusinessCard';
+
+export { default as FilterBar } from './FilterBar';
+export type { FilterBarProps, FilterOption, SortOption } from './FilterBar';
