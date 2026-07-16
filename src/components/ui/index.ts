@@ -36,3 +36,9 @@ export type { BusinessCardProps, Business } from './BusinessCard';
 
 export { default as FilterBar } from './FilterBar';
 export type { FilterBarProps, FilterOption, SortOption } from './FilterBar';
+
+export { Carousel } from './Carousel';
+export type { CarouselProps } from './Carousel';
+
+export { ReviewList } from './Review';
+export type { Review, ReviewListProps } from './Review';

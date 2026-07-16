@@ -256,6 +256,7 @@ export default function DirectoryPage() {
                 onViewDetails={handleViewDetails}
                 onSave={handleSave}
                 onShare={handleShare}
+                enableLink={true}
               />
             ))}
           </div>
