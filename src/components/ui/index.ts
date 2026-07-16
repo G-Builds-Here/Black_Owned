@@ -1,6 +1,12 @@
 export { default as Button } from './Button';
 export type { ButtonProps } from './Button';
 
+export { StarRating } from './StarRating';
+export type { StarRatingProps } from './StarRating';
+
+export { default as VerifiedBadge } from './VerifiedBadge';
+export type { VerifiedBadgeProps } from './VerifiedBadge';
+
 export { default as Card } from './Card';
 export type { CardProps } from './Card';
 
