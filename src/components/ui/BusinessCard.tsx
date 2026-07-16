@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import Card from './Card';
 import Badge from './Badge';
 import Button from './Button';
@@ -23,6 +24,7 @@ export interface BusinessCardProps {
   onViewDetails?: (businessId: string) => void;
   onSave?: (businessId: string) => void;
   onShare?: (businessId: string) => void;
+  enableLink?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export default function BusinessCard({
   onViewDetails,
   onSave,
   onShare,
+  enableLink,
 }: BusinessCardProps) {
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating);
@@ -80,7 +83,14 @@ export default function BusinessCard({
   };
 
   return (
-    <Card variant="elevated" padding="none" clickable className="h-full flex flex-col">
+    <Card
+      variant="elevated"
+      padding="none"
+      clickable
+      className="h-full flex flex-col"
+      as={enableLink ? Link : 'div'}
+      href={enableLink ? `/business/${business.id}` : undefined}
+    >
       {/* Image */}
       <div className="relative aspect-video overflow-hidden rounded-t-lg bg-neutral-200">
         {business.imageUrl ? (

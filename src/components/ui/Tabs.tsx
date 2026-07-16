@@ -168,7 +168,22 @@ interface TabPanelProps extends HTMLAttributes<HTMLDivElement> {
 
 const TabPanel = forwardRef<HTMLDivElement, TabPanelProps>(
   ({ value, children, className = '', ...props }, ref) => {
-    const { selectedKey } = useContext(TabsContext)!;
+    const context = useContext(TabsContext);
+
+    // If context is null, render children without tab panel behavior
+    if (!context) {
+      return (
+        <div
+          ref={ref}
+          className={className}
+          {...props}
+        >
+          {children}
+        </div>
+      );
+    }
+
+    const { selectedKey } = context;
 
     if (selectedKey !== value) return null;
 
