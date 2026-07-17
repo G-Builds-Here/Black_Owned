@@ -1,0 +1,77 @@
+/*
+ * ChatBubble Component Styles
+ *
+ * Cultural design elements:
+ * - Warm earth-tone backgrounds for received messages
+ * - Gold accent borders for sent messages celebrating voice
+ * - Subtle pattern details referencing textile traditions
+ */
+
+.chatBubble {
+  max-width: 80%;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  position: relative;
+  margin-bottom: var(--spacing-md);
+}
+
+.sent {
+  align-self: flex-end;
+  background: linear-gradient(135deg, var(--color-indigo-500) 0%, var(--color-indigo-600) 100%);
+  color: white;
+  border-bottom-right-radius: var(--radius-sm);
+  border: 2px solid var(--color-gold-400);
+}
+
+.received {
+  align-self: flex-start;
+  background: linear-gradient(135deg, var(--color-earth-sand) 0%, var(--color-earth-clay) 100%);
+  color: var(--color-neutral-800);
+  border-bottom-left-radius: var(--radius-sm);
+  border: 2px solid var(--color-primary-300);
+}
+
+.senderName {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+  opacity: 0.9;
+}
+
+.sent .senderName {
+  color: var(--color-gold-200);
+}
+
+.received .senderName {
+  color: var(--color-neutral-700);
+}
+
+.bubbleContent p {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.sent .bubbleContent p {
+  color: white;
+}
+
+.received .bubbleContent p {
+  color: var(--color-neutral-800);
+}
+
+.timestamp {
+  display: block;
+  font-size: 0.625rem;
+  margin-top: var(--spacing-xs);
+  opacity: 0.7;
+  text-align: right;
+}
+
+.sent .timestamp {
+  color: var(--color-gold-200);
+}
+
+.received .timestamp {
+  color: var(--color-neutral-600);
+}

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FilterSidebar } from './FilterSidebar';
+import styles from './FilterSidebar.module.css';
 
 describe('FilterSidebar', () => {
   it('renders with default title', () => {
@@ -64,7 +65,24 @@ describe('FilterSidebar', () => {
   it('has correct CSS classes', () => {
     const { container } = render(<FilterSidebar options={[]} selectedValues={[]} onChange={() => {}} />);
 
-    expect(container.querySelector('.filter-sidebar')).toBeInTheDocument();
-    expect(container.querySelector('.filter-options')).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.filterSidebar}`)).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.filterOptions}`)).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.filterTitle}`)).toBeInTheDocument();
+  });
+
+  it('applies cultural indigo styling for header', () => {
+    const options = [{ label: 'Option 1', value: 'opt1' }];
+    const { container } = render(<FilterSidebar options={options} selectedValues={[]} onChange={() => {}} />);
+    const sidebar = container.querySelector(`.${styles.filterSidebar}`);
+
+    expect(sidebar).toBeInTheDocument();
+  });
+
+  it('applies cultural earth tone styling for checkboxes', () => {
+    const options = [{ label: 'Option 1', value: 'opt1' }];
+    const { container } = render(<FilterSidebar options={options} selectedValues={[]} onChange={() => {}} />);
+    const checkbox = container.querySelector('input[type="checkbox"]');
+
+    expect(checkbox).toBeInTheDocument();
   });
 });

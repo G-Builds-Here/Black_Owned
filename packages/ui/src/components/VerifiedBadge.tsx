@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './VerifiedBadge.module.css';
 
 export interface VerifiedBadgeProps {
   verified?: boolean;
@@ -10,9 +11,9 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
   label,
 }) => {
   return (
-    <span className={`verified-badge ${verified ? 'verified' : 'unverified'}`}>
+    <span className={`${styles.verifiedBadge} ${verified ? styles.verified : styles.unverified}`}>
       {verified ? '✓' : '○'}
-      {label && <span className="badge-label">{label}</span>}
+      {label && <span className={styles.badgeLabel}>{label}</span>}
     </span>
   );
 };

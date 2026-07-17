@@ -1,0 +1,62 @@
+/*
+ * NotificationBanner Component Styles
+ *
+ * Cultural design elements:
+ * - Warm color palette for notifications
+ * - Gold accent borders celebrating important messages
+ * - Professional, accessible design
+ */
+
+.notificationBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  border-left: 4px solid;
+}
+
+.info {
+  background: linear-gradient(135deg, var(--color-indigo-50) 0%, var(--color-indigo-100) 100%);
+  border-left-color: var(--color-indigo-500);
+  color: var(--color-indigo-900);
+}
+
+.success {
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  border-left-color: var(--color-success);
+  color: #1B5E20;
+}
+
+.warning {
+  background: linear-gradient(135deg, var(--color-gold-100) 0%, var(--color-gold-200) 100%);
+  border-left-color: var(--color-warning);
+  color: #7C4D00;
+}
+
+.error {
+  background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+  border-left-color: var(--color-error);
+  color: #B71C1C;
+}
+
+.notificationMessage {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.notificationClose {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.notificationClose:hover {
+  opacity: 1;
+}
