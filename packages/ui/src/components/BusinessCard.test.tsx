@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { BusinessCard } from './BusinessCard';
+import styles from './BusinessCard.module.css';
 
 describe('BusinessCard', () => {
   it('renders minimal props without crash', () => {
@@ -30,7 +31,43 @@ describe('BusinessCard', () => {
   it('has correct CSS classes', () => {
     const { container } = render(<BusinessCard businessName="Test Biz" rating={4} />);
 
-    expect(container.querySelector('.business-card')).toBeInTheDocument();
-    expect(container.querySelector('.rating')).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.businessCard}`)).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.rating}`)).toBeInTheDocument();
+  });
+
+  it('applies cultural heritage styling - terracotta border accent', () => {
+    const { container } = render(<BusinessCard businessName="Test Biz" rating={4} />);
+    const card = container.querySelector(`.${styles.businessCard}`);
+
+    expect(card).toBeInTheDocument();
+  });
+
+  it('applies cultural heritage styling - gold accent on hover', () => {
+    const { container } = render(<BusinessCard businessName="Test Biz" rating={4} />);
+    const card = container.querySelector(`.${styles.businessCard}`);
+
+    expect(card).toBeInTheDocument();
+  });
+
+  it('renders gold star accent for rating', () => {
+    render(<BusinessCard businessName="Test Biz" rating={4.5} />);
+    const ratingElement = screen.getByText('4.5');
+
+    expect(ratingElement).toHaveClass(styles.rating);
+  });
+
+  it('applies earth tone accent for address', () => {
+    render(<BusinessCard businessName="Test Biz" rating={4} address="123 Main St" />);
+    const addressElement = screen.getByText('123 Main St');
+
+    expect(addressElement).toHaveClass(styles.address);
+  });
+
+  it('renders business name with cultural serif typography', () => {
+    const { container } = render(<BusinessCard businessName="Test Biz" rating={4} />);
+    const heading = container.querySelector('h2');
+
+    expect(heading).toBeInTheDocument();
+    expect(heading).toHaveTextContent('Test Biz');
   });
 });

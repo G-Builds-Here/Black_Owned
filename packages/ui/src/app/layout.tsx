@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import "../app/globals.css";
 
 export const metadata: Metadata = {
   title: "Black Owned UI",
-  description: "UI components for Black Owned",
+  description: "UI components for Black Owned - Celebrating Black business ownership",
 };
 
 export default function RootLayout({
@@ -12,7 +13,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/* Subtle heritage pattern background accent */}
+        <div className="pattern-accent" style={{ minHeight: "100vh" }}>
+          {children}
+        </div>
+      </body>
     </html>
   );
 }

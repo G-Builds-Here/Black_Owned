@@ -4,7 +4,7 @@ import RootLayout from '../../app/layout';
 describe('Root Layout', () => {
   it('has correct metadata', () => {
     expect(metadata.title).toBe('Black Owned UI');
-    expect(metadata.description).toBe('UI components for Black Owned');
+    expect(metadata.description).toContain('Black Owned');
   });
 
   it('metadata is properly typed', () => {

@@ -1,2 +1,4 @@
-// No PostCSS plugins needed for unit tests
-module.exports = {};
+// Minimal PostCSS config - no plugins needed for plain CSS
+module.exports = {
+  plugins: {}
+};

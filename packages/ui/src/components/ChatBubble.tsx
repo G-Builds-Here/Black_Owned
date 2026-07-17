@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './ChatBubble.module.css';
 
 export type MessageDirection = 'sent' | 'received';
 
@@ -16,12 +17,12 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
   senderName,
 }) => {
   return (
-    <div className={`chat-bubble ${direction}`}>
-      {senderName && <span className="sender-name">{senderName}</span>}
-      <div className="bubble-content">
+    <div className={`${styles.chatBubble} ${styles[direction]}`}>
+      {senderName && <span className={styles.senderName}>{senderName}</span>}
+      <div className={styles.bubbleContent}>
         <p>{message}</p>
       </div>
-      {timestamp && <span className="timestamp">{timestamp}</span>}
+      {timestamp && <span className={styles.timestamp}>{timestamp}</span>}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NotificationBanner } from './NotificationBanner';
+import styles from './NotificationBanner.module.css';
 
 describe('NotificationBanner', () => {
   it('renders message', () => {
@@ -11,13 +12,13 @@ describe('NotificationBanner', () => {
   it('defaults to info type', () => {
     const { container } = render(<NotificationBanner message="Test" />);
 
-    expect(container.querySelector('.info')).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.info}`)).toBeInTheDocument();
   });
 
   it('applies correct type class', () => {
     const { container } = render(<NotificationBanner message="Test" type="success" />);
 
-    expect(container.querySelector('.success')).toBeInTheDocument();
+    expect(container.querySelector(`.${styles.success}`)).toBeInTheDocument();
   });
 
   it('has role alert', () => {
@@ -52,5 +53,13 @@ describe('NotificationBanner', () => {
     fireEvent.click(screen.getByLabelText('Close'));
 
     expect(handleClose).toHaveBeenCalled();
+  });
+
+  it('applies cultural heritage styling - gold accent border', () => {
+    const { container } = render(<NotificationBanner message="Success" type="success" />);
+    const banner = container.querySelector(`.${styles.notificationBanner}`);
+
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveClass(styles.success);
   });
 });

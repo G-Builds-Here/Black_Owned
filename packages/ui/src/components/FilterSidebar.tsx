@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './FilterSidebar.module.css';
 
 export interface FilterOption {
   label: string;
@@ -27,9 +28,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   };
 
   return (
-    <aside className="filter-sidebar">
-      <h3>{title}</h3>
-      <ul className="filter-options">
+    <aside className={styles.filterSidebar} aria-label={title}>
+      <span className={styles.filterTitle}>{title}</span>
+      <ul className={styles.filterOptions}>
         {options.map((option) => (
           <li key={option.value}>
             <label>
@@ -38,7 +39,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
                 checked={selectedValues.includes(option.value)}
                 onChange={() => handleToggle(option.value)}
               />
-              {option.label}
+              <span>{option.label}</span>
             </label>
           </li>
         ))}

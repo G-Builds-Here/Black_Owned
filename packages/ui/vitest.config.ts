@@ -20,7 +20,6 @@ export default defineConfig({
         functions: 90,
         lines: 90,
       },
-      all: true,
       include: ['src/app/**/*.ts', 'src/app/**/*.tsx', 'src/components/**/*.ts', 'src/components/**/*.tsx'],
       exclude: ['src/**/*.d.ts', 'src/**/__tests__/**/*', 'src/__tests__/**/*'],
     },

@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './Pagination.module.css';
 
 export interface PaginationProps {
   currentPage: number;
@@ -48,19 +49,19 @@ export const Pagination: React.FC<PaginationProps> = ({
   };
 
   return (
-    <nav className="pagination" aria-label="Pagination">
+    <nav className={styles.pagination} aria-label="Pagination">
       <button
-        className="pagination-prev"
+        className={styles.paginationPrev}
         onClick={handlePrevious}
         disabled={currentPage === 1}
       >
         Previous
       </button>
-      <ul className="pagination-pages">
+      <ul className={styles.paginationPages}>
         {getPageNumbers().map((page, index) => (
           <li key={index}>
             <button
-              className={page === currentPage ? 'active' : ''}
+              className={page === currentPage ? styles.active : ''}
               onClick={() => typeof page === 'number' && onPageChange(page)}
               disabled={page === '...'}
             >
@@ -70,7 +71,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         ))}
       </ul>
       <button
-        className="pagination-next"
+        className={styles.paginationNext}
         onClick={handleNext}
         disabled={currentPage === totalPages}
       >
