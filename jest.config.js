@@ -9,4 +9,5 @@ module.exports = {
     '^.+\\.(t|j)sx?$': ['@swc/jest'],
   },
   testMatch: ['**/*.spec.tsx', '**/*.spec.ts'],
+  testPathIgnorePatterns: ['/e2e/'],
 };

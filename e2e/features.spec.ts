@@ -11,11 +11,11 @@ test.describe('LOC-0051 E2E Validation', () => {
       await expect(page).toHaveTitle(/Black Owned/);
 
       // Verify gradient background (heritage colors)
-      const heroSection = page.locator('section').filter({ hasText: 'Celebrating Black Excellence' });
+      const heroSection = page.getByText('Celebrating Black Excellence');
       await expect(heroSection).toBeVisible();
 
-      // Verify typography - main heading (use first match to avoid strict mode violation)
-      const heading = page.getByRole('heading', { name: /Black Owned/i }).first();
+      // Verify typography - main heading
+      const heading = page.getByRole('heading', { name: /Black Owned/i, level: 1 }).first();
       await expect(heading).toBeVisible();
 
       // Verify navigation component
@@ -51,8 +51,8 @@ test.describe('LOC-0051 E2E Validation', () => {
     test('should render Tabs component on directory page', async ({ page }) => {
       await page.goto(`${BASE_URL}/directory`);
 
-      // Check tabs are visible (use exact match to avoid strict mode violation)
-      const allTab = page.getByText('All Businesses', { exact: true }).first();
+      // Check tabs are visible
+      const allTab = page.getByRole('tab', { name: /All Businesses/i });
       await expect(allTab).toBeVisible();
 
       const savedTab = page.getByRole('tab', { name: /Saved/i });
@@ -91,9 +91,7 @@ test.describe('LOC-0051 E2E Validation', () => {
       await expect(page.getByRole('heading', { name: /Business Directory/i })).toBeVisible();
 
       // Check business cards are displayed
-      const businessCards = page.locator('[role="article"], .card, [class*="card"]');
-      // At minimum, verify the grid container exists
-      const grid = page.locator('main').filter({ hasText: 'Soul Food Kitchen' });
+      const grid = page.getByText('Soul Food Kitchen');
       await expect(grid).toBeVisible();
     });
 
@@ -128,11 +126,11 @@ test.describe('LOC-0051 E2E Validation', () => {
       await expect(page.getByText('Soul Food Kitchen')).toBeVisible();
 
       // Check for rating stars (rendered as unicode star character)
-      const starRating = page.locator('span', { hasText: String.fromCharCode(9733) }).first();
+      const starRating = page.getByText('★').first();
       await expect(starRating).toBeVisible();
 
-      // Check for verified badge (use first match to avoid strict mode violation)
-      const verifiedBadge = page.getByText('Verified').first();
+      // Check for verified badge
+      const verifiedBadge = page.getByText('Verified');
       await expect(verifiedBadge).toBeVisible();
     });
 
@@ -157,7 +155,7 @@ test.describe('LOC-0051 E2E Validation', () => {
 
       // Navigate back to home
       await page.goto(BASE_URL);
-      await expect(page.getByRole('heading', { name: /Black Owned/i }).first()).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Black Owned/i, level: 1 })).toBeVisible();
     });
   });
 });
