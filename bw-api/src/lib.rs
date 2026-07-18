@@ -3,6 +3,8 @@
 use bw_types::{Business, Category, Review};
 use serde::{Deserialize, Serialize};
 
+pub mod routes;
+
 /// API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiResponse<T> {

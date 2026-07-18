@@ -3,6 +3,19 @@
 #[cfg(feature = "integration_test")]
 pub mod service_connectivity;
 
+pub mod email_service;
+
+pub mod image_processor;
+
+#[cfg(feature = "integration_test")]
+pub mod image_publisher;
+
+#[cfg(feature = "integration_test")]
+pub mod image_worker;
+
+#[cfg(feature = "integration_test")]
+pub mod stream_config;
+
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
 
