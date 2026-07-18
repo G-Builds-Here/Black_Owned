@@ -6,8 +6,16 @@ license.workspace = true
 
 [dependencies]
 bw-types = { path = "../bw-types" }
-bw-ingestion = { path = "../bw-ingestion" }
+bw-ingestion = { path = "../bw-ingestion", features = ["integration_test"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+minio-rsc = "0.2.6"
+async-nats = "0.40"
+image = { version = "0.25", features = ["jpeg", "png", "gif"] }
+tracing = "0.1"
+bytes = "1.0"
+futures = "0.3"
