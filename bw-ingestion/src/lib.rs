@@ -1,5 +1,8 @@
 //! Data ingestion module for Black Owned platform.
 
+#[cfg(feature = "integration_test")]
+pub mod service_connectivity;
+
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
 
