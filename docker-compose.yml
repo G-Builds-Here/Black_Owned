@@ -5,6 +5,9 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    mem_limit: 4g
+    memswap_limit: 4g
+    restart: unless-stopped
     volumes:
       - clickhouse-data:/var/lib/clickhouse
     healthcheck:
