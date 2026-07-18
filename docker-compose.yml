@@ -1,0 +1,79 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: black-owned-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: black-owned-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "-sl", "ping", "localhost:4222"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  minio:
+    image: minio/minio:latest
+    container_name: black-owned-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  valkey:
+    image: valkey/valkey:7.2-alpine
+    container_name: black-owned-valkey
+    ports:
+      - "6379:6379"
+    command:
+      - valkey-server
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--maxmemory"
+      - "268435456"
+      - "--timeout"
+      - "300"
+      - "--notify-keyspace-events"
+      - "KEA"
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  clickhouse-data:
+  nats-data:
+  minio-data:
+  valkey-data:
