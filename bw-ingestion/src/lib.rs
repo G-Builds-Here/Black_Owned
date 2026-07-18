@@ -5,6 +5,10 @@ pub mod service_connectivity;
 
 pub mod email_service;
 
+pub mod email_publisher;
+
+pub mod email_consumer;
+
 pub mod image_processor;
 
 #[cfg(feature = "integration_test")]

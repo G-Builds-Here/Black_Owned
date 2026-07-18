@@ -2,6 +2,8 @@
 //!
 //! Core domain types for the Black Owned platform.
 
+pub mod email;
+
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
