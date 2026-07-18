@@ -1,13 +1,11 @@
+/** @type {import('jest').Config} */
 module.exports = {
-  testEnvironment: 'jsdom',
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-  },
-  transform: {
-    '^.+\\.(t|j)sx?$': ['@swc/jest'],
-  },
-  testMatch: ['**/*.spec.tsx', '**/*.spec.ts'],
-  testPathIgnorePatterns: ['/e2e/'],
+  preset: "ts-jest",
+  testEnvironment: "node",
+  roots: ["<rootDir>/src", "<rootDir>"],
+  testMatch: ["**/*.spec.ts", "**/*.test.ts"],
+  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.spec.ts"],
+  coverageDirectory: "coverage",
+  coverageReporters: ["text", "lcov", "html"],
+  verbose: true,
 };
