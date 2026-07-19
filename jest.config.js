@@ -8,10 +8,5 @@ module.exports = {
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
   verbose: true,
-<<<<<<< HEAD
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
-  moduleNameMapper: {
-    "^@/(.*)$": "<rootDir>/src/$1",
-  },
->>>>>>> feature/LOC-0038-AC3
 };
