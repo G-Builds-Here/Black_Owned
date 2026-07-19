@@ -76,3 +76,14 @@ CREATE TABLE IF NOT EXISTS categories (
     _version UInt64
 ) ENGINE = ReplacingMergeTree(_version)
 ORDER BY id;
+
+-- Chat messages table for chat persistence consumer
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id UUID,
+    user_id UUID,
+    business_id UUID,
+    content String,
+    timestamp DateTime64(6, 'UTC'),
+    _version UInt64
+) ENGINE = ReplacingMergeTree(_version)
+ORDER BY id;

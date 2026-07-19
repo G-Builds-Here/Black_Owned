@@ -3,6 +3,11 @@
 #[cfg(feature = "integration_test")]
 pub mod service_connectivity;
 
+pub mod chat_consumer;
+
+#[cfg(feature = "integration_test")]
+pub mod background_service;
+
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
 
