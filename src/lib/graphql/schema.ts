@@ -22,8 +22,43 @@ export const typeDefs = `#graphql
     error: String
   }
 
+  type Business {
+    id: ID!
+    name: String!
+    category: String!
+    rating: Float!
+    reviewCount: Int!
+    location: String!
+    isVerified: Boolean!
+    imageUrl: String
+    description: String
+    tags: [String!]
+  }
+
+  type SearchResults {
+    businesses: [Business!]!
+    total: Int!
+    page: Int!
+    pageSize: Int!
+    totalPages: Int!
+  }
+
+  type DateTimeUtc {
+    timestamp: Int!
+  }
+
+  type GQLBusiness {
+    id: ID!
+    name: String!
+    categoryId: String!
+    verified: Boolean!
+    createdAt: DateTimeUtc!
+  }
+
   type Query {
     health: String!
+    searchBusinesses(query: String!, page: Int, pageSize: Int): SearchResults!
+    business(id: String!): GQLBusiness
   }
 
   type Mutation {
