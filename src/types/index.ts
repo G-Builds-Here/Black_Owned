@@ -6,3 +6,4 @@
 
 export * from "./business";
 export * from "./review";
+export * from "./user";
