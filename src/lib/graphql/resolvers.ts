@@ -19,6 +19,84 @@ import {
 import { storeRefreshToken } from "../valkey/valkey-client";
 
 /**
+ * Mock business data for search
+ */
+const MOCK_BUSINESSES = [
+  {
+    id: '1',
+    name: 'Soul Food Kitchen',
+    category: 'Food & Dining',
+    rating: 4.8,
+    reviewCount: 156,
+    location: 'Harlem, NY',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
+    tags: ['Southern', 'Family-Friendly', 'Takeout'],
+  },
+  {
+    id: '2',
+    name: 'Black Diamond Consulting',
+    category: 'Professional Services',
+    rating: 5.0,
+    reviewCount: 42,
+    location: 'Atlanta, GA',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Strategic business consulting for Black-owned enterprises and startups.',
+    tags: ['Consulting', 'Business Strategy', 'B2B'],
+  },
+  {
+    id: '3',
+    name: 'Afro Threads',
+    category: 'Retail & Fashion',
+    rating: 4.5,
+    reviewCount: 89,
+    location: 'Los Angeles, CA',
+    isVerified: false,
+    imageUrl: '',
+    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
+    tags: ['Clothing', 'Accessories', 'African-Inspired'],
+  },
+  {
+    id: '4',
+    name: 'Heritage Wellness Center',
+    category: 'Health & Wellness',
+    rating: 4.9,
+    reviewCount: 203,
+    location: 'Chicago, IL',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
+    tags: ['Wellness', 'Massage', 'Holistic'],
+  },
+  {
+    id: '5',
+    name: 'Golden Era Barbershop',
+    category: 'Personal Services',
+    rating: 4.7,
+    reviewCount: 312,
+    location: 'Houston, TX',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
+    tags: ['Barber', 'Grooming', 'Community'],
+  },
+  {
+    id: '6',
+    name: 'Rhythm & Blues Records',
+    category: 'Entertainment',
+    rating: 4.6,
+    reviewCount: 78,
+    location: 'New Orleans, LA',
+    isVerified: false,
+    imageUrl: '',
+    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
+    tags: ['Music', 'Vinyl', 'Audio'],
+  },
+];
+
+/**
  * Convert User record to GraphQL User type
  */
 function userToGraphqlUser(user: User) {
@@ -100,11 +178,58 @@ export function health(): string {
 }
 
 /**
+ * Search businesses resolver with pagination
+ */
+export function searchBusinesses(
+  _parent: unknown,
+  args: { query: string; page?: number; pageSize?: number }
+): {
+  businesses: unknown[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+} {
+  const { query, page = 1, pageSize = 10 } = args;
+  const normalizedQuery = query.toLowerCase().trim();
+
+  // Filter businesses by search query (name, description, tags, category, location)
+  const filtered = MOCK_BUSINESSES.filter((business) => {
+    if (!normalizedQuery) return true;
+
+    const nameMatch = business.name.toLowerCase().includes(normalizedQuery);
+    const descMatch = business.description?.toLowerCase().includes(normalizedQuery);
+    const categoryMatch = business.category.toLowerCase().includes(normalizedQuery);
+    const tagMatch = business.tags?.some((tag) =>
+      tag.toLowerCase().includes(normalizedQuery)
+    );
+    const locationMatch = business.location.toLowerCase().includes(normalizedQuery);
+
+    return nameMatch || descMatch || categoryMatch || tagMatch || locationMatch;
+  });
+
+  const total = filtered.length;
+  const totalPages = Math.ceil(total / pageSize);
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedBusinesses = filtered.slice(startIndex, endIndex);
+
+  return {
+    businesses: paginatedBusinesses,
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
   Query: {
     health,
+    searchBusinesses,
   },
   Mutation: {
     register,
