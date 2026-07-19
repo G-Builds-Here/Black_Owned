@@ -1,5 +1,5 @@
 /**
- * GraphQL schema for Business queries
+ * GraphQL schema for Business queries and mutations
  */
 
 export const businessTypeDefs = `#graphql
@@ -15,7 +15,17 @@ export const businessTypeDefs = `#graphql
     createdAt: DateTimeUtc!
   }
 
+  type UpdateBusinessResponse {
+    success: Boolean!
+    business: Business
+    error: String
+  }
+
   type Query {
     business(id: String!): Business
+  }
+
+  type Mutation {
+    updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
   }
 `;

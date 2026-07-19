@@ -74,8 +74,15 @@ export const typeDefs = `#graphql
     error: String
   }
 
+  type UpdateBusinessResponse {
+    success: Boolean!
+    business: Business
+    error: String
+  }
+
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
+    updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
   }
 `;
