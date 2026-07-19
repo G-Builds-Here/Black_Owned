@@ -19,3 +19,6 @@ image = { version = "0.25", features = ["jpeg", "png", "gif"] }
 tracing = "0.1"
 bytes = "1.0"
 futures = "0.3"
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-layer = "0.3"

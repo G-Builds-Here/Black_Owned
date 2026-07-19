@@ -3,6 +3,7 @@
 use bw_types::{Business, Category, Review};
 use serde::{Deserialize, Serialize};
 
+pub mod middleware;
 pub mod routes;
 
 /// API response wrapper
