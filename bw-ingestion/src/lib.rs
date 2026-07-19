@@ -20,6 +20,8 @@ pub mod image_worker;
 #[cfg(feature = "integration_test")]
 pub mod stream_config;
 
+pub mod cache_invalidator;
+
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
 
