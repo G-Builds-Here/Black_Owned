@@ -1,93 +1,187 @@
-//! GraphQL mutation resolvers.
+//! GraphQL mutations for Black Owned API.
+//!
+//! Provides mutation resolvers for:
+//! - createBusiness: Create a new business
+//! - updateBusiness: Update an existing business
+//! - submitReview: Submit a review for a business
+//! - deleteReview: Delete a review
 
 use async_graphql::*;
-use crate::graphql::types::{Business, CreateBusinessInput, Review, SubmitReviewInput, UpdateBusinessInput};
-use bw_types::{Business as DomainBusiness, Review as DomainReview};
+use bw_types::{Business, Review};
+use chrono::Utc;
 use uuid::Uuid;
 
-/// Mutation root for GraphQL operations
-#[derive(Default)]
-pub struct Mutation;
+use super::types::{GQLBusiness, GQLReview};
+
+/// Mutation root for GraphQL API
+pub struct MutationRoot;
 
 #[Object]
-impl Mutation {
+impl MutationRoot {
     /// Create a new business
-    async fn create_business(&self, input: CreateBusinessInput) -> Result<Business> {
-        let category_id = Uuid::parse_str(&input.category_id)
-            .map_err(|e| format!("Invalid category ID: {}", e))?;
+    async fn create_business(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+        category_id: String,
+    ) -> Result<GQLBusiness> {
+        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
+            Error::new(format!("Database connection not available: {:?}", e))
+        })?;
 
-        let business = DomainBusiness {
-            id: Uuid::new_v4(),
-            name: input.name,
-            category_id,
-            verified: false,
-            created_at: chrono::Utc::now(),
-        };
+        let category_uuid = Uuid::parse_str(&category_id).map_err(|e| {
+            Error::new(format!("Invalid category UUID: {:?}", e))
+        })?;
 
-        Ok(Business::from(business))
+        let id = Uuid::new_v4();
+
+        let result = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
+            r#"
+            INSERT INTO businesses (id, name, category_id, verified, created_at)
+            VALUES ($1, $2, $3, false, $4)
+            RETURNING id, name, category_id, verified, created_at
+            "#,
+        )
+        .bind(id)
+        .bind(&name)
+        .bind(category_uuid)
+        .bind(Utc::now())
+        .fetch_one(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        Ok(GQLBusiness::from(Business {
+            id: result.0,
+            name: result.1,
+            category_id: result.2,
+            verified: result.3,
+            created_at: result.4,
+        }))
     }
 
     /// Update an existing business
-    async fn update_business(&self, input: UpdateBusinessInput) -> Result<Business> {
-        let id = Uuid::parse_str(&input.id)
-            .map_err(|e| format!("Invalid business ID: {}", e))?;
+    async fn update_business(
+        &self,
+        ctx: &Context<'_>,
+        id: String,
+        name: Option<String>,
+        category_id: Option<String>,
+        verified: Option<bool>,
+    ) -> Result<Option<GQLBusiness>> {
+        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
+            Error::new(format!("Database connection not available: {:?}", e))
+        })?;
 
-        let category_id = match input.category_id {
-            Some(ref cat_id) => {
-                Some(Uuid::parse_str(cat_id)
-                    .map_err(|e| format!("Invalid category ID: {}", e))?)
-            }
-            None => None,
-        };
+        let business_id = Uuid::parse_str(&id).map_err(|e| {
+            Error::new(format!("Invalid business UUID: {:?}", e))
+        })?;
 
-        // In a real implementation, this would fetch and update from the database
-        // For now, create a placeholder business
-        let business = DomainBusiness {
-            id,
-            name: input.name.unwrap_or_else(|| "Unknown".to_string()),
-            category_id: category_id.unwrap_or_else(Uuid::new_v4),
-            verified: input.verified.unwrap_or(false),
-            created_at: chrono::Utc::now(),
-        };
+        let name_ref = name.as_deref();
+        let category_uuid = category_id
+            .map(|s| Uuid::parse_str(&s))
+            .transpose()
+            .map_err(|e| Error::new(format!("Invalid category UUID: {:?}", e)))?;
 
-        Ok(Business::from(business))
+        let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
+            r#"
+            UPDATE businesses
+            SET name = COALESCE($2, name),
+                category_id = COALESCE($3, category_id),
+                verified = COALESCE($4, verified)
+            WHERE id = $1
+            RETURNING id, name, category_id, verified, created_at
+            "#,
+        )
+        .bind(business_id)
+        .bind(name_ref)
+        .bind(category_uuid)
+        .bind(verified)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        Ok(row.map(|(bid, n, cid, v, ca)| {
+            GQLBusiness::from(Business {
+                id: bid,
+                name: n,
+                category_id: cid,
+                verified: v,
+                created_at: ca,
+            })
+        }))
     }
 
     /// Submit a review for a business
-    async fn submit_review(&self, input: SubmitReviewInput) -> Result<Review> {
-        let business_id = Uuid::parse_str(&input.business_id)
-            .map_err(|e| format!("Invalid business ID: {}", e))?;
+    async fn submit_review(
+        &self,
+        ctx: &Context<'_>,
+        business_id: String,
+        user_id: String,
+        rating: i32,
+        comment: String,
+    ) -> Result<GQLReview> {
+        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
+            Error::new(format!("Database connection not available: {:?}", e))
+        })?;
 
-        let user_id = Uuid::parse_str(&input.user_id)
-            .map_err(|e| format!("Invalid user ID: {}", e))?;
-
-        if input.rating < 1 || input.rating > 5 {
-            return Err("Rating must be between 1 and 5".into());
+        if rating < 1 || rating > 5 {
+            return Err(Error::new("Rating must be between 1 and 5"));
         }
 
-        if input.comment.is_empty() {
-            return Err("Comment is required".into());
-        }
+        let business_uuid = Uuid::parse_str(&business_id).map_err(|e| {
+            Error::new(format!("Invalid business UUID: {:?}", e))
+        })?;
 
-        let review = DomainReview {
-            id: Uuid::new_v4(),
-            business_id,
-            user_id,
-            rating: input.rating as u8,
-            comment: input.comment,
-            created_at: chrono::Utc::now(),
-        };
+        let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
+            Error::new(format!("Invalid user UUID: {:?}", e))
+        })?;
 
-        Ok(Review::from(review))
+        let id = Uuid::new_v4();
+
+        let result =
+            sqlx::query_as::<_, (Uuid, Uuid, Uuid, i8, String, chrono::DateTime<Utc>)>(
+                r#"
+                INSERT INTO reviews (id, business_id, user_id, rating, comment, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, business_id, user_id, rating, comment, created_at
+                "#,
+            )
+            .bind(id)
+            .bind(business_uuid)
+            .bind(user_uuid)
+            .bind(rating as i8)
+            .bind(&comment)
+            .bind(Utc::now())
+            .fetch_one(db)
+            .await
+            .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        Ok(GQLReview::from(Review {
+            id: result.0,
+            business_id: result.1,
+            user_id: result.2,
+            rating: result.3 as u8,
+            comment: result.4,
+            created_at: result.5,
+        }))
     }
 
     /// Delete a review
-    async fn delete_review(&self, id: String) -> Result<bool> {
-        let _ = Uuid::parse_str(&id)
-            .map_err(|e| format!("Invalid review ID: {}", e))?;
+    async fn delete_review(&self, ctx: &Context<'_>, id: String) -> Result<bool> {
+        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
+            Error::new(format!("Database connection not available: {:?}", e))
+        })?;
 
-        // In a real implementation, this would delete from the database
-        // For now, just return success
-        Ok(true)
+        let review_id = Uuid::parse_str(&id).map_err(|e| {
+            Error::new(format!("Invalid review UUID: {:?}", e))
+        })?;
+
+        let result = sqlx::query("DELETE FROM reviews WHERE id = $1")
+            .bind(review_id)
+            .execute(db)
+            .await
+            .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        Ok(result.rows_affected() > 0)
     }
 }

@@ -1,16 +1,17 @@
-//! GraphQL schema definition.
+//! GraphQL schema configuration for Black Owned API.
+//!
+//! Sets up the async-graphql schema with all types, queries, and mutations.
 
-use async_graphql::{EmptySubscription, Schema, SchemaBuilder};
-use crate::graphql::mutations::Mutation;
-use crate::graphql::queries::Query;
+use async_graphql::*;
 
-/// Create the GraphQL schema
-pub fn create_schema() -> Schema<Query, Mutation, EmptySubscription> {
-    Schema::build(Query::default(), Mutation::default(), EmptySubscription)
+use super::mutations::MutationRoot;
+use super::queries::QueryRoot;
+
+/// Main GraphQL schema type
+pub type Schema = async_graphql::Schema<QueryRoot, MutationRoot, EmptySubscription>;
+
+/// Create a new GraphQL schema instance
+pub fn create_schema() -> Schema {
+    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .finish()
-}
-
-/// Schema builder for testing
-pub fn create_schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(Query::default(), Mutation::default(), EmptySubscription)
 }

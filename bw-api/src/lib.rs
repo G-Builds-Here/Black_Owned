@@ -1,5 +1,7 @@
 //! API module for Black Owned platform.
 
+pub mod graphql;
+
 use bw_types::{Business, Category, Review};
 use serde::{Deserialize, Serialize};
 

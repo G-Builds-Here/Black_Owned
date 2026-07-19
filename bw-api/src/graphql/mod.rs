@@ -1,4 +1,9 @@
-//! GraphQL schema module for Black Owned API.
+//! GraphQL module for Black Owned API.
+//!
+//! Provides GraphQL schema with Hot Chocolate (async-graphql) for:
+//! - Business, Review, Category, User types
+//! - Queries: businesses, business, reviews, categories, search
+//! - Mutations: createBusiness, updateBusiness, submitReview, deleteReview
 
 pub mod mutations;
 pub mod queries;
