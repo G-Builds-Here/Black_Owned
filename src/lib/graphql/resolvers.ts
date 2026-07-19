@@ -17,6 +17,12 @@ import {
   User,
 } from "../../types/user";
 import { storeRefreshToken } from "../valkey/valkey-client";
+import { verifyToken, JwtPayload } from "../auth/auth-service";
+import {
+  findById as findBusinessById,
+  updateNameById,
+  Business as BusinessRecord,
+} from "../db/business-repository";
 
 /**
  * Mock business data for search
@@ -178,6 +184,75 @@ export function health(): string {
 }
 
 /**
+ * Convert business record to GraphQL Business type
+ */
+function businessToGraphqlBusiness(business: BusinessRecord) {
+  return {
+    id: business.id,
+    name: business.name,
+    categoryId: business.category_id,
+    verified: business.verified,
+    createdAt: {
+      timestamp: Math.floor(business.created_at.getTime() / 1000),
+    },
+  };
+}
+
+/**
+ * Update business mutation resolver - verifies caller is the owner
+ */
+export async function updateBusiness(
+  _parent: unknown,
+  args: { id: string; name: string },
+  context: { headers: { authorization?: string } }
+): Promise<{
+  success: boolean;
+  business?: unknown;
+  error?: string;
+}> {
+  const { id, name } = args;
+  const authHeader = context.headers.authorization;
+
+  // Extract JWT token from Authorization header
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return {
+      success: false,
+      error: "Authorization required",
+    };
+  }
+
+  const token = authHeader.substring(7);
+
+  // Verify token and extract user ID
+  let payload: JwtPayload;
+  try {
+    payload = verifyToken(token);
+  } catch (error) {
+    return {
+      success: false,
+      error: "Invalid or expired token",
+    };
+  }
+
+  const userId = payload.userId;
+
+  // Verify ownership - only the business owner can update
+  const updatedBusiness = await updateNameById(id, name, userId);
+
+  if (!updatedBusiness) {
+    return {
+      success: false,
+      error: "Business not found or you are not the owner",
+    };
+  }
+
+  return {
+    success: true,
+    business: businessToGraphqlBusiness(updatedBusiness),
+  };
+}
+
+/**
  * Search businesses resolver with pagination
  */
 export function searchBusinesses(
@@ -233,5 +308,6 @@ export const resolvers = {
   },
   Mutation: {
     register,
+    updateBusiness,
   },
 };
