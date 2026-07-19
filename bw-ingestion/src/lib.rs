@@ -1,5 +1,7 @@
 //! Data ingestion module for Black Owned platform.
 
+pub mod chat_consumer;
+
 #[cfg(feature = "integration_test")]
 pub mod service_connectivity;
 
