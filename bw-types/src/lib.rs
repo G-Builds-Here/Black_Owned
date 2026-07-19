@@ -18,6 +18,7 @@ pub struct Business {
     pub category_id: Uuid,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
+    pub owner_id: Uuid,
 }
 
 /// Review entity for business reviews

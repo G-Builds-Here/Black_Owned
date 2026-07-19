@@ -61,7 +61,21 @@ export const typeDefs = `#graphql
     business(id: String!): GQLBusiness
   }
 
+  type PresignedUrl {
+    url: String!
+    expiresInSeconds: Int!
+    objectName: String!
+    bucket: String!
+  }
+
+  type SubmitVerificationResponse {
+    success: Boolean!
+    presignedUrls: [PresignedUrl!]
+    error: String
+  }
+
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
+    submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
   }
 `;

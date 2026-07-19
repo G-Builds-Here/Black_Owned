@@ -17,6 +17,12 @@ import {
   User,
 } from "../../types/user";
 import { storeRefreshToken } from "../valkey/valkey-client";
+import { getCachedResponse, cacheResponse, generateCacheKey } from "./query-cache";
+import {
+  MinioService,
+  createMinioServiceFromEnv,
+  PresignedUrlResult,
+} from "../minio/minio-service";
 
 /**
  * Mock business data for search
@@ -109,6 +115,76 @@ function userToGraphqlUser(user: User) {
 }
 
 /**
+ * Lazy-initialized MinIO service instance
+ */
+let minioService: MinioService | null = null;
+
+function getMinioService(): MinioService {
+  if (!minioService) {
+    minioService = createMinioServiceFromEnv();
+  }
+  return minioService;
+}
+
+/**
+ * Submit verification mutation resolver
+ * Generates presigned PUT URLs for uploading verification documents to MinIO
+ */
+export async function submitVerification(
+  _parent: unknown,
+  args: { businessId: string; fileNames: string[] }
+): Promise<{
+  success: boolean;
+  presignedUrls?: PresignedUrlResult[];
+  error?: string;
+}> {
+  const { businessId, fileNames } = args;
+
+  // Validate required fields
+  if (!businessId || businessId.trim() === "") {
+    return {
+      success: false,
+      error: "Missing required field: businessId",
+    };
+  }
+
+  if (!fileNames || fileNames.length === 0) {
+    return {
+      success: false,
+      error: "Missing required field: fileNames (must provide at least one file)",
+    };
+  }
+
+  try {
+    const minio = getMinioService();
+
+    // Use the verification-docs bucket for verification documents
+    const bucket = "verification-docs";
+
+    // Generate object names in the format: {businessId}/{filename}
+    const objectNames = fileNames.map((fileName) => `${businessId}/${fileName}`);
+
+    // Generate presigned PUT URLs with 15-minute expiry (900 seconds)
+    const presignedUrls = await minio.generatePresignedPutUrlsBatch(
+      bucket,
+      objectNames,
+      900 // 15 minutes
+    );
+
+    return {
+      success: true,
+      presignedUrls,
+    };
+  } catch (error) {
+    console.error("Submit verification error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to generate presigned URLs",
+    };
+  }
+}
+
+/**
  * Register mutation resolver
  */
 export async function register(
@@ -178,19 +254,32 @@ export function health(): string {
 }
 
 /**
- * Search businesses resolver with pagination
+ * Search businesses resolver with pagination and caching
  */
-export function searchBusinesses(
+export async function searchBusinesses(
   _parent: unknown,
   args: { query: string; page?: number; pageSize?: number }
-): {
+): Promise<{
   businesses: unknown[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
-} {
+}> {
   const { query, page = 1, pageSize = 10 } = args;
+
+  // Check cache first
+  const cached = await getCachedResponse("searchBusinesses", { query, page, pageSize });
+  if (cached) {
+    return cached as {
+      businesses: unknown[];
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+    };
+  }
+
   const normalizedQuery = query.toLowerCase().trim();
 
   // Filter businesses by search query (name, description, tags, category, location)
@@ -214,13 +303,18 @@ export function searchBusinesses(
   const endIndex = startIndex + pageSize;
   const paginatedBusinesses = filtered.slice(startIndex, endIndex);
 
-  return {
+  const result = {
     businesses: paginatedBusinesses,
     total,
     page,
     pageSize,
     totalPages,
   };
+
+  // Cache the response
+  await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
+
+  return result;
 }
 
 /**
@@ -233,5 +327,6 @@ export const resolvers = {
   },
   Mutation: {
     register,
+    submitVerification,
   },
 };

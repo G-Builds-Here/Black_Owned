@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -118,6 +118,7 @@ export default function AdminConsole() {
         <Tabs
           tabs={[
             { key: 'dashboard', label: 'Dashboard' },
+            { key: 'users', label: 'User Management' },
             { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
             { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
             { key: 'settings', label: 'Settings' },
@@ -263,6 +264,19 @@ export default function AdminConsole() {
               </div>
             </Card>
           </div>
+        </TabPanel>
+
+        {/* User Management Tab */}
+        <TabPanel value="users" className="mt-6">
+          <Card variant="elevated" padding="lg">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-neutral-800">User Management</h2>
+                <p className="text-sm text-neutral-500 mt-1">View and manage user roles</p>
+              </div>
+            </div>
+            <UserTable adminUser="admin" />
+          </Card>
         </TabPanel>
 
         {/* Verifications Tab */}

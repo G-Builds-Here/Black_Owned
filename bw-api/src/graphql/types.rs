@@ -28,6 +28,8 @@ pub struct GQLBusiness {
     pub category_id: String,
     pub verified: bool,
     pub created_at: DateTimeUtc,
+    pub rating_avg: Option<f64>,
+    pub review_count: i32,
 }
 
 impl From<Business> for GQLBusiness {
@@ -38,6 +40,8 @@ impl From<Business> for GQLBusiness {
             category_id: business.category_id.to_string(),
             verified: business.verified,
             created_at: business.created_at.into(),
+            rating_avg: None,
+            review_count: 0,
         }
     }
 }
@@ -51,6 +55,13 @@ pub struct GQLReview {
     pub rating: i32,
     pub comment: String,
     pub created_at: DateTimeUtc,
+}
+
+/// Return type for submitReview mutation containing the review and updated business
+#[derive(SimpleObject, Clone, Debug)]
+pub struct SubmitReviewResult {
+    pub review: GQLReview,
+    pub business: GQLBusiness,
 }
 
 impl From<Review> for GQLReview {

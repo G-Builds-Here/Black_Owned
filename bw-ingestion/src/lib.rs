@@ -67,12 +67,18 @@ impl BusinessIngestionHandler {
             return Err("Owner email cannot be empty".to_string());
         }
 
+        // Parse owner email to UUID - for now use a placeholder UUID since email is not a UUID
+        // In production, this would look up the user ID from the email
+        let owner_id = uuid::Uuid::parse_str(&input.owner_email)
+            .unwrap_or_else(|_| uuid::Uuid::new_v4());
+
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
             category_id: *category_id,
             verified: false,
             created_at: chrono::Utc::now(),
+            owner_id,
         })
     }
 

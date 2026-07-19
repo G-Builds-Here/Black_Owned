@@ -5,6 +5,16 @@
  */
 
 /**
+ * User role types
+ */
+export type UserRole = "user" | "business_owner" | "admin";
+
+/**
+ * User status types
+ */
+export type UserStatus = "active" | "inactive" | "suspended";
+
+/**
  * User record stored in PostgreSQL
  */
 export interface User {
@@ -12,6 +22,8 @@ export interface User {
   email: string;
   passwordHash: string;
   name: string;
+  role: UserRole;
+  status: UserStatus;
   createdAt: Date;
   updatedAt: Date;
 }

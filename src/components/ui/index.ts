@@ -48,3 +48,6 @@ export type { CarouselProps } from './Carousel';
 
 export { ReviewList } from './Review';
 export type { Review, ReviewListProps } from './Review';
+
+export { UserTable } from './UserTable';
+export type { UserTableRow } from './UserTable';
