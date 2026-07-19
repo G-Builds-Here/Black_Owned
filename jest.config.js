@@ -1,7 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: "ts-jest",
-  testEnvironment: "jsdom",
+  testEnvironment: "node",
   roots: ["<rootDir>/src", "<rootDir>"],
   testMatch: ["**/*.spec.ts", "**/*.test.ts", "**/*.spec.tsx", "**/*.test.tsx"],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.spec.ts"],
@@ -9,4 +9,7 @@ module.exports = {
   coverageReporters: ["text", "lcov", "html"],
   verbose: true,
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
+  moduleNameMapper: {
+    "^next/server$": "<rootDir>/__mocks__/next-server.ts",
+  },
 };

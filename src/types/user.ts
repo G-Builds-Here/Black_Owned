@@ -5,6 +5,11 @@
  */
 
 /**
+ * User roles for access control
+ */
+export type UserRole = "user" | "business_owner" | "admin";
+
+/**
  * User record stored in PostgreSQL
  */
 export interface User {
@@ -12,6 +17,7 @@ export interface User {
   email: string;
   passwordHash: string;
   name: string;
+  role: UserRole;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +28,7 @@ export interface User {
 export interface JwtPayload {
   userId: string;
   email: string;
+  role: UserRole;
   iat: number;
   exp: number;
 }

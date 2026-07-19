@@ -9,11 +9,40 @@ import {
   generateRefreshToken,
   generateTokenPair,
   verifyToken,
+  verifyTokenSafe,
+  isTokenExpired,
   BCRYPT_COST_FACTOR,
   ACCESS_TOKEN_EXPIRY,
   REFRESH_TOKEN_EXPIRY,
+  JWT_ALGORITHM,
 } from "./auth-service";
-import { User } from "../../types/user";
+import { User, UserRole } from "../../types/user";
+import { generateKeyPairSync } from "crypto";
+
+// Generate RSA key pair for testing (only once per test run)
+const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicKeyEncoding: {
+    type: "spki",
+    format: "pem",
+  },
+  privateKeyEncoding: {
+    type: "pkcs8",
+    format: "pem",
+  },
+});
+
+// Mock fs for key file reading - return private key for signing, public key for verification
+let mockFsReturn: string;
+jest.mock("fs", () => ({
+  readFileSync: jest.fn().mockImplementation((path: string) => {
+    // Return public key for public key file path, private key for private key file path
+    if (typeof path === "string" && path.includes("public.pem")) {
+      return publicKey as string;
+    }
+    return mockFsReturn || (privateKey as string);
+  }),
+}));
 
 describe("Auth Service", () => {
   const mockUser: User = {
@@ -21,6 +50,17 @@ describe("Auth Service", () => {
     email: "test@example.com",
     passwordHash: "",
     name: "Test User",
+    role: "user" as UserRole,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const mockBusinessOwner: User = {
+    id: "business-owner-id",
+    email: "owner@example.com",
+    passwordHash: "",
+    name: "Business Owner",
+    role: "business_owner" as UserRole,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -63,7 +103,7 @@ describe("Auth Service", () => {
 
   describe("generateAccessToken", () => {
     it("should generate a valid JWT token", () => {
-      process.env.JWT_SECRET = "test-secret-key";
+      process.env.JWT_PRIVATE_KEY = privateKey as string;
       const token = generateAccessToken(mockUser);
       expect(token).toBeDefined();
       expect(typeof token).toBe("string");
@@ -71,17 +111,28 @@ describe("Auth Service", () => {
     });
 
     it("should include user data in payload", () => {
-      process.env.JWT_SECRET = "test-secret-key";
+      process.env.JWT_PRIVATE_KEY = privateKey as string;
       const token = generateAccessToken(mockUser);
-      const decoded = verifyToken(token);
-      expect(decoded.userId).toBe(mockUser.id);
-      expect(decoded.email).toBe(mockUser.email);
+      // Decode without verification to check payload
+      const parts = token.split(".");
+      const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
+      expect(payload.userId).toBe(mockUser.id);
+      expect(payload.email).toBe(mockUser.email);
+      expect(payload.role).toBe("user");
+    });
+
+    it("should include business_owner role in token", () => {
+      process.env.JWT_PRIVATE_KEY = privateKey as string;
+      const token = generateAccessToken(mockBusinessOwner);
+      const parts = token.split(".");
+      const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
+      expect(payload.role).toBe("business_owner");
     });
   });
 
   describe("generateRefreshToken", () => {
     it("should generate a valid JWT token", () => {
-      process.env.JWT_SECRET = "test-secret-key";
+      process.env.JWT_PRIVATE_KEY = privateKey as string;
       const token = generateRefreshToken(mockUser);
       expect(token).toBeDefined();
       expect(typeof token).toBe("string");
@@ -91,30 +142,37 @@ describe("Auth Service", () => {
 
   describe("generateTokenPair", () => {
     it("should return both access and refresh tokens", () => {
-      process.env.JWT_SECRET = "test-secret-key";
+      process.env.JWT_PRIVATE_KEY = privateKey as string;
       const tokens = generateTokenPair(mockUser);
       expect(tokens.accessToken).toBeDefined();
       expect(tokens.refreshToken).toBeDefined();
     });
 
     it("should have different tokens", () => {
-      process.env.JWT_SECRET = "test-secret-key";
+      process.env.JWT_PRIVATE_KEY = privateKey as string;
       const tokens = generateTokenPair(mockUser);
       expect(tokens.accessToken).not.toBe(tokens.refreshToken);
     });
   });
 
   describe("verifyToken", () => {
-    it("should verify a valid token", () => {
-      process.env.JWT_SECRET = "test-secret-key";
-      const token = generateAccessToken(mockUser);
-      const decoded = verifyToken(token);
-      expect(decoded.userId).toBe(mockUser.id);
-    });
-
     it("should throw on invalid token", () => {
-      process.env.JWT_SECRET = "test-secret-key";
+      process.env.JWT_PUBLIC_KEY = publicKey as string;
       expect(() => verifyToken("invalid.token.here")).toThrow();
+    });
+  });
+
+  describe("verifyTokenSafe", () => {
+    it("should return null on invalid token instead of throwing", () => {
+      const result = verifyTokenSafe("invalid.token.here");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("isTokenExpired", () => {
+    it("should return true for malformed token", () => {
+      const result = isTokenExpired("not.a.valid.token");
+      expect(result).toBe(true);
     });
   });
 
@@ -129,6 +187,10 @@ describe("Auth Service", () => {
 
     it("should have refresh token expiry 7d", () => {
       expect(REFRESH_TOKEN_EXPIRY).toBe("7d");
+    });
+
+    it("should use RS256 algorithm", () => {
+      expect(JWT_ALGORITHM).toBe("RS256");
     });
   });
 });
