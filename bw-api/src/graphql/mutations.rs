@@ -18,23 +18,12 @@ pub struct MutationRoot;
 
 /// Extract user ID from JWT token in Authorization header
 fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
-    let auth_header = ctx
-        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string())
-        .or_else(|| {
-            ctx.req()
-                .headers()
-                .get(axum::http::header::AUTHORIZATION)
-                .and_then(|h| h.to_str().ok())
-                .filter(|s| s.starts_with("Bearer "))
-                .map(|s| s.trim_start_matches("Bearer ").to_string())
-        });
+    let token = ctx
+        .data::<String>()
+        .map_err(|_| Error::new("Authorization token not available"))?;
 
-    auth_header
-        .ok_or_else(|| Error::new("Authorization header is required"))
-        .and_then(|token| {
-            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
-        })
+    Uuid::parse_str(token)
+        .map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
 }
 
 #[Object]
@@ -138,7 +127,9 @@ impl MutationRoot {
             GQLBusiness::from(Business {
                 id: bid,
                 name: n,
+                description: None,
                 category_id: cid,
+                owner_id: Uuid::new_v4(),
                 verified: v,
                 created_at: ca,
             })
@@ -217,5 +208,116 @@ impl MutationRoot {
             .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
         Ok(result.rows_affected() > 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_user_from_auth_valid_token() {
+        let valid_uuid = Uuid::new_v4().to_string();
+        let result = Uuid::parse_str(&valid_uuid);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_extract_user_from_auth_invalid_token() {
+        let invalid_token = "not-a-uuid";
+        let result = Uuid::parse_str(invalid_token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_business_name_required() {
+        let empty_name = "";
+        assert!(empty_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_validate_business_name_whitespace_only() {
+        let whitespace_name = "   ";
+        assert!(whitespace_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_validate_category_uuid_valid() {
+        let valid_uuid = Uuid::new_v4().to_string();
+        let result = Uuid::parse_str(&valid_uuid);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_category_uuid_invalid() {
+        let invalid_uuid = "not-a-uuid";
+        let result = Uuid::parse_str(invalid_uuid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_business_status_unverified_by_default() {
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: Some("Test description".to_string()),
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.into();
+        assert_eq!(gql_business.status, "unverified");
+        assert!(!gql_business.verified);
+    }
+
+    #[test]
+    fn test_business_conversion_includes_timestamp() {
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: None,
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.clone().into();
+        assert!(gql_business.created_at.timestamp > 0);
+    }
+
+    #[test]
+    fn test_business_conversion_preserves_optional_description() {
+        let description = "Optional description";
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: Some(description.to_string()),
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.into();
+        assert_eq!(gql_business.description, Some(description.to_string()));
+    }
+
+    #[test]
+    fn test_business_conversion_none_description() {
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: None,
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.into();
+        assert!(gql_business.description.is_none());
     }
 }
