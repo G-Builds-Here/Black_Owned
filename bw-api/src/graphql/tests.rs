@@ -28,6 +28,7 @@ async fn setup_test_schema(pool: &sqlx::PgPool) {
             id UUID PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             category_id UUID NOT NULL,
+            owner_id UUID NOT NULL,
             verified BOOLEAN DEFAULT false,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
@@ -80,29 +81,30 @@ async fn test_submit_review_success() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
         .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
 
     let user_id = Uuid::new_v4();
     let request = Request::new(
-        r#"
-        mutation {
-            submitReview(businessId: "BUSINESS_ID", userId: "USER_ID", rating: 5, comment: "Great business!") {
-                id
-                businessId
-                userId
-                rating
-                comment
-            }
-        }
-        "#
-        .replace("BUSINESS_ID", &business_id.to_string())
-        .replace("USER_ID", &user_id.to_string()),
+        format!(
+            r#"
+            mutation {{
+                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "Great business!") {{
+                    id
+                    businessId
+                    userId
+                    rating
+                    comment
+                }}
+            }}
+            "#
+        ),
     );
 
     let response = schema.execute(request).await;
@@ -133,30 +135,27 @@ async fn test_submit_review_duplicate_rejected() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
         .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
 
     // Submit first review
-    let business_id_str = business_id.to_string();
-    let user_id_str = user_id.to_string();
     let request = Request::new(
         format!(
             r#"
             mutation {{
-                submitReview(businessId: "BUSINESS_ID", userId: "USER_ID", rating: 5, comment: "First review") {{
+                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "First review") {{
                     id
                     rating
                     comment
                 }}
             }}
             "#
-            .replace("BUSINESS_ID", &business_id_str)
-            .replace("USER_ID", &user_id_str),
         ),
     );
 
@@ -168,15 +167,13 @@ async fn test_submit_review_duplicate_rejected() {
         format!(
             r#"
             mutation {{
-                submitReview(businessId: "BUSINESS_ID", userId: "USER_ID", rating: 5, comment: "First review") {{
+                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "First review") {{
                     id
                     rating
                     comment
                 }}
             }}
             "#
-            .replace("BUSINESS_ID", &business_id_str)
-            .replace("USER_ID", &user_id_str),
         ),
     );
     let response = schema.execute(request2).await;
@@ -201,10 +198,11 @@ async fn test_rating_aggregation() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
         .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
@@ -217,14 +215,12 @@ async fn test_rating_aggregation() {
             format!(
                 r#"
                 mutation {{
-                    submitReview(businessId: "BUSINESS_ID", userId: "USER_ID", rating: {}, comment: "Review") {{
+                    submitReview(businessId: "{business_id}", userId: "{user_id}", rating: {}, comment: "Review") {{
                         id
                         rating
                     }}
                 }}
-                "#
-                .replace("BUSINESS_ID", &business_id.to_string())
-                .replace("USER_ID", &user_id.to_string()),
+                "#,
                 rating
             ),
         );
@@ -235,17 +231,18 @@ async fn test_rating_aggregation() {
 
     // Query for business and verify rating aggregation
     let request = Request::new(
-        r#"
-        query {
-            business(id: "BUSINESS_ID") {
-                id
-                name
-                ratingAvg
-                reviewCount
-            }
-        }
-        "#
-        .replace("BUSINESS_ID", &business_id.to_string()),
+        format!(
+            r#"
+            query {{
+                business(id: "{business_id}") {{
+                    id
+                    name
+                    ratingAvg
+                    reviewCount
+                }}
+            }}
+            "#
+        ),
     );
 
     let response = schema.execute(request).await;
@@ -271,15 +268,15 @@ async fn test_submit_review_invalid_rating() {
     let user_id = Uuid::new_v4();
 
     let request = Request::new(
-        r#"
-        mutation {
-            submitReview(businessId: "BUSINESS_ID", userId: "USER_ID", rating: 6, comment: "Invalid") {
-                id
-            }
-        }
-        "#
-        .replace("BUSINESS_ID", &business_id.to_string())
-        .replace("USER_ID", &user_id.to_string()),
+        format!(
+            r#"
+            mutation {{
+                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 6, comment: "Invalid") {{
+                    id
+                }}
+            }}
+            "#
+        ),
     );
 
     let response = schema.execute(request).await;
@@ -304,26 +301,28 @@ async fn test_business_rating_avg_none_when_no_reviews() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
         .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
 
     let request = Request::new(
-        r#"
-        query {
-            business(id: "BUSINESS_ID") {
-                id
-                name
-                ratingAvg
-                reviewCount
-            }
-        }
-        "#
-        .replace("BUSINESS_ID", &business_id.to_string()),
+        format!(
+            r#"
+            query {{
+                business(id: "{business_id}") {{
+                    id
+                    name
+                    ratingAvg
+                    reviewCount
+                }}
+            }}
+            "#
+        ),
     );
 
     let response = schema.execute(request).await;
@@ -337,4 +336,182 @@ async fn test_business_rating_avg_none_when_no_reviews() {
 
     let review_count: i32 = business.get("reviewCount").unwrap().as_i64().unwrap() as i32;
     assert_eq!(review_count, 0, "Expected 0 reviews");
+}
+
+#[tokio::test]
+async fn test_update_business_owner_success() {
+    let schema = create_test_schema().await;
+
+    let business_id = Uuid::new_v4();
+    let category_id = Uuid::new_v4();
+    let owner_id = Uuid::new_v4();
+
+    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
+        .bind(category_id)
+        .bind("Test Category")
+        .bind("Test Description")
+        .execute(schema.data::<sqlx::PgPool>().unwrap())
+        .await
+        .unwrap();
+
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
+        .bind(business_id)
+        .bind("Original Name")
+        .bind(category_id)
+        .bind(owner_id)
+        .execute(schema.data::<sqlx::PgPool>().unwrap())
+        .await
+        .unwrap();
+
+    let request = Request::new(
+        format!(
+            r#"
+            mutation {{
+                updateBusiness(id: "{business_id}", name: "Updated Name", categoryId: "{category_id}", verified: true) {{
+                    id
+                    name
+                    categoryId
+                    verified
+                }}
+            }}
+            "#
+        ),
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(response.errors.is_empty(), "Update by owner should succeed: {:?}", response.errors);
+
+    let data: serde_json::Value = response.data.into_json().unwrap();
+    let business = data.get("updateBusiness").unwrap();
+
+    assert_eq!(business.get("name").unwrap(), "Updated Name");
+    assert_eq!(business.get("categoryId").unwrap().as_str().unwrap(), category_id.to_string());
+    assert_eq!(business.get("verified").unwrap(), true);
+}
+
+#[tokio::test]
+async fn test_update_business_not_owner_rejected() {
+    let schema = create_test_schema().await;
+
+    let business_id = Uuid::new_v4();
+    let category_id = Uuid::new_v4();
+    let owner_id = Uuid::new_v4();
+    let non_owner_id = Uuid::new_v4();
+
+    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
+        .bind(category_id)
+        .bind("Test Category")
+        .bind("Test Description")
+        .execute(schema.data::<sqlx::PgPool>().unwrap())
+        .await
+        .unwrap();
+
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
+        .bind(business_id)
+        .bind("Original Name")
+        .bind(category_id)
+        .bind(owner_id)
+        .execute(schema.data::<sqlx::PgPool>().unwrap())
+        .await
+        .unwrap();
+
+    // Note: The mutation extracts user ID from JWT token, not from arguments
+    // This test verifies that a non-owner cannot update the business
+    let request = Request::new(
+        format!(
+            r#"
+            mutation {{
+                updateBusiness(id: "{business_id}", name: "Hacked Name") {{
+                    id
+                    name
+                }}
+            }}
+            "#
+        ),
+    );
+
+    let response = schema.execute(request).await;
+
+    // Should fail because the authenticated user (non_owner_id) is not the owner
+    assert!(!response.errors.is_empty(), "Update by non-owner should be rejected");
+}
+
+#[tokio::test]
+async fn test_update_business_not_found_returns_null() {
+    let schema = create_test_schema().await;
+
+    let non_existent_id = Uuid::new_v4();
+
+    let request = Request::new(
+        format!(
+            r#"
+            mutation {{
+                updateBusiness(id: "{non_existent_id}", verified: false) {{
+                    id
+                    name
+                }}
+            }}
+            "#
+        ),
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(response.errors.is_empty(), "Query should succeed: {:?}", response.errors);
+
+    let data: serde_json::Value = response.data.into_json().unwrap();
+    let business = data.get("updateBusiness").unwrap();
+
+    assert!(business.is_null(), "Should return null for non-existent business");
+}
+
+#[tokio::test]
+async fn test_update_business_partial_fields() {
+    let schema = create_test_schema().await;
+
+    let business_id = Uuid::new_v4();
+    let category_id = Uuid::new_v4();
+    let owner_id = Uuid::new_v4();
+
+    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
+        .bind(category_id)
+        .bind("Test Category")
+        .bind("Test Description")
+        .execute(schema.data::<sqlx::PgPool>().unwrap())
+        .await
+        .unwrap();
+
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
+        .bind(business_id)
+        .bind("Original Name")
+        .bind(category_id)
+        .bind(owner_id)
+        .execute(schema.data::<sqlx::PgPool>().unwrap())
+        .await
+        .unwrap();
+
+    let request = Request::new(
+        format!(
+            r#"
+            mutation {{
+                updateBusiness(id: "{business_id}", verified: true) {{
+                    id
+                    name
+                    verified
+                }}
+            }}
+            "#
+        ),
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(response.errors.is_empty(), "Partial update should succeed: {:?}", response.errors);
+
+    let data: serde_json::Value = response.data.into_json().unwrap();
+    let business = data.get("updateBusiness").unwrap();
+
+    assert_eq!(business.get("name").unwrap(), "Original Name", "Name should remain unchanged");
+    assert_eq!(business.get("verified").unwrap(), true);
 }

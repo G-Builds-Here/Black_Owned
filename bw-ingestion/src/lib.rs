@@ -24,6 +24,9 @@ pub mod stream_config;
 
 pub mod cache_invalidator;
 
+#[cfg(feature = "integration_test")]
+pub mod cache_service;
+
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
 
@@ -75,6 +78,7 @@ impl BusinessIngestionHandler {
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
+            description: None,
             category_id: *category_id,
             verified: false,
             created_at: chrono::Utc::now(),

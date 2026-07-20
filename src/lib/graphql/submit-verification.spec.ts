@@ -131,8 +131,9 @@ describe("submitVerification mutation", () => {
   it("should handle error from MinIO service", async () => {
     // Mock MinioService to throw an error
     const mockMinioService = {
-      generatePresignedPutUrlsBatch: jest
-      .mockRejectedValue(new Error("MinIO connection failed"));
+      generatePresignedPutUrlsBatch: jest.fn()
+        .mockRejectedValue(new Error("MinIO connection failed")),
+    };
 
     (MinioService as jest.Mock).mockImplementation(() => mockMinioService);
 

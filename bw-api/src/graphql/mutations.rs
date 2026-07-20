@@ -177,10 +177,11 @@ impl MutationRoot {
             GQLBusiness::from(Business {
                 id: bid,
                 name: n,
+                description: None,
                 category_id: cid,
+                owner_id: oid,
                 verified: v,
                 created_at: ca,
-                owner_id: oid,
             })
         }))
     }
@@ -225,7 +226,6 @@ impl MutationRoot {
 
         if existing {
             return Err(Error::new("A review for this business by this user already exists"));
-        }
         }
 
         let id = Uuid::new_v4();

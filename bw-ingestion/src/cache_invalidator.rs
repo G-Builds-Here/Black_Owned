@@ -250,6 +250,12 @@ async fn delete_key(valkey_url: &str, key: &str) -> Result<()> {
     Ok(())
 }
 
+/// Test helper to expose delete_key for integration tests
+#[cfg(any(test, feature = "integration_test"))]
+pub async fn test_delete_key(valkey_url: &str, key: &str) -> Result<()> {
+    delete_key(valkey_url, key).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

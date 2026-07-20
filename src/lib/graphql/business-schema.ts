@@ -15,14 +15,7 @@ export const businessTypeDefs = `#graphql
     createdAt: DateTimeUtc!
   }
 
-<<<<<<< HEAD
   type CreateBusinessPayload {
-    success: Boolean!
-    business: Business
-    error: String
-  }
-
-  type UpdateBusinessResponse {
     success: Boolean!
     business: Business
     error: String
@@ -40,6 +33,5 @@ export const businessTypeDefs = `#graphql
 
   type Mutation {
     createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
-    updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
   }
 `;

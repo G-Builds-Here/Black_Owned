@@ -308,11 +308,6 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-
-/**
- * Search businesses resolver with pagination, relevance ranking, and category facets
->>>>>>> feature/LOC-0037-AC5
- */
 function businessToGraphqlBusiness(business: BusinessRecord) {
   return {
     id: business.id,
@@ -598,11 +593,8 @@ export const resolvers = {
   },
   Mutation: {
     register,
-<<<<<<< HEAD
+    createBusiness,
     submitVerification,
     updateBusiness,
-=======
-    createBusiness,
->>>>>>> feature/LOC-0037-AC1
   },
 };
