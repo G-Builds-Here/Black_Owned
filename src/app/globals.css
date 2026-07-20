@@ -45,7 +45,7 @@
   --color-heritage-midnight: #191970;
   --color-heritage-onyx: #353839;
 
-  /* Neutral Scale */
+  /* Neutral Scale - WCAG AA Compliant */
   --color-neutral-50: #FAFAFA;
   --color-neutral-100: #F5F5F5;
   --color-neutral-200: #E5E5E5;
@@ -71,6 +71,10 @@
   --shadow-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
   --shadow-medium: 0 4px 20px -2px rgba(0, 0, 0, 0.1), 0 8px 25px -3px rgba(0, 0, 0, 0.08);
   --shadow-strong: 0 10px 40px -5px rgba(0, 0, 0, 0.15), 0 15px 30px -5px rgba(0, 0, 0, 0.1);
+
+  /* Cultural Pattern Backgrounds */
+  --pattern-kente-stripes: repeating-linear-gradient(90deg, #CC7722 0px, #CC7722 20px, #FFD700 20px, #FFD700 40px, #00A86B 40px, #00A86B 60px);
+  --pattern-bogolan-dots: radial-gradient(circle, #CC7722 2px, transparent 2.5px), radial-gradient(circle, #FFD700 2px, transparent 2.5px);
 }
 
 /* Base styles */
@@ -83,6 +87,7 @@
 html {
   -webkit-text-size-adjust: 100%;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  scroll-behavior: smooth;
 }
 
 body {
@@ -140,9 +145,9 @@ p {
   margin-bottom: 1rem;
 }
 
-/* Focus visible for accessibility */
+/* Focus visible for accessibility - WCAG 2.1 compliant */
 :focus-visible {
-  outline: 2px solid var(--color-heritage-ochre);
+  outline: 3px solid var(--color-heritage-ochre);
   outline-offset: 2px;
 }
 
@@ -152,10 +157,21 @@ button {
   cursor: pointer;
 }
 
+/* Minimum touch target size for mobile - 44px minimum per WCAG */
+button,
+a,
+input[type="button"],
+input[type="submit"],
+[role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
 /* Remove default link styles */
 a {
   color: var(--color-heritage-ochre);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   transition: color 150ms ease-out;
 }
 
@@ -186,4 +202,147 @@ a:hover {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-neutral-400);
+}
+
+/* Skip to main content link for screen readers */
+.skip-to-main {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: var(--color-heritage-ochre);
+  color: white;
+  padding: 1rem 2rem;
+  z-index: 10000;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.skip-to-main:focus {
+  top: 0;
+}
+
+/* Cultural Pattern Utilities */
+.pattern-kente {
+  background: var(--pattern-kente-stripes);
+}
+
+.pattern-bogolan {
+  background-color: var(--color-neutral-900);
+  background-image: var(--pattern-bogolan-dots);
+  background-size: 20px 20px;
+}
+
+.pattern-geometric {
+  background-color: var(--color-heritage-forest);
+  background-image:
+    linear-gradient(45deg, var(--color-heritage-gold) 25%, transparent 25%, transparent 75%, var(--color-heritage-gold) 75%),
+    linear-gradient(-45deg, var(--color-heritage-gold) 25%, transparent 25%, transparent 75%, var(--color-heritage-gold) 75%);
+  background-size: 20px 20px;
+}
+
+/* Heritage accent border */
+.border-heritage-accent {
+  border-image: linear-gradient(to right, var(--color-heritage-ochre), var(--color-heritage-gold), var(--color-heritage-forest)) 1;
+}
+
+/* Subtle cultural pattern overlay */
+.cultural-overlay {
+  position: relative;
+}
+
+.cultural-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    var(--color-heritage-ochre) 0%,
+    var(--color-heritage-gold) 25%,
+    var(--color-heritage-forest) 50%,
+    var(--color-heritage-gold) 75%,
+    var(--color-heritage-ochre) 100%
+  );
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --color-heritage-ochre: #B8860B;
+    --color-heritage-forest: #006400;
+    --color-heritage-royal: #4B0082;
+  }
+
+  button,
+  a {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-neutral-50: #171717;
+    --color-neutral-100: #262626;
+    --color-neutral-200: #404040;
+    --color-neutral-800: #E5E5E5;
+    --color-neutral-900: #FAFAFA;
+  }
+
+  body {
+    background-color: var(--color-neutral-50);
+    color: var(--color-neutral-100);
+  }
+}
+
+/* Image lazy loading placeholder */
+img[loading="lazy"] {
+  background: linear-gradient(90deg, var(--color-neutral-200) 25%, var(--color-neutral-300) 50%, var(--color-neutral-200) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Print styles */
+@media print {
+  nav,
+  footer,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+
+  a {
+    text-decoration: underline;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+  }
 }

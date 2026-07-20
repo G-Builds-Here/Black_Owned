@@ -1,6 +1,7 @@
 'use client';
 
-import React, { HTMLAttributes, forwardRef } from 'react';
+import React, { HTMLAttributes, forwardRef, ElementType, ReactElement } from 'react';
+import Link, { LinkProps } from 'next/link';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   /** Card variant */
@@ -13,6 +14,10 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   header?: React.ReactNode;
   /** Card footer */
   footer?: React.ReactNode;
+  /** Render as a different element (e.g., Link) */
+  as?: ElementType;
+  /** Link href when as=Link */
+  href?: LinkProps['href'];
 }
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
@@ -25,6 +30,8 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       footer,
       children,
       className = '',
+      as: Component,
+      href,
       ...props
     },
     ref
@@ -62,7 +69,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-heritage-ochre focus:ring-offset-2'
       : '';
 
-    return (
+    const cardContent = (
       <div
         ref={ref}
         className={`${baseStyles} ${variantStyles[variant]} ${paddingStyles[padding]} ${clickableStyles} ${className}`}
@@ -87,6 +94,12 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         )}
       </div>
     );
+
+    if (Component && href) {
+      return <Component href={href}>{cardContent}</Component>;
+    }
+
+    return cardContent;
   }
 );
 

@@ -1,0 +1,23 @@
+{
+  "type": "dupin",
+  "ticket_key": "LOC-0030",
+  "status": "in_progress",
+  "branch": "epic/LOC-0030",
+  "repo": "C:/Users/Merlin/Documents/repos/Black_Owned",
+  "route": "N/A",
+  "summary": "LOC-0034-AC3 merged; dispatched LOC-0050-AC6 + LOC-0051 impl",
+  "step": "orchestration-loop",
+  "ticket_status": "In Implementation",
+  "Stories": "LOC-0031, LOC-0034, LOC-0050, LOC-0051",
+  "Current Story": "N/A",
+  "phase_stories": "['LOC-0034', 'LOC-0051']",
+  "phase": 1,
+  "total_phases": 1,
+  "ACs In Progress": "LOC-0050-AC6, LOC-0051",
+  "ACs Done": "LOC-0034-AC3",
+  "ACs Merged": "LOC-0031-AC1, LOC-0031-AC2, LOC-0031-AC3, LOC-0034-AC1, LOC-0034-AC2, LOC-0034-AC3, LOC-0050-AC1, LOC-0050-AC2, LOC-0050-AC3, LOC-0050-AC4, LOC-0050-AC5, LOC-0050-AC7",
+  "Stories Merged to Epic": "LOC-0031, LOC-0034",
+  "epic_branch": "epic/LOC-0030",
+  "GIT_PLATFORM": "github",
+  "_qa": "{\"open_questions\":[],\"answered_questions\":[],\"decisions\":[],\"dispatched_this_cycle\":[\"LOC-0050-AC6\",\"LOC-0051\"]}"
+}

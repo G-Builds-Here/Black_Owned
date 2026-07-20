@@ -1,9 +1,265 @@
-* {
+/*
+ * Black Owned Design System - Global Styles
+ *
+ * This stylesheet implements subtle visual elements that honor Black heritage
+ * while maintaining a modern, professional aesthetic. Cultural nods include:
+ * - Warm earth-tone color palette inspired by African landscapes
+ * - Gold accents celebrating prosperity and achievement
+ * - Subtle geometric patterns referencing traditional textile designs
+ * - Typography that balances warmth with professionalism
+ */
+
+/* CSS Custom Properties for theming */
+:root {
+  /* Primary heritage colors - warm terracotta earth tones */
+  --color-primary-50: #FDF8F6;
+  --color-primary-100: #F9EFE9;
+  --color-primary-200: #F2DED7;
+  --color-primary-300: #E8C4BC;
+  --color-primary-400: #DDA699;
+  --color-primary-500: #C9856D;
+  --color-primary-600: #B06D54;
+  --color-primary-700: #8F5240;
+  --color-primary-800: #754235;
+  --color-primary-900: #5F362C;
+
+  /* Gold accents - prosperity and celebration */
+  --color-gold-50: #FFFBF0;
+  --color-gold-100: #FFF5D4;
+  --color-gold-200: #FFE9A3;
+  --color-gold-300: #FFD966;
+  --color-gold-400: #FFC72C;
+  --color-gold-500: #FFB300;
+  --color-gold-600: #E59F00;
+  --color-gold-700: #BF8500;
+  --color-gold-800: #9A6B00;
+  --color-gold-900: #7D5700;
+
+  /* Deep indigo - traditional textile reference */
+  --color-indigo-50: #F0F4F8;
+  --color-indigo-100: #D9E2F0;
+  --color-indigo-200: #B5C8E0;
+  --color-indigo-300: #8BA8CC;
+  --color-indigo-400: #5F85B3;
+  --color-indigo-500: #3D6299;
+  --color-indigo-600: #2F4D7A;
+  --color-indigo-700: #263E63;
+  --color-indigo-800: #1F3352;
+  --color-indigo-900: #1A2B45;
+
+  /* Burgundy accent */
+  --color-burgundy-50: #FBF0F2;
+  --color-burgundy-100: #F7E0E5;
+  --color-burgundy-200: #F0C4CD;
+  --color-burgundy-300: #E7A0AE;
+  --color-burgundy-400: #DD7589;
+  --color-burgundy-500: #D1526B;
+  --color-burgundy-600: #B54056;
+  --color-burgundy-700: #913345;
+  --color-burgundy-800: #752B3A;
+  --color-burgundy-900: #5F2431;
+
+  /* Earth tones */
+  --color-earth-sand: #E8DCC4;
+  --color-earth-clay: #C4A582;
+  --color-earth-sienna: #A07855;
+  --color-earth-charcoal: #3D3D3D;
+
+  /* Neutrals */
+  --color-neutral-50: #FAFAFA;
+  --color-neutral-100: #F5F5F5;
+  --color-neutral-200: #E5E5E5;
+  --color-neutral-300: #D4D4D4;
+  --color-neutral-400: #A3A3A3;
+  --color-neutral-500: #737373;
+  --color-neutral-600: #525252;
+  --color-neutral-700: #404040;
+  --color-neutral-800: #262626;
+  --color-neutral-900: #171717;
+
+  /* Functional */
+  --color-success: #2D7A4F;
+  --color-warning: #D97706;
+  --color-error: #DC2626;
+  --color-info: #2563EB;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* Border radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+  /* Typography */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: "Fira Code", "Courier New", monospace;
+}
+
+/* Base reset */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
+}
+
+/* Base typography - warm, professional */
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  color: var(--color-neutral-800);
+  background-color: var(--color-neutral-50);
+  line-height: 1.5;
+}
+
+/* Subtle heritage accent border - top of page */
+body::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--color-primary-500) 0%,
+    var(--color-gold-500) 25%,
+    var(--color-indigo-500) 50%,
+    var(--color-gold-500) 75%,
+    var(--color-primary-500) 100%
+  );
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+}
+
+/* Headings - serif for warmth and tradition */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-neutral-900);
+}
+
+h1 {
+  font-size: 2.25rem;
+  margin-bottom: var(--spacing-lg);
+}
+
+h2 {
+  font-size: 1.875rem;
+  margin-bottom: var(--spacing-md);
+}
+
+h3 {
+  font-size: 1.5rem;
+  margin-bottom: var(--spacing-md);
+}
+
+/* Subtle cultural pattern accent for section headers */
+h2::after {
+  content: "";
+  display: block;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--color-gold-500) 0%,
+    var(--color-primary-500) 100%
+  );
+  margin-top: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+}
+
+/* Links - professional with warm accent on hover */
+a {
+  color: var(--color-indigo-600);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-primary-600);
+}
+
+/* Focus states - gold accent for visibility and celebration */
+:focus-visible {
+  outline: 2px solid var(--color-gold-500);
+  outline-offset: 2px;
+}
+
+/* Button base - warm, inviting */
+button {
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+/* Card base with subtle heritage-inspired shadow */
+.card {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+  border-left: 3px solid var(--color-earth-clay);
+}
+
+/* Subtle pattern overlay for backgrounds */
+.pattern-accent {
+  position: relative;
+}
+
+.pattern-accent::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(var(--color-earth-clay) 1px, transparent 1px);
+  background-size: 20px 20px;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* Gold accent divider */
+.divider-accent {
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-gold-400) 20%,
+    var(--color-gold-500) 50%,
+    var(--color-gold-400) 80%,
+    transparent 100%
+  );
+  margin: var(--spacing-xl) 0;
+  border: none;
+}
+
+/* Utility class for gold accent text */
+.text-gold {
+  color: var(--color-gold-600);
+}
+
+/* Utility class for earth tone backgrounds */
+.bg-earth {
+  background-color: var(--color-earth-sand);
 }

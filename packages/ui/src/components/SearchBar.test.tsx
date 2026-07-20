@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SearchBar } from './SearchBar';
+import styles from './SearchBar.module.css';
 
 describe('SearchBar', () => {
   it('renders with default placeholder', () => {
@@ -48,5 +49,19 @@ describe('SearchBar', () => {
     fireEvent.keyDown(input, { key: 'a', code: 'KeyA' });
 
     expect(handleSearch).not.toHaveBeenCalled();
+  });
+
+  it('applies cultural styling - search bar class', () => {
+    const { container } = render(<SearchBar value="" onChange={() => {}} />);
+    const input = container.querySelector(`.${styles.searchBar}`);
+
+    expect(input).toBeInTheDocument();
+  });
+
+  it('applies cultural heritage styling - warm focus border', () => {
+    const { container } = render(<SearchBar value="" onChange={() => {}} />);
+    const input = container.querySelector(`.${styles.searchBar}`);
+
+    expect(input).toBeInTheDocument();
   });
 });

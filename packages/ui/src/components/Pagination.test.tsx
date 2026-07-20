@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Pagination } from './Pagination';
+import styles from './Pagination.module.css';
 
 describe('Pagination', () => {
   it('renders current and total page numbers', () => {
@@ -50,7 +51,7 @@ describe('Pagination', () => {
   it('marks current page as active', () => {
     const { container } = render(<Pagination currentPage={3} totalPages={5} onPageChange={() => {}} />);
 
-    const activeButton = container.querySelector('.pagination-pages button.active');
+    const activeButton = container.querySelector(`.${styles.paginationPages} button.${styles.active}`);
     expect(activeButton?.textContent).toBe('3');
   });
 
@@ -67,5 +68,12 @@ describe('Pagination', () => {
     fireEvent.click(screen.getByText('2'));
 
     expect(handlePageChange).toHaveBeenCalledWith(2);
+  });
+
+  it('applies cultural gold styling for active page', () => {
+    const { container } = render(<Pagination currentPage={2} totalPages={5} onPageChange={() => {}} />);
+    const activeButton = container.querySelector(`.${styles.active}`);
+
+    expect(activeButton).toBeInTheDocument();
   });
 });

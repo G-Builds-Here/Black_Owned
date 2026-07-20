@@ -1,0 +1,82 @@
+/*
+ * Pagination Component Styles
+ *
+ * Cultural design elements:
+ * - Gold accent for active page celebrating current position
+ * - Warm terracotta hover states
+ * - Professional, accessible navigation design
+ */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.paginationPrev,
+.paginationNext {
+  background: white;
+  border: 2px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-neutral-700);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.paginationPrev:hover:not(:disabled),
+.paginationNext:hover:not(:disabled) {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-700);
+  background: var(--color-primary-50);
+}
+
+.paginationPrev:disabled,
+.paginationNext:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paginationPages {
+  display: flex;
+  list-style: none;
+  gap: 2px;
+}
+
+.paginationPages button {
+  min-width: 36px;
+  height: 36px;
+  background: white;
+  border: 2px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-neutral-700);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.paginationPages button:hover:not(:disabled) {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-700);
+  background: var(--color-primary-50);
+}
+
+.paginationPages button.active {
+  background: linear-gradient(135deg, var(--color-gold-400) 0%, var(--color-gold-500) 100%);
+  border-color: var(--color-gold-500);
+  color: var(--color-neutral-900);
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(255, 179, 0, 0.2);
+}
+
+.paginationPages button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

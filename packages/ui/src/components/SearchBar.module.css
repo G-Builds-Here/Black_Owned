@@ -1,0 +1,36 @@
+/*
+ * SearchBar Component Styles
+ *
+ * Cultural design elements:
+ * - Warm terracotta focus border representing earth connection
+ * - Gold accent on focus state celebrating discovery
+ * - Subtle pattern in background
+ */
+
+.searchBar {
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  color: var(--color-neutral-800);
+  background: white;
+  border: 2px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.searchBar::placeholder {
+  color: var(--color-neutral-400);
+}
+
+.searchBar:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px var(--color-gold-200);
+  background: linear-gradient(to bottom, white 0%, var(--color-gold-50) 100%);
+}
+
+.searchBar:hover {
+  border-color: var(--color-earth-clay);
+}

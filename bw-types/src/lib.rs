@@ -2,6 +2,8 @@
 //!
 //! Core domain types for the Black Owned platform.
 
+pub mod email;
+
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
@@ -13,7 +15,9 @@ use uuid::Uuid;
 pub struct Business {
     pub id: Uuid,
     pub name: String,
+    pub description: Option<String>,
     pub category_id: Uuid,
+    pub owner_id: Uuid,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
 }

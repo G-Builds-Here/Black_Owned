@@ -1,0 +1,45 @@
+/*
+ * VerifiedBadge Component Styles
+ *
+ * Cultural design elements:
+ * - Gold gradient celebrating verified Black-owned businesses
+ * - Professional appearance with warm accent colors
+ * - Subtle shine effect on verified state
+ */
+
+.verifiedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+}
+
+.verified {
+  background: linear-gradient(135deg, var(--color-gold-400) 0%, var(--color-gold-500) 100%);
+  color: var(--color-neutral-900);
+  box-shadow: 0 2px 4px rgba(255, 179, 0, 0.2);
+}
+
+.verified::before {
+  content: "✓";
+  color: var(--color-neutral-900);
+  font-weight: 700;
+}
+
+.unverified {
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-500);
+}
+
+.badgeLabel {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.verified .badgeLabel {
+  color: var(--color-neutral-800);
+}

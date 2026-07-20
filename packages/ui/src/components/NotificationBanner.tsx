@@ -1,4 +1,5 @@
 import React from 'react';
+import styles from './NotificationBanner.module.css';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 
@@ -16,10 +17,10 @@ export const NotificationBanner: React.FC<NotificationBannerProps> = ({
   dismissible = true,
 }) => {
   return (
-    <div className={`notification-banner ${type}`} role="alert">
-      <span className="notification-message">{message}</span>
+    <div className={`${styles.notificationBanner} ${styles[type]}`} role="alert">
+      <span className={styles.notificationMessage}>{message}</span>
       {dismissible && onClose && (
-        <button className="notification-close" onClick={onClose} aria-label="Close">
+        <button className={styles.notificationClose} onClick={onClose} aria-label="Close">
           ×
         </button>
       )}

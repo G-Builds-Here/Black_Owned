@@ -1,0 +1,108 @@
+/*
+ * BusinessCard Component Styles
+ *
+ * Cultural design elements:
+ * - Warm terracotta border accent representing earth connection
+ * - Subtle gold highlight on hover celebrating business achievement
+ * - Professional card layout with heritage-inspired color accents
+ */
+
+.businessCard {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+  border-left: 4px solid var(--color-primary-500);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.businessCard::before {
+  /* Subtle geometric pattern accent - inspired by African textile motifs */
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 80px;
+  height: 80px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    var(--color-earth-clay) 10px,
+    var(--color-earth-clay) 12px
+  );
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.businessCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-left-color: var(--color-gold-500);
+}
+
+.businessCard h2 {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-neutral-900);
+  margin-bottom: var(--spacing-sm);
+  position: relative;
+}
+
+.businessCard h2::after {
+  /* Subtle gold accent line under business name */
+  content: "";
+  display: block;
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--color-gold-400) 0%,
+    var(--color-primary-500) 100%
+  );
+  margin-top: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+}
+
+.rating {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--color-gold-600);
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.rating::before {
+  /* Star icon accent */
+  content: "★";
+  color: var(--color-gold-500);
+}
+
+.description {
+  color: var(--color-neutral-600);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin-bottom: var(--spacing-sm);
+}
+
+.address {
+  color: var(--color-neutral-500);
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.address::before {
+  /* Location accent dot in earth tone */
+  content: "";
+  width: 6px;
+  height: 6px;
+  background-color: var(--color-earth-clay);
+  border-radius: var(--radius-full);
+}

@@ -1,7 +1,12 @@
 //! API module for Black Owned platform.
 
+pub mod graphql;
+
 use bw_types::{Business, Category, Review};
 use serde::{Deserialize, Serialize};
+
+pub mod middleware;
+pub mod routes;
 
 /// API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -53,16 +58,20 @@ impl BusinessApi {
     /// Returns an error if the business name is empty.
     pub fn create_business(
         name: &str,
+        description: Option<&str>,
         category_id: &uuid::Uuid,
+        owner_id: &uuid::Uuid,
     ) -> Result<Business, String> {
-        if name.is_empty() {
-            return Err("Business name is required".to_string());
+        if name.trim().is_empty() {
+            return Err("Name is required".to_string());
         }
 
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: name.to_string(),
+            description: description.map(String::from),
             category_id: *category_id,
+            owner_id: *owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
         })

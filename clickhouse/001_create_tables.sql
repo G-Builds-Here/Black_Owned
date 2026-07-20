@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS businesses (
     category_id UUID,
     verified UInt8 DEFAULT 0,
     created_at DateTime64(6, 'UTC'),
+    owner_id UUID,
     _version UInt64
 ) ENGINE = ReplacingMergeTree(_version)
 ORDER BY id;
