@@ -17,6 +17,7 @@ import {
   User,
 } from "../../types/user";
 import { storeRefreshToken } from "../valkey/valkey-client";
+import { MinioService, createMinioServiceFromEnv, PresignedUrlResult } from "../minio/minio-service";
 
 /**
  * Mock business data for search
@@ -224,6 +225,80 @@ export function searchBusinesses(
 }
 
 /**
+ * Get MinIO service instance (lazy initialization)
+ */
+export let minioService: MinioService | null = null;
+
+export function resetMinioService(): void {
+  minioService = null;
+}
+
+function getMinioService(): MinioService {
+  if (!minioService) {
+    minioService = createMinioServiceFromEnv();
+  }
+  return minioService;
+}
+
+/**
+ * Submit verification mutation resolver
+ * Generates presigned PUT URLs for uploading verification documents to MinIO
+ */
+export async function submitVerification(
+  _parent: unknown,
+  args: { businessId: string; fileNames: string[] }
+): Promise<{
+  success: boolean;
+  presignedUrls?: PresignedUrlResult[];
+  error?: string;
+}> {
+  const { businessId, fileNames } = args;
+
+  // Validate required fields
+  if (!businessId || businessId.trim() === "") {
+    return {
+      success: false,
+      error: "Missing required field: businessId",
+    };
+  }
+
+  if (!fileNames || fileNames.length === 0) {
+    return {
+      success: false,
+      error: "Missing required field: fileNames (must provide at least one file)",
+    };
+  }
+
+  try {
+    const minio = getMinioService();
+
+    // Use the verification-docs bucket for verification documents
+    const bucket = "verification-docs";
+
+    // Generate object names in the format: {businessId}/{filename}
+    const objectNames = fileNames.map((fileName) => `${businessId}/${fileName}`);
+
+    // Generate presigned PUT URLs with 15-minute expiry (900 seconds)
+    const presignedUrls = await minio.generatePresignedPutUrlsBatch(
+      bucket,
+      objectNames,
+      900 // 15 minutes
+    );
+
+    return {
+      success: true,
+      presignedUrls,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
@@ -233,5 +308,6 @@ export const resolvers = {
   },
   Mutation: {
     register,
+    submitVerification,
   },
 };
