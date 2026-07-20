@@ -129,7 +129,7 @@ impl CacheInvalidator {
 
             let consumer_config = jetstream::consumer::push::Config {
                 durable_name: Some("cache_invalidator".to_string()),
-                deliver_policy: jetstream::consumer::DeliverPolicy::All,
+                deliver_policy: jetstream::consumer::DeliverPolicy::New,
                 ack_policy: jetstream::consumer::AckPolicy::Explicit,
                 max_deliver: 3,
                 ..Default::default()
@@ -219,7 +219,7 @@ async fn process_invalidate_message(valkey_url: &str, msg: async_nats::jetstream
 ///
 /// # Errors
 /// Returns an error if the connection fails or the delete operation fails
-async fn delete_key(valkey_url: &str, key: &str) -> Result<()> {
+pub async fn delete_key(valkey_url: &str, key: &str) -> Result<()> {
     // Parse the URL - handle both valkey and redis schemes
     let redis_url = if let Some(stripped) = valkey_url.strip_prefix("valkey://") {
         stripped
