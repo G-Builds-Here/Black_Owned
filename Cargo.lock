@@ -499,7 +499,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "axum",
- "bw-ingestion",
  "bw-types",
  "chrono",
  "futures",
