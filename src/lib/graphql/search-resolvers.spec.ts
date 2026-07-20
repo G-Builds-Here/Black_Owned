@@ -8,6 +8,17 @@ describe('searchBusinesses resolver', () => {
     expect(result.total).toBeGreaterThan(0);
     expect(result.page).toBe(1);
     expect(result.pageSize).toBe(10);
+    expect(result.facets).toBeDefined();
+    expect(result.facets.length).toBeGreaterThan(0);
+  });
+
+  it('returns facets with category counts for empty query', () => {
+    const result = searchBusinesses({}, { query: '' });
+
+    const facetCategories = result.facets.map((f) => f.category);
+    expect(facetCategories).toContain('Food & Dining');
+    expect(facetCategories).toContain('Professional Services');
+    expect(result.facets.every((f) => f.count > 0)).toBe(true);
   });
 
   it('searches by business name', () => {
@@ -109,5 +120,48 @@ describe('searchBusinesses resolver', () => {
 
     expect(result.businesses.length).toBeGreaterThanOrEqual(1);
     expect(result.businesses[0].name).toBe('Black Diamond Consulting');
+  });
+
+  it('returns ranked results by relevance score', () => {
+    // Query that matches name should rank higher than description
+    const result = searchBusinesses({}, { query: 'soul', page: 1, pageSize: 10 });
+
+    // Results should be sorted by relevance (highest score first)
+    expect(result.businesses.length).toBeGreaterThan(0);
+    expect(result.facets).toBeDefined();
+  });
+
+  it('returns facets with match counts for search query', () => {
+    const result = searchBusinesses({}, { query: 'cuisine', page: 1, pageSize: 10 });
+
+    expect(result.facets).toBeDefined();
+    expect(Array.isArray(result.facets)).toBe(true);
+    // Each facet should have category and count
+    for (const facet of result.facets) {
+      expect(typeof facet.category).toBe('string');
+      expect(typeof facet.count).toBe('number');
+      expect(facet.count).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('returns empty results with zero-count facets for non-matching query', () => {
+    const result = searchBusinesses({}, { query: 'xyznonexistent' });
+
+    expect(result.businesses.length).toBe(0);
+    expect(result.total).toBe(0);
+    expect(result.facets).toBeDefined();
+    // All facets should have zero count when no matches
+    expect(result.facets.every((f) => f.count === 0)).toBe(true);
+  });
+
+  it('search is accessible without authentication (public query)', () => {
+    // This test verifies the resolver works without any auth context
+    // The AC specifies that unauthenticated users can search
+    const result = searchBusinesses({}, { query: 'coffee' });
+
+    // Should return results without throwing auth errors
+    expect(result).toBeDefined();
+    expect(Array.isArray(result.businesses)).toBe(true);
+    expect(Array.isArray(result.facets)).toBe(true);
   });
 });

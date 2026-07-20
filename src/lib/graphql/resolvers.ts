@@ -178,41 +178,119 @@ export function health(): string {
 }
 
 /**
- * Search businesses resolver with pagination
+ * Calculate relevance score for a business based on query match
+ * Higher scores for matches in more prominent fields (name > description > category/location > tags)
+ */
+function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: string): number {
+  if (!query) return 0;
+
+  const normalizedQuery = query.toLowerCase();
+  let score = 0;
+
+  // Name matches get highest weight (10 points per occurrence)
+  const nameLower = business.name.toLowerCase();
+  const nameOccurrences = (nameLower.match(new RegExp(normalizedQuery, 'g')) || []).length;
+  score += nameOccurrences * 10;
+
+  // Description matches get medium weight (5 points per occurrence)
+  if (business.description) {
+    const descLower = business.description.toLowerCase();
+    const descOccurrences = (descLower.match(new RegExp(normalizedQuery, 'g')) || []).length;
+    score += descOccurrences * 5;
+  }
+
+  // Category matches get medium weight (5 points)
+  if (business.category.toLowerCase().includes(normalizedQuery)) {
+    score += 5;
+  }
+
+  // Location matches get medium weight (5 points)
+  if (business.location.toLowerCase().includes(normalizedQuery)) {
+    score += 5;
+  }
+
+  // Tag matches get lower weight (3 points per tag)
+  if (business.tags) {
+    for (const tag of business.tags) {
+      if (tag.toLowerCase().includes(normalizedQuery)) {
+        score += 3;
+      }
+    }
+  }
+
+  return score;
+}
+
+/**
+ * Search businesses resolver with pagination, relevance ranking, and category facets
  */
 export function searchBusinesses(
   _parent: unknown,
   args: { query: string; page?: number; pageSize?: number }
 ): {
-  businesses: unknown[];
+  businesses: typeof MOCK_BUSINESSES[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
+  facets: { category: string; count: number }[];
 } {
   const { query, page = 1, pageSize = 10 } = args;
   const normalizedQuery = query.toLowerCase().trim();
 
-  // Filter businesses by search query (name, description, tags, category, location)
-  const filtered = MOCK_BUSINESSES.filter((business) => {
-    if (!normalizedQuery) return true;
+  // If query is empty, return all businesses with no ranking
+  if (!normalizedQuery) {
+    const total = MOCK_BUSINESSES.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedBusinesses = MOCK_BUSINESSES.slice(startIndex, endIndex);
 
-    const nameMatch = business.name.toLowerCase().includes(normalizedQuery);
-    const descMatch = business.description?.toLowerCase().includes(normalizedQuery);
-    const categoryMatch = business.category.toLowerCase().includes(normalizedQuery);
-    const tagMatch = business.tags?.some((tag) =>
-      tag.toLowerCase().includes(normalizedQuery)
-    );
-    const locationMatch = business.location.toLowerCase().includes(normalizedQuery);
+    // Calculate facets for all businesses
+    const categoryCounts: Record<string, number> = {};
+    for (const business of MOCK_BUSINESSES) {
+      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
+    }
+    const facets = Object.entries(categoryCounts)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
 
-    return nameMatch || descMatch || categoryMatch || tagMatch || locationMatch;
-  });
+    return {
+      businesses: paginatedBusinesses,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      facets,
+    };
+  }
 
-  const total = filtered.length;
+  // Score and filter businesses
+  const scoredBusinesses = MOCK_BUSINESSES
+    .map((business) => ({
+      business,
+      score: calculateRelevanceScore(business, normalizedQuery),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score); // Sort by relevance score descending
+
+  // Calculate facets from matched businesses
+  const categoryCounts: Record<string, number> = {};
+  for (const { business } of scoredBusinesses) {
+    categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
+  }
+  const facets = Object.entries(categoryCounts)
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Paginate ranked results
+  const total = scoredBusinesses.length;
   const totalPages = Math.ceil(total / pageSize);
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedBusinesses = filtered.slice(startIndex, endIndex);
+  const paginatedBusinesses = scoredBusinesses
+    .slice(startIndex, endIndex)
+    .map((item) => item.business);
 
   return {
     businesses: paginatedBusinesses,
@@ -220,6 +298,7 @@ export function searchBusinesses(
     page,
     pageSize,
     totalPages,
+    facets,
   };
 }
 

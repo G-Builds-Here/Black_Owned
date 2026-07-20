@@ -35,12 +35,18 @@ export const typeDefs = `#graphql
     tags: [String!]
   }
 
+  type CategoryFacet {
+    category: String!
+    count: Int!
+  }
+
   type SearchResults {
     businesses: [Business!]!
     total: Int!
     page: Int!
     pageSize: Int!
     totalPages: Int!
+    facets: [CategoryFacet!]!
   }
 
   type DateTimeUtc {
