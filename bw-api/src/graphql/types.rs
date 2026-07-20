@@ -25,7 +25,10 @@ impl From<DateTime<Utc>> for DateTimeUtc {
 pub struct GQLBusiness {
     pub id: String,
     pub name: String,
+    pub description: Option<String>,
     pub category_id: String,
+    pub owner_id: String,
+    pub status: String,
     pub verified: bool,
     pub created_at: DateTimeUtc,
 }
@@ -35,7 +38,10 @@ impl From<Business> for GQLBusiness {
         Self {
             id: business.id.to_string(),
             name: business.name,
+            description: business.description,
             category_id: business.category_id.to_string(),
+            owner_id: business.owner_id.to_string(),
+            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
             verified: business.verified,
             created_at: business.created_at.into(),
         }

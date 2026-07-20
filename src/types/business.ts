@@ -10,6 +10,20 @@
 export type VerificationStatus = "unverified" | "pending" | "verified";
 
 /**
+ * Business entity stored in PostgreSQL
+ */
+export interface Business {
+  id: string;
+  ownerId: string;
+  name: string;
+  description: string | undefined;
+  categoryId: string;
+  verificationStatus: VerificationStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
  * Standard business hours format
  * Each day has optional open and close times in HH:MM format
  */

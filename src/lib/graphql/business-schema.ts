@@ -15,7 +15,23 @@ export const businessTypeDefs = `#graphql
     createdAt: DateTimeUtc!
   }
 
+  type CreateBusinessPayload {
+    success: Boolean!
+    business: Business
+    error: String
+  }
+
+  input CreateBusinessInput {
+    name: String!
+    description: String
+    categoryId: String!
+  }
+
   type Query {
     business(id: String!): Business
+  }
+
+  type Mutation {
+    createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
   }
 `;

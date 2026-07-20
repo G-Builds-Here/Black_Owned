@@ -17,6 +17,8 @@ import {
   User,
 } from "../../types/user";
 import { storeRefreshToken } from "../valkey/valkey-client";
+import { getPool } from "../db/user-repository";
+import { Business } from "../../types/business";
 
 /**
  * Mock business data for search
@@ -224,6 +226,116 @@ export function searchBusinesses(
 }
 
 /**
+ * Convert Business entity to GraphQL Business type
+ */
+function businessToGraphqlBusiness(business: Business): {
+  id: string;
+  name: string;
+  categoryId: string;
+  verified: boolean;
+  createdAt: { timestamp: number };
+} {
+  return {
+    id: business.id,
+    name: business.name,
+    categoryId: business.categoryId,
+    verified: business.verificationStatus === "verified",
+    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
+  };
+}
+
+/**
+ * Get the current user ID from context (set by auth middleware)
+ */
+function getCurrentUserId(context: unknown): string | null {
+  const ctx = context as { user?: { id: string } };
+  return ctx?.user?.id ?? null;
+}
+
+/**
+ * Create business mutation resolver
+ */
+export async function createBusiness(
+  _parent: unknown,
+  args: { input: { name: string; description?: string; categoryId: string } },
+  context: unknown
+): Promise<{
+  success: boolean;
+  business?: unknown;
+  error?: string;
+}> {
+  const { input } = args;
+  const userId = getCurrentUserId(context);
+
+  // Validate required fields
+  if (!input.name || input.name.trim() === "") {
+    return {
+      success: false,
+      error: "Name is required",
+    };
+  }
+
+  if (!input.categoryId || input.categoryId.trim() === "") {
+    return {
+      success: false,
+      error: "Category ID is required",
+    };
+  }
+
+  // Check if user is authenticated
+  if (!userId) {
+    return {
+      success: false,
+      error: "Authentication required",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    const business = await createBusinessInDb(
+      client,
+      userId,
+      input.name.trim(),
+      input.description?.trim(),
+      input.categoryId.trim()
+    );
+
+    return {
+      success: true,
+      business: businessToGraphqlBusiness(business),
+    };
+  } catch (error) {
+    console.error("Error creating business:", error);
+    return {
+      success: false,
+      error: "Failed to create business",
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Internal function to create a business in the database
+ */
+async function createBusinessInDb(
+  client: import("pg").PoolClient,
+  ownerId: string,
+  name: string,
+  description: string | undefined,
+  categoryId: string
+): Promise<Business> {
+  const tableName = "businesses";
+  const result = await client.query<Business>(
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
+     VALUES ($1, $2, $3, $4, 'unverified')
+     RETURNING *`,
+    [ownerId, name, description || null, categoryId]
+  );
+  return result.rows[0];
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
@@ -233,5 +345,6 @@ export const resolvers = {
   },
   Mutation: {
     register,
+    createBusiness,
   },
 };
