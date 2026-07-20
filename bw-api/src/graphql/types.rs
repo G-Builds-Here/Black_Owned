@@ -28,6 +28,8 @@ pub struct GQLBusiness {
     pub category_id: String,
     pub verified: bool,
     pub created_at: DateTimeUtc,
+    pub rating_avg: Option<f64>,
+    pub review_count: i32,
 }
 
 impl From<Business> for GQLBusiness {
@@ -38,6 +40,35 @@ impl From<Business> for GQLBusiness {
             category_id: business.category_id.to_string(),
             verified: business.verified,
             created_at: business.created_at.into(),
+            rating_avg: None,
+            review_count: 0,
+        }
+    }
+}
+
+/// GQLBusiness with rating aggregation data
+#[derive(SimpleObject, Clone, Debug)]
+pub struct GQLBusinessWithRatings {
+    pub id: String,
+    pub name: String,
+    pub category_id: String,
+    pub verified: bool,
+    pub created_at: DateTimeUtc,
+    pub rating_avg: Option<f64>,
+    pub review_count: i32,
+}
+
+impl GQLBusinessWithRatings {
+    /// Create from Business with rating aggregation
+    pub fn with_ratings(business: Business, rating_avg: Option<f64>, review_count: i32) -> Self {
+        Self {
+            id: business.id.to_string(),
+            name: business.name,
+            category_id: business.category_id.to_string(),
+            verified: business.verified,
+            created_at: business.created_at.into(),
+            rating_avg,
+            review_count,
         }
     }
 }

@@ -112,6 +112,9 @@ impl MutationRoot {
     }
 
     /// Submit a review for a business
+    ///
+    /// Checks for duplicate reviews (same user + same business) and rejects duplicates.
+    /// Returns the created review with updated rating aggregation.
     async fn submit_review(
         &self,
         ctx: &Context<'_>,
@@ -135,6 +138,20 @@ impl MutationRoot {
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user UUID: {:?}", e))
         })?;
+
+        // Check for duplicate review (same user + same business)
+        let existing = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM reviews WHERE business_id = $1 AND user_id = $2)",
+        )
+        .bind(business_uuid)
+        .bind(user_uuid)
+        .fetch_one(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        if existing {
+            return Err(Error::new("A review for this business by this user already exists"));
+        }
 
         let id = Uuid::new_v4();
 
