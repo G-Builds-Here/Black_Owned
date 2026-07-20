@@ -15,7 +15,9 @@ use uuid::Uuid;
 pub struct Business {
     pub id: Uuid,
     pub name: String,
+    pub description: Option<String>,
     pub category_id: Uuid,
+    pub owner_id: Uuid,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
     pub owner_id: Uuid,

@@ -42,7 +42,10 @@ pub struct BusinessEdge {
 pub struct GqlBusiness {
     pub id: String,
     pub name: String,
+    pub description: Option<String>,
     pub category_id: String,
+    pub owner_id: String,
+    pub status: String,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -52,7 +55,10 @@ impl From<Business> for GqlBusiness {
         Self {
             id: business.id.to_string(),
             name: business.name,
+            description: business.description,
             category_id: business.category_id.to_string(),
+            owner_id: business.owner_id.to_string(),
+            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
             verified: business.verified,
             created_at: business.created_at,
         }
@@ -128,6 +134,7 @@ impl From<User> for GqlUser {
 #[derive(InputObject, Clone, Debug)]
 pub struct CreateBusinessInput {
     pub name: String,
+    pub description: Option<String>,
     pub category_id: String,
 }
 
@@ -221,6 +228,27 @@ impl QueryRoot {
     }
 }
 
+/// Extract user ID from JWT token in Authorization header
+fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
+    let auth_header = ctx
+        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
+        .map(|ext| ext.0.token().to_string())
+        .or_else(|| {
+            ctx.req()
+                .headers()
+                .get(axum::http::header::AUTHORIZATION)
+                .and_then(|h| h.to_str().ok())
+                .filter(|s| s.starts_with("Bearer "))
+                .map(|s| s.trim_start_matches("Bearer ").to_string())
+        });
+
+    auth_header
+        .ok_or_else(|| Error::new("Authorization header is required"))
+        .and_then(|token| {
+            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
+        })
+}
+
 /// Mutation root for GraphQL
 #[derive(Default)]
 pub struct MutationRoot;
@@ -228,18 +256,24 @@ pub struct MutationRoot;
 #[Object]
 impl MutationRoot {
     /// Create a new business
-    async fn create_business(&self, input: CreateBusinessInput) -> Result<GqlBusiness> {
-        if input.name.is_empty() {
-            return Err("Business name is required".into());
+    async fn create_business(&self, ctx: &Context<'_>, input: CreateBusinessInput) -> Result<GqlBusiness> {
+        // Validate name is required
+        if input.name.trim().is_empty() {
+            return Err("Name is required".into());
         }
 
         let category_id = Uuid::parse_str(&input.category_id)
             .map_err(|_| "Invalid category ID format")?;
 
+        // Extract user ID from auth context
+        let owner_id = extract_user_from_auth(ctx)?;
+
         let business = Business {
             id: Uuid::new_v4(),
             name: input.name,
+            description: input.description,
             category_id,
+            owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
         };

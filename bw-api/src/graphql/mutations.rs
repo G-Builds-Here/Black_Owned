@@ -17,6 +17,27 @@ use crate::middleware::UserId;
 /// Mutation root for GraphQL API
 pub struct MutationRoot;
 
+/// Extract user ID from JWT token in Authorization header
+fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
+    let auth_header = ctx
+        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
+        .map(|ext| ext.0.token().to_string())
+        .or_else(|| {
+            ctx.req()
+                .headers()
+                .get(axum::http::header::AUTHORIZATION)
+                .and_then(|h| h.to_str().ok())
+                .filter(|s| s.starts_with("Bearer "))
+                .map(|s| s.trim_start_matches("Bearer ").to_string())
+        });
+
+    auth_header
+        .ok_or_else(|| Error::new("Authorization header is required"))
+        .and_then(|token| {
+            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
+        })
+}
+
 #[Object]
 impl MutationRoot {
     /// Create a new business
@@ -24,8 +45,14 @@ impl MutationRoot {
         &self,
         ctx: &Context<'_>,
         name: String,
+        description: Option<String>,
         category_id: String,
     ) -> Result<GQLBusiness> {
+        // Validate name is required
+        if name.trim().is_empty() {
+            return Err(Error::new("Name is required"));
+        }
+
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
@@ -46,18 +73,19 @@ impl MutationRoot {
 
         let id = Uuid::new_v4();
 
-        let result = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
+        let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Uuid, Uuid, bool, chrono::DateTime<Utc>)>(
             r#"
-            INSERT INTO businesses (id, name, category_id, verified, created_at, owner_id)
-            VALUES ($1, $2, $3, false, $4, $5)
-            RETURNING id, name, category_id, verified, created_at, owner_id
+            INSERT INTO businesses (id, name, description, category_id, owner_id, verified, created_at)
+            VALUES ($1, $2, $3, $4, $5, false, $6)
+            RETURNING id, name, description, category_id, owner_id, verified, created_at
             "#,
         )
         .bind(id)
         .bind(&name)
+        .bind(&description)
         .bind(category_uuid)
-        .bind(Utc::now())
         .bind(user_uuid)
+        .bind(Utc::now())
         .fetch_one(db)
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
@@ -65,10 +93,11 @@ impl MutationRoot {
         Ok(GQLBusiness::from(Business {
             id: result.0,
             name: result.1,
-            category_id: result.2,
-            verified: result.3,
-            created_at: result.4,
-            owner_id: result.5,
+            description: result.2,
+            category_id: result.3,
+            owner_id: result.4,
+            verified: result.5,
+            created_at: result.6,
         }))
     }
 
