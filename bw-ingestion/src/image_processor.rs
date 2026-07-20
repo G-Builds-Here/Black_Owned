@@ -3,10 +3,15 @@
 //! This module provides image processing functionality that generates thumbnails
 //! of various sizes (150px, 300px, 800px) from source images stored in MinIO.
 
+#![cfg(feature = "integration_test")]
+
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
+#[cfg(feature = "integration_test")]
 use image::{DynamicImage, ImageFormat};
+#[cfg(feature = "integration_test")]
 use minio_rsc::client::{KeyArgs, Minio};
+#[cfg(feature = "integration_test")]
 use minio_rsc::provider::StaticProvider;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
