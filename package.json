@@ -13,6 +13,7 @@
     "@graphql-tools/schema": "^10.0.0",
     "bcryptjs": "^2.4.3",
     "graphql": "^16.8.0",
+    "graphql-request": "^6.1.0",
     "jsonwebtoken": "^9.0.0",
     "next": "16.0.0",
     "pg": "^8.11.0",
