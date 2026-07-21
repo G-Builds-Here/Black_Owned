@@ -88,6 +88,17 @@ pub struct Category {
     pub description: String,
 }
 
+/// Chat message entity for chat persistence
+#[derive(Debug, Clone, Serialize, Deserialize, Builder, PartialEq)]
+#[builder(setter(into))]
+pub struct ChatMessage {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub business_id: Uuid,
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,32 +1,12 @@
 //! Data ingestion module for Black Owned platform.
 
-pub mod chat_consumer;
-
 #[cfg(feature = "integration_test")]
 pub mod service_connectivity;
 
-pub mod email_service;
-
-pub mod email_publisher;
-
-pub mod email_consumer;
-
-pub mod image_processor;
+pub mod chat_consumer;
 
 #[cfg(feature = "integration_test")]
-pub mod image_publisher;
-
-#[cfg(feature = "integration_test")]
-pub mod image_worker;
-
-#[cfg(feature = "integration_test")]
-pub mod stream_config;
-
-pub mod cache_invalidator;
-pub mod cache_service;
-
-#[cfg(feature = "integration_test")]
-pub mod cache_service;
+pub mod background_service;
 
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
@@ -71,19 +51,12 @@ impl BusinessIngestionHandler {
             return Err("Owner email cannot be empty".to_string());
         }
 
-        // Parse owner email to UUID - for now use a placeholder UUID since email is not a UUID
-        // In production, this would look up the user ID from the email
-        let owner_id = uuid::Uuid::parse_str(&input.owner_email)
-            .unwrap_or_else(|_| uuid::Uuid::new_v4());
-
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
-            description: None,
             category_id: *category_id,
             verified: false,
             created_at: chrono::Utc::now(),
-            owner_id,
         })
     }
 
