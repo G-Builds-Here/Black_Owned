@@ -54,7 +54,9 @@ impl BusinessIngestionHandler {
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
+            description: None,
             category_id: *category_id,
+            owner_id: uuid::Uuid::new_v4(),
             verified: false,
             created_at: chrono::Utc::now(),
         })

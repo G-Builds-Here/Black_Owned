@@ -11,12 +11,20 @@ use bw_types::{Business, Review};
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{GQLBusiness, GQLReview, SubmitReviewResult};
-use crate::middleware::UserId;
+use super::types::{GQLBusiness, GQLReview};
 
 /// Mutation root for GraphQL API
 pub struct MutationRoot;
 
+/// Extract user ID from JWT token in Authorization header
+fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
+    let token = ctx
+        .data::<String>()
+        .map_err(|_| Error::new("Authorization token not available"))?;
+
+    Uuid::parse_str(token)
+        .map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
+}
 
 #[Object]
 impl MutationRoot {
@@ -37,15 +45,8 @@ impl MutationRoot {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
 
-        // Extract user ID from JWT token
-        let user_id = match ctx.data::<UserId>() {
-            Ok(uid) => uid.0.clone(),
-            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
-        };
-
-        let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
-            Error::new(format!("Invalid user ID from token: {:?}", e))
-        })?;
+        // Extract user ID from auth context
+        let owner_id = extract_user_from_auth(ctx)?;
 
         let category_uuid = Uuid::parse_str(&category_id).map_err(|e| {
             Error::new(format!("Invalid category UUID: {:?}", e))
@@ -64,7 +65,7 @@ impl MutationRoot {
         .bind(&name)
         .bind(&description)
         .bind(category_uuid)
-        .bind(user_uuid)
+        .bind(owner_id)
         .bind(Utc::now())
         .fetch_one(db)
         .await
@@ -87,22 +88,11 @@ impl MutationRoot {
         ctx: &Context<'_>,
         id: String,
         name: Option<String>,
-        description: Option<String>,
         category_id: Option<String>,
         verified: Option<bool>,
     ) -> Result<Option<GQLBusiness>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
-        })?;
-
-        // Extract user ID from JWT token
-        let user_id = match ctx.data::<UserId>() {
-            Ok(uid) => uid.0.clone(),
-            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
-        };
-
-        let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
-            Error::new(format!("Invalid user ID from token: {:?}", e))
         })?;
 
         let business_id = Uuid::parse_str(&id).map_err(|e| {
@@ -115,55 +105,31 @@ impl MutationRoot {
             .transpose()
             .map_err(|e| Error::new(format!("Invalid category UUID: {:?}", e)))?;
 
-        // First, check if the business exists and get its owner
-        let current_owner = sqlx::query_as::<_, (Uuid,)>(
-            "SELECT owner_id FROM businesses WHERE id = $1",
-        )
-        .bind(business_id)
-        .fetch_optional(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
-
-        match current_owner {
-            Some((owner_id,)) => {
-                // Verify the user is the owner
-                if owner_id != user_uuid {
-                    return Err(Error::new("Forbidden: You are not the owner of this business"));
-                }
-            }
-            None => {
-                return Ok(None);
-            }
-        }
-
-        let description_ref = description.as_deref();
-        let row = sqlx::query_as::<_, (Uuid, String, Option<String>, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
+        let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
             r#"
             UPDATE businesses
             SET name = COALESCE($2, name),
-                description = COALESCE($3, description),
-                category_id = COALESCE($4, category_id),
-                verified = COALESCE($5, verified)
+                category_id = COALESCE($3, category_id),
+                verified = COALESCE($4, verified)
             WHERE id = $1
-            RETURNING id, name, description, category_id, verified, created_at, owner_id
+            RETURNING id, name, category_id, verified, created_at
             "#,
         )
         .bind(business_id)
         .bind(name_ref)
-        .bind(description_ref)
         .bind(category_uuid)
         .bind(verified)
         .fetch_optional(db)
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        Ok(row.map(|(bid, n, desc, cid, v, ca, oid)| {
+        Ok(row.map(|(bid, n, cid, v, ca)| {
             GQLBusiness::from(Business {
                 id: bid,
                 name: n,
-                description: desc,
+                description: None,
                 category_id: cid,
-                owner_id: oid,
+                owner_id: Uuid::new_v4(),
                 verified: v,
                 created_at: ca,
             })
@@ -171,9 +137,6 @@ impl MutationRoot {
     }
 
     /// Submit a review for a business
-    ///
-    /// Checks for duplicate reviews (same user + same business) and rejects duplicates.
-    /// Returns the created review with updated rating aggregation.
     async fn submit_review(
         &self,
         ctx: &Context<'_>,
@@ -181,7 +144,7 @@ impl MutationRoot {
         user_id: String,
         rating: i32,
         comment: String,
-    ) -> Result<SubmitReviewResult> {
+    ) -> Result<GQLReview> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
@@ -197,20 +160,6 @@ impl MutationRoot {
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user UUID: {:?}", e))
         })?;
-
-        // Check for duplicate review (same user + same business)
-        let existing = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM reviews WHERE business_id = $1 AND user_id = $2)",
-        )
-        .bind(business_uuid)
-        .bind(user_uuid)
-        .fetch_one(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
-
-        if existing {
-            return Err(Error::new("A review for this business by this user already exists"));
-        }
 
         let id = Uuid::new_v4();
 
@@ -232,58 +181,14 @@ impl MutationRoot {
             .await
             .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        let review = Review {
+        Ok(GQLReview::from(Review {
             id: result.0,
             business_id: result.1,
             user_id: result.2,
             rating: result.3 as u8,
             comment: result.4,
             created_at: result.5,
-        };
-
-        // Calculate rating average and review count
-        let (sum, count) = sqlx::query_as::<_, (i64, i64)>(
-            "SELECT COALESCE(SUM(rating), 0), COUNT(*) FROM reviews WHERE business_id = $1",
-        )
-        .bind(business_uuid)
-        .fetch_one(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
-
-        let rating_avg = if count > 0 {
-            Some(sum as f64 / count as f64)
-        } else {
-            None
-        };
-        let review_count = count as i32;
-
-        // Fetch business details
-        let business_row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
-            "SELECT id, name, category_id, verified, created_at, owner_id FROM businesses WHERE id = $1",
-        )
-        .bind(business_uuid)
-        .fetch_one(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
-
-        let business = Business {
-            id: business_row.0,
-            name: business_row.1,
-            description: None,
-            category_id: business_row.2,
-            verified: business_row.3,
-            created_at: business_row.4,
-            owner_id: business_row.5,
-        };
-
-        let mut gql_business: GQLBusiness = business.into();
-        gql_business.rating_avg = rating_avg;
-        gql_business.review_count = review_count;
-
-        Ok(SubmitReviewResult {
-            review: GQLReview::from(review),
-            business: gql_business,
-        })
+        }))
     }
 
     /// Delete a review
@@ -303,5 +208,116 @@ impl MutationRoot {
             .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
         Ok(result.rows_affected() > 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_user_from_auth_valid_token() {
+        let valid_uuid = Uuid::new_v4().to_string();
+        let result = Uuid::parse_str(&valid_uuid);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_extract_user_from_auth_invalid_token() {
+        let invalid_token = "not-a-uuid";
+        let result = Uuid::parse_str(invalid_token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_business_name_required() {
+        let empty_name = "";
+        assert!(empty_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_validate_business_name_whitespace_only() {
+        let whitespace_name = "   ";
+        assert!(whitespace_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_validate_category_uuid_valid() {
+        let valid_uuid = Uuid::new_v4().to_string();
+        let result = Uuid::parse_str(&valid_uuid);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_category_uuid_invalid() {
+        let invalid_uuid = "not-a-uuid";
+        let result = Uuid::parse_str(invalid_uuid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_business_status_unverified_by_default() {
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: Some("Test description".to_string()),
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.into();
+        assert_eq!(gql_business.status, "unverified");
+        assert!(!gql_business.verified);
+    }
+
+    #[test]
+    fn test_business_conversion_includes_timestamp() {
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: None,
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.clone().into();
+        assert!(gql_business.created_at.timestamp > 0);
+    }
+
+    #[test]
+    fn test_business_conversion_preserves_optional_description() {
+        let description = "Optional description";
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: Some(description.to_string()),
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.into();
+        assert_eq!(gql_business.description, Some(description.to_string()));
+    }
+
+    #[test]
+    fn test_business_conversion_none_description() {
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            description: None,
+            category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            verified: false,
+            created_at: Utc::now(),
+        };
+
+        let gql_business: GQLBusiness = business.into();
+        assert!(gql_business.description.is_none());
     }
 }

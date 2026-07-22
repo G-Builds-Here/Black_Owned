@@ -12,7 +12,7 @@ use bw_types::{Business, Category, Review};
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLBusinessWithRatings, GQLCategory, GQLReview, PageInfo};
+use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLCategory, GQLReview, PageInfo};
 
 /// Query root for GraphQL API
 pub struct QueryRoot;
@@ -87,8 +87,8 @@ impl QueryRoot {
         })
     }
 
-    /// Get a single business by ID with rating aggregation
-    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusinessWithRatings>> {
+    /// Get a single business by ID
+    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusiness>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
@@ -97,7 +97,6 @@ impl QueryRoot {
             Error::new(format!("Invalid UUID: {:?}", e))
         })?;
 
-        // Get business data
         let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
             "SELECT id, name, category_id, verified, created_at FROM businesses WHERE id = $1",
         )
@@ -106,35 +105,17 @@ impl QueryRoot {
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        let Some((bid, name, category_id, verified, created_at)) = row else {
-            return Ok(None);
-        };
-
-        // Get rating aggregation
-        let rating_stats = sqlx::query_as::<_, (Option<f64>, i64)>(
-            "SELECT AVG(rating::float), COUNT(*) FROM reviews WHERE business_id = $1",
-        )
-        .bind(business_id)
-        .fetch_optional(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?
-        .unwrap_or((None, 0));
-
-        let business = Business {
-            id: bid,
-            name,
-            description: None,
-            category_id,
-            owner_id: Uuid::new_v4(),
-            verified,
-            created_at,
-        };
-
-        Ok(Some(GQLBusinessWithRatings::with_ratings(
-            business,
-            rating_stats.0,
-            rating_stats.1 as i32,
-        )))
+        Ok(row.map(|(bid, name, category_id, verified, created_at)| {
+            GQLBusiness::from(Business {
+                id: bid,
+                name,
+                description: None,
+                category_id,
+                owner_id: Uuid::new_v4(),
+                verified,
+                created_at,
+            })
+        }))
     }
 
     /// Get reviews for a business
