@@ -1,0 +1,731 @@
+{
+  "ticket": "LOC-0030",
+  "phase": 5,
+  "phase_stories": [
+    "LOC-0044",
+    "LOC-0042",
+    "LOC-0043",
+    "LOC-0048"
+  ],
+  "acs_merged": [
+    "LOC-0031-AC1",
+    "LOC-0031-AC2",
+    "LOC-0034-AC1",
+    "LOC-0034-AC3",
+    "LOC-0050-AC1",
+    "LOC-0050-AC2",
+    "LOC-0050-AC3",
+    "LOC-0050-AC4",
+    "LOC-0050-AC5",
+    "LOC-0050-AC6",
+    "LOC-0051-AC1",
+    "LOC-0051-AC2",
+    "LOC-0051-AC3",
+    "LOC-0051-AC4",
+    "LOC-0051-AC8"
+  ],
+  "epic_branch": "epic/LOC-0030",
+  "acs": {
+    "LOC-0042-AC1": {
+      "ac_id": "LOC-0042-AC1",
+      "status": "complete",
+      "handoff_exists": true,
+      "handoff_type": "commit-qa",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0042/commit-qa-LOC-0042-AC1.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": true,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 122,
+            "branch": "feature/LOC-0042-AC1",
+            "details": "122 commits found on feature/LOC-0042-AC1"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "src/app/chat/page.tsx",
+              "src/components/ui/ConversationList.tsx",
+              "src/components/ui/ConversationList.spec.tsx",
+              "src/services/conversation-service.ts",
+              "src/services/conversation-service.spec.ts",
+              "src/types/conversation.ts",
+              "src/types/conversation.spec.ts"
+            ],
+            "details": "7 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": true,
+            "details": "skipped \u2014 no importable artifacts",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "ConversationList"
+              ],
+              "files": [
+                "src/components/ui/ConversationList.tsx",
+                "src/components/ui/ConversationList.spec.tsx",
+                "src/app/chat/page.tsx"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 1397,
+            "branch": "feature/LOC-0042-AC1",
+            "details": "1397 lines changed on feature/LOC-0042-AC1"
+          }
+        },
+        "failures": []
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0042/impl-LOC-0042-AC1.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0042/commit-impl-LOC-0042-AC1.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0042/qa-LOC-0042-AC1.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0042/commit-qa-LOC-0042-AC1.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "story_key": "LOC-0042",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0040-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0040-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0040-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0042-AC2": {
+      "ac_id": "LOC-0042-AC2",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0042",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0042-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        },
+        {
+          "dep_ac": "LOC-0033-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        },
+        {
+          "dep_ac": "LOC-0040-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0042-AC1",
+        "LOC-0033-AC1",
+        "LOC-0040-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0042-AC1",
+        "LOC-0033-AC1",
+        "LOC-0040-AC1"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0042-AC3": {
+      "ac_id": "LOC-0042-AC3",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0042",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0041-AC4",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0041-AC4"
+      ],
+      "normalized_deps": [
+        "LOC-0041-AC4"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0042-AC4": {
+      "ac_id": "LOC-0042-AC4",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0042",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0042-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        },
+        {
+          "dep_ac": "LOC-0040-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0042-AC1",
+        "LOC-0040-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0042-AC1",
+        "LOC-0040-AC1"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0043-AC1": {
+      "ac_id": "LOC-0043-AC1",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0043",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0038-AC2",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: qa"
+        },
+        {
+          "dep_ac": "LOC-0041-AC4",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0038-AC2",
+        "LOC-0041-AC4"
+      ],
+      "normalized_deps": [
+        "LOC-0038-AC2",
+        "LOC-0041-AC4"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0043-AC2": {
+      "ac_id": "LOC-0043-AC2",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0043",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0039-AC1",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: commit-qa"
+        },
+        {
+          "dep_ac": "LOC-0041-AC4",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0039-AC1",
+        "LOC-0041-AC4"
+      ],
+      "normalized_deps": [
+        "LOC-0039-AC1",
+        "LOC-0041-AC4"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0043-AC3": {
+      "ac_id": "LOC-0043-AC3",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0043",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0043-AC1",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0043-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0043-AC1"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0043-AC4": {
+      "ac_id": "LOC-0043-AC4",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0043",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0037-AC2",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: qa, commit-qa; incomplete: commit-impl"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0037-AC2"
+      ],
+      "normalized_deps": [
+        "LOC-0037-AC2"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0044-AC1": {
+      "ac_id": "LOC-0044-AC1",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0044",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0038-AC2",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: qa"
+        },
+        {
+          "dep_ac": "LOC-0036-AC4",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0038-AC2",
+        "LOC-0036-AC4"
+      ],
+      "normalized_deps": [
+        "LOC-0038-AC2",
+        "LOC-0036-AC4"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0044-AC2": {
+      "ac_id": "LOC-0044-AC2",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "commit-impl",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0044/commit-impl-LOC-0044-AC2.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 122,
+            "branch": "feature/LOC-0044-AC2",
+            "details": "122 commits found on feature/LOC-0044-AC2"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "src/lib/nats/nats-monitor.ts",
+              "src/lib/nats/nats-monitor.spec.ts",
+              "src/lib/nats/index.ts",
+              "src/components/admin/NatsConsumerMonitor.tsx",
+              "src/components/admin/NatsConsumerMonitor.spec.tsx",
+              "jest.config.js"
+            ],
+            "details": "6 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/1 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "NatsConsumerMonitor"
+              ],
+              "files": [
+                "src/lib/nats/nats-monitor.ts",
+                "src/lib/nats/nats-monitor.spec.ts",
+                "src/lib/nats/index.ts",
+                "src/components/admin/NatsConsumerMonitor.tsx",
+                "src/components/admin/NatsConsumerMonitor.spec.tsx",
+                "jest.config.js"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": false,
+            "result": "absent",
+            "details": "no QA handoff found"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 1397,
+            "branch": "feature/LOC-0044-AC2",
+            "details": "1397 lines changed on feature/LOC-0044-AC2"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned",
+          "qa_result: absent (need pass or partial)"
+        ]
+      },
+      "handoff_chain": {
+        "valid": false,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0044/impl-LOC-0044-AC2.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0044/commit-impl-LOC-0044-AC2.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": false,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0044/qa-LOC-0044-AC2.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": false,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0044/commit-qa-LOC-0044-AC2.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": [
+          "qa",
+          "commit-qa"
+        ]
+      },
+      "needs_verification_reason": "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned; qa_result: absent (need pass or partial); handoff chain incomplete: qa, commit-qa",
+      "story_key": "LOC-0044",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0033-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        },
+        {
+          "dep_ac": "LOC-0040-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0033-AC1",
+        "LOC-0040-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0033-AC1",
+        "LOC-0040-AC1"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0048-AC1": {
+      "ac_id": "LOC-0048-AC1",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0048",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0037-AC4",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        },
+        {
+          "dep_ac": "LOC-0037-AC1",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: qa, commit-qa; incomplete: commit-impl"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0037-AC4",
+        "LOC-0037-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0037-AC4",
+        "LOC-0037-AC1"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0048-AC2": {
+      "ac_id": "LOC-0048-AC2",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0048",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0039-AC2",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        },
+        {
+          "dep_ac": "LOC-0039-AC3",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0039-AC2",
+        "LOC-0039-AC3"
+      ],
+      "normalized_deps": [
+        "LOC-0039-AC2",
+        "LOC-0039-AC3"
+      ],
+      "dispatch_status": "blocked"
+    }
+  },
+  "dispatch": [],
+  "recovered": [],
+  "blocked": [
+    "LOC-0042-AC2",
+    "LOC-0042-AC3",
+    "LOC-0042-AC4",
+    "LOC-0043-AC1",
+    "LOC-0043-AC2",
+    "LOC-0043-AC3",
+    "LOC-0043-AC4",
+    "LOC-0044-AC1",
+    "LOC-0044-AC2",
+    "LOC-0048-AC1",
+    "LOC-0048-AC2"
+  ],
+  "blocked_details": [
+    {
+      "ac_id": "LOC-0042-AC2",
+      "unmet_deps": [
+        "LOC-0042-AC1",
+        "LOC-0033-AC1",
+        "LOC-0040-AC1"
+      ]
+    },
+    {
+      "ac_id": "LOC-0042-AC3",
+      "unmet_deps": [
+        "LOC-0041-AC4"
+      ]
+    },
+    {
+      "ac_id": "LOC-0042-AC4",
+      "unmet_deps": [
+        "LOC-0042-AC1",
+        "LOC-0040-AC1"
+      ]
+    },
+    {
+      "ac_id": "LOC-0043-AC1",
+      "unmet_deps": [
+        "LOC-0038-AC2",
+        "LOC-0041-AC4"
+      ]
+    },
+    {
+      "ac_id": "LOC-0043-AC2",
+      "unmet_deps": [
+        "LOC-0039-AC1",
+        "LOC-0041-AC4"
+      ]
+    },
+    {
+      "ac_id": "LOC-0043-AC3",
+      "unmet_deps": [
+        "LOC-0043-AC1"
+      ]
+    },
+    {
+      "ac_id": "LOC-0043-AC4",
+      "unmet_deps": [
+        "LOC-0037-AC2"
+      ]
+    },
+    {
+      "ac_id": "LOC-0044-AC1",
+      "unmet_deps": [
+        "LOC-0038-AC2",
+        "LOC-0036-AC4"
+      ]
+    },
+    {
+      "ac_id": "LOC-0044-AC2",
+      "unmet_deps": [
+        "LOC-0033-AC1",
+        "LOC-0040-AC1"
+      ]
+    },
+    {
+      "ac_id": "LOC-0048-AC1",
+      "unmet_deps": [
+        "LOC-0037-AC4",
+        "LOC-0037-AC1"
+      ]
+    },
+    {
+      "ac_id": "LOC-0048-AC2",
+      "unmet_deps": [
+        "LOC-0039-AC2",
+        "LOC-0039-AC3"
+      ]
+    }
+  ],
+  "in_progress": [],
+  "ready_to_merge": [
+    "LOC-0042-AC1"
+  ],
+  "needs_salvage": [],
+  "unverified_garbage": [],
+  "unverified_garbage_details": [],
+  "concurrency_capped": [],
+  "dead_claims_released": [],
+  "concurrency": {
+    "max": 5,
+    "running": 0,
+    "slots_remaining": 5
+  },
+  "summary": {
+    "total_acs": 12,
+    "dispatch": 0,
+    "recovered": 0,
+    "blocked": 11,
+    "in_progress": 0,
+    "ready_to_merge": 1,
+    "needs_salvage": 0,
+    "unverified_garbage": 0,
+    "concurrency_capped": 0,
+    "dead_claims_released": 0
+  }
+}

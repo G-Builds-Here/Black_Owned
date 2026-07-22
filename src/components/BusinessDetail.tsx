@@ -1,11 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { updateBusiness } from '@/lib/graphql/graphql-client';
+import { useNotification } from '@/components/ui';
 
 export interface Business {
   id: string;
   name: string;
+  description: string | null;
   categoryId: string;
+  ownerId: string;
   verified: boolean;
   createdAt: {
     timestamp: number;
@@ -16,6 +20,7 @@ export interface BusinessDetailProps {
   business: Business | null;
   loading: boolean;
   error: string | null;
+  isOwner?: boolean;
 }
 
 /**
@@ -23,8 +28,65 @@ export interface BusinessDetailProps {
  *
  * Shows loading state while fetching, error state if fetch fails,
  * and business details (name, category, verified status) on success.
+ * Supports edit mode for business owners.
  */
-export function BusinessDetail({ business, loading, error }: BusinessDetailProps) {
+export function BusinessDetail({ business, loading, error, isOwner = false }: BusinessDetailProps) {
+  const { showNotification } = useNotification();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    if (business) {
+      setEditName(business.name);
+      setEditDescription(business.description || '');
+    }
+  }, [business]);
+
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    if (business) {
+      setEditName(business.name);
+      setEditDescription(business.description || '');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!business) return;
+
+    setSaving(true);
+    try {
+      const result = await updateBusiness(business.id, {
+        name: editName,
+        description: editDescription,
+      });
+
+      if (result.success) {
+        showNotification('Profile Updated', 'Profile updated');
+        setIsEditing(false);
+      } else {
+        showNotification('Update Failed', result.error || 'Failed to update profile', 'error');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      showNotification('Update Failed', errorMessage, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleInputChange = (field: 'name' | 'description', value: string) => {
+    if (field === 'name') {
+      setEditName(value);
+    } else {
+      setEditDescription(value);
+    }
+  };
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-neutral-50">
@@ -120,14 +182,59 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
                   {formatCategory(business.categoryId)}
                 </span>
               </div>
-              <h1 className="text-3xl font-bold text-neutral-900 mb-2">
-                {business.name}
-              </h1>
+              {isEditing ? (
+                <div>
+                  <label htmlFor="business-name" className="sr-only">
+                    Business Name
+                  </label>
+                  <input
+                    id="business-name"
+                    type="text"
+                    value={editName}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    className="text-3xl font-bold text-neutral-900 mb-2 w-full border border-neutral-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-heritage-ochre"
+                  />
+                </div>
+              ) : (
+                <h1 className="text-3xl font-bold text-neutral-900 mb-2">
+                  {business.name}
+                </h1>
+              )}
               <p className="text-neutral-500 text-sm">
                 Joined: {formatDate(business.createdAt.timestamp)}
               </p>
             </div>
+            {isOwner && !isEditing && (
+              <button
+                onClick={handleEdit}
+                className="inline-flex items-center justify-center px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium"
+              >
+                Edit Profile
+              </button>
+            )}
           </div>
+
+          {/* Description */}
+          {isEditing ? (
+            <div className="mt-6">
+              <label htmlFor="business-description" className="block text-sm font-medium text-neutral-700 mb-2">
+                Description
+              </label>
+              <textarea
+                id="business-description"
+                value={editDescription}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                rows={4}
+                className="w-full border border-neutral-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-heritage-ochre"
+                placeholder="Add a description for your business..."
+              />
+            </div>
+          ) : business.description ? (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-neutral-500 mb-2">Description</h3>
+              <p className="text-neutral-800">{business.description}</p>
+            </div>
+          ) : null}
 
           {/* Business Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
@@ -149,18 +256,39 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
 
           {/* Action Buttons */}
           <div className="flex gap-3 mt-8 pt-6 border-t border-neutral-200">
-            <a
-              href="/directory"
-              className="inline-flex items-center justify-center px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium"
-            >
-              ← Back to Directory
-            </a>
-            {business.verified && (
-              <button
-                className="inline-flex items-center justify-center px-4 py-2 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors font-medium"
-              >
-                Contact Business
-              </button>
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="inline-flex items-center justify-center px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="inline-flex items-center justify-center px-4 py-2 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors font-medium disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </>
+            ) : (
+              <>
+                <a
+                  href="/directory"
+                  className="inline-flex items-center justify-center px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium"
+                >
+                  ← Back to Directory
+                </a>
+                {business.verified && (
+                  <button
+                    className="inline-flex items-center justify-center px-4 py-2 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors font-medium"
+                  >
+                    Contact Business
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

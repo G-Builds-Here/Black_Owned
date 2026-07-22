@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, NotificationProvider, useNotification } from '@/components/ui';
+import { NatsConsumerMonitor } from '@/components/admin/NatsConsumerMonitor';
+import { subscribeToMessageEvents, unsubscribeFromMessageEvents } from '@/services/notification-service';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -44,9 +46,31 @@ const VERIFICATION_QUEUE = [
   { id: '3', business: 'Rhythm & Blues Records', owner: 'James Peterson', email: 'james@...', submitted: '2026-07-13', documents: ['business_license.pdf', 'insurance.pdf'] },
 ];
 
-export default function AdminConsole() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
+/**
+ * Admin Console Content (inner component that can use hooks)
+ */
+function AdminConsoleContent() {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'nats-monitor' | 'verifications' | 'reviews' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const { showNotification } = useNotification();
+
+  // Subscribe to NATS message events on mount
+  useEffect(() => {
+    const handleNewMessage = (businessName: string, messagePreview: string) => {
+      showNotification(businessName, messagePreview);
+    };
+
+    subscribeToMessageEvents(handleNewMessage).catch((error) => {
+      console.error("Failed to subscribe to message events:", error);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribeFromMessageEvents().catch((error) => {
+        console.error("Failed to unsubscribe from message events:", error);
+      });
+    };
+  }, [showNotification]);
 
   const handleApproveVerification = (id: string) => {
     console.log('Approve verification:', id);
@@ -119,6 +143,7 @@ export default function AdminConsole() {
           tabs={[
             { key: 'dashboard', label: 'Dashboard' },
             { key: 'users', label: 'User Management' },
+            { key: 'nats-monitor', label: 'NATS Monitor' },
             { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
             { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
             { key: 'settings', label: 'Settings' },
@@ -279,6 +304,11 @@ export default function AdminConsole() {
           </Card>
         </TabPanel>
 
+        {/* NATS Monitor Tab */}
+        <TabPanel value="nats-monitor" className="mt-6">
+          <NatsConsumerMonitor />
+        </TabPanel>
+
         {/* Verifications Tab */}
         <TabPanel value="verifications" className="mt-6">
           <Card variant="elevated" padding="lg">
@@ -417,5 +447,16 @@ export default function AdminConsole() {
         </div>
       </footer>
     </main>
+  );
+}
+
+/**
+ * Admin Console with Notification Provider
+ */
+export default function AdminConsole() {
+  return (
+    <NotificationProvider>
+      <AdminConsoleContent />
+    </NotificationProvider>
   );
 }

@@ -1,8 +1,8 @@
 /**
- * Business Resolvers Tests - createBusiness mutation
+ * Business Resolvers Tests - createBusiness and updateBusiness mutations
  */
 
-import { createBusiness } from "./resolvers";
+import { createBusiness, updateBusiness } from "./resolvers";
 
 // Mock the database functions
 const mockQuery = jest.fn();
@@ -306,5 +306,145 @@ describe("createBusiness mutation", () => {
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Trimmed Business Name");
     expect(result.business?.categoryId).toBe("cat-4");
+  });
+});
+
+describe("updateBusiness mutation", () => {
+  const mockUserId = "test-user-id-123";
+  const mockBusinessId = "business-id-456";
+  const mockDate = new Date("2026-07-19T10:00:00Z");
+
+  const mockUpdatedBusiness = {
+    id: mockBusinessId,
+    ownerId: mockUserId,
+    name: "Updated Business Name",
+    description: "Updated description",
+    categoryId: "cat-1",
+    verificationStatus: "unverified",
+    createdAt: mockDate,
+    updatedAt: mockDate,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("updates business when user is the owner", async () => {
+    mockQuery.mockResolvedValue({ rows: [mockUpdatedBusiness] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
+    };
+
+    const args = {
+      input: {
+        id: mockBusinessId,
+        name: "Updated Business Name",
+        description: "Updated description",
+      },
+    };
+
+    const result = await updateBusiness(null, args, context);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.business).toBeDefined();
+    expect(result.business?.name).toBe("Updated Business Name");
+  });
+
+  it("returns authentication error when user is not authenticated", async () => {
+    const args = {
+      input: {
+        id: mockBusinessId,
+        name: "Updated Name",
+      },
+    };
+
+    const result = await updateBusiness(null, args, {});
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Authentication required");
+  });
+
+  it("returns error when business not found or user is not owner", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
+    };
+
+    const args = {
+      input: {
+        id: mockBusinessId,
+        name: "Updated Name",
+      },
+    };
+
+    const result = await updateBusiness(null, args, context);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Business not found or you are not the owner");
+  });
+
+  it("updates only description when name is not provided", async () => {
+    const mockBusinessWithUpdatedDesc = {
+      ...mockUpdatedBusiness,
+      name: "Original Name",
+      description: "New description only",
+    };
+    mockQuery.mockResolvedValue({ rows: [mockBusinessWithUpdatedDesc] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
+    };
+
+    const args = {
+      input: {
+        id: mockBusinessId,
+        description: "New description only",
+      },
+    };
+
+    const result = await updateBusiness(null, args, context);
+
+    expect(result.success).toBe(true);
+    expect(result.business?.description).toBe("New description only");
+  });
+
+  it("updates only name when description is not provided", async () => {
+    const mockBusinessWithUpdatedName = {
+      ...mockUpdatedBusiness,
+      name: "New Name Only",
+      description: null,
+    };
+    mockQuery.mockResolvedValue({ rows: [mockBusinessWithUpdatedName] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
+    };
+
+    const args = {
+      input: {
+        id: mockBusinessId,
+        name: "New Name Only",
+      },
+    };
+
+    const result = await updateBusiness(null, args, context);
+
+    expect(result.success).toBe(true);
+    expect(result.business?.name).toBe("New Name Only");
   });
 });

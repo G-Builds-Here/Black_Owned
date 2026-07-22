@@ -16,7 +16,9 @@ export interface GraphQLResponse<T> {
 export interface Business {
   id: string;
   name: string;
+  description: string | null;
   categoryId: string;
+  ownerId: string;
   verified: boolean;
   createdAt: {
     timestamp: number;
@@ -25,6 +27,14 @@ export interface Business {
 
 export interface BusinessQueryResponse {
   business: Business | null;
+}
+
+export interface UpdateBusinessMutationResponse {
+  updateBusiness: {
+    success: boolean;
+    business: Business | null;
+    error: string | null;
+  };
 }
 
 /**
@@ -71,6 +81,7 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
       business(id: $id) {
         id
         name
+        description
         categoryId
         verified
         createdAt {
@@ -82,4 +93,37 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
 
   const result = await graphqlQuery<BusinessQueryResponse>(query, { id });
   return result.business;
+}
+
+/**
+ * Update a business using the GraphQL API
+ */
+export async function updateBusiness(
+  id: string,
+  updates: { name?: string; description?: string; categoryId?: string }
+): Promise<UpdateBusinessMutationResponse["updateBusiness"]> {
+  const query = `
+    mutation UpdateBusiness($input: UpdateBusinessInput!) {
+      updateBusiness(input: $input) {
+        success
+        business {
+          id
+          name
+          description
+          categoryId
+          ownerId
+          verified
+          createdAt {
+            timestamp
+          }
+        }
+        error
+      }
+    }
+  `;
+
+  const result = await graphqlQuery<UpdateBusinessMutationResponse>(query, {
+    input: { id, ...updates },
+  });
+  return result.updateBusiness;
 }

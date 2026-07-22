@@ -3,13 +3,31 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BusinessDetail, Business } from './BusinessDetail';
+
+// Mock the notification hook
+const mockShowNotification = jest.fn();
+jest.mock('@/components/ui', () => ({
+  ...jest.requireActual('@/components/ui'),
+  useNotification: () => ({
+    showNotification: mockShowNotification,
+  }),
+}));
+
+// Mock the graphql client
+jest.mock('@/lib/graphql/graphql-client', () => ({
+  updateBusiness: jest.fn(),
+}));
+
+import { updateBusiness } from '@/lib/graphql/graphql-client';
 
 const mockBusiness: Business = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   name: 'Soul Food Kitchen',
+  description: 'Authentic Southern cuisine with a modern twist.',
   categoryId: 'food-dining',
+  ownerId: 'user-123',
   verified: true,
   createdAt: {
     timestamp: 1704067200, // 2024-01-01
@@ -221,6 +239,252 @@ describe('BusinessDetail', () => {
       );
 
       expect(screen.getByText(/unverified/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Edit Profile (Owner Only)', () => {
+    it('shows edit button when user is owner', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /edit profile/i })).toBeInTheDocument();
+    });
+
+    it('does not show edit button when user is not owner', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={false}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: /edit profile/i })).not.toBeInTheDocument();
+    });
+
+    it('shows edit form when edit button is clicked', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      expect(screen.getByRole('textbox', { name: /business name/i })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /description/i })).toBeInTheDocument();
+    });
+
+    it('pre-populates edit form with current values', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      expect(screen.getByRole('textbox', { name: /business name/i })).toHaveValue('Soul Food Kitchen');
+      expect(screen.getByRole('textbox', { name: /description/i })).toHaveValue('Authentic Southern cuisine with a modern twist.');
+    });
+
+    it('shows save and cancel buttons in edit mode', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    });
+
+    it('hides back to directory link in edit mode', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      // Initially shows back link
+      expect(screen.getByRole('link', { name: /back to directory/i })).toBeInTheDocument();
+
+      // Click edit button
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      // Back link should be hidden in edit mode
+      expect(screen.queryByRole('link', { name: /back to directory/i })).not.toBeInTheDocument();
+    });
+
+    it('calls updateBusiness mutation when save is clicked', async () => {
+      const mockUpdateResult = {
+        success: true,
+        business: mockBusiness,
+        error: null,
+      };
+      (updateBusiness as jest.Mock).mockResolvedValue(mockUpdateResult);
+
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      // Enter edit mode
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      // Change values
+      const nameInput = screen.getByRole('textbox', { name: /name/i });
+      const descriptionInput = screen.getByRole('textbox', { name: /description/i });
+
+      fireEvent.change(nameInput, { target: { value: 'Updated Name' } });
+      fireEvent.change(descriptionInput, { target: { value: 'Updated description' } });
+
+      // Click save
+      fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+      // Verify mutation was called
+      await waitFor(() => {
+        expect(updateBusiness).toHaveBeenCalledWith(mockBusiness.id, {
+          name: 'Updated Name',
+          description: 'Updated description',
+        });
+      });
+    });
+
+    it('shows success notification when update succeeds', async () => {
+      const mockUpdateResult = {
+        success: true,
+        business: mockBusiness,
+        error: null,
+      };
+      (updateBusiness as jest.Mock).mockResolvedValue(mockUpdateResult);
+
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+      fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => {
+        expect(mockShowNotification).toHaveBeenCalledWith(
+          'Profile Updated',
+          'Profile updated'
+        );
+      });
+    });
+
+    it('shows error notification when update fails', async () => {
+      const mockUpdateResult = {
+        success: false,
+        business: null,
+        error: 'You do not have permission to update this business',
+      };
+      (updateBusiness as jest.Mock).mockResolvedValue(mockUpdateResult);
+
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+      fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => {
+        expect(mockShowNotification).toHaveBeenCalledWith(
+          'Update Failed',
+          'You do not have permission to update this business',
+          'error'
+        );
+      });
+    });
+
+    it('exits edit mode after successful save', async () => {
+      const mockUpdateResult = {
+        success: true,
+        business: mockBusiness,
+        error: null,
+      };
+      (updateBusiness as jest.Mock).mockResolvedValue(mockUpdateResult);
+
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      // Should be in edit mode
+      expect(screen.getByRole('textbox', { name: /name/i })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+      // Wait for the update to complete
+      await waitFor(() => {
+        // Should exit edit mode and show edit button again
+        expect(screen.getByRole('button', { name: /edit profile/i })).toBeInTheDocument();
+      });
+    });
+
+    it('cancels edit mode and restores original values', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          isOwner={true}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /edit profile/i }));
+
+      // Change values
+      const nameInput = screen.getByRole('textbox', { name: /name/i });
+      fireEvent.change(nameInput, { target: { value: 'Changed Name' } });
+
+      // Click cancel
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Should exit edit mode
+      expect(screen.getByRole('button', { name: /edit profile/i })).toBeInTheDocument();
     });
   });
 

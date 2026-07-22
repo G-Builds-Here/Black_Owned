@@ -28,6 +28,7 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
+  updateBusinessById,
   create as createBusiness,
   Business as BusinessRecord,
 } from "../db/business-repository";
@@ -325,14 +326,15 @@ function businessToGraphqlBusiness(business: BusinessRecord) {
  */
 export async function updateBusiness(
   _parent: unknown,
-  args: { id: string; name: string },
+  args: { input: { id: string; name?: string; description?: string; categoryId?: string } },
   context: { headers: { authorization?: string } }
 ): Promise<{
   success: boolean;
   business?: unknown;
   error?: string;
 }> {
-  const { id, name } = args;
+  const { input } = args;
+  const { id, name, description, categoryId } = input;
   const authHeader = context.headers.authorization;
 
   // Extract JWT token from Authorization header
@@ -358,20 +360,25 @@ export async function updateBusiness(
 
   const userId = payload.userId;
 
-  // Verify ownership - only the business owner can update
-  const updatedBusiness = await updateNameById(id, name, userId);
+  const client = await getPool().connect();
+  try {
+    // Verify ownership and update - only the business owner can update
+    const updatedBusiness = await updateBusinessById(client, id, { name, description, categoryId }, userId);
 
-  if (!updatedBusiness) {
+    if (!updatedBusiness) {
+      return {
+        success: false,
+        error: "Business not found or you are not the owner",
+      };
+    }
+
     return {
-      success: false,
-      error: "Business not found or you are not the owner",
+      success: true,
+      business: businessToGraphqlBusiness(updatedBusiness),
     };
+  } finally {
+    client.release();
   }
-
-  return {
-    success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
-  };
 }
 
 /**

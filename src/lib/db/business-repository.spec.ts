@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateBusinessById } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -152,6 +152,143 @@ describe("Business Repository", () => {
         try {
           const businesses = await findBusinessesByOwnerId(client, user.id);
           expect(businesses.length).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+  });
+
+  describe("updateBusinessById", () => {
+    it("updates business name when user is the owner", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Original Name", "Original desc", "cat-1");
+
+          const updated = await updateBusinessById(client, business.id, { name: "Updated Name" }, user.id);
+
+          expect(updated).toBeDefined();
+          expect(updated?.name).toBe("Updated Name");
+          expect(updated?.description).toBe("Original desc");
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("updates business description when user is the owner", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Test Name", "Original desc", "cat-1");
+
+          const updated = await updateBusinessById(client, business.id, { description: "Updated desc" }, user.id);
+
+          expect(updated).toBeDefined();
+          expect(updated?.name).toBe("Test Name");
+          expect(updated?.description).toBe("Updated desc");
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("updates multiple fields at once", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Original Name", "Original desc", "cat-1");
+
+          const updated = await updateBusinessById(client, business.id, {
+            name: "New Name",
+            description: "New desc",
+            categoryId: "cat-2",
+          }, user.id);
+
+          expect(updated).toBeDefined();
+          expect(updated?.name).toBe("New Name");
+          expect(updated?.description).toBe("New desc");
+          expect(updated?.categoryId).toBe("cat-2");
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("returns null when user is not the owner", async () => {
+      const user1 = await createTestUser();
+      const user2 = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user1.id, "Test Name", "Desc", "cat-1");
+
+          // Try to update with wrong user ID
+          const updated = await updateBusinessById(client, business.id, { name: "Hacked Name" }, user2.id);
+
+          expect(updated).toBeNull();
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user1.email);
+        await cleanupUser(user2.email);
+      }
+    });
+
+    it("returns null when business does not exist", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          const updated = await updateBusinessById(client, "00000000-0000-0000-0000-000000000000", { name: "Fake Name" }, user.id);
+
+          expect(updated).toBeNull();
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("preserves existing values when not provided in update", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Original Name", "Original desc", "cat-1");
+
+          // Update only name, should preserve description and category
+          const updated = await updateBusinessById(client, business.id, { name: "New Name" }, user.id);
+
+          expect(updated).toBeDefined();
+          expect(updated?.name).toBe("New Name");
+          expect(updated?.description).toBe("Original desc");
+          expect(updated?.categoryId).toBe("cat-1");
         } finally {
           client.release();
         }

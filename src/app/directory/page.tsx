@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import { NotificationProvider, useNotification } from '@/components/ui/NotificationBanner';
+import { subscribeToMessageEvents, unsubscribeFromMessageEvents } from '@/services/notification-service';
 
 // Mock data - in production this would come from an API
 const MOCK_BUSINESSES: Business[] = [
@@ -102,11 +104,38 @@ const LOCATIONS = [
   'Philadelphia, PA',
 ];
 
-export default function DirectoryPage() {
+function DirectoryPageContent() {
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
   const [filters, setFilters] = useState<FilterOption>({});
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
+  const { showNotification, setNotificationClickHandler } = useNotification();
+
+  // Register click handler for notification banner
+  React.useEffect(() => {
+    setNotificationClickHandler(() => {
+      // Navigate to chat page when notification is clicked
+      window.location.href = '/chat';
+    });
+  }, [setNotificationClickHandler]);
+
+  // Subscribe to NATS message events on mount
+  React.useEffect(() => {
+    const handleNewMessage = (businessName: string, messagePreview: string) => {
+      showNotification(businessName, messagePreview);
+    };
+
+    subscribeToMessageEvents(handleNewMessage).catch((error) => {
+      console.error('Failed to subscribe to message events:', error);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribeFromMessageEvents().catch((error) => {
+        console.error('Failed to unsubscribe from message events:', error);
+      });
+    };
+  }, [showNotification]);
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
@@ -199,13 +228,21 @@ export default function DirectoryPage() {
 
   const displayBusinesses = activeTab === 'all' ? filteredBusinesses : savedBusinessList;
 
+  const handleNavigate = useCallback((section: 'directory' | 'admin' | 'user' | 'home') => {
+    // Handle navigation - in production this would use next/router
+    console.log('Navigate to:', section);
+  }, []);
+
+  const handleChatNavigation = useCallback(() => {
+    // Navigate to chat page
+    window.location.href = '/chat';
+  }, []);
+
   return (
     <main className="min-h-screen bg-neutral-50">
       {/* Navigation */}
       <Navigation
-        onNavigate={(section) => {
-          console.log('Navigate to:', section);
-        }}
+        onNavigate={handleNavigate}
       />
 
       {/* Page Header */}
@@ -335,5 +372,13 @@ export default function DirectoryPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function DirectoryPage() {
+  return (
+    <NotificationProvider>
+      <DirectoryPageContent />
+    </NotificationProvider>
   );
 }

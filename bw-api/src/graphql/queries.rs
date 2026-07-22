@@ -61,7 +61,9 @@ impl QueryRoot {
                 let business = Business {
                     id,
                     name,
+                    description: None,
                     category_id,
+                    owner_id: Uuid::new_v4(),
                     verified,
                     created_at,
                 };
@@ -121,7 +123,9 @@ impl QueryRoot {
         let business = Business {
             id: bid,
             name,
+            description: None,
             category_id,
+            owner_id: Uuid::new_v4(),
             verified,
             created_at,
         };
@@ -210,7 +214,9 @@ impl QueryRoot {
                 GQLBusiness::from(Business {
                     id,
                     name,
+                    description: None,
                     category_id,
+                    owner_id: Uuid::new_v4(),
                     verified,
                     created_at,
                 })

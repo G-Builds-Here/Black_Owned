@@ -99,3 +99,68 @@ export async function findBusinessesByOwnerId(
   );
   return result.rows.map(rowToBusiness);
 }
+
+/**
+ * Update business name by ID (only if user is the owner)
+ */
+export async function updateNameById(
+  client: PoolClient,
+  id: string,
+  name: string,
+  ownerId: string
+): Promise<Business | null> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET name = $2, updated_at = NOW()
+     WHERE id = $1 AND owner_id = $3
+     RETURNING *`,
+    [id, name, ownerId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Update business description by ID (only if user is the owner)
+ */
+export async function updateDescriptionById(
+  client: PoolClient,
+  id: string,
+  description: string | undefined,
+  ownerId: string
+): Promise<Business | null> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET description = $2, updated_at = NOW()
+     WHERE id = $1 AND owner_id = $3
+     RETURNING *`,
+    [id, description || null, ownerId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Update business by ID (only if user is the owner)
+ */
+export async function updateBusinessById(
+  client: PoolClient,
+  id: string,
+  updates: { name?: string; description?: string; categoryId?: string },
+  ownerId: string
+): Promise<Business | null> {
+  const tableName = getTableName();
+  const { name, description, categoryId } = updates;
+
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET name = COALESCE($2, name),
+         description = COALESCE($3, description),
+         category_id = COALESCE($4, category_id),
+         updated_at = NOW()
+     WHERE id = $1 AND owner_id = $5
+     RETURNING *`,
+    [id, name || null, description || null, categoryId || null, ownerId]
+  );
+  return result.rows[0] || null;
+}
