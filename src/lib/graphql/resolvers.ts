@@ -7,6 +7,7 @@ import {
   create,
   initializeUserSchema,
 } from "../db/user-repository";
+import { login } from "./login-resolvers";
 import {
   hashPassword,
   generateTokenPair,
@@ -605,3 +606,8 @@ export const resolvers = {
     updateBusiness,
   },
 };
+
+/**
+ * Export login function for API route usage
+ */
+export { login };
