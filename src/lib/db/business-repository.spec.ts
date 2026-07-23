@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateBusinessById } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateDescriptionById } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -161,21 +161,20 @@ describe("Business Repository", () => {
     });
   });
 
-  describe("updateBusinessById", () => {
-    it("updates business name when user is the owner", async () => {
+  describe("updateDescriptionById", () => {
+    it("updates business description when user is owner", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Original Name", "Original desc", "cat-1");
-
-          const updated = await updateBusinessById(client, business.id, { name: "Updated Name" }, user.id);
+          const business = await createBusiness(client, user.id, "Update Test Business", "Original description", "cat-1");
+          const updated = await updateDescriptionById(client, business.id, "Updated description", user.id);
 
           expect(updated).toBeDefined();
-          expect(updated?.name).toBe("Updated Name");
-          expect(updated?.description).toBe("Original desc");
+          expect(updated?.id).toBe(business.id);
+          expect(updated?.description).toBe("Updated description");
         } finally {
           client.release();
         }
@@ -184,56 +183,7 @@ describe("Business Repository", () => {
       }
     });
 
-    it("updates business description when user is the owner", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Test Name", "Original desc", "cat-1");
-
-          const updated = await updateBusinessById(client, business.id, { description: "Updated desc" }, user.id);
-
-          expect(updated).toBeDefined();
-          expect(updated?.name).toBe("Test Name");
-          expect(updated?.description).toBe("Updated desc");
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("updates multiple fields at once", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Original Name", "Original desc", "cat-1");
-
-          const updated = await updateBusinessById(client, business.id, {
-            name: "New Name",
-            description: "New desc",
-            categoryId: "cat-2",
-          }, user.id);
-
-          expect(updated).toBeDefined();
-          expect(updated?.name).toBe("New Name");
-          expect(updated?.description).toBe("New desc");
-          expect(updated?.categoryId).toBe("cat-2");
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("returns null when user is not the owner", async () => {
+    it("returns undefined when user is not the owner", async () => {
       const user1 = await createTestUser();
       const user2 = await createTestUser();
 
@@ -241,12 +191,10 @@ describe("Business Repository", () => {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user1.id, "Test Name", "Desc", "cat-1");
+          const business = await createBusiness(client, user1.id, "Not Owner Test", "Original", "cat-1");
+          const updated = await updateDescriptionById(client, business.id, "Updated by non-owner", user2.id);
 
-          // Try to update with wrong user ID
-          const updated = await updateBusinessById(client, business.id, { name: "Hacked Name" }, user2.id);
-
-          expect(updated).toBeNull();
+          expect(updated).toBeUndefined();
         } finally {
           client.release();
         }
@@ -256,39 +204,15 @@ describe("Business Repository", () => {
       }
     });
 
-    it("returns null when business does not exist", async () => {
+    it("returns undefined when business does not exist", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
-          const updated = await updateBusinessById(client, "00000000-0000-0000-0000-000000000000", { name: "Fake Name" }, user.id);
+          const updated = await updateDescriptionById(client, "00000000-0000-0000-0000-000000000000", "Updated", user.id);
 
-          expect(updated).toBeNull();
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("preserves existing values when not provided in update", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Original Name", "Original desc", "cat-1");
-
-          // Update only name, should preserve description and category
-          const updated = await updateBusinessById(client, business.id, { name: "New Name" }, user.id);
-
-          expect(updated).toBeDefined();
-          expect(updated?.name).toBe("New Name");
-          expect(updated?.description).toBe("Original desc");
-          expect(updated?.categoryId).toBe("cat-1");
+          expect(updated).toBeUndefined();
         } finally {
           client.release();
         }

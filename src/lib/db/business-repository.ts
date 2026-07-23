@@ -101,66 +101,21 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
- * Update business name by ID (only if user is the owner)
- */
-export async function updateNameById(
-  client: PoolClient,
-  id: string,
-  name: string,
-  ownerId: string
-): Promise<Business | null> {
-  const tableName = getTableName();
-  const result = await client.query<Business>(
-    `UPDATE ${tableName}
-     SET name = $2, updated_at = NOW()
-     WHERE id = $1 AND owner_id = $3
-     RETURNING *`,
-    [id, name, ownerId]
-  );
-  return result.rows[0] || null;
-}
-
-/**
- * Update business description by ID (only if user is the owner)
+ * Update business description by ID
  */
 export async function updateDescriptionById(
   client: PoolClient,
   id: string,
-  description: string | undefined,
+  description: string,
   ownerId: string
-): Promise<Business | null> {
+): Promise<Business | undefined> {
   const tableName = getTableName();
   const result = await client.query<Business>(
     `UPDATE ${tableName}
-     SET description = $2, updated_at = NOW()
-     WHERE id = $1 AND owner_id = $3
+     SET description = $1, updated_at = NOW()
+     WHERE id = $2 AND owner_id = $3
      RETURNING *`,
-    [id, description || null, ownerId]
+    [description, id, ownerId]
   );
-  return result.rows[0] || null;
-}
-
-/**
- * Update business by ID (only if user is the owner)
- */
-export async function updateBusinessById(
-  client: PoolClient,
-  id: string,
-  updates: { name?: string; description?: string; categoryId?: string },
-  ownerId: string
-): Promise<Business | null> {
-  const tableName = getTableName();
-  const { name, description, categoryId } = updates;
-
-  const result = await client.query<Business>(
-    `UPDATE ${tableName}
-     SET name = COALESCE($2, name),
-         description = COALESCE($3, description),
-         category_id = COALESCE($4, category_id),
-         updated_at = NOW()
-     WHERE id = $1 AND owner_id = $5
-     RETURNING *`,
-    [id, name || null, description || null, categoryId || null, ownerId]
-  );
-  return result.rows[0] || null;
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }

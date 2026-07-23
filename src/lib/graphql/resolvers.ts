@@ -7,7 +7,6 @@ import {
   create,
   initializeUserSchema,
 } from "../db/user-repository";
-import { login } from "./login-resolvers";
 import {
   hashPassword,
   generateTokenPair,
@@ -29,8 +28,7 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  updateBusinessById,
-  create as createBusiness,
+  create as createBusinessInDbRaw,
   Business as BusinessRecord,
 } from "../db/business-repository";
 
@@ -308,18 +306,13 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 }
 
 /**
- * Convert business record to GraphQL Business type
+ * Publish cache invalidation event via NATS
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
-  return {
-    id: business.id,
-    name: business.name,
-    categoryId: business.category_id,
-    verified: business.verified,
-    createdAt: {
-      timestamp: Math.floor(business.created_at.getTime() / 1000),
-    },
-  };
+async function publishCacheInvalidation(key: string): Promise<void> {
+  const { getNatsConnection } = await import("../nats/client");
+  const nc = await getNatsConnection();
+  const payload = JSON.stringify({ key });
+  nc.publish("cache.invalidate", Buffer.from(payload));
 }
 
 /**
@@ -327,7 +320,7 @@ function businessToGraphqlBusiness(business: BusinessRecord) {
  */
 export async function updateBusiness(
   _parent: unknown,
-  args: { input: { id: string; name?: string; description?: string; categoryId?: string } },
+  args: { input: { id: string; name?: string; description?: string } },
   context: { headers: { authorization?: string } }
 ): Promise<{
   success: boolean;
@@ -335,8 +328,16 @@ export async function updateBusiness(
   error?: string;
 }> {
   const { input } = args;
-  const { id, name, description, categoryId } = input;
+  const { id, name, description } = input;
   const authHeader = context.headers.authorization;
+
+  // Validate that at least one field is provided
+  if (!name && !description) {
+    return {
+      success: false,
+      error: "At least one field (name or description) must be provided",
+    };
+  }
 
   // Extract JWT token from Authorization header
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -361,10 +362,20 @@ export async function updateBusiness(
 
   const userId = payload.userId;
 
+  // Get database client
+  const { getPool } = await import("../db/user-repository");
   const client = await getPool().connect();
+
   try {
     // Verify ownership and update - only the business owner can update
-    const updatedBusiness = await updateBusinessById(client, id, { name, description, categoryId }, userId);
+    let updatedBusiness: Business | undefined;
+
+    if (description !== undefined) {
+      const { updateDescriptionById } = await import("../db/business-repository");
+      updatedBusiness = await updateDescriptionById(client, id, description, userId);
+    } else if (name) {
+      updatedBusiness = await updateNameById(client, id, name, userId);
+    }
 
     if (!updatedBusiness) {
       return {
@@ -372,6 +383,9 @@ export async function updateBusiness(
         error: "Business not found or you are not the owner",
       };
     }
+
+    // Invalidate cache for this business
+    await publishCacheInvalidation(`business:${id}`);
 
     return {
       success: true,
@@ -606,8 +620,3 @@ export const resolvers = {
     updateBusiness,
   },
 };
-
-/**
- * Export login function for API route usage
- */
-export { login };
