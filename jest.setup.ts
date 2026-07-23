@@ -4,3 +4,8 @@ import '@testing-library/jest-dom';
 import { TextEncoder, TextDecoder } from 'util';
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
+
+// Mock scrollIntoView for testing environments
+if (typeof HTMLElement !== 'undefined') {
+  HTMLElement.prototype.scrollIntoView = jest.fn();
+}

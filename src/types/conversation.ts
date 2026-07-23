@@ -19,6 +19,11 @@ export interface ConversationParticipant {
 export type MessageType = 'text' | 'image' | 'file';
 
 /**
+ * Message send status for optimistic UI
+ */
+export type MessageStatus = 'sending' | 'sent' | 'failed';
+
+/**
  * Message entity
  */
 export interface Message {
@@ -29,6 +34,7 @@ export interface Message {
   type: MessageType;
   timestamp: Date;
   isRead: boolean;
+  status?: MessageStatus;
 }
 
 /**
