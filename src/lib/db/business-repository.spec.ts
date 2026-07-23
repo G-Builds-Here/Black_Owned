@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateDescriptionById } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -152,6 +152,67 @@ describe("Business Repository", () => {
         try {
           const businesses = await findBusinessesByOwnerId(client, user.id);
           expect(businesses.length).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+  });
+
+  describe("updateDescriptionById", () => {
+    it("updates business description when user is owner", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Update Test Business", "Original description", "cat-1");
+          const updated = await updateDescriptionById(client, business.id, "Updated description", user.id);
+
+          expect(updated).toBeDefined();
+          expect(updated?.id).toBe(business.id);
+          expect(updated?.description).toBe("Updated description");
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("returns undefined when user is not the owner", async () => {
+      const user1 = await createTestUser();
+      const user2 = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user1.id, "Not Owner Test", "Original", "cat-1");
+          const updated = await updateDescriptionById(client, business.id, "Updated by non-owner", user2.id);
+
+          expect(updated).toBeUndefined();
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user1.email);
+        await cleanupUser(user2.email);
+      }
+    });
+
+    it("returns undefined when business does not exist", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          const updated = await updateDescriptionById(client, "00000000-0000-0000-0000-000000000000", "Updated", user.id);
+
+          expect(updated).toBeUndefined();
         } finally {
           client.release();
         }

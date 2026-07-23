@@ -99,3 +99,23 @@ export async function findBusinessesByOwnerId(
   );
   return result.rows.map(rowToBusiness);
 }
+
+/**
+ * Update business description by ID
+ */
+export async function updateDescriptionById(
+  client: PoolClient,
+  id: string,
+  description: string,
+  ownerId: string
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET description = $1, updated_at = NOW()
+     WHERE id = $2 AND owner_id = $3
+     RETURNING *`,
+    [description, id, ownerId]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+}
