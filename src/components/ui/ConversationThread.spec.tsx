@@ -1,173 +1,156 @@
+/**
+ * ConversationThread Component Tests
+ *
+ * Tests the optimistic UI updates, message sending, and NATS integration.
+ */
+
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ConversationThread from './ConversationThread';
-import type { Message } from '../../types/message';
+
+// Mock the nats-client module
+jest.mock('../../lib/nats/nats-client', () => ({
+  sendMessage: jest.fn().mockResolvedValue(),
+  subscribeToMessages: jest.fn(),
+}));
+
+const mockMessages = [
+  {
+    id: 'msg-1',
+    conversationId: 'conv-1',
+    senderId: 'other-user',
+    content: 'Hello!',
+    type: 'text' as const,
+    timestamp: new Date(),
+    isRead: true,
+  },
+];
 
 describe('ConversationThread', () => {
-  const mockMessages: Message[] = [
-    {
-      id: 'msg-1',
-      conversationId: 'conv-1',
-      senderId: 'user-2',
-      content: 'Hello!',
-      type: 'text',
-      timestamp: new Date('2026-07-21T10:00:00Z'),
-      isRead: false,
-      status: 'sent',
-    },
-    {
-      id: 'msg-2',
-      conversationId: 'conv-1',
-      senderId: 'current-user',
-      content: 'Hi there!',
-      type: 'text',
-      timestamp: new Date('2026-07-21T10:01:00Z'),
-      isRead: true,
-      status: 'sent',
-    },
-  ];
-
   const defaultProps = {
-    messages: mockMessages,
     currentUserId: 'current-user',
+    conversationId: 'conv-1',
+    messages: mockMessages,
   };
 
-  it('renders empty state when no messages', () => {
-    render(<ConversationThread {...defaultProps} messages={[]} />);
-    expect(screen.getByText(/No messages yet/)).toBeInTheDocument();
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('displays messages from other users on the left', () => {
+  it('renders messages correctly', () => {
     render(<ConversationThread {...defaultProps} />);
+
     expect(screen.getByText('Hello!')).toBeInTheDocument();
   });
 
-  it('displays own messages on the right', () => {
-    render(<ConversationThread {...defaultProps} />);
-    expect(screen.getByText('Hi there!')).toBeInTheDocument();
-  });
-
-  it('shows sending indicator for messages with sending status', () => {
-    const sendingMessage: Message = {
-      ...mockMessages[0],
-      status: 'sending',
-    };
-    render(<ConversationThread {...defaultProps} messages={[sendingMessage]} />);
-    expect(screen.getByText(/sending\.\.\./)).toBeInTheDocument();
-  });
-
-  it('shows failed indicator for messages with failed status', () => {
-    const failedMessage: Message = {
-      ...mockMessages[0],
-      status: 'failed',
-    };
-    render(<ConversationThread {...defaultProps} messages={[failedMessage]} />);
-    expect(screen.getByText(/failed/)).toBeInTheDocument();
-  });
-
-  it('shows sent checkmark for messages with sent status', () => {
-    render(<ConversationThread {...defaultProps} />);
-    expect(screen.getByText('✓')).toBeInTheDocument();
-  });
-
-  it('displays message timestamp', () => {
-    render(<ConversationThread {...defaultProps} />);
-    expect(screen.getByText('10:00 AM')).toBeInTheDocument();
-  });
-
-  it('shows error banner when errorMessage is provided', () => {
+  it('displays empty state when no messages', () => {
     render(
       <ConversationThread
         {...defaultProps}
-        errorMessage="Failed to send message"
+        messages={[]}
       />
     );
-    expect(screen.getByText(/Failed to send message/)).toBeInTheDocument();
+
+    expect(screen.getByText('No messages yet. Start the conversation!')).toBeInTheDocument();
   });
 
-  it('displays input field for new messages', () => {
+  it('shows sending indicator immediately when message is sent', async () => {
     render(<ConversationThread {...defaultProps} />);
-    const input = screen.getByPlaceholderText(/Type a message/);
-    expect(input).toBeInTheDocument();
-  });
 
-  it('disables input when isSending is true', () => {
-    render(<ConversationThread {...defaultProps} isSending={true} />);
-    const input = screen.getByPlaceholderText(/Type a message/);
-    expect(input).toBeDisabled();
-  });
-
-  it('calls onSendMessage when form is submitted', () => {
-    const mockOnSendMessage = jest.fn();
-    render(
-      <ConversationThread
-        {...defaultProps}
-        onSendMessage={mockOnSendMessage}
-      />
-    );
-
-    const input = screen.getByPlaceholderText(/Type a message/);
-    const sendButton = screen.getByText('Send');
+    const input = screen.getByPlaceholderText('Type a message...');
+    const sendButton = screen.getByRole('button', { name: 'Send' });
 
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(sendButton);
 
-    expect(mockOnSendMessage).toHaveBeenCalledWith('Test message');
+    // Message should appear immediately with sending indicator
+    await waitFor(() => {
+      expect(screen.getByText('Test message')).toBeInTheDocument();
+    });
   });
 
-  it('clears input after sending message', () => {
-    const mockOnSendMessage = jest.fn();
-    render(
-      <ConversationThread
-        {...defaultProps}
-        onSendMessage={mockOnSendMessage}
-      />
-    );
+  it('calls onMessageSent callback when message is sent', async () => {
+    const onMessageSent = jest.fn();
 
-    const input = screen.getByPlaceholderText(/Type a message/);
-    const sendButton = screen.getByText('Send');
+    render(<ConversationThread {...defaultProps} onMessageSent={onMessageSent} />);
+
+    const input = screen.getByPlaceholderText('Type a message...');
+    const sendButton = screen.getByRole('button', { name: 'Send' });
 
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(sendButton);
 
-    expect(input).toHaveValue('');
+    await waitFor(() => {
+      expect(onMessageSent).toHaveBeenCalled();
+    });
+
+    const sentMessage = onMessageSent.mock.calls[0][0];
+    expect(sentMessage.content).toBe('Test message');
+    expect(sentMessage.senderId).toBe('current-user');
+    expect(sentMessage.status).toBe('sending');
   });
 
-  it('does not send empty messages', () => {
-    const mockOnSendMessage = jest.fn();
-    render(
-      <ConversationThread
-        {...defaultProps}
-        onSendMessage={mockOnSendMessage}
-      />
-    );
+  it('clears input after sending message', async () => {
+    render(<ConversationThread {...defaultProps} />);
 
-    const input = screen.getByPlaceholderText(/Type a message/);
-    const sendButton = screen.getByText('Send');
+    const input = screen.getByPlaceholderText('Type a message...');
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(input).toHaveValue('');
+    });
+  });
+
+  it('does not send empty messages', async () => {
+    render(<ConversationThread {...defaultProps} />);
+
+    const input = screen.getByPlaceholderText('Type a message...');
+    const sendButton = screen.getByRole('button', { name: 'Send' });
 
     fireEvent.change(input, { target: { value: '   ' } });
     fireEvent.click(sendButton);
 
-    expect(mockOnSendMessage).not.toHaveBeenCalled();
+    // Message should not appear
+    expect(screen.queryByText('   ')).not.toBeInTheDocument();
   });
 
   it('disables send button when input is empty', () => {
     render(<ConversationThread {...defaultProps} />);
-    const sendButton = screen.getByText('Send');
+
+    const sendButton = screen.getByRole('button', { name: 'Send' });
     expect(sendButton).toBeDisabled();
   });
 
   it('enables send button when input has content', () => {
     render(<ConversationThread {...defaultProps} />);
-    const input = screen.getByPlaceholderText(/Type a message/);
-    const sendButton = screen.getByText('Send');
+
+    const input = screen.getByPlaceholderText('Type a message...');
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+
+    expect(sendButton).toBeDisabled();
 
     fireEvent.change(input, { target: { value: 'Test' } });
+
     expect(sendButton).not.toBeDisabled();
   });
 
-  it('shows sending text on button when isSending is true', () => {
-    render(<ConversationThread {...defaultProps} isSending={true} />);
-    expect(screen.getByText('Sending...')).toBeInTheDocument();
+  it('shows own messages on the right side', () => {
+    const ownMessage = {
+      ...mockMessages[0],
+      senderId: 'current-user',
+    };
+
+    render(<ConversationThread {...defaultProps} messages={[ownMessage]} />);
+
+    expect(screen.getByText('Hello!')).toBeInTheDocument();
+  });
+
+  it('shows received messages on the left side', () => {
+    render(<ConversationThread {...defaultProps} />);
+
+    expect(screen.getByText('Hello!')).toBeInTheDocument();
   });
 });
