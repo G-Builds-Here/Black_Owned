@@ -18,6 +18,10 @@ import {
 } from "../../types/user";
 import { storeRefreshToken } from "../valkey/valkey-client";
 import { MinioService, createMinioServiceFromEnv, PresignedUrlResult } from "../minio/minio-service";
+import {
+  findBusinessById,
+  updateVerificationStatusById,
+} from "../db/business-repository";
 
 /**
  * Mock business data for search
@@ -301,6 +305,88 @@ export async function submitVerification(
 /**
  * Resolvers object
  */
+/**
+ * Approve verification mutation resolver
+ * Sets business verification status to "verified" and publishes NATS event
+ */
+export async function approveVerification(
+  _parent: unknown,
+  args: { businessId: string },
+  context: unknown
+): Promise<{
+  success: boolean;
+  business?: unknown;
+  error?: string;
+}> {
+  const { businessId } = args;
+
+  // Validate required fields
+  if (!businessId || businessId.trim() === "") {
+    return {
+      success: false,
+      error: "Missing required field: businessId",
+    };
+  }
+
+  // Validate admin check - only admins can approve verifications
+  const ctx = context as { user?: { id: string; role?: string } };
+  const userRole = ctx?.user?.role;
+  if (userRole !== "admin") {
+    return {
+      success: false,
+      error: "Unauthorized: only admin users can approve verifications",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    // Find the business
+    const business = await findBusinessById(client, businessId);
+    if (!business) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    // Update verification status to "verified"
+    const updatedBusiness = await updateVerificationStatusById(
+      client,
+      businessId,
+      "verified"
+    );
+
+    if (!updatedBusiness) {
+      return {
+        success: false,
+        error: "Failed to update verification status",
+      };
+    }
+
+    // Publish NATS event
+    try {
+      const { publishVerificationApprovedEvent } = await import("../nats/client");
+      await publishVerificationApprovedEvent(businessId, ctx.user?.id || "unknown");
+    } catch (natsError) {
+      console.error("Failed to publish verification.approved event:", natsError);
+      // Don't fail the operation if NATS fails - log and continue
+    }
+
+    return {
+      success: true,
+      business: businessToGraphqlBusiness(updatedBusiness),
+    };
+  } catch (error) {
+    console.error("Approve verification error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to approve verification",
+    };
+  } finally {
+    client.release();
+  }
+}
+
 export const resolvers = {
   Query: {
     health,
@@ -309,5 +395,6 @@ export const resolvers = {
   Mutation: {
     register,
     submitVerification,
+    approveVerification,
   },
 };
