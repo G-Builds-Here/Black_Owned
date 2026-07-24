@@ -1,20 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import React, { useState } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, NotificationProvider, useNotification } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
 import { NatsConsumerMonitor } from '@/components/admin/NatsConsumerMonitor';
-import { subscribeToMessageEvents, unsubscribeFromMessageEvents } from '@/services/notification-service';
 
-// Mock data for admin metrics (per LOC-0044-AC1)
+// Mock data for admin metrics
 const METRICS = {
-  totalUsers: 150,
-  totalBusinesses: 45,
-  totalReviews: 320,
-  unmoderatedReviews: 12,
-  pendingVerifications: 3,
-  natsLag: 0,
+  totalBusinesses: 1247,
+  activeUsers: 8932,
+  pendingReviews: 156,
+  pendingVerifications: 43,
+  todaySignups: 87,
+  weeklyGrowth: 12.5,
 };
 
 const RECENT_BUSINESSES = [
@@ -47,31 +45,9 @@ const VERIFICATION_QUEUE = [
   { id: '3', business: 'Rhythm & Blues Records', owner: 'James Peterson', email: 'james@...', submitted: '2026-07-13', documents: ['business_license.pdf', 'insurance.pdf'] },
 ];
 
-/**
- * Admin Console Content (inner component that can use hooks)
- */
-function AdminConsoleContent() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'nats-monitor' | 'verifications' | 'reviews' | 'settings'>('dashboard');
+export default function AdminConsole() {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
-  const { showNotification } = useNotification();
-
-  // Subscribe to NATS message events on mount
-  useEffect(() => {
-    const handleNewMessage = (businessName: string, messagePreview: string) => {
-      showNotification(businessName, messagePreview);
-    };
-
-    subscribeToMessageEvents(handleNewMessage).catch((error) => {
-      console.error("Failed to subscribe to message events:", error);
-    });
-
-    // Cleanup on unmount
-    return () => {
-      unsubscribeFromMessageEvents().catch((error) => {
-        console.error("Failed to unsubscribe from message events:", error);
-      });
-    };
-  }, [showNotification]);
 
   const handleApproveVerification = (id: string) => {
     console.log('Approve verification:', id);
@@ -87,10 +63,6 @@ function AdminConsoleContent() {
 
   const handleFlagReview = (id: string) => {
     console.log('Flag review:', id);
-  };
-
-  const handleMetricClick = (targetTab: 'users' | 'nats-monitor' | 'verifications' | 'reviews') => {
-    setActiveTab(targetTab);
   };
 
   const getStatusBadge = (status: string) => {
@@ -147,10 +119,9 @@ function AdminConsoleContent() {
         <Tabs
           tabs={[
             { key: 'dashboard', label: 'Dashboard' },
-            { key: 'users', label: `User Management (${METRICS.totalUsers})` },
-            { key: 'nats-monitor', label: 'NATS Monitor' },
-            { key: 'verifications', label: `Verification Queue (${METRICS.pendingVerifications})` },
-            { key: 'reviews', label: `Moderation Queue (${METRICS.unmoderatedReviews})` },
+            { key: 'users', label: 'User Management' },
+            { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
+            { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
             { key: 'settings', label: 'Settings' },
           ]}
           selectedKey={activeTab}
@@ -159,39 +130,14 @@ function AdminConsoleContent() {
 
         {/* Dashboard Tab */}
         <TabPanel value="dashboard" className="mt-6">
-          {/* Metrics Grid - 6 metric cards per LOC-0044-AC1 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {/* Users card - linked to User Management */}
-            <Card
-              variant="elevated"
-              padding="lg"
-              clickable
-              as={Link}
-              href="#users"
-            >
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card variant="elevated" padding="lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-neutral-500 mb-1">Users</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalUsers}</p>
-                </div>
-                <div className="w-12 h-12 bg-heritage-jade/10 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">👥</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Businesses card - linked to Verification Queue */}
-            <Card
-              variant="elevated"
-              padding="lg"
-              clickable
-              as={Link}
-              href="#verifications"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-neutral-500 mb-1">Businesses</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses}</p>
+                  <p className="text-sm text-neutral-500 mb-1">Total Businesses</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses.toLocaleString()}</p>
+                  <p className="text-sm text-heritage-jade mt-1">+{METRICS.weeklyGrowth}% this week</p>
                 </div>
                 <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
                   <span className="text-2xl">🏪</span>
@@ -199,116 +145,49 @@ function AdminConsoleContent() {
               </div>
             </Card>
 
-            {/* Reviews card - no direct link */}
             <Card variant="elevated" padding="lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-neutral-500 mb-1">Reviews</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalReviews}</p>
+                  <p className="text-sm text-neutral-500 mb-1">Active Users</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.activeUsers.toLocaleString()}</p>
+                  <p className="text-sm text-heritage-jade mt-1">+8.2% this week</p>
                 </div>
-                <div className="w-12 h-12 bg-heritage-royal/10 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-heritage-jade/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">👥</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Pending Reviews</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.pendingReviews}</p>
+                  <p className="text-sm text-heritage-amber mt-1">Needs attention</p>
+                </div>
+                <div className="w-12 h-12 bg-heritage-amber/10 rounded-lg flex items-center justify-center">
                   <span className="text-2xl">📝</span>
                 </div>
               </div>
             </Card>
 
-            {/* Unmoderated card - linked to Moderation Queue */}
-            <Card
-              variant="elevated"
-              padding="lg"
-              clickable
-              as={Link}
-              href="#reviews"
-            >
+            <Card variant="elevated" padding="lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-neutral-500 mb-1">Unmoderated</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.unmoderatedReviews}</p>
-                  <p className="text-sm text-heritage-amber mt-1">Needs attention</p>
+                  <p className="text-sm text-neutral-500 mb-1">Today Signups</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.todaySignups}</p>
+                  <p className="text-sm text-heritage-jade mt-1">+15% vs yesterday</p>
                 </div>
-                <div className="w-12 h-12 bg-heritage-amber/10 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">⚠️</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Pending Verifications card - linked to Verification Queue */}
-            <Card
-              variant="elevated"
-              padding="lg"
-              clickable
-              as={Link}
-              href="#verifications"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-neutral-500 mb-1">Pending Verifications</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.pendingVerifications}</p>
-                </div>
-                <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">📋</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* NATS Lag card - linked to NATS Monitor with green indicator */}
-            <Card
-              variant="elevated"
-              padding="lg"
-              clickable
-              as={Link}
-              href="#nats-monitor"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-neutral-500 mb-1">NATS Lag</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.natsLag}</p>
-                  <span className="inline-flex items-center gap-1 text-sm text-heritage-jade mt-1">
-                    <span className="w-2 h-2 bg-heritage-jade rounded-full"></span>
-                    OK
-                  </span>
-                </div>
-                <div className="w-12 h-12 bg-heritage-jade/10 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">📡</span>
+                <div className="w-12 h-12 bg-heritage-royal/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📈</span>
                 </div>
               </div>
             </Card>
           </div>
 
-          {/* NATS Monitoring */}
+          {/* NATS Consumer Monitor */}
           <div className="mb-8">
-            <Card variant="elevated" padding="lg">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-neutral-800">NATS Monitoring</h2>
-                <Badge variant="primary" size="sm">Operational</Badge>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Active Connections</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.activeConnections}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Messages/Sec</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.messagesPerSecond.toLocaleString()}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Pending Messages</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.pendingMessages}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Subscriptions</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.subscriptions}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Uptime</p>
-                  <p className="text-2xl font-bold text-heritage-jade">{NATS_METRICS.uptime}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Last Incident</p>
-                  <p className="text-lg font-bold text-neutral-800">{NATS_METRICS.lastIncident}</p>
-                </div>
-              </div>
-            </Card>
+            <NatsConsumerMonitor />
           </div>
 
           {/* Recent Activity */}
@@ -368,11 +247,6 @@ function AdminConsoleContent() {
             </div>
             <UserTable adminUser="admin" />
           </Card>
-        </TabPanel>
-
-        {/* NATS Monitor Tab */}
-        <TabPanel value="nats-monitor" className="mt-6">
-          <NatsConsumerMonitor />
         </TabPanel>
 
         {/* Verifications Tab */}
@@ -513,16 +387,5 @@ function AdminConsoleContent() {
         </div>
       </footer>
     </main>
-  );
-}
-
-/**
- * Admin Console with Notification Provider
- */
-export default function AdminConsole() {
-  return (
-    <NotificationProvider>
-      <AdminConsoleContent />
-    </NotificationProvider>
   );
 }
