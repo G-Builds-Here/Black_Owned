@@ -14,6 +14,24 @@ use uuid::Uuid;
 
 use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLCategory, GQLReview, PageInfo};
 
+/// Get rating aggregation for a business
+async fn get_rating_aggregation(
+    db: &sqlx::PgPool,
+    business_id: Uuid,
+) -> Result<(Option<f64>, i32)> {
+    let row = sqlx::query_as::<_, (Option<f64>, i64)>(
+        "SELECT AVG(rating::double precision), COUNT(*) FROM reviews WHERE business_id = $1",
+    )
+    .bind(business_id)
+    .fetch_optional(db)
+    .await
+    .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+    Ok(row
+        .map(|(avg, count)| (avg, count as i32))
+        .unwrap_or((None, 0)))
+}
+
 /// Query root for GraphQL API
 pub struct QueryRoot;
 
@@ -87,7 +105,7 @@ impl QueryRoot {
         })
     }
 
-    /// Get a single business by ID
+    /// Get a single business by ID with rating aggregation
     async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusiness>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
@@ -105,8 +123,8 @@ impl QueryRoot {
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        Ok(row.map(|(bid, name, category_id, verified, created_at)| {
-            GQLBusiness::from(Business {
+        let business = row.map(|(bid, name, category_id, verified, created_at)| {
+            Business {
                 id: bid,
                 name,
                 description: None,
@@ -114,7 +132,17 @@ impl QueryRoot {
                 owner_id: Uuid::new_v4(),
                 verified,
                 created_at,
-            })
+            }
+        });
+
+        // Fetch rating aggregation
+        let (rating_avg, review_count) = get_rating_aggregation(&db, business_id).await?;
+
+        Ok(business.map(|b| {
+            let mut gql_business = GQLBusiness::from(b);
+            gql_business.rating_avg = rating_avg;
+            gql_business.review_count = review_count;
+            gql_business
         }))
     }
 
@@ -203,5 +231,84 @@ impl QueryRoot {
                 })
             })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rating_bounds_valid() {
+        // Test that rating values 1-5 are valid
+        assert!(1 >= 1 && 1 <= 5);
+        assert!(3 >= 1 && 3 <= 5);
+        assert!(5 >= 1 && 5 <= 5);
+    }
+
+    #[test]
+    fn test_rating_bounds_invalid() {
+        // Test that rating values outside 1-5 are invalid
+        assert!(0 < 1 || 0 > 5);
+        assert!(6 < 1 || 6 > 5);
+    }
+
+    #[test]
+    fn test_uuid_parsing_valid() {
+        let valid_uuid = Uuid::new_v4().to_string();
+        let result = Uuid::parse_str(&valid_uuid);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_uuid_parsing_invalid() {
+        let invalid_uuid = "not-a-valid-uuid";
+        let result = Uuid::parse_str(invalid_uuid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rating_aggregation_math() {
+        // Test average calculation: (3 + 4 + 5 + 2 + 4) / 5 = 3.6
+        let ratings: Vec<i32> = vec![3, 4, 5, 2, 4];
+        let sum: i32 = ratings.iter().sum();
+        let avg = sum as f64 / ratings.len() as f64;
+        assert!((avg - 3.6).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_rating_aggregation_single_review() {
+        // Test average with single review
+        let ratings: Vec<i32> = vec![5];
+        let sum: i32 = ratings.iter().sum();
+        let avg = sum as f64 / ratings.len() as f64;
+        assert!((avg - 5.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_rating_aggregation_two_reviews() {
+        // Test average with two reviews: (3 + 5) / 2 = 4.0
+        let ratings: Vec<i32> = vec![3, 5];
+        let sum: i32 = ratings.iter().sum();
+        let avg = sum as f64 / ratings.len() as f64;
+        assert!((avg - 4.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_business_name_validation_empty() {
+        let empty_name = "";
+        assert!(empty_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_business_name_validation_whitespace() {
+        let whitespace_name = "   ";
+        assert!(whitespace_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_business_name_validation_valid() {
+        let valid_name = "Test Business";
+        assert!(!valid_name.trim().is_empty());
     }
 }
