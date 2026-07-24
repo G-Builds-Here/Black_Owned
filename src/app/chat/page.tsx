@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Navigation } from '@/components/ui';
 import { ConversationList } from '@/components/ui';
 import {
@@ -10,6 +11,7 @@ import {
 import type { ConversationPreview } from '@/types/conversation';
 
 export default function ChatPage() {
+  const searchParams = useSearchParams();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>(
     undefined
   );
@@ -18,6 +20,14 @@ export default function ChatPage() {
   const conversations: ConversationPreview[] = getConversations(
     generateMockConversations()
   );
+
+  // Read conversationId from URL query parameter
+  useEffect(() => {
+    const conversationId = searchParams.get('conversationId');
+    if (conversationId) {
+      setSelectedConversationId(conversationId);
+    }
+  }, [searchParams]);
 
   const handleSelectConversation = (conversationId: string) => {
     setSelectedConversationId(conversationId);
