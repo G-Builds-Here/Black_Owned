@@ -1,0 +1,884 @@
+{
+  "ticket": "LOC-0030",
+  "phase": 2,
+  "phase_stories": [
+    "LOC-0032",
+    "LOC-0033",
+    "LOC-0045"
+  ],
+  "acs_merged": [
+    "LOC-0036-AC1",
+    "LOC-0036-AC2",
+    "LOC-0036-AC3",
+    "LOC-0036-AC4",
+    "LOC-0037-AC1",
+    "LOC-0037-AC2",
+    "LOC-0037-AC5",
+    "LOC-0047-AC1",
+    "LOC-0042-AC1"
+  ],
+  "epic_branch": "epic/LOC-0030",
+  "acs": {
+    "LOC-0032-AC1": {
+      "ac_id": "LOC-0032-AC1",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "commit-qa",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/commit-qa-LOC-0032-AC1.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 34,
+            "branch": "feature/LOC-0032",
+            "details": "34 commits found on feature/LOC-0032"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "clickhouse/loc-0032-ac1-sql-validation.test.ts",
+              "clickhouse/vitest.config.ts",
+              "clickhouse/001_create_tables.sql",
+              "migrations/clickhouse/001_create_tables.sql"
+            ],
+            "details": "4 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/8 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "businesses",
+                "reviews",
+                "users",
+                "verification_requests",
+                "messages",
+                "analytics_events",
+                "categories"
+              ],
+              "files": [
+                "migrations/clickhouse/001_create_tables.sql"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 174,
+            "branch": "feature/LOC-0032",
+            "details": "174 lines changed on feature/LOC-0032"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/8 artifacts found in imports \u2014 may be orphaned"
+        ]
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/impl-LOC-0032-AC1.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/commit-impl-LOC-0032-AC1.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/qa-LOC-0032-AC1.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/commit-qa-LOC-0032-AC1.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/8 artifacts found in imports \u2014 may be orphaned",
+      "story_key": "LOC-0032",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0031-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0031-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0031-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0032-AC2": {
+      "ac_id": "LOC-0032-AC2",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "commit-qa",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/commit-qa-LOC-0032-AC2.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 43,
+            "branch": "feature/LOC-0032-AC2",
+            "details": "43 commits found on feature/LOC-0032-AC2"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "clickhouse/loc-0032-ac1-sql-validation.test.ts",
+              "clickhouse/vitest.config.ts",
+              "docker-compose.yml",
+              "clickhouse/loc-0032-ac2-docker-compose.test.ts",
+              "clickhouse/loc-0032-ac2-runtime.test.ts"
+            ],
+            "details": "5 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/2 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "clickhouse docker-compose service",
+                "docker-compose validation tests"
+              ],
+              "files": [
+                "docker-compose.yml",
+                "clickhouse/loc-0032-ac2-docker-compose.test.ts",
+                "clickhouse/loc-0032-ac2-runtime.test.ts"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 918,
+            "branch": "feature/LOC-0032-AC2",
+            "details": "918 lines changed on feature/LOC-0032-AC2"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/2 artifacts found in imports \u2014 may be orphaned"
+        ]
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/impl-LOC-0032-AC2.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/commit-impl-LOC-0032-AC2.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/qa-LOC-0032-AC2.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0032/commit-qa-LOC-0032-AC2.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/2 artifacts found in imports \u2014 may be orphaned",
+      "story_key": "LOC-0032",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0045-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0045-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0045-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0033-AC1": {
+      "ac_id": "LOC-0033-AC1",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "pr",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/pr-LOC-0033-AC1.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 33,
+            "branch": "feature/LOC-0033",
+            "details": "33 commits found on feature/LOC-0033"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "scripts/provision-nats.sh"
+            ],
+            "details": "1 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/2 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "provision-nats.sh"
+              ],
+              "files": [
+                "scripts/provision-nats.sh"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 47,
+            "branch": "feature/LOC-0033",
+            "details": "47 lines changed on feature/LOC-0033"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/2 artifacts found in imports \u2014 may be orphaned"
+        ]
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/impl-LOC-0033-AC1.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/commit-impl-LOC-0033-AC1.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/qa-LOC-0033-AC1.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/commit-qa-LOC-0033-AC1.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/2 artifacts found in imports \u2014 may be orphaned",
+      "story_key": "LOC-0033",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0031-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0031-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0031-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0033-AC2": {
+      "ac_id": "LOC-0033-AC2",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "qa",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/qa-LOC-0033-AC2.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 34,
+            "branch": "feature/LOC-0033-AC2",
+            "details": "34 commits found on feature/LOC-0033-AC2"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "scripts/provision-nats.sh",
+              "scripts/provision-minio.sh",
+              "scripts/tests/test-provision-minio.sh"
+            ],
+            "details": "3 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/2 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "provision-minio.sh"
+              ],
+              "files": [
+                "scripts/provision-minio.sh",
+                "scripts/tests/test-provision-minio.sh"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 25,
+            "branch": "feature/LOC-0033-AC2",
+            "details": "25 lines changed on feature/LOC-0033-AC2"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/2 artifacts found in imports \u2014 may be orphaned"
+        ]
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/impl-LOC-0033-AC2.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/commit-impl-LOC-0033-AC2.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/qa-LOC-0033-AC2.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/commit-qa-LOC-0033-AC2.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/2 artifacts found in imports \u2014 may be orphaned",
+      "story_key": "LOC-0033",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0031-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0031-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0031-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0033-AC3": {
+      "ac_id": "LOC-0033-AC3",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "pr",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/pr-LOC-0033-AC3.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 34,
+            "branch": "feature/LOC-0033-AC3",
+            "details": "34 commits found on feature/LOC-0033-AC3"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "scripts/provision-nats.sh",
+              "jest.config.js",
+              "package.json",
+              "package-lock.json",
+              "docker-compose.yml",
+              "valkey-config.spec.ts",
+              "valkey-config.test.ts",
+              "valkey-integration.test.ts"
+            ],
+            "details": "8 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/8 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "valkey-service",
+                "valkey-config-tests"
+              ],
+              "files": [
+                "docker-compose.yml",
+                "valkey-config.spec.ts",
+                "valkey-config.test.ts",
+                "valkey-integration.test.ts",
+                "package.json",
+                "jest.config.js"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 303,
+            "branch": "feature/LOC-0033-AC3",
+            "details": "303 lines changed on feature/LOC-0033-AC3"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/8 artifacts found in imports \u2014 may be orphaned"
+        ]
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/impl-LOC-0033-AC3.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/commit-impl-LOC-0033-AC3.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/qa-LOC-0033-AC3.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0033/commit-qa-LOC-0033-AC3.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/8 artifacts found in imports \u2014 may be orphaned",
+      "story_key": "LOC-0033",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0031-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0031-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0031-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0045-AC1": {
+      "ac_id": "LOC-0045-AC1",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "commit-qa",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/commit-qa-LOC-0045-AC1.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 32,
+            "branch": "feature/LOC-0045-AC1",
+            "details": "32 commits found on feature/LOC-0045-AC1"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "docker-compose.yml"
+            ],
+            "details": "1 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/4 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "clickhouse",
+                "nats",
+                "minio",
+                "valkey"
+              ],
+              "files": [
+                "docker-compose.yml"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 1657,
+            "branch": "feature/LOC-0045-AC1",
+            "details": "1657 lines changed on feature/LOC-0045-AC1"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/4 artifacts found in imports \u2014 may be orphaned"
+        ]
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/impl-LOC-0045-AC1.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/commit-impl-LOC-0045-AC1.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/qa-LOC-0045-AC1.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/commit-qa-LOC-0045-AC1.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/4 artifacts found in imports \u2014 may be orphaned",
+      "story_key": "LOC-0045",
+      "deps_met": true,
+      "dep_details": [],
+      "blocked_by": [],
+      "normalized_deps": [],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    },
+    "LOC-0045-AC2": {
+      "ac_id": "LOC-0045-AC2",
+      "status": "complete",
+      "handoff_exists": true,
+      "handoff_type": "commit-qa",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/commit-qa-LOC-0045-AC2.md",
+      "claim_exists": false,
+      "findings_file_exists": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": true,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 33,
+            "branch": "feature/LOC-0045-AC2",
+            "details": "33 commits found on feature/LOC-0045-AC2"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "docker-compose.yml",
+              "bw-ingestion/src/service_connectivity.rs",
+              "bw-ingestion/Cargo.toml",
+              "bw-ingestion/src/lib.rs",
+              "Cargo.lock"
+            ],
+            "details": "5 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": true,
+            "details": "skipped \u2014 no importable artifacts",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "service_connectivity module",
+                "ServiceConfig",
+                "ConnectivityResult",
+                "test_all_services",
+                "test_clickhouse",
+                "test_nats",
+                "test_minio",
+                "test_valkey"
+              ],
+              "files": [
+                "bw-ingestion/Cargo.toml",
+                "bw-ingestion/src/lib.rs",
+                "bw-ingestion/src/service_connectivity.rs"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": true,
+            "result": "pass",
+            "details": "QA result: pass"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 2879,
+            "branch": "feature/LOC-0045-AC2",
+            "details": "2879 lines changed on feature/LOC-0045-AC2"
+          }
+        },
+        "failures": []
+      },
+      "handoff_chain": {
+        "valid": true,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/impl-LOC-0045-AC2.md"
+          },
+          "commit-impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/commit-impl-LOC-0045-AC2.md"
+          },
+          "qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/qa-LOC-0045-AC2.md"
+          },
+          "commit-qa": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0045/commit-qa-LOC-0045-AC2.md"
+          }
+        },
+        "missing_stages": [],
+        "incomplete_stages": []
+      },
+      "story_key": "LOC-0045",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0045-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        },
+        {
+          "dep_ac": "LOC-0031-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0045-AC1",
+        "LOC-0031-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0045-AC1",
+        "LOC-0031-AC1"
+      ],
+      "dispatch_status": "ready-to-merge",
+      "qa_result": "pass"
+    }
+  },
+  "dispatch": [],
+  "recovered": [],
+  "blocked": [],
+  "blocked_details": [],
+  "in_progress": [],
+  "ready_to_merge": [
+    "LOC-0032-AC1",
+    "LOC-0032-AC2",
+    "LOC-0033-AC1",
+    "LOC-0033-AC2",
+    "LOC-0033-AC3",
+    "LOC-0045-AC1",
+    "LOC-0045-AC2"
+  ],
+  "needs_salvage": [],
+  "unverified_garbage": [],
+  "unverified_garbage_details": [],
+  "concurrency_capped": [],
+  "dead_claims_released": [],
+  "concurrency": {
+    "max": 5,
+    "running": 0,
+    "slots_remaining": 5
+  },
+  "summary": {
+    "total_acs": 7,
+    "dispatch": 0,
+    "recovered": 0,
+    "blocked": 0,
+    "in_progress": 0,
+    "ready_to_merge": 7,
+    "needs_salvage": 0,
+    "unverified_garbage": 0,
+    "concurrency_capped": 0,
+    "dead_claims_released": 0
+  }
+}

@@ -1,0 +1,748 @@
+[
+  {
+    "ac_id": "LOC-0031-AC1",
+    "story_key": "LOC-0031",
+    "ac_name": "AC1",
+    "depends_on": [],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0031-AC2",
+    "story_key": "LOC-0031",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0031-AC3",
+    "story_key": "LOC-0031",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1",
+      "AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0032-AC1",
+    "story_key": "LOC-0032",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0031-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0032-AC2",
+    "story_key": "LOC-0032",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0045-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0033-AC1",
+    "story_key": "LOC-0033",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0031-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0033-AC2",
+    "story_key": "LOC-0033",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0031-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0033-AC3",
+    "story_key": "LOC-0033",
+    "ac_name": "AC3",
+    "depends_on": [
+      "LOC-0031-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0034-AC1",
+    "story_key": "LOC-0034",
+    "ac_name": "AC1",
+    "depends_on": [],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0034-AC2",
+    "story_key": "LOC-0034",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0034-AC3",
+    "story_key": "LOC-0034",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0035-AC1",
+    "story_key": "LOC-0035",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0031-AC1",
+      "LOC-0032-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0035-AC2",
+    "story_key": "LOC-0035",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0035-AC3",
+    "story_key": "LOC-0035",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0036-AC1",
+    "story_key": "LOC-0036",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0033-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0036-AC2",
+    "story_key": "LOC-0036",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0035-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0036-AC3",
+    "story_key": "LOC-0036",
+    "ac_name": "AC3",
+    "depends_on": [
+      "LOC-0033-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0036-AC4",
+    "story_key": "LOC-0036",
+    "ac_name": "AC4",
+    "depends_on": [
+      "LOC-0038-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0037-AC1",
+    "story_key": "LOC-0037",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0035-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0037-AC2",
+    "story_key": "LOC-0037",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0035-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0037-AC3",
+    "story_key": "LOC-0037",
+    "ac_name": "AC3",
+    "depends_on": [
+      "LOC-0035-AC1",
+      "LOC-0035-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0037-AC4",
+    "story_key": "LOC-0037",
+    "ac_name": "AC4",
+    "depends_on": [
+      "AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0037-AC5",
+    "story_key": "LOC-0037",
+    "ac_name": "AC5",
+    "depends_on": [
+      "LOC-0035-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0038-AC1",
+    "story_key": "LOC-0038",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0031-AC2",
+      "LOC-0032-AC1",
+      "LOC-0033-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0038-AC2",
+    "story_key": "LOC-0038",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1",
+      "LOC-0031-AC2",
+      "LOC-0032-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0038-AC3",
+    "story_key": "LOC-0038",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC2",
+      "LOC-0033-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0039-AC1",
+    "story_key": "LOC-0039",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0035-AC3",
+      "LOC-0038-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0039-AC2",
+    "story_key": "LOC-0039",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0039-AC3",
+    "story_key": "LOC-0039",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0039-AC4",
+    "story_key": "LOC-0039",
+    "ac_name": "AC4",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0040-AC1",
+    "story_key": "LOC-0040",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0031-AC2",
+      "LOC-0033-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0040-AC2",
+    "story_key": "LOC-0040",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0031-AC2",
+      "LOC-0033-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0041-AC1",
+    "story_key": "LOC-0041",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0034-AC2",
+      "LOC-0035-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0041-AC2",
+    "story_key": "LOC-0041",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0041-AC3",
+    "story_key": "LOC-0041",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0041-AC4",
+    "story_key": "LOC-0041",
+    "ac_name": "AC4",
+    "depends_on": [
+      "LOC-0034-AC2",
+      "LOC-0035-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0042-AC1",
+    "story_key": "LOC-0042",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0040-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0042-AC2",
+    "story_key": "LOC-0042",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1",
+      "LOC-0033-AC1",
+      "LOC-0040-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0042-AC3",
+    "story_key": "LOC-0042",
+    "ac_name": "AC3",
+    "depends_on": [
+      "LOC-0041-AC4"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0042-AC4",
+    "story_key": "LOC-0042",
+    "ac_name": "AC4",
+    "depends_on": [
+      "AC1",
+      "LOC-0040-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0043-AC1",
+    "story_key": "LOC-0043",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0038-AC2",
+      "LOC-0041-AC4"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0043-AC2",
+    "story_key": "LOC-0043",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0039-AC1",
+      "LOC-0041-AC4"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0043-AC3",
+    "story_key": "LOC-0043",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0043-AC4",
+    "story_key": "LOC-0043",
+    "ac_name": "AC4",
+    "depends_on": [
+      "LOC-0037-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0044-AC1",
+    "story_key": "LOC-0044",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0038-AC2",
+      "LOC-0036-AC4"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0044-AC2",
+    "story_key": "LOC-0044",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0033-AC1",
+      "LOC-0040-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0045-AC1",
+    "story_key": "LOC-0045",
+    "ac_name": "AC1",
+    "depends_on": [],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0045-AC2",
+    "story_key": "LOC-0045",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1",
+      "LOC-0031-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0046-AC1",
+    "story_key": "LOC-0046",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0031-AC2",
+      "LOC-0033-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0046-AC2",
+    "story_key": "LOC-0046",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0031-AC2",
+      "LOC-0033-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0047-AC1",
+    "story_key": "LOC-0047",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0038-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0048-AC1",
+    "story_key": "LOC-0048",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0037-AC4",
+      "LOC-0037-AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0048-AC2",
+    "story_key": "LOC-0048",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0039-AC2",
+      "LOC-0039-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC1",
+    "story_key": "LOC-0050",
+    "ac_name": "AC1",
+    "depends_on": [],
+    "parallelizable": true,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC2",
+    "story_key": "LOC-0050",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": true,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC3",
+    "story_key": "LOC-0050",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": true,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC4",
+    "story_key": "LOC-0050",
+    "ac_name": "AC4",
+    "depends_on": [],
+    "parallelizable": true,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC5",
+    "story_key": "LOC-0050",
+    "ac_name": "AC5",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC6",
+    "story_key": "LOC-0050",
+    "ac_name": "AC6",
+    "depends_on": [
+      "AC1",
+      "AC2",
+      "AC3",
+      "AC4",
+      "AC5"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0050-AC7",
+    "story_key": "LOC-0050",
+    "ac_name": "AC7",
+    "depends_on": [],
+    "parallelizable": true,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC1",
+    "story_key": "LOC-0051",
+    "ac_name": "AC1",
+    "depends_on": [],
+    "parallelizable": true,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC10",
+    "story_key": "LOC-0051",
+    "ac_name": "AC10",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC2",
+    "story_key": "LOC-0051",
+    "ac_name": "AC2",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC3",
+    "story_key": "LOC-0051",
+    "ac_name": "AC3",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC4",
+    "story_key": "LOC-0051",
+    "ac_name": "AC4",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC5",
+    "story_key": "LOC-0051",
+    "ac_name": "AC5",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC6",
+    "story_key": "LOC-0051",
+    "ac_name": "AC6",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC7",
+    "story_key": "LOC-0051",
+    "ac_name": "AC7",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC8",
+    "story_key": "LOC-0051",
+    "ac_name": "AC8",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0051-AC9",
+    "story_key": "LOC-0051",
+    "ac_name": "AC9",
+    "depends_on": [
+      "AC1"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0053-AC1",
+    "story_key": "LOC-0053",
+    "ac_name": "AC1",
+    "depends_on": [
+      "LOC-0042-AC3"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0053-AC2",
+    "story_key": "LOC-0053",
+    "ac_name": "AC2",
+    "depends_on": [
+      "LOC-0043-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  },
+  {
+    "ac_id": "LOC-0053-AC3",
+    "story_key": "LOC-0053",
+    "ac_name": "AC3",
+    "depends_on": [
+      "LOC-0044-AC1",
+      "LOC-0044-AC2"
+    ],
+    "parallelizable": false,
+    "story_status": "backlog"
+  }
+]

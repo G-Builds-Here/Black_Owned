@@ -8,6 +8,12 @@ import * as nats from "nats";
 import { Msg } from "nats";
 type Client = nats.NatsConnection;
 import { RoleChangedEvent, ROLE_CHANGED_SUBJECT } from "../../types/user-management";
+import {
+  MESSAGE_SEND_SUBJECT,
+  MESSAGE_RECEIVE_SUBJECT,
+  SendMessagePayload,
+  ReceivedMessagePayload,
+} from "../../types/message";
 
 /**
  * NATS connection instance
@@ -94,4 +100,43 @@ export async function checkNatsHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Send a message via NATS
+ */
+export async function sendMessage(payload: SendMessagePayload): Promise<void> {
+  const client = await getNatsClient();
+  const messagePayload: ReceivedMessagePayload = {
+    id: `msg-${Date.now()}`,
+    conversationId: payload.conversationId,
+    senderId: payload.senderId,
+    content: payload.content,
+    type: payload.type,
+    timestamp: Date.now(),
+  };
+
+  client.publish(MESSAGE_SEND_SUBJECT, Buffer.from(JSON.stringify(messagePayload)));
+}
+
+/**
+ * Subscribe to incoming messages
+ */
+export function subscribeToMessages(
+  callback: (payload: ReceivedMessagePayload) => void
+): void {
+  const subscription = nats.subscribe(MESSAGE_RECEIVE_SUBJECT);
+
+  (async () => {
+    for await (const msg of subscription) {
+      try {
+        const payload = JSON.parse(msg.data.toString()) as ReceivedMessagePayload;
+        callback(payload);
+      } catch (error) {
+        console.error("Failed to parse message payload:", error);
+      }
+    }
+  })().catch((err) => {
+    console.error("Message subscription error:", err);
+  });
 }

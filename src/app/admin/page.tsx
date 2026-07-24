@@ -1,19 +1,20 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Navigation } from '@/components/ui/Navigation';
 import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, NotificationProvider, useNotification } from '@/components/ui';
 import { NatsConsumerMonitor } from '@/components/admin/NatsConsumerMonitor';
 import { subscribeToMessageEvents, unsubscribeFromMessageEvents } from '@/services/notification-service';
 
-// Mock data for admin metrics
+// Mock data for admin metrics (per LOC-0044-AC1)
 const METRICS = {
-  totalBusinesses: 1247,
-  activeUsers: 8932,
-  pendingReviews: 156,
-  pendingVerifications: 43,
-  todaySignups: 87,
-  weeklyGrowth: 12.5,
+  totalUsers: 150,
+  totalBusinesses: 45,
+  totalReviews: 320,
+  unmoderatedReviews: 12,
+  pendingVerifications: 3,
+  natsLag: 0,
 };
 
 const RECENT_BUSINESSES = [
@@ -88,6 +89,10 @@ function AdminConsoleContent() {
     console.log('Flag review:', id);
   };
 
+  const handleMetricClick = (targetTab: 'users' | 'nats-monitor' | 'verifications' | 'reviews') => {
+    setActiveTab(targetTab);
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
       approved: 'success',
@@ -142,10 +147,10 @@ function AdminConsoleContent() {
         <Tabs
           tabs={[
             { key: 'dashboard', label: 'Dashboard' },
-            { key: 'users', label: 'User Management' },
+            { key: 'users', label: `User Management (${METRICS.totalUsers})` },
             { key: 'nats-monitor', label: 'NATS Monitor' },
-            { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
-            { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
+            { key: 'verifications', label: `Verification Queue (${METRICS.pendingVerifications})` },
+            { key: 'reviews', label: `Moderation Queue (${METRICS.unmoderatedReviews})` },
             { key: 'settings', label: 'Settings' },
           ]}
           selectedKey={activeTab}
@@ -154,27 +159,20 @@ function AdminConsoleContent() {
 
         {/* Dashboard Tab */}
         <TabPanel value="dashboard" className="mt-6">
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card variant="elevated" padding="lg">
+          {/* Metrics Grid - 6 metric cards per LOC-0044-AC1 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* Users card - linked to User Management */}
+            <Card
+              variant="elevated"
+              padding="lg"
+              clickable
+              as={Link}
+              href="#users"
+            >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-neutral-500 mb-1">Total Businesses</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses.toLocaleString()}</p>
-                  <p className="text-sm text-heritage-jade mt-1">+{METRICS.weeklyGrowth}% this week</p>
-                </div>
-                <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">🏪</span>
-                </div>
-              </div>
-            </Card>
-
-            <Card variant="elevated" padding="lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-neutral-500 mb-1">Active Users</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.activeUsers.toLocaleString()}</p>
-                  <p className="text-sm text-heritage-jade mt-1">+8.2% this week</p>
+                  <p className="text-sm text-neutral-500 mb-1">Users</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalUsers}</p>
                 </div>
                 <div className="w-12 h-12 bg-heritage-jade/10 rounded-lg flex items-center justify-center">
                   <span className="text-2xl">👥</span>
@@ -182,28 +180,96 @@ function AdminConsoleContent() {
               </div>
             </Card>
 
+            {/* Businesses card - linked to Verification Queue */}
+            <Card
+              variant="elevated"
+              padding="lg"
+              clickable
+              as={Link}
+              href="#verifications"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Businesses</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses}</p>
+                </div>
+                <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">🏪</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Reviews card - no direct link */}
             <Card variant="elevated" padding="lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-neutral-500 mb-1">Pending Reviews</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.pendingReviews}</p>
-                  <p className="text-sm text-heritage-amber mt-1">Needs attention</p>
+                  <p className="text-sm text-neutral-500 mb-1">Reviews</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalReviews}</p>
                 </div>
-                <div className="w-12 h-12 bg-heritage-amber/10 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-heritage-royal/10 rounded-lg flex items-center justify-center">
                   <span className="text-2xl">📝</span>
                 </div>
               </div>
             </Card>
 
-            <Card variant="elevated" padding="lg">
+            {/* Unmoderated card - linked to Moderation Queue */}
+            <Card
+              variant="elevated"
+              padding="lg"
+              clickable
+              as={Link}
+              href="#reviews"
+            >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-neutral-500 mb-1">Today Signups</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.todaySignups}</p>
-                  <p className="text-sm text-heritage-jade mt-1">+15% vs yesterday</p>
+                  <p className="text-sm text-neutral-500 mb-1">Unmoderated</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.unmoderatedReviews}</p>
+                  <p className="text-sm text-heritage-amber mt-1">Needs attention</p>
                 </div>
-                <div className="w-12 h-12 bg-heritage-royal/10 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">📈</span>
+                <div className="w-12 h-12 bg-heritage-amber/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Pending Verifications card - linked to Verification Queue */}
+            <Card
+              variant="elevated"
+              padding="lg"
+              clickable
+              as={Link}
+              href="#verifications"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Pending Verifications</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.pendingVerifications}</p>
+                </div>
+                <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📋</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* NATS Lag card - linked to NATS Monitor with green indicator */}
+            <Card
+              variant="elevated"
+              padding="lg"
+              clickable
+              as={Link}
+              href="#nats-monitor"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">NATS Lag</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.natsLag}</p>
+                  <span className="inline-flex items-center gap-1 text-sm text-heritage-jade mt-1">
+                    <span className="w-2 h-2 bg-heritage-jade rounded-full"></span>
+                    OK
+                  </span>
+                </div>
+                <div className="w-12 h-12 bg-heritage-jade/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📡</span>
                 </div>
               </div>
             </Card>
