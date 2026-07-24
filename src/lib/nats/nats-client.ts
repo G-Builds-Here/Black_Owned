@@ -7,7 +7,12 @@
 import * as nats from "nats";
 import { Msg } from "nats";
 type Client = nats.NatsConnection;
-import { RoleChangedEvent, ROLE_CHANGED_SUBJECT } from "../../types/user-management";
+import {
+  RoleChangedEvent,
+  ROLE_CHANGED_SUBJECT,
+  VerificationApprovedEvent,
+  VERIFICATION_APPROVED_SUBJECT,
+} from "../../types/user-management";
 import {
   MESSAGE_SEND_SUBJECT,
   MESSAGE_RECEIVE_SUBJECT,
@@ -65,6 +70,18 @@ export async function publishRoleChangedEvent(
   const payload = JSON.stringify(event);
 
   client.publish(ROLE_CHANGED_SUBJECT, Buffer.from(payload));
+}
+
+/**
+ * Publish a verification approved event to NATS
+ */
+export async function publishVerificationApprovedEvent(
+  event: VerificationApprovedEvent
+): Promise<void> {
+  const client = await getNatsClient();
+  const payload = JSON.stringify(event);
+
+  client.publish(VERIFICATION_APPROVED_SUBJECT, Buffer.from(payload));
 }
 
 /**

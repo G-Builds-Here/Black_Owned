@@ -90,6 +90,20 @@ export interface RoleChangedEvent {
 export const ROLE_CHANGED_SUBJECT = 'user.role_changed';
 
 /**
+ * NATS payload for verification approved event
+ */
+export interface VerificationApprovedEvent {
+  businessId: string;
+  approvedBy: string;
+  timestamp: string;
+}
+
+/**
+ * NATS subject for verification approved events
+ */
+export const VERIFICATION_APPROVED_SUBJECT = 'verification.approved';
+
+/**
  * Validate user role
  */
 export function isValidRole(role: string): role is UserRole {

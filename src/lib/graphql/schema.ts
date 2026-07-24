@@ -68,14 +68,47 @@ export const typeDefs = `#graphql
     bucket: String!
   }
 
+  type FileValidationError {
+    fileName: String!
+    error: String!
+    code: String!
+  }
+
   type SubmitVerificationResponse {
     success: Boolean!
     presignedUrls: [PresignedUrlResult!]
+    error: String
+    fileErrors: [FileValidationError!]
+  }
+
+<<<<<<< Updated upstream
+  type Mutation {
+    register(email: String!, password: String!, name: String!): AuthResponse!
+    submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
+=======
+  type UpdateBusinessResponse {
+    success: Boolean!
+    business: Business
+    error: String
+  }
+
+  input UpdateBusinessInput {
+    id: String!
+    name: String
+    description: String
+  }
+
+  type ApproveVerificationResponse {
+    success: Boolean!
+    business: Business
     error: String
   }
 
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
+    updateBusiness(input: UpdateBusinessInput!): UpdateBusinessResponse!
+    approveVerification(businessId: String!): ApproveVerificationResponse!
+>>>>>>> Stashed changes
   }
 `;

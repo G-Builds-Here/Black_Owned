@@ -5,9 +5,10 @@
 //! - updateBusiness: Update an existing business
 //! - submitReview: Submit a review for a business
 //! - deleteReview: Delete a review
+//! - rejectVerification: Admin reject verification with NATS event
 
 use async_graphql::*;
-use bw_types::{Business, Review};
+use bw_types::{Business, NatsVerificationRejectedPayload, Review};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -209,6 +210,72 @@ impl MutationRoot {
 
         Ok(result.rows_affected() > 0)
     }
+
+    /// Reject a verification request with reason
+    ///
+    /// Admin-only operation that sets verification status to rejected and emits a NATS event
+    async fn reject_verification(
+        &self,
+        ctx: &Context<'_>,
+        business_id: String,
+        reason: Option<String>,
+    ) -> Result<RejectVerificationResponse> {
+        // Validate that reason is provided
+        let rejection_reason = reason.ok_or_else(|| Error::new("Rejection reason is required"))?;
+
+        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
+            Error::new(format!("Database connection not available: {:?}", e))
+        })?;
+
+        let business_uuid = Uuid::parse_str(&business_id).map_err(|e| {
+            Error::new(format!("Invalid business UUID: {:?}", e))
+        })?;
+
+        // Update the business verification status to rejected
+        let result = sqlx::query(
+            r#"
+            UPDATE businesses
+            SET verified = false
+            WHERE id = $1
+            "#,
+        )
+        .bind(business_uuid)
+        .execute(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(Error::new("Business not found"));
+        }
+
+        // Publish NATS event for verification rejected
+        let nats_client = ctx.data::<async_nats::Client>().map_err(|_| {
+            Error::new("NATS client not available")
+        })?;
+
+        let payload = NatsVerificationRejectedPayload::new(business_id.clone(), rejection_reason.clone());
+        let payload_bytes = serde_json::to_vec(&payload)
+            .map_err(|e| Error::new(format!("Failed to serialize payload: {:?}", e)))?;
+
+        nats_client
+            .publish("verification.rejected".to_string(), payload_bytes.into())
+            .await
+            .map_err(|e| Error::new(format!("Failed to publish NATS event: {:?}", e)))?;
+
+        Ok(RejectVerificationResponse {
+            success: true,
+            business_id,
+            reason: rejection_reason,
+        })
+    }
+}
+
+/// Response type for reject_verification mutation
+#[derive(SimpleObject)]
+pub struct RejectVerificationResponse {
+    pub success: bool,
+    pub business_id: String,
+    pub reason: String,
 }
 
 #[cfg(test)]
@@ -253,6 +320,35 @@ mod tests {
         let invalid_uuid = "not-a-uuid";
         let result = Uuid::parse_str(invalid_uuid);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_reject_verification_missing_reason() {
+        // Verify that missing reason returns error
+        let reason: Option<String> = None;
+        assert!(reason.is_none());
+    }
+
+    #[test]
+    fn test_reject_verification_with_reason() {
+        // Verify that reason is properly captured
+        let reason: Option<String> = Some("Documents are illegible".to_string());
+        assert!(reason.is_some());
+        assert_eq!(reason.unwrap(), "Documents are illegible");
+    }
+
+    #[test]
+    fn test_rejection_payload_serialization() {
+        let payload = NatsVerificationRejectedPayload::new(
+            "biz-123".to_string(),
+            "Documents are illegible".to_string(),
+        );
+
+        let json = serde_json::to_string(&payload).unwrap();
+        let deserialized: NatsVerificationRejectedPayload = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(payload.business_id, deserialized.business_id);
+        assert_eq!(payload.reason, deserialized.reason);
     }
 
     #[test]

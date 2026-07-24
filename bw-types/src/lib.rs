@@ -3,6 +3,7 @@
 //! Core domain types for the Black Owned platform.
 
 pub mod email;
+pub use email::{NatsVerificationApprovedPayload, NatsVerificationRejectedPayload};
 
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
@@ -44,6 +45,14 @@ pub struct User {
     pub created_at: DateTime<Utc>,
 }
 
+/// Verification status for business verification requests
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum VerificationStatus {
+    Pending,
+    Approved,
+    Rejected,
+}
+
 /// Verification record for business verification
 #[derive(Debug, Clone, Serialize, Deserialize, Builder, PartialEq)]
 #[builder(setter(into))]
@@ -53,6 +62,8 @@ pub struct Verification {
     pub verifier_id: Uuid,
     pub verified_at: DateTime<Utc>,
     pub method: String,
+    pub status: VerificationStatus,
+    pub rejection_reason: Option<String>,
 }
 
 /// Message entity for platform messaging
