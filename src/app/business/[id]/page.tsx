@@ -11,7 +11,7 @@ import { verifyToken } from '@/lib/auth/auth-service';
  *
  * Fetches and displays a single business by ID using the GraphQL API.
  * Shows loading, error, and not-found states appropriately.
- * Business owners can edit their profile.
+ * Business owners can edit their profile. Verified businesses show a Chat button.
  */
 export default function BusinessDetailPage() {
   const params = useParams();

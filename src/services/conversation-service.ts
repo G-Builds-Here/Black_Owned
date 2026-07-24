@@ -98,6 +98,49 @@ export function createConversation(
 }
 
 /**
+ * Find or create a conversation between current user and another user
+ * Returns existing conversation if one exists, otherwise creates a new one
+ */
+export function findOrCreateConversation(
+  existingConversations: Conversation[],
+  otherUserId: string,
+  otherUserName: string
+): Conversation {
+  // Check if conversation already exists with this user
+  const existing = existingConversations.find(conv =>
+    conv.participants.some(p => p.userId === otherUserId)
+  );
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create new conversation
+  const now = new Date();
+  const initialMessage: Message = {
+    id: `msg-${Date.now()}`,
+    conversationId: `conv-${Date.now()}`,
+    senderId: CURRENT_USER_ID,
+    content: 'Hello! I would like to connect with you.',
+    type: 'text',
+    timestamp: now,
+    isRead: true,
+  };
+
+  return {
+    id: initialMessage.conversationId,
+    participants: [
+      { userId: CURRENT_USER_ID, name: 'Current User' },
+      { userId: otherUserId, name: otherUserName },
+    ],
+    lastMessage: initialMessage,
+    unreadCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
  * Generate mock conversations for testing/demo
  */
 export function generateMockConversations(): Conversation[] {

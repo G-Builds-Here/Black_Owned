@@ -12,6 +12,5 @@ module.exports = {
   moduleNameMapper: {
     "^next/server$": "<rootDir>/__mocks__/next-server.ts",
     "^@/(.*)$": "<rootDir>/src/$1",
-    "^nats$": "<rootDir>/src/lib/nats/__mocks__/nats.ts",
   },
 };
