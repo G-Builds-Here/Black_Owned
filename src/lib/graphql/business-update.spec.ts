@@ -3,7 +3,7 @@
  */
 
 // Mock MinIO client before importing resolvers
-jest.mock("@minio/client", () => ({
+jest.mock("minio", () => ({
   Minio: jest.fn().mockImplementation(() => ({
     presignedPutObject: jest.fn().mockResolvedValue("https://mock-url"),
   })),

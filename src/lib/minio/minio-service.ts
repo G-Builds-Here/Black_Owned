@@ -5,7 +5,7 @@
  * Supports generating presigned PUT URLs for secure file uploads.
  */
 
-import { MinioClient } from "@minio/client";
+import { MinioClient } from "minio";
 
 /**
  * Configuration for MinIO connection
