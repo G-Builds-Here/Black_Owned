@@ -1,11 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { findOrCreateConversation } from '@/services/conversation-service';
+import { getConversations, generateMockConversations } from '@/services/conversation-service';
 
 export interface Business {
   id: string;
   name: string;
+  description: string | null;
   categoryId: string;
+  ownerId: string;
   verified: boolean;
   createdAt: {
     timestamp: number;
@@ -16,6 +21,7 @@ export interface BusinessDetailProps {
   business: Business | null;
   loading: boolean;
   error: string | null;
+  isOwner?: boolean;
 }
 
 /**
@@ -23,8 +29,52 @@ export interface BusinessDetailProps {
  *
  * Shows loading state while fetching, error state if fetch fails,
  * and business details (name, category, verified status) on success.
+ * Business owners can edit their profile. Verified businesses show a Chat button.
  */
-export function BusinessDetail({ business, loading, error }: BusinessDetailProps) {
+export function BusinessDetail({ business, loading, error, isOwner = false }: BusinessDetailProps) {
+  const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    if (business) {
+      setEditName(business.name);
+      setEditDescription(business.description || '');
+    }
+  }, [business]);
+
+  const handleChat = () => {
+    if (!business) return;
+
+    // Get existing conversations and find or create one with this business owner
+    const conversations = getConversations(generateMockConversations());
+    const newConversation = findOrCreateConversation(
+      conversations.map(c => ({
+        id: c.id,
+        participants: [],
+        lastMessage: {
+          id: '',
+          conversationId: c.id,
+          senderId: '',
+          content: c.lastMessagePreview,
+          type: 'text',
+          timestamp: c.lastMessageTime,
+          isRead: c.isUnread,
+        },
+        unreadCount: c.unreadCount,
+        createdAt: c.lastMessageTime,
+        updatedAt: c.lastMessageTime,
+      })),
+      business.ownerId,
+      business.name
+    );
+
+    // Navigate to chat page with the conversation
+    router.push(`/chat?conversationId=${newConversation.id}`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-neutral-50">
@@ -157,9 +207,10 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
             </a>
             {business.verified && (
               <button
+                onClick={handleChat}
                 className="inline-flex items-center justify-center px-4 py-2 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors font-medium"
               >
-                Contact Business
+                Chat
               </button>
             )}
           </div>
