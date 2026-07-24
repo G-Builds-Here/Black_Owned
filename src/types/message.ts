@@ -1,9 +1,16 @@
 /**
- * Message Types for NATS messaging
+ * Message Types
+ *
+ * Defines the data structures for message sending, receiving, and queue management.
  */
 
 /**
- * Message entity for the UI
+ * Message status for optimistic UI updates
+ */
+export type MessageStatus = 'sending' | 'sent' | 'failed' | 'offline';
+
+/**
+ * Message entity with status tracking
  */
 export interface Message {
   id: string;
@@ -13,53 +20,120 @@ export interface Message {
   type: 'text' | 'image' | 'file';
   timestamp: Date;
   isRead: boolean;
-  status?: 'sending' | 'sent' | 'failed';
+  status: MessageStatus;
 }
 
 /**
- * NATS message subject for sending messages
+ * Outgoing message for sending via NATS
  */
-export const MESSAGE_SEND_SUBJECT = 'message.send';
-
-/**
- * NATS message subject for receiving messages
- */
-export const MESSAGE_RECEIVE_SUBJECT = 'message.receive';
-
-/**
- * NATS message payload for sending a message
- */
-export interface SendMessagePayload {
-  conversationId: string;
-  content: string;
-  senderId: string;
-  type: 'text' | 'image' | 'file';
-}
-
-/**
- * NATS message payload for receiving a message
- */
-export interface ReceivedMessagePayload {
-  id: string;
+export interface OutgoingMessage {
   conversationId: string;
   senderId: string;
   content: string;
   type: 'text' | 'image' | 'file';
-  timestamp: number;
+  clientTimestamp: Date;
 }
 
 /**
- * Convert received NATS payload to Message entity
+ * Incoming message received from NATS
  */
-export function payloadToMessage(payload: ReceivedMessagePayload): Message {
+export interface IncomingMessage {
+  messageId: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  type: 'text' | 'image' | 'file';
+  timestamp: Date;
+}
+
+/**
+ * Message acknowledgment from NATS
+ */
+export interface MessageAck {
+  messageId: string;
+  acknowledged: boolean;
+  timestamp: Date;
+}
+
+/**
+ * Offline message queue entry
+ */
+export interface OfflineQueueEntry {
+  message: OutgoingMessage;
+  retryCount: number;
+  lastAttempt: Date;
+}
+
+/**
+ * Generate a unique message ID
+ */
+export function generateMessageId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Create an outgoing message with optimistic UI state
+ */
+export function createOutgoingMessage(
+  conversationId: string,
+  senderId: string,
+  content: string,
+  type: 'text' | 'image' | 'file' = 'text'
+): OutgoingMessage {
   return {
-    id: payload.id,
-    conversationId: payload.conversationId,
-    senderId: payload.senderId,
-    content: payload.content,
-    type: payload.type,
-    timestamp: new Date(payload.timestamp),
+    conversationId,
+    senderId,
+    content,
+    type,
+    clientTimestamp: new Date(),
+  };
+}
+
+/**
+ * Convert outgoing message to full message with sending status
+ */
+export function toSendingMessage(
+  outgoing: OutgoingMessage
+): Message {
+  return {
+    id: generateMessageId(),
+    conversationId: outgoing.conversationId,
+    senderId: outgoing.senderId,
+    content: outgoing.content,
+    type: outgoing.type,
+    timestamp: outgoing.clientTimestamp,
+    isRead: true,
+    status: 'sending',
+  };
+}
+
+/**
+ * Convert incoming message to full message
+ */
+export function toMessage(
+  incoming: IncomingMessage
+): Message {
+  return {
+    id: incoming.messageId,
+    conversationId: incoming.conversationId,
+    senderId: incoming.senderId,
+    content: incoming.content,
+    type: incoming.type,
+    timestamp: incoming.timestamp,
     isRead: false,
     status: 'sent',
+  };
+}
+
+/**
+ * Update message status
+ */
+export function updateMessageStatus(
+  message: Message,
+  status: MessageStatus
+): Message {
+  return {
+    ...message,
+    status,
   };
 }
