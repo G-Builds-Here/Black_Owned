@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
 import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import { NatsConsumerMonitor } from '@/components/admin/NatsConsumerMonitor';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -184,40 +185,9 @@ export default function AdminConsole() {
             </Card>
           </div>
 
-          {/* NATS Monitoring */}
+          {/* NATS Consumer Monitor */}
           <div className="mb-8">
-            <Card variant="elevated" padding="lg">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-neutral-800">NATS Monitoring</h2>
-                <Badge variant="primary" size="sm">Operational</Badge>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Active Connections</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.activeConnections}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Messages/Sec</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.messagesPerSecond.toLocaleString()}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Pending Messages</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.pendingMessages}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Subscriptions</p>
-                  <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.subscriptions}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Uptime</p>
-                  <p className="text-2xl font-bold text-heritage-jade">{NATS_METRICS.uptime}</p>
-                </div>
-                <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                  <p className="text-sm text-neutral-500">Last Incident</p>
-                  <p className="text-lg font-bold text-neutral-800">{NATS_METRICS.lastIncident}</p>
-                </div>
-              </div>
-            </Card>
+            <NatsConsumerMonitor />
           </div>
 
           {/* Recent Activity */}
