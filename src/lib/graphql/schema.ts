@@ -81,21 +81,23 @@ export const typeDefs = `#graphql
     fileErrors: [FileValidationError!]
   }
 
-<<<<<<< Updated upstream
-  type Mutation {
-    register(email: String!, password: String!, name: String!): AuthResponse!
-    submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
-=======
-  type UpdateBusinessResponse {
-    success: Boolean!
-    business: Business
-    error: String
+  # Verification Queue Types for Admin Review
+  type VerificationRecord {
+    id: ID!
+    businessId: ID!
+    businessName: String!
+    documentUrls: [String!]!
+    status: VerificationStatus!
+    submittedAt: String!
+    reviewedAt: String
+    reviewedBy: String
+    rejectionReason: String
   }
 
-  input UpdateBusinessInput {
-    id: String!
-    name: String
-    description: String
+  enum VerificationStatus {
+    pending
+    approved
+    rejected
   }
 
   type ApproveVerificationResponse {
@@ -104,11 +106,23 @@ export const typeDefs = `#graphql
     error: String
   }
 
+  type RejectVerificationResponse {
+    success: Boolean!
+    error: String
+  }
+
+  type VerificationQueueResult {
+    pendingCount: Int!
+    items: [VerificationRecord!]!
+  }
+
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
-    updateBusiness(input: UpdateBusinessInput!): UpdateBusinessResponse!
-    approveVerification(businessId: String!): ApproveVerificationResponse!
->>>>>>> Stashed changes
+
+    # Admin verification review mutations
+    approveVerification(verificationId: ID!, reviewedBy: String!): ApproveVerificationResponse!
+    rejectVerification(verificationId: ID!, reviewedBy: String!, reason: String!): RejectVerificationResponse!
+    getPendingVerifications: VerificationQueueResult!
   }
 `;
