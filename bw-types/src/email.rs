@@ -180,6 +180,45 @@ pub struct NatsEmailPayload {
     pub template_vars: HashMap<String, String>,
 }
 
+/// NATS payload for verification approved event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NatsVerificationApprovedPayload {
+    /// Business ID that was approved
+    pub business_id: String,
+}
+
+impl NatsVerificationApprovedPayload {
+    /// Create a new NATS verification approved payload
+    #[must_use]
+    pub fn new(business_id: String) -> Self {
+        Self { business_id }
+    }
+}
+
+/// NATS payload for verification rejected event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NatsVerificationRejectedPayload {
+    /// Business ID that was rejected
+    pub business_id: String,
+    /// Rejection reason
+    pub reason: String,
+}
+
+impl NatsVerificationRejectedPayload {
+    /// Create a new NATS verification rejected payload
+    ///
+    /// # Arguments
+    /// * `business_id` - The business ID
+    /// * `reason` - The rejection reason
+    ///
+    /// # Returns
+    /// A new NatsVerificationRejectedPayload instance
+    #[must_use]
+    pub fn new(business_id: String, reason: String) -> Self {
+        Self { business_id, reason }
+    }
+}
+
 impl NatsEmailPayload {
     /// Create a new NATS email payload
     ///

@@ -119,3 +119,22 @@ export async function updateDescriptionById(
   );
   return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }
+
+/**
+ * Update business verification status by ID (admin only)
+ */
+export async function updateVerificationStatusById(
+  client: PoolClient,
+  id: string,
+  verificationStatus: "unverified" | "pending" | "verified"
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET verification_status = $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [verificationStatus, id]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+}

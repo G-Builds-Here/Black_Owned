@@ -521,6 +521,7 @@ name = "bw-api"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "async-nats",
  "axum",
  "axum-extra",
  "bw-types",
