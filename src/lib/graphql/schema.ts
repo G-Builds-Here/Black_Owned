@@ -35,18 +35,12 @@ export const typeDefs = `#graphql
     tags: [String!]
   }
 
-  type CategoryFacet {
-    category: String!
-    count: Int!
-  }
-
   type SearchResults {
     businesses: [Business!]!
     total: Int!
     page: Int!
     pageSize: Int!
     totalPages: Int!
-    facets: [CategoryFacet!]!
   }
 
   type DateTimeUtc {
@@ -67,7 +61,7 @@ export const typeDefs = `#graphql
     business(id: String!): GQLBusiness
   }
 
-  type PresignedUrl {
+  type PresignedUrlResult {
     url: String!
     expiresInSeconds: Int!
     objectName: String!
@@ -76,25 +70,12 @@ export const typeDefs = `#graphql
 
   type SubmitVerificationResponse {
     success: Boolean!
-    presignedUrls: [PresignedUrl!]
+    presignedUrls: [PresignedUrlResult!]
     error: String
-  }
-
-  type UpdateBusinessResponse {
-    success: Boolean!
-    business: Business
-    error: String
-  }
-
-  input UpdateBusinessInput {
-    id: String!
-    name: String
-    description: String
   }
 
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
-    updateBusiness(input: UpdateBusinessInput!): UpdateBusinessResponse!
   }
 `;

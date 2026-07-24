@@ -4,39 +4,47 @@
  * Tests for the submitVerification GraphQL mutation.
  */
 
-import { submitVerification } from "./resolvers";
-import { MinioService } from "../minio/minio-service";
+// Mock the db module before importing resolvers
+jest.mock("../db/user-repository", () => ({
+  findByEmail: jest.fn(),
+  create: jest.fn(),
+  initializeUserSchema: jest.fn(),
+}));
 
 // Mock the MinioService
 jest.mock("../minio/minio-service", () => {
-  const mockPresignedUrls = [
-    {
-      url: "https://minio.bws.local/verification-docs/biz-123/license.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature-1",
-      expiresInSeconds: 900,
-      objectName: "biz-123/license.pdf",
-      bucket: "verification-docs",
-    },
-    {
-      url: "https://minio.bws.local/verification-docs/biz-123/tax.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature-2",
-      expiresInSeconds: 900,
-      objectName: "biz-123/tax.pdf",
-      bucket: "verification-docs",
-    },
-  ];
-
   return {
-    MinioService: jest.fn().mockImplementation(() => ({
-      generatePresignedPutUrlsBatch: jest.fn().mockResolvedValue(mockPresignedUrls),
-    })),
+    MinioService: jest.fn().mockImplementation(function (this: any) {
+      this.generatePresignedPutUrlsBatch = jest.fn(async (bucket: string, objectNames: string[], expirySeconds: number) => {
+        return objectNames.map((objectName: string) => ({
+          url: `https://minio.bws.local/verification-docs/${objectName}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature`,
+          expiresInSeconds: expirySeconds,
+          objectName,
+          bucket,
+        }));
+      });
+    }),
     createMinioServiceFromEnv: jest.fn().mockImplementation(() => ({
-      generatePresignedPutUrlsBatch: jest.fn().mockResolvedValue(mockPresignedUrls),
+      generatePresignedPutUrlsBatch: jest.fn(async (bucket: string, objectNames: string[], expirySeconds: number) => {
+        return objectNames.map((objectName: string) => ({
+          url: `https://minio.bws.local/verification-docs/${objectName}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature`,
+          expiresInSeconds: expirySeconds,
+          objectName,
+          bucket,
+        }));
+      }),
     })),
   };
 });
 
+import { submitVerification, minioService, resetMinioService } from "./resolvers";
+import { MinioService } from "../minio/minio-service";
+
 describe("submitVerification mutation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset the minioService singleton to allow fresh mocking per test
+    resetMinioService();
   });
 
   it("should generate presigned URLs for valid businessId and fileNames", async () => {
@@ -129,13 +137,14 @@ describe("submitVerification mutation", () => {
   });
 
   it("should handle error from MinIO service", async () => {
-    // Mock MinioService to throw an error
+    // Reset the singleton and inject a mock that throws
+    resetMinioService();
     const mockMinioService = {
-      generatePresignedPutUrlsBatch: jest.fn()
+      generatePresignedPutUrlsBatch: jest
+        .fn()
         .mockRejectedValue(new Error("MinIO connection failed")),
     };
-
-    (MinioService as jest.Mock).mockImplementation(() => mockMinioService);
+    (minioService as any) = mockMinioService;
 
     const result = await submitVerification(null, {
       businessId: "biz-error",
@@ -147,12 +156,13 @@ describe("submitVerification mutation", () => {
   });
 
   it("should handle generic error from MinIO service", async () => {
+    resetMinioService();
     const mockMinioService = {
       generatePresignedPutUrlsBatch: jest
-        .mockRejectedValue("Unknown error"),
+        .fn()
+        .mockRejectedValue(new Error("Unknown error")),
     };
-
-    (MinioService as jest.Mock).mockImplementation(() => mockMinioService);
+    (minioService as any) = mockMinioService;
 
     const result = await submitVerification(null, {
       businessId: "biz-error",
