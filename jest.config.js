@@ -11,8 +11,6 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   moduleNameMapper: {
     "^next/server$": "<rootDir>/__mocks__/next-server.ts",
-    "^@/lib/nats/nats-client$": "<rootDir>/src/lib/nats/__mocks__/nats-client.ts",
-    "^nats$": "<rootDir>/src/lib/nats/__mocks__/nats.ts",
-    "^@/components/ui/(.*)$": "<rootDir>/src/components/ui/$1",
+    "^@/(.*)$": "<rootDir>/src/$1",
   },
 };
