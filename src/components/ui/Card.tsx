@@ -69,10 +69,15 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-heritage-ochre focus:ring-offset-2'
       : '';
 
+    const clickableProps = clickable
+      ? { tabIndex: 0, role: 'button' }
+      : {};
+
     const cardContent = (
       <div
         ref={ref}
         className={`${baseStyles} ${variantStyles[variant]} ${paddingStyles[padding]} ${clickableStyles} ${className}`}
+        {...clickableProps}
         {...props}
       >
         {header && (

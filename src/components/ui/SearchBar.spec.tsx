@@ -138,4 +138,23 @@ describe('SearchBar', () => {
     render(<SearchBar />);
     expect(screen.getByRole('group')).toBeInTheDocument();
   });
+
+  it('category filter buttons have aria-pressed attribute', () => {
+    render(<SearchBar />);
+    const categoryButton = screen.getByText(/all/i);
+    expect(categoryButton).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('selected category has aria-pressed true', () => {
+    render(<SearchBar />);
+    const categoryButton = screen.getByText(/all/i);
+    fireEvent.click(categoryButton);
+    expect(categoryButton).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('category filter group has accessible label', () => {
+    render(<SearchBar />);
+    const filterGroup = screen.getByRole('group', { name: /category filters/i });
+    expect(filterGroup).toBeInTheDocument();
+  });
 });

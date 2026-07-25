@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Button from './Button';
 
 export interface NavigationProps {
@@ -67,9 +67,9 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
             </Button>
           </div>
 
-          {/* Mobile Menu Button - 44px minimum touch target per WCAG */}
+          {/* Mobile Menu Button */}
           <button
-            className="md:hidden min-h-[44px] min-w-[44px] p-2 text-neutral-300 hover:text-white touch-manipulation"
+            className="md:hidden p-2 text-neutral-300 hover:text-white"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-expanded={mobileMenuOpen}
             aria-label="Toggle navigation menu"
@@ -99,26 +99,26 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
           </button>
         </div>
 
-        {/* Mobile Menu - Touch targets 44px minimum per WCAG */}
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-neutral-800">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-4">
               {navItems.map((item) => (
                 <a
                   key={item.label}
                   href={item.href}
                   onClick={() => handleNavClick(item.section)}
-                  className="text-neutral-300 hover:text-white transition-colors font-medium min-h-[44px] flex items-center px-4 py-3"
+                  className="text-neutral-300 hover:text-white transition-colors font-medium py-2"
                 >
                   {item.label}
                 </a>
               ))}
-              <div className="pt-2 border-t border-neutral-800 flex flex-col gap-2">
+              <div className="pt-4 border-t border-neutral-800 flex flex-col gap-3">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleNavClick('admin')}
-                  className="text-neutral-300 hover:text-white justify-center min-h-[44px]"
+                  className="text-neutral-300 hover:text-white justify-center"
                 >
                   Admin Console
                 </Button>
@@ -126,7 +126,7 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
                   variant="primary"
                   size="sm"
                   onClick={() => handleNavClick('user')}
-                  className="justify-center min-h-[44px]"
+                  className="justify-center"
                 >
                   Sign In
                 </Button>

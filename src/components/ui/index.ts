@@ -48,12 +48,3 @@ export type { CarouselProps } from './Carousel';
 
 export { ReviewList } from './Review';
 export type { Review, ReviewListProps } from './Review';
-
-export { UserTable } from './UserTable';
-export type { UserTableRow } from './UserTable';
-
-export { default as ConversationThread } from './ConversationThread';
-export type { ConversationThreadProps } from './ConversationThread';
-
-export { default as ConversationList } from './ConversationList';
-export type { ConversationListProps } from './ConversationList';

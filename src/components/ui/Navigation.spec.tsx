@@ -154,4 +154,22 @@ describe('Navigation', () => {
       container.querySelector('.justify-between')
     );
   });
+
+  it('navigation has aria-label', () => {
+    render(<Navigation />);
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+  });
+
+  it('mobile menu button has aria-expanded', () => {
+    render(<Navigation />);
+    const menuButton = screen.getByLabelText(/toggle navigation menu/i);
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('mobile menu button toggles aria-expanded state', () => {
+    render(<Navigation />);
+    const menuButton = screen.getByLabelText(/toggle navigation menu/i);
+    fireEvent.click(menuButton);
+    expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+  });
 });

@@ -150,8 +150,8 @@ export default function BusinessCard({
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200">
-          <Button variant="primary" size="sm" onClick={handleViewDetails} className="flex-1">
+        <div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200" role="group" aria-label={`Actions for ${business.name}`}>
+          <Button variant="primary" size="sm" onClick={handleViewDetails} className="flex-1" aria-label={`View details for ${business.name}`}>
             View Details
           </Button>
           <Button variant="secondary" size="sm" onClick={handleSave} aria-label={`Save ${business.name}`}>
