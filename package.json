@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@graphql-tools/schema": "^10.0.0",
-    "minio": "^8.0.7",
+    "minio": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "graphql": "^16.8.0",
     "jsonwebtoken": "^9.0.0",
