@@ -3,10 +3,14 @@
 #[cfg(feature = "integration_test")]
 pub mod service_connectivity;
 
-pub mod chat_consumer;
+#[cfg(feature = "integration_test")]
+pub mod image_processor;
 
 #[cfg(feature = "integration_test")]
-pub mod background_service;
+pub mod image_worker;
+
+#[cfg(feature = "integration_test")]
+pub mod image_worker_integration;
 
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
@@ -54,9 +58,7 @@ impl BusinessIngestionHandler {
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
-            description: None,
             category_id: *category_id,
-            owner_id: uuid::Uuid::new_v4(),
             verified: false,
             created_at: chrono::Utc::now(),
         })
