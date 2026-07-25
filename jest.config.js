@@ -1,24 +1,17 @@
-const nextJest = require('next/jest.js');
-
-const createJestConfig = nextJest({
-  // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
-  dir: './',
-});
-
-// Add any custom config to be passed to Jest
-const config = {
-  coverageProvider: 'v8',
-  testEnvironment: 'jsdom',
-  // Add more setup options before each test is run
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+/** @type {import('jest').Config} */
+module.exports = {
+  preset: "ts-jest",
+  testEnvironment: "jsdom",
+  roots: ["<rootDir>/src", "<rootDir>"],
+  testMatch: ["**/*.spec.ts", "**/*.test.ts", "**/*.spec.tsx", "**/*.test.tsx"],
+  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.spec.ts"],
+  coverageDirectory: "coverage",
+  coverageReporters: ["text", "lcov", "html"],
+  verbose: true,
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-  },
-  transform: {
-    '^.+\\.(t|j)sx?$': ['@swc/jest'],
+    "^next/server$": "<rootDir>/__mocks__/next-server.ts",
+    "^@/lib/nats/nats-client$": "<rootDir>/src/lib/nats/__mocks__/nats-client.ts",
+    "^nats$": "<rootDir>/src/lib/nats/__mocks__/nats.ts",
   },
 };
-
-// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-module.exports = createJestConfig(config);

@@ -153,4 +153,25 @@ describe('ConversationThread', () => {
 
     expect(screen.getByText('Hello!')).toBeInTheDocument();
   });
+
+  it('updates message status from sending to sent after 500ms', async () => {
+    render(<ConversationThread {...defaultProps} />);
+
+    const input = screen.getByPlaceholderText('Type a message...');
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(sendButton);
+
+    // Message appears with sending status
+    await waitFor(() => {
+      expect(screen.getByText('Test message')).toBeInTheDocument();
+    });
+
+    // Wait for the 500ms transition to "sent" status
+    await waitFor(() => {
+      const checkmark = screen.getByText('✓'); // Checkmark character for "sent"
+      expect(checkmark).toBeInTheDocument();
+    }, { timeout: 1000 });
+  });
 });

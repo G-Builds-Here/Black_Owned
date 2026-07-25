@@ -49,11 +49,11 @@ export type { CarouselProps } from './Carousel';
 export { ReviewList } from './Review';
 export type { Review, ReviewListProps } from './Review';
 
-export { MobileBottomNav } from './MobileBottomNav';
-export type { MobileBottomNavProps } from './MobileBottomNav';
+export { UserTable } from './UserTable';
+export type { UserTableRow } from './UserTable';
 
-export { MobileResponsiveContainer } from './MobileResponsiveContainer';
-export type { MobileResponsiveContainerProps, Breakpoint, BreakpointState } from './MobileResponsiveContainer';
+export { default as ConversationThread } from './ConversationThread';
+export type { ConversationThreadProps } from './ConversationThread';
 
-export { ResponsiveImage } from './ResponsiveImage';
-export type { ResponsiveImageProps } from './ResponsiveImage';
+export { default as ConversationList } from './ConversationList';
+export type { ConversationListProps } from './ConversationList';

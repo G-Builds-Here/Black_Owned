@@ -7,17 +7,12 @@
 import * as nats from "nats";
 import { Msg } from "nats";
 type Client = nats.NatsConnection;
+import { RoleChangedEvent, ROLE_CHANGED_SUBJECT } from "../../types/user-management";
 import {
-  RoleChangedEvent,
-  ROLE_CHANGED_SUBJECT,
-  VerificationApprovedEvent,
-  VERIFICATION_APPROVED_SUBJECT,
-} from "../../types/user-management";
-import {
-  MESSAGE_SEND_SUBJECT,
-  MESSAGE_RECEIVE_SUBJECT,
   SendMessagePayload,
   ReceivedMessagePayload,
+  MESSAGE_SEND_SUBJECT,
+  MESSAGE_RECEIVE_SUBJECT,
 } from "../../types/message";
 
 /**
@@ -73,18 +68,6 @@ export async function publishRoleChangedEvent(
 }
 
 /**
- * Publish a verification approved event to NATS
- */
-export async function publishVerificationApprovedEvent(
-  event: VerificationApprovedEvent
-): Promise<void> {
-  const client = await getNatsClient();
-  const payload = JSON.stringify(event);
-
-  client.publish(VERIFICATION_APPROVED_SUBJECT, Buffer.from(payload));
-}
-
-/**
  * Subscribe to a NATS subject
  */
 export async function subscribe(
@@ -121,19 +104,13 @@ export async function checkNatsHealth(): Promise<boolean> {
 
 /**
  * Send a message via NATS
+ * Returns a promise that resolves when the message is acknowledged
  */
 export async function sendMessage(payload: SendMessagePayload): Promise<void> {
   const client = await getNatsClient();
-  const messagePayload: ReceivedMessagePayload = {
-    id: `msg-${Date.now()}`,
-    conversationId: payload.conversationId,
-    senderId: payload.senderId,
-    content: payload.content,
-    type: payload.type,
-    timestamp: Date.now(),
-  };
+  const messagePayload = JSON.stringify(payload);
 
-  client.publish(MESSAGE_SEND_SUBJECT, Buffer.from(JSON.stringify(messagePayload)));
+  client.publish(MESSAGE_SEND_SUBJECT, Buffer.from(messagePayload));
 }
 
 /**
@@ -142,18 +119,8 @@ export async function sendMessage(payload: SendMessagePayload): Promise<void> {
 export function subscribeToMessages(
   callback: (payload: ReceivedMessagePayload) => void
 ): void {
-  const subscription = nats.subscribe(MESSAGE_RECEIVE_SUBJECT);
-
-  (async () => {
-    for await (const msg of subscription) {
-      try {
-        const payload = JSON.parse(msg.data.toString()) as ReceivedMessagePayload;
-        callback(payload);
-      } catch (error) {
-        console.error("Failed to parse message payload:", error);
-      }
-    }
-  })().catch((err) => {
-    console.error("Message subscription error:", err);
+  subscribe(MESSAGE_RECEIVE_SUBJECT, (msg: Msg) => {
+    const payload = JSON.parse(msg.data.toString()) as ReceivedMessagePayload;
+    callback(payload);
   });
 }

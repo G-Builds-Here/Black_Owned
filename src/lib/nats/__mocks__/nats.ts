@@ -1,10 +1,18 @@
 /**
- * Mock NATS module for testing
+ * Mock for NATS client module
  */
 
-export const connect = jest.fn();
+// Mock the nats package
+export const connect = jest.fn().mockResolvedValue({
+  publish: jest.fn(),
+  subscribe: jest.fn().mockResolvedValue({
+    [Symbol.asyncIterator]: async function* () {
+      // Empty iterator for testing
+      return;
+    },
+  }),
+  request: jest.fn().mockResolvedValue({ data: Buffer.from('') }),
+  close: jest.fn(),
+});
 
-// Export type aliases as value exports for Jest
-export type NatsConnection = any;
-export type ConsumerInfo = any;
-export type StreamInfo = any;
+export type Msg = unknown;
