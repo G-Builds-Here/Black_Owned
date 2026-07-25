@@ -9,8 +9,6 @@
  * - User emails: "bws-test@domain.com" pattern
  */
 
-import { BusinessImageData, generateImagesForBusiness } from "../services/image-service";
-
 export const TEST_PREFIX = "BWS-TEST";
 export const TEST_EMAIL_DOMAIN = "bws-test@domain.com";
 
@@ -19,12 +17,9 @@ export interface TestBusiness {
   name: string;
   formattedName: string;
   description?: string;
-  category?: string;
 }
 
-export interface TestBusinessWithImages extends TestBusiness {
-  images: BusinessImageData;
-}
+export type UserRole = "customer" | "business_owner" | "admin";
 
 export interface TestUser {
   id?: string;
@@ -32,6 +27,8 @@ export interface TestUser {
   firstName: string;
   lastName: string;
   formattedEmail: string;
+  role: UserRole;
+  associatedBusinessId?: string; // For business owners: links to a TestBusiness
 }
 
 export interface TestSeedData {
@@ -72,107 +69,42 @@ export function isTestEmail(email: string): boolean {
 }
 
 /**
- * Category definitions for business seeding (10 categories, 3 businesses each = 30 total)
- */
-export const BUSINESS_CATEGORIES = [
-  "restaurants",
-  "retail",
-  "professional services",
-  "health/wellness",
-  "beauty",
-  "home services",
-  "entertainment",
-  "fitness",
-  "education",
-  "automotive",
-];
-
-/**
- * Business name templates organized by category
- */
-export const BUSINESS_TEMPLATES_BY_CATEGORY: Record<string, string[]> = {
-  restaurants: [
-    "Soul Food Kitchen",
-    "Barbecue House",
-    "Gourmet Bistro",
-  ],
-  retail: [
-    "Community Market",
-    "Urban Boutique",
-    "Neighborhood Store",
-  ],
-  "professional services": [
-    "Business Consulting Group",
-    "Financial Advisors LLC",
-    "Legal Associates",
-  ],
-  "health/wellness": [
-    "Wellness Center",
-    "Holistic Health Clinic",
-    "Community Pharmacy",
-  ],
-  beauty: [
-    "Glamour Salon",
-    "Natural Beauty Spa",
-    "Elite Hair Studio",
-  ],
-  "home services": [
-    "Quality Plumbing Co",
-    "Expert Electrical Services",
-    "Reliable HVAC Solutions",
-  ],
-  entertainment: [
-    "City Cinema",
-    "Music Lounge",
-    "Event Productions",
-  ],
-  fitness: [
-    "Power Gym",
-    "Yoga Studio",
-    "CrossFit Community",
-  ],
-  education: [
-    "Learning Academy",
-    "Tutoring Center",
-    "Skill Development Institute",
-  ],
-  automotive: [
-    "Auto Care Center",
-    "Quick Oil Change",
-    "Premium Tire Shop",
-  ],
-};
-
-/**
- * Generates sample test business data with category assignment
+ * Generates sample test business data with IDs
  */
 export function generateTestBusinesses(count: number = 5): TestBusiness[] {
-  const businesses: TestBusiness[] = [];
+  const businessTemplates = [
+    "Black Beauty Salon",
+    "Community Grocery Store",
+    "Tech Solutions LLC",
+    "Family Restaurant",
+    "Fitness Center",
+    "Bookstore & Cafe",
+    "Auto Repair Shop",
+    "Hair Studio",
+  ];
 
-  for (let i = 0; i < count; i++) {
-    const categoryIndex = i % BUSINESS_CATEGORIES.length;
-    const category = BUSINESS_CATEGORIES[categoryIndex];
-    const templates = BUSINESS_TEMPLATES_BY_CATEGORY[category];
-    const templateIndex = Math.floor(i / BUSINESS_CATEGORIES.length) % templates.length;
-    const template = templates[templateIndex];
-    const suffix = templateIndex >= templates.length ? ` ${templateIndex + 1}` : "";
+  return Array.from({ length: count }, (_, i) => {
+    const template = businessTemplates[i % businessTemplates.length];
+    const suffix = count > businessTemplates.length ? ` (${i + 1})` : "";
     const name = `${template}${suffix}`;
 
-    businesses.push({
+    return {
+      id: `biz-${i + 1}`,
       name,
       formattedName: formatBusinessName(name),
-      description: `Test business in ${category} category - ${name}`,
-      category,
-    });
-  }
-
-  return businesses;
+      description: `Test business - ${name}`,
+    };
+  });
 }
 
 /**
- * Generates sample test user data
+ * Generates sample test user data with role assignments
+ * Default distribution: customers, business_owners, admin per AC requirements
  */
-export function generateTestUsers(count: number = 5): TestUser[] {
+export function generateTestUsers(count: number = 5, businesses?: TestBusiness[]): TestUser[] {
+  // Default role distribution: 2 customers, 2 business owners, 1 admin
+  const roleDistribution: UserRole[] = ["customer", "customer", "business_owner", "business_owner", "admin"];
+
   const userTemplates = [
     { first: "John", last: "Doe" },
     { first: "Jane", last: "Smith" },
@@ -185,56 +117,39 @@ export function generateTestUsers(count: number = 5): TestUser[] {
     const template = userTemplates[i % userTemplates.length];
     const suffix = count > userTemplates.length ? `${i + 1}` : "";
     const fullName = `${template.first}${suffix} ${template.last}`;
+    const role = roleDistribution[i % roleDistribution.length];
 
-    return {
+    const user: TestUser = {
       firstName: template.first,
       lastName: template.last,
       formattedEmail: formatUserEmail(fullName),
+      role,
     };
+
+    // Associate business owners with businesses
+    if (role === "business_owner" && businesses && businesses.length > 0) {
+      const businessIndex = i % businesses.length;
+      user.associatedBusinessId = businesses[businessIndex].id;
+    }
+
+    return user;
   });
 }
 
 /**
- * Generates complete test seed data
+ * Generates complete test seed data with role associations
+ * Business owners are automatically associated with seeded businesses
  */
 export function generateTestSeedData(
   businessCount: number = 5,
   userCount: number = 5
 ): TestSeedData {
-  return {
-    businesses: generateTestBusinesses(businessCount),
-    users: generateTestUsers(userCount),
-  };
-}
-
-/**
- * Generates 30 businesses with images for AC3
- * Each business gets 2-4 images with category-appropriate alt text
- */
-export function generateBusinessesWithImages(
-  businessCount: number = 30
-): TestBusinessWithImages[] {
   const businesses = generateTestBusinesses(businessCount);
-  const results: TestBusinessWithImages[] = [];
-
-  businesses.forEach((business, index) => {
-    const businessId = `bws-test-biz-${String(index + 1).padStart(3, "0")}`;
-    const category = business.category || "restaurants";
-
-    const images = generateImagesForBusiness(
-      businessId,
-      business.formattedName,
-      category
-    );
-
-    results.push({
-      ...business,
-      id: businessId,
-      images,
-    });
-  });
-
-  return results;
+  const users = generateTestUsers(userCount, businesses);
+  return {
+    businesses,
+    users,
+  };
 }
 
 /**
