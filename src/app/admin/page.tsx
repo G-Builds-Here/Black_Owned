@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, Modal } from '@/components/ui';
+import { graphqlClient } from '@/lib/graphql/graphql-client';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -44,24 +45,154 @@ const VERIFICATION_QUEUE = [
   { id: '3', business: 'Rhythm & Blues Records', owner: 'James Peterson', email: 'james@...', submitted: '2026-07-13', documents: ['business_license.pdf', 'insurance.pdf'] },
 ];
 
+interface ModerationQueueItem {
+  id: string;
+  businessId: string;
+  businessName: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  status: 'pending' | 'approved' | 'hidden';
+  createdAt: string;
+}
+
+interface ModerationQueueResult {
+  pendingCount: number;
+  items: ModerationQueueItem[];
+}
+
 export default function AdminConsole() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const [moderationQueue, setModerationQueue] = useState<ModerationQueueResult | null>(null);
+  const [verificationQueue, setVerificationQueue] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedReview, setSelectedReview] = useState<ModerationQueueItem | null>(null);
+  const [selectedVerification, setSelectedVerification] = useState<any>(null);
+  const [hideReason, setHideReason] = useState('');
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [actionType, setActionType] = useState<'approve' | 'hide' | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const handleApproveVerification = (id: string) => {
-    console.log('Approve verification:', id);
+  // Fetch moderation queue data
+  const fetchModerationQueue = async () => {
+    setLoading(true);
+    try {
+      const result = await graphqlClient.getPendingReviews();
+      setModerationQueue(result);
+    } catch (error) {
+      console.error('Failed to fetch moderation queue:', error);
+      setToast({ message: 'Failed to load moderation queue', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRejectVerification = (id: string) => {
-    console.log('Reject verification:', id);
+  // Fetch verification queue data
+  const fetchVerificationQueue = async () => {
+    setLoading(true);
+    try {
+      const result = await graphqlClient.getPendingVerifications();
+      setVerificationQueue(result.items);
+    } catch (error) {
+      console.error('Failed to fetch verification queue:', error);
+      setToast({ message: 'Failed to load verification queue', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleApproveReview = (id: string) => {
-    console.log('Approve review:', id);
+  useEffect(() => {
+    if (activeTab === 'reviews') {
+      fetchModerationQueue();
+    } else if (activeTab === 'verifications') {
+      fetchVerificationQueue();
+    }
+  }, [activeTab]);
+
+  const handleApproveReview = async (reviewId: string) => {
+    try {
+      const result = await graphqlClient.approveReview({
+        reviewId,
+        reviewedBy: 'admin-current', // In production, get from auth context
+      });
+      if (result.success) {
+        setToast({ message: 'Review approved successfully', type: 'success' });
+        fetchModerationQueue();
+      } else {
+        setToast({ message: result.error || 'Failed to approve review', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to approve review', type: 'error' });
+    }
   };
 
-  const handleFlagReview = (id: string) => {
-    console.log('Flag review:', id);
+  const openHideReasonModal = (review: ModerationQueueItem) => {
+    setSelectedReview(review);
+    setHideReason('');
+    setActionType('hide');
+    setShowReasonModal(true);
+  };
+
+  const handleHideReview = async () => {
+    if (!selectedReview) return;
+    if (!hideReason.trim()) {
+      setToast({ message: 'Hide reason is required', type: 'error' });
+      return;
+    }
+    try {
+      const result = await graphqlClient.hideReview({
+        reviewId: selectedReview.id,
+        reviewedBy: 'admin-current',
+        reason: hideReason,
+      });
+      if (result.success) {
+        setToast({ message: 'Review hidden successfully', type: 'success' });
+        setShowReasonModal(false);
+        setSelectedReview(null);
+        fetchModerationQueue();
+      } else {
+        setToast({ message: result.error || 'Failed to hide review', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to hide review', type: 'error' });
+    }
+  };
+
+  const handleApproveVerification = async (id: string) => {
+    try {
+      const result = await graphqlClient.approveVerification({
+        verificationId: id,
+        reviewedBy: 'admin-current',
+      });
+      if (result.success) {
+        setToast({ message: 'Verification approved successfully', type: 'success' });
+        fetchVerificationQueue();
+      } else {
+        setToast({ message: result.error || 'Failed to approve verification', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to approve verification', type: 'error' });
+    }
+  };
+
+  const handleRejectVerification = async (id: string) => {
+    try {
+      const result = await graphqlClient.rejectVerification({
+        verificationId: id,
+        reviewedBy: 'admin-current',
+        reason: 'Documents require clarification',
+      });
+      if (result.success) {
+        setToast({ message: 'Verification rejected successfully', type: 'success' });
+        fetchVerificationQueue();
+      } else {
+        setToast({ message: result.error || 'Failed to reject verification', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to reject verification', type: 'error' });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -317,33 +448,46 @@ export default function AdminConsole() {
               <h2 className="text-xl font-bold text-neutral-800">Review Moderation Queue</h2>
               <div className="flex gap-2">
                 <Input placeholder="Search reviews..." className="text-sm" />
-                <Button variant="secondary" size="sm">Filter</Button>
+                <Button variant="secondary" size="sm" onClick={fetchModerationQueue}>Refresh</Button>
               </div>
             </div>
-            <div className="space-y-4">
-              {RECENT_REVIEWS.filter((r) => r.status === 'pending').map((review) => (
-                <Card key={review.id} variant="outlined" padding="md">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-neutral-800">{review.business}</h3>
-                        <span className="text-heritage-ochre">{'★'.repeat(review.rating)}</span>
+            {loading ? (
+              <div className="text-center py-8 text-neutral-500">Loading moderation queue...</div>
+            ) : moderationQueue && moderationQueue.items.length === 0 ? (
+              <div className="text-center py-8 text-neutral-500">No pending reviews to moderate</div>
+            ) : (
+              <div className="space-y-4">
+                {moderationQueue?.items.map((review) => (
+                  <Card key={review.id} variant="outlined" padding="md">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-neutral-800">{review.businessName}</h3>
+                          <span className="text-heritage-ochre">{'★'.repeat(review.rating)}</span>
+                          <Badge variant="warning" size="sm">Pending</Badge>
+                        </div>
+                        <p className="text-sm text-neutral-600 mb-2">{review.comment}</p>
+                        <div className="flex items-center gap-2 text-sm text-neutral-500">
+                          <span>By: {review.userName}</span>
+                          <span>•</span>
+                          <span>Business: {review.businessName}</span>
+                          <span>•</span>
+                          <span>Submitted: {new Date(review.createdAt).toLocaleDateString()}</span>
+                        </div>
                       </div>
-                      <p className="text-sm text-neutral-600 mb-2">By: {review.user}</p>
-                      <p className="text-sm text-neutral-500 mb-3">Date: {review.date}</p>
+                      <div className="flex gap-2">
+                        <Button variant="primary" size="sm" onClick={() => handleApproveReview(review.id)}>
+                          Approve
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={() => openHideReasonModal(review)}>
+                          Hide
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="primary" size="sm" onClick={() => handleApproveReview(review.id)}>
-                        Approve
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleFlagReview(review.id)}>
-                        Flag
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </Card>
         </TabPanel>
 
@@ -393,6 +537,60 @@ export default function AdminConsole() {
           </Card>
         </TabPanel>
       </section>
+
+      {/* Hide Reason Modal */}
+      {showReasonModal && (
+        <Modal
+          isOpen={showReasonModal}
+          onClose={() => {
+            setShowReasonModal(false);
+            setSelectedReview(null);
+          }}
+          title="Hide Review"
+        >
+          <div className="space-y-4">
+            <p className="text-neutral-600">
+              Please provide a reason for hiding this review from {selectedReview?.userName}.
+            </p>
+            <textarea
+              value={hideReason}
+              onChange={(e) => setHideReason(e.target.value)}
+              placeholder="Enter reason for hiding this review..."
+              className="w-full p-3 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-heritage-royal"
+              rows={4}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setShowReasonModal(false);
+                  setSelectedReview(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button variant="danger" size="sm" onClick={handleHideReview}>
+                Hide Review
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg ${
+            toast.type === 'success'
+              ? 'bg-heritage-jade text-white'
+              : 'bg-red-600 text-white'
+          }`}
+          onClick={() => setToast(null)}
+        >
+          {toast.message}
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="bg-neutral-950 text-neutral-400 py-12 mt-16">

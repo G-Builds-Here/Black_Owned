@@ -116,6 +116,40 @@ export const typeDefs = `#graphql
     items: [VerificationRecord!]!
   }
 
+  # Moderation Queue Types for Admin Review
+  type ReviewRecord {
+    id: ID!
+    businessId: ID!
+    businessName: String!
+    userId: ID!
+    userName: String!
+    rating: Int!
+    comment: String!
+    status: ReviewStatus!
+    createdAt: String!
+  }
+
+  enum ReviewStatus {
+    pending
+    approved
+    hidden
+  }
+
+  type ApproveReviewResponse {
+    success: Boolean!
+    error: String
+  }
+
+  type HideReviewResponse {
+    success: Boolean!
+    error: String
+  }
+
+  type ModerationQueueResult {
+    pendingCount: Int!
+    items: [ReviewRecord!]!
+  }
+
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
@@ -124,5 +158,10 @@ export const typeDefs = `#graphql
     approveVerification(verificationId: ID!, reviewedBy: String!): ApproveVerificationResponse!
     rejectVerification(verificationId: ID!, reviewedBy: String!, reason: String!): RejectVerificationResponse!
     getPendingVerifications: VerificationQueueResult!
+
+    # Admin moderation review mutations
+    approveReview(reviewId: ID!, reviewedBy: String!): ApproveReviewResponse!
+    hideReview(reviewId: ID!, reviewedBy: String!, reason: String!): HideReviewResponse!
+    getPendingReviews: ModerationQueueResult!
   }
 `;
