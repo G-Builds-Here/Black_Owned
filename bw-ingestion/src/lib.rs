@@ -1,28 +1,12 @@
 //! Data ingestion module for Black Owned platform.
 
-pub mod chat_consumer;
-
 #[cfg(feature = "integration_test")]
 pub mod service_connectivity;
 
-pub mod email_service;
-
-pub mod email_publisher;
-
-pub mod email_consumer;
-
-pub mod image_processor;
+pub mod chat_consumer;
 
 #[cfg(feature = "integration_test")]
-pub mod image_publisher;
-
-#[cfg(feature = "integration_test")]
-pub mod image_worker;
-
-#[cfg(feature = "integration_test")]
-pub mod stream_config;
-
-pub mod cache_invalidator;
+pub mod background_service;
 
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
