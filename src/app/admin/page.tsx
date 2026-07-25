@@ -2,16 +2,16 @@
 
 import React, { useState } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs } from '@/components/ui';
 
-// Admin metrics data per AC requirements
+// Mock data for admin metrics
 const METRICS = {
-  Users: 150,
-  Businesses: 45,
-  Reviews: 320,
-  Unmoderated: 12,
-  PendingVerifications: 3,
-  NATS_Lag: 0,
+  totalBusinesses: 1247,
+  activeUsers: 8932,
+  pendingReviews: 156,
+  pendingVerifications: 43,
+  todaySignups: 87,
+  weeklyGrowth: 12.5,
 };
 
 const RECENT_BUSINESSES = [
@@ -45,7 +45,7 @@ const VERIFICATION_QUEUE = [
 ];
 
 export default function AdminConsole() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'verifications' | 'moderation' | 'nats' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
 
   const handleApproveVerification = (id: string) => {
@@ -76,67 +76,6 @@ export default function AdminConsole() {
       </Badge>
     );
   };
-
-  // Metric card configuration with links to management sections
-  const metricCards = [
-    {
-      key: 'Users',
-      label: 'Users',
-      value: METRICS.Users,
-      icon: '👥',
-      bgClass: 'bg-heritage-jade/10',
-      linkTab: 'users',
-      linkLabel: 'User Management',
-    },
-    {
-      key: 'Businesses',
-      label: 'Businesses',
-      value: METRICS.Businesses,
-      icon: '🏪',
-      bgClass: 'bg-heritage-ochre/10',
-      linkTab: 'verifications',
-      linkLabel: 'Verification Queue',
-    },
-    {
-      key: 'Reviews',
-      label: 'Reviews',
-      value: METRICS.Reviews,
-      icon: '📝',
-      bgClass: 'bg-heritage-royal/10',
-      linkTab: null,
-      linkLabel: null,
-    },
-    {
-      key: 'Unmoderated',
-      label: 'Unmoderated',
-      value: METRICS.Unmoderated,
-      icon: '⚠️',
-      bgClass: 'bg-heritage-amber/10',
-      linkTab: 'moderation',
-      linkLabel: 'Moderation Queue',
-      alert: true,
-    },
-    {
-      key: 'PendingVerifications',
-      label: 'Pending Verifications',
-      value: METRICS.PendingVerifications,
-      icon: '🔍',
-      bgClass: 'bg-heritage-jade/10',
-      linkTab: 'verifications',
-      linkLabel: 'Verification Queue',
-      alert: true,
-    },
-    {
-      key: 'NATS_Lag',
-      label: 'NATS Lag',
-      value: METRICS.NATS_Lag,
-      icon: '📡',
-      bgClass: 'bg-heritage-jade/10',
-      linkTab: 'nats',
-      linkLabel: 'NATS Monitor',
-      indicator: METRICS.NATS_Lag === 0 ? 'green' : 'red',
-    },
-  ];
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -179,10 +118,8 @@ export default function AdminConsole() {
         <Tabs
           tabs={[
             { key: 'dashboard', label: 'Dashboard' },
-            { key: 'users', label: 'User Management' },
-            { key: 'verifications', label: `Verification Queue (${METRICS.Businesses})` },
-            { key: 'moderation', label: `Moderation Queue (${METRICS.Unmoderated})` },
-            { key: 'nats', label: 'NATS Monitor' },
+            { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
+            { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
             { key: 'settings', label: 'Settings' },
           ]}
           selectedKey={activeTab}
@@ -191,52 +128,62 @@ export default function AdminConsole() {
 
         {/* Dashboard Tab */}
         <TabPanel value="dashboard" className="mt-6">
-          {/* Metrics Grid - 6 cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {metricCards.map((metric) => (
-              <Card
-                key={metric.key}
-                variant="elevated"
-                padding="lg"
-                className={metric.linkTab ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}
-                onClick={metric.linkTab ? () => setActiveTab(metric.linkTab as typeof activeTab) : undefined}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm text-neutral-500 mb-1">{metric.label}</p>
-                    <p className="text-3xl font-bold text-neutral-800">{metric.value.toLocaleString()}</p>
-                    {metric.alert && metric.value > 0 && (
-                      <p className="text-sm text-heritage-amber mt-1">Needs attention</p>
-                    )}
-                    {metric.key === 'NATS_Lag' && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span
-                          className={`inline-block w-2 h-2 rounded-full ${
-                            metric.indicator === 'green' ? 'bg-heritage-jade' : 'bg-red-500'
-                          }`}
-                        />
-                        <span className="text-sm text-neutral-500">
-                          {metric.indicator === 'green' ? 'Operational' : 'Lagging'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className={`w-12 h-12 ${metric.bgClass} rounded-lg flex items-center justify-center`}>
-                    <span className="text-2xl">{metric.icon}</span>
-                  </div>
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Total Businesses</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses.toLocaleString()}</p>
+                  <p className="text-sm text-heritage-jade mt-1">+{METRICS.weeklyGrowth}% this week</p>
                 </div>
-                {metric.linkTab && (
-                  <div className="mt-3 pt-3 border-t border-neutral-100">
-                    <span className="text-xs text-heritage-royal font-medium">
-                      → {metric.linkLabel}
-                    </span>
-                  </div>
-                )}
-              </Card>
-            ))}
+                <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">🏪</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Active Users</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.activeUsers.toLocaleString()}</p>
+                  <p className="text-sm text-heritage-jade mt-1">+8.2% this week</p>
+                </div>
+                <div className="w-12 h-12 bg-heritage-jade/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">👥</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Pending Reviews</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.pendingReviews}</p>
+                  <p className="text-sm text-heritage-amber mt-1">Needs attention</p>
+                </div>
+                <div className="w-12 h-12 bg-heritage-amber/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📝</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Today Signups</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS.todaySignups}</p>
+                  <p className="text-sm text-heritage-jade mt-1">+15% vs yesterday</p>
+                </div>
+                <div className="w-12 h-12 bg-heritage-royal/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📈</span>
+                </div>
+              </div>
+            </Card>
           </div>
 
-          {/* NATS Monitoring Detail */}
+          {/* NATS Monitoring */}
           <div className="mb-8">
             <Card variant="elevated" padding="lg">
               <div className="flex items-center justify-between mb-6">
@@ -318,20 +265,7 @@ export default function AdminConsole() {
           </div>
         </TabPanel>
 
-        {/* User Management Tab */}
-        <TabPanel value="users" className="mt-6">
-          <Card variant="elevated" padding="lg">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-neutral-800">User Management</h2>
-                <p className="text-sm text-neutral-500 mt-1">View and manage user roles</p>
-              </div>
-            </div>
-            <UserTable adminUser="admin" />
-          </Card>
-        </TabPanel>
-
-        {/* Verification Queue Tab */}
+        {/* Verifications Tab */}
         <TabPanel value="verifications" className="mt-6">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
@@ -376,11 +310,11 @@ export default function AdminConsole() {
           </Card>
         </TabPanel>
 
-        {/* Moderation Queue Tab */}
-        <TabPanel value="moderation" className="mt-6">
+        {/* Reviews Tab */}
+        <TabPanel value="reviews" className="mt-6">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-neutral-800">Moderation Queue</h2>
+              <h2 className="text-xl font-bold text-neutral-800">Review Moderation Queue</h2>
               <div className="flex gap-2">
                 <Input placeholder="Search reviews..." className="text-sm" />
                 <Button variant="secondary" size="sm">Filter</Button>
@@ -394,7 +328,6 @@ export default function AdminConsole() {
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-neutral-800">{review.business}</h3>
                         <span className="text-heritage-ochre">{'★'.repeat(review.rating)}</span>
-                        <Badge variant="warning" size="sm">Unmoderated</Badge>
                       </div>
                       <p className="text-sm text-neutral-600 mb-2">By: {review.user}</p>
                       <p className="text-sm text-neutral-500 mb-3">Date: {review.date}</p>
@@ -410,50 +343,6 @@ export default function AdminConsole() {
                   </div>
                 </Card>
               ))}
-            </div>
-          </Card>
-        </TabPanel>
-
-        {/* NATS Monitor Tab */}
-        <TabPanel value="nats" className="mt-6">
-          <Card variant="elevated" padding="lg">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-neutral-800">NATS Message Bus Monitor</h2>
-              <Badge variant="success" size="sm">Operational</Badge>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-500">Active Connections</p>
-                <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.activeConnections}</p>
-              </div>
-              <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-500">Messages/Sec</p>
-                <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.messagesPerSecond.toLocaleString()}</p>
-              </div>
-              <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-500">Pending Messages</p>
-                <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.pendingMessages}</p>
-              </div>
-              <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-500">Subscriptions</p>
-                <p className="text-2xl font-bold text-neutral-800">{NATS_METRICS.subscriptions}</p>
-              </div>
-              <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-500">Uptime</p>
-                <p className="text-2xl font-bold text-heritage-jade">{NATS_METRICS.uptime}</p>
-              </div>
-              <div className="text-center p-4 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-500">Last Incident</p>
-                <p className="text-lg font-bold text-neutral-800">{NATS_METRICS.lastIncident}</p>
-              </div>
-            </div>
-            <div className="mt-6 p-4 bg-heritage-jade/10 rounded-lg">
-              <div className="flex items-center gap-3">
-                <span className="inline-block w-3 h-3 bg-heritage-jade rounded-full" />
-                <span className="text-sm font-medium text-neutral-800">
-                  NATS Lag: {METRICS.NATS_Lag}ms - System healthy
-                </span>
-              </div>
             </div>
           </Card>
         </TabPanel>
