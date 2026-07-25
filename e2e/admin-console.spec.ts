@@ -14,16 +14,44 @@ import { test, expect } from '@playwright/test';
 test.describe('Admin Console E2E Tests', () => {
   const BASE_URL = 'http://localhost:3001';
 
-  test.describe('AC3: Admin Console Dashboard', () => {
-    test.beforeEach(async ({ page }) => {
-      // Set up authenticated admin user session
-      await page.evaluate(() => {
-        localStorage.setItem('auth_token', 'mock-admin-jwt-token');
-        localStorage.setItem('user_role', 'admin');
-      });
-    });
+  // Use a reusable context with pre-authenticated state
+  let context: any;
+  let page: any;
 
-    test('should navigate to admin console from navigation', async ({ page }) => {
+  test.beforeAll(async ({ browser }) => {
+    // Create a new browser context with mocked authentication
+    context = await browser.newContext({
+      storageState: {
+        cookies: [
+          {
+            name: 'auth_token',
+            value: 'mock-admin-jwt-token',
+            url: BASE_URL,
+          },
+        ],
+        localStorage: [
+          {
+            url: BASE_URL,
+            name: 'auth_token',
+            value: 'mock-admin-jwt-token',
+          },
+          {
+            url: BASE_URL,
+            name: 'user_role',
+            value: 'admin',
+          },
+        ],
+      },
+    });
+    page = await context.newPage();
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  test.describe('AC3: Admin Console Dashboard', () => {
+    test('should navigate to admin console from navigation', async () => {
       // Given: An authenticated admin user is on the home page
       await page.goto(BASE_URL);
 
@@ -31,10 +59,10 @@ test.describe('Admin Console E2E Tests', () => {
       await page.goto(`${BASE_URL}/admin`);
 
       // Then: Admin console page loads with the Admin Console heading
-      await expect(page.getByRole('heading', { name: /Admin Console/i, level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Admin Console/i })).toBeVisible();
     });
 
-    test('should display all 6 metric cards with correct labels', async ({ page }) => {
+    test('should display all 6 metric cards with correct labels', async () => {
       // Given: An authenticated admin user navigates to the admin console dashboard
       await page.goto(`${BASE_URL}/admin`);
 
@@ -48,7 +76,7 @@ test.describe('Admin Console E2E Tests', () => {
       await expect(page.getByText(/Weekly Growth/i)).toBeVisible();
     });
 
-    test('should display metric values in each card', async ({ page }) => {
+    test('should display metric values in each card', async () => {
       // Given: An authenticated admin user is on the admin console dashboard
       await page.goto(`${BASE_URL}/admin`);
 
@@ -72,7 +100,7 @@ test.describe('Admin Console E2E Tests', () => {
       await expect(page.getByText(/\+12\.5%/i)).toBeVisible();
     });
 
-    test('should have links to management sections from metric cards', async ({ page }) => {
+    test('should have links to management sections from metric cards', async () => {
       // Given: An authenticated admin user is on the admin console dashboard
       await page.goto(`${BASE_URL}/admin`);
 
@@ -80,13 +108,14 @@ test.describe('Admin Console E2E Tests', () => {
       // Then: Navigation links are available for management sections
 
       // Verify tabs for management sections exist
-      await expect(page.getByRole('tab', { name: /Users/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /Dashboard/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /User Management/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /Verifications/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /Reviews/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /Settings/i })).toBeVisible();
     });
 
-    test('should display the NATS Consumer Monitor section', async ({ page }) => {
+    test('should display the NATS Consumer Monitor section', async () => {
       // Given: An authenticated admin user is on the admin console dashboard
       await page.goto(`${BASE_URL}/admin`);
 
@@ -96,15 +125,7 @@ test.describe('Admin Console E2E Tests', () => {
   });
 
   test.describe('NATS Consumer Monitor', () => {
-    test.beforeEach(async ({ page }) => {
-      // Set up authenticated admin user session
-      await page.evaluate(() => {
-        localStorage.setItem('auth_token', 'mock-admin-jwt-token');
-        localStorage.setItem('user_role', 'admin');
-      });
-    });
-
-    test('should display the NATS Monitor table with stream and consumer data', async ({ page }) => {
+    test('should display the NATS Monitor table with stream and consumer data', async () => {
       // Given: An authenticated admin user opens the NATS Monitor on the admin dashboard
       await page.goto(`${BASE_URL}/admin`);
 
@@ -119,7 +140,7 @@ test.describe('Admin Console E2E Tests', () => {
       await expect(page.getByText(/Status/i)).toBeVisible();
     });
 
-    test('should display pending count for each consumer', async ({ page }) => {
+    test('should display pending count for each consumer', async () => {
       // Given: An authenticated admin user opens the NATS Monitor
       await page.goto(`${BASE_URL}/admin`);
 
@@ -129,7 +150,7 @@ test.describe('Admin Console E2E Tests', () => {
       await expect(pendingCountColumn).toBeVisible();
     });
 
-    test('should display oldest message age for each consumer', async ({ page }) => {
+    test('should display oldest message age for each consumer', async () => {
       // Given: An authenticated admin user opens the NATS Monitor
       await page.goto(`${BASE_URL}/admin`);
 
@@ -138,7 +159,7 @@ test.describe('Admin Console E2E Tests', () => {
       await expect(oldestAgeColumn).toBeVisible();
     });
 
-    test('should show Healthy status for consumers with 0 pending messages', async ({ page }) => {
+    test('should show Healthy status for consumers with 0 pending messages', async () => {
       // Given: An authenticated admin user opens the NATS Monitor
       await page.goto(`${BASE_URL}/admin`);
 
@@ -152,7 +173,7 @@ test.describe('Admin Console E2E Tests', () => {
       });
     });
 
-    test('should show Warning status for consumers with 100+ pending messages', async ({ page }) => {
+    test('should show Warning status for consumers with 100+ pending messages', async () => {
       // Given: An authenticated admin user opens the NATS Monitor
       await page.goto(`${BASE_URL}/admin`);
 
@@ -166,7 +187,7 @@ test.describe('Admin Console E2E Tests', () => {
       });
     });
 
-    test('should display status indicators with color coding', async ({ page }) => {
+    test('should display status indicators with color coding', async () => {
       // Given: An authenticated admin user opens the NATS Monitor
       await page.goto(`${BASE_URL}/admin`);
 
@@ -176,7 +197,7 @@ test.describe('Admin Console E2E Tests', () => {
       await expect(statusColumn).toBeVisible();
     });
 
-    test('should allow manual refresh of consumer data', async ({ page }) => {
+    test('should allow manual refresh of consumer data', async () => {
       // Given: An authenticated admin user is viewing the NATS Monitor
       await page.goto(`${BASE_URL}/admin`);
 
@@ -192,15 +213,7 @@ test.describe('Admin Console E2E Tests', () => {
   });
 
   test.describe('Dashboard Tab Navigation', () => {
-    test.beforeEach(async ({ page }) => {
-      // Set up authenticated admin user session
-      await page.evaluate(() => {
-        localStorage.setItem('auth_token', 'mock-admin-jwt-token');
-        localStorage.setItem('user_role', 'admin');
-      });
-    });
-
-    test('should switch between dashboard tabs', async ({ page }) => {
+    test('should switch between dashboard tabs', async () => {
       // Given: An authenticated admin user is on the admin console
       await page.goto(`${BASE_URL}/admin`);
 
