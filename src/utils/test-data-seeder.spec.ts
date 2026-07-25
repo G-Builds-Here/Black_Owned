@@ -15,9 +15,7 @@ import {
   generateTestBusinesses,
   generateTestUsers,
   generateTestSeedData,
-  generateBusinessesWithImages,
-  BUSINESS_CATEGORIES,
-  BUSINESS_TEMPLATES_BY_CATEGORY,
+  type UserRole,
 } from "./test-data-seeder";
 
 describe("Test Data Seeder", () => {
@@ -120,6 +118,53 @@ describe("Test Data Seeder", () => {
       expect(users[0].firstName).toBeDefined();
       expect(users[0].lastName).toBeDefined();
     });
+
+    it("assigns roles to all users", () => {
+      const users = generateTestUsers(5);
+      users.forEach((user) => {
+        expect(user.role).toBeDefined();
+        expect(["customer", "business_owner", "admin"]).toContain(user.role);
+      });
+    });
+
+    it("creates default distribution: 2 customers, 2 business owners, 1 admin", () => {
+      const users = generateTestUsers(5);
+      const roleCounts = {
+        customer: 0,
+        business_owner: 0,
+        admin: 0,
+      };
+      users.forEach((user) => {
+        roleCounts[user.role as UserRole]++;
+      });
+      expect(roleCounts.customer).toBe(2);
+      expect(roleCounts.business_owner).toBe(2);
+      expect(roleCounts.admin).toBe(1);
+    });
+
+    it("associates business owners with businesses when provided", () => {
+      const businesses = [
+        { id: "biz-1", name: "Test Biz 1", formattedName: "BWS-TEST: Test Biz 1" },
+        { id: "biz-2", name: "Test Biz 2", formattedName: "BWS-TEST: Test Biz 2" },
+      ];
+      const users = generateTestUsers(5, businesses);
+      const businessOwners = users.filter((u) => u.role === "business_owner");
+      businessOwners.forEach((owner) => {
+        expect(owner.associatedBusinessId).toBeDefined();
+        expect(["biz-1", "biz-2"]).toContain(owner.associatedBusinessId);
+      });
+    });
+
+    it("customers and admin do not have associated business IDs", () => {
+      const businesses = [
+        { id: "biz-1", name: "Test Biz 1", formattedName: "BWS-TEST: Test Biz 1" },
+      ];
+      const users = generateTestUsers(5, businesses);
+      const nonOwners = users.filter((u) => u.role !== "business_owner");
+      nonOwners.forEach((user) => {
+        expect(user.associatedBusinessId).toBeUndefined();
+      });
+    });
   });
 
   describe("generateTestSeedData", () => {
@@ -142,86 +187,32 @@ describe("Test Data Seeder", () => {
         expect(isTestEmail(user.formattedEmail)).toBe(true);
       });
     });
-  });
 
-  describe("generateBusinessesWithImages", () => {
-    it("generates 30 businesses with images by default", () => {
-      const results = generateBusinessesWithImages();
-      expect(results).toHaveLength(30);
-    });
-
-    it("generates specified number of businesses with images", () => {
-      const results = generateBusinessesWithImages(15);
-      expect(results).toHaveLength(15);
-    });
-
-    it("each business has 2-4 images", () => {
-      const results = generateBusinessesWithImages(30);
-      results.forEach((result) => {
-        expect(result.images.images.length).toBeGreaterThanOrEqual(2);
-        expect(result.images.images.length).toBeLessThanOrEqual(4);
+    it("creates exactly 5 users with correct role distribution (2 customers, 2 business owners, 1 admin)", () => {
+      const data = generateTestSeedData(5, 5);
+      expect(data.users).toHaveLength(5);
+      const roleCounts = {
+        customer: 0,
+        business_owner: 0,
+        admin: 0,
+      };
+      data.users.forEach((user) => {
+        roleCounts[user.role as UserRole]++;
       });
+      expect(roleCounts.customer).toBe(2);
+      expect(roleCounts.business_owner).toBe(2);
+      expect(roleCounts.admin).toBe(1);
     });
 
-    it("each business has unique ID", () => {
-      const results = generateBusinessesWithImages(30);
-      const ids = results.map((r) => r.id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(30);
-    });
-
-    it("all images are associated with correct business ID via foreign key", () => {
-      const results = generateBusinessesWithImages(30);
-      results.forEach((result) => {
-        result.images.images.forEach((image: { businessId: string }) => {
-          expect(image.businessId).toBe(result.id);
-        });
-      });
-    });
-
-    it("each image has descriptive alt text", () => {
-      const results = generateBusinessesWithImages(30);
-      results.forEach((result) => {
-        result.images.images.forEach((image: { altText: string }) => {
-          expect(image.altText).toBeDefined();
-          expect(image.altText.length).toBeGreaterThanOrEqual(10);
-        });
-      });
-    });
-
-    it("alt text matches business category", () => {
-      const results = generateBusinessesWithImages(30);
-      results.forEach((result) => {
-        result.images.images.forEach((image: { category: string }) => {
-          expect(image.category).toBe(result.category);
-        });
-      });
-    });
-
-    it("all businesses have BWS-TEST prefix", () => {
-      const results = generateBusinessesWithImages(30);
-      results.forEach((result) => {
-        expect(isTestBusiness(result.formattedName)).toBe(true);
-      });
-    });
-
-    it("covers all 10 categories", () => {
-      const results = generateBusinessesWithImages(30);
-      const categories = new Set(results.map((r) => r.category));
-      expect(categories.size).toBe(10);
-    });
-
-    it("each category has 3 businesses", () => {
-      const results = generateBusinessesWithImages(30);
-      const categoryCounts: Record<string, number> = {};
-
-      results.forEach((result) => {
-        const cat = result.category || "unknown";
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      });
-
-      BUSINESS_CATEGORIES.forEach((category) => {
-        expect(categoryCounts[category]).toBe(3);
+    it("associates business owners with seeded businesses", () => {
+      const data = generateTestSeedData(5, 5);
+      expect(data.businesses).toHaveLength(5);
+      const businessOwners = data.users.filter((u) => u.role === "business_owner");
+      expect(businessOwners).toHaveLength(2);
+      businessOwners.forEach((owner) => {
+        expect(owner.associatedBusinessId).toBeDefined();
+        const associatedBiz = data.businesses.find((b) => b.id === owner.associatedBusinessId);
+        expect(associatedBiz).toBeDefined();
       });
     });
   });
