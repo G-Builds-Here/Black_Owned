@@ -127,3 +127,170 @@ export async function updateBusiness(
   });
   return result.updateBusiness;
 }
+
+// Verification Queue Types
+export interface VerificationRecord {
+  id: string;
+  businessId: string;
+  businessName: string;
+  documentUrls: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+}
+
+export interface VerificationQueueResult {
+  pendingCount: number;
+  items: VerificationRecord[];
+}
+
+// Moderation Queue Types
+export interface ModerationQueueItem {
+  id: string;
+  businessId: string;
+  businessName: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  status: 'pending' | 'approved' | 'hidden';
+  createdAt: string;
+}
+
+export interface ModerationQueueResult {
+  pendingCount: number;
+  items: ModerationQueueItem[];
+}
+
+// GraphQL Client with moderation and verification mutations
+export const graphqlClient = {
+  /**
+   * Get pending verifications for the admin queue
+   */
+  async getPendingVerifications(): Promise<VerificationQueueResult> {
+    const query = `
+      mutation GetPendingVerifications {
+        getPendingVerifications {
+          pendingCount
+          items {
+            id
+            businessId
+            businessName
+            documentUrls
+            status
+            submittedAt
+          }
+        }
+      }
+    `;
+    const result = await graphqlQuery<{ getPendingVerifications: VerificationQueueResult }>(query, {});
+    return result.getPendingVerifications;
+  },
+
+  /**
+   * Approve a verification submission
+   */
+  async approveVerification(args: { verificationId: string; reviewedBy: string }): Promise<{ success: boolean; error?: string }> {
+    const { verificationId, reviewedBy } = args;
+    const query = `
+      mutation ApproveVerification($verificationId: ID!, $reviewedBy: String!) {
+        approveVerification(verificationId: $verificationId, reviewedBy: $reviewedBy) {
+          success
+          error
+        }
+      }
+    `;
+    const result = await graphqlQuery<{ approveVerification: { success: boolean; error?: string } }>(query, {
+      verificationId,
+      reviewedBy,
+    });
+    return result.approveVerification;
+  },
+
+  /**
+   * Reject a verification submission
+   */
+  async rejectVerification(args: { verificationId: string; reviewedBy: string; reason: string }): Promise<{ success: boolean; error?: string }> {
+    const { verificationId, reviewedBy, reason } = args;
+    const query = `
+      mutation RejectVerification($verificationId: ID!, $reviewedBy: String!, $reason: String!) {
+        rejectVerification(verificationId: $verificationId, reviewedBy: $reviewedBy, reason: $reason) {
+          success
+          error
+        }
+      }
+    `;
+    const result = await graphqlQuery<{ rejectVerification: { success: boolean; error?: string } }>(query, {
+      verificationId,
+      reviewedBy,
+      reason,
+    });
+    return result.rejectVerification;
+  },
+
+  /**
+   * Get pending reviews for the moderation queue
+   */
+  async getPendingReviews(): Promise<ModerationQueueResult> {
+    const query = `
+      mutation GetPendingReviews {
+        getPendingReviews {
+          pendingCount
+          items {
+            id
+            businessId
+            businessName
+            userId
+            userName
+            rating
+            comment
+            status
+            createdAt
+          }
+        }
+      }
+    `;
+    const result = await graphqlQuery<{ getPendingReviews: ModerationQueueResult }>(query, {});
+    return result.getPendingReviews;
+  },
+
+  /**
+   * Approve a review submission
+   */
+  async approveReview(args: { reviewId: string; reviewedBy: string }): Promise<{ success: boolean; error?: string }> {
+    const { reviewId, reviewedBy } = args;
+    const query = `
+      mutation ApproveReview($reviewId: ID!, $reviewedBy: String!) {
+        approveReview(reviewId: $reviewId, reviewedBy: $reviewedBy) {
+          success
+          error
+        }
+      }
+    `;
+    const result = await graphqlQuery<{ approveReview: { success: boolean; error?: string } }>(query, {
+      reviewId,
+      reviewedBy,
+    });
+    return result.approveReview;
+  },
+
+  /**
+   * Hide a review with reason
+   */
+  async hideReview(args: { reviewId: string; reviewedBy: string; reason: string }): Promise<{ success: boolean; error?: string }> {
+    const { reviewId, reviewedBy, reason } = args;
+    const query = `
+      mutation HideReview($reviewId: ID!, $reviewedBy: String!, $reason: String!) {
+        hideReview(reviewId: $reviewId, reviewedBy: $reviewedBy, reason: $reason) {
+          success
+          error
+        }
+      }
+    `;
+    const result = await graphqlQuery<{ hideReview: { success: boolean; error?: string } }>(query, {
+      reviewId,
+      reviewedBy,
+      reason,
+    });
+    return result.hideReview;
+  },
+};

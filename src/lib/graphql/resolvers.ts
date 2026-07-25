@@ -19,6 +19,12 @@ import {
   rejectVerification,
   VerificationQueueItem,
 } from "../verification/verification-service";
+import {
+  getPendingReviews,
+  approveReview,
+  hideReview,
+  ModerationQueueItem,
+} from "../moderation/moderation-service";
 import { getPool } from "../db/database";
 
 /**
@@ -104,6 +110,58 @@ export const resolvers = {
       items: VerificationQueueItem[];
     }> => {
       const items = await getPendingVerifications();
+      return {
+        pendingCount: items.length,
+        items,
+      };
+    },
+    /**
+     * Approve a review submission
+     */
+    approveReview: async (
+      _parent: unknown,
+      args: { reviewId: string; reviewedBy: string }
+    ) => {
+      const { reviewId, reviewedBy } = args;
+
+      const result = await approveReview({
+        reviewId,
+        reviewedBy,
+      });
+
+      return {
+        success: result.success,
+        error: result.error || undefined,
+      };
+    },
+    /**
+     * Hide a review with reason
+     */
+    hideReview: async (
+      _parent: unknown,
+      args: { reviewId: string; reviewedBy: string; reason: string }
+    ) => {
+      const { reviewId, reviewedBy, reason } = args;
+
+      const result = await hideReview({
+        reviewId,
+        reviewedBy,
+        reason,
+      });
+
+      return {
+        success: result.success,
+        error: result.error || undefined,
+      };
+    },
+    /**
+     * Get all pending reviews for the admin moderation queue
+     */
+    getPendingReviews: async (): Promise<{
+      pendingCount: number;
+      items: ModerationQueueItem[];
+    }> => {
+      const items = await getPendingReviews();
       return {
         pendingCount: items.length,
         items,
