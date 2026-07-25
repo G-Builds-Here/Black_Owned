@@ -49,6 +49,23 @@ interface ModerationQueueResult {
   items: ModerationQueueItem[];
 }
 
+interface ModerationQueueItem {
+  id: string;
+  businessId: string;
+  businessName: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  status: 'pending' | 'approved' | 'hidden';
+  createdAt: string;
+}
+
+interface ModerationQueueResult {
+  pendingCount: number;
+  items: ModerationQueueItem[];
+}
+
 export default function AdminConsole() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');

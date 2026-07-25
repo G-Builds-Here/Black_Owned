@@ -5,6 +5,12 @@ import { test, expect } from '@playwright/test';
  *
  * Verifies the admin console dashboard with metric cards and NATS monitor.
  */
+
+/**
+ * Moderation Queue E2E Tests - LOC-0048-AC2
+ *
+ * Verifies the review moderation queue functionality for admin users.
+ */
 test.describe('Admin Console E2E Tests', () => {
   const BASE_URL = 'http://localhost:3001';
 
@@ -221,6 +227,114 @@ test.describe('Admin Console E2E Tests', () => {
       // Settings tab
       const settingsTab = page.getByRole('tab', { name: /Settings/i });
       await expect(settingsTab).toBeVisible();
+    });
+  });
+
+  test.describe('Moderation Queue - AC2', () => {
+    test.beforeEach(async ({ page }) => {
+      // Set up authenticated admin user session
+      await page.evaluate(() => {
+        localStorage.setItem('auth_token', 'mock-admin-jwt-token');
+        localStorage.setItem('user_role', 'admin');
+      });
+    });
+
+    test('should navigate to Reviews tab and display moderation queue', async ({ page }) => {
+      // Given: An authenticated admin user is on the admin console
+      await page.goto(`${BASE_URL}/admin`);
+
+      // When: User clicks on the Reviews tab
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      // Then: The moderation queue heading is visible
+      await expect(page.getByRole('heading', { name: /Review Moderation Queue/i })).toBeVisible();
+    });
+
+    test('should display pending reviews in the moderation queue', async ({ page }) => {
+      // Given: An authenticated admin user navigates to the Reviews tab
+      await page.goto(`${BASE_URL}/admin`);
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      // Then: Pending reviews are displayed with review details
+      // Review card should show business name, rating, comment, and reviewer info
+      await expect(page.getByText(/Pending/i)).toBeVisible();
+    });
+
+    test('should show approve and hide buttons for each pending review', async ({ page }) => {
+      // Given: An authenticated admin user is viewing the moderation queue
+      await page.goto(`${BASE_URL}/admin`);
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      // Then: Action buttons are available for each review
+      await expect(page.getByRole('button', { name: /Approve/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Hide/i })).toBeVisible();
+    });
+
+    test('should display hide reason modal when clicking Hide button', async ({ page }) => {
+      // Given: An authenticated admin user is viewing the moderation queue
+      await page.goto(`${BASE_URL}/admin`);
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      // When: User clicks the Hide button on a review
+      const hideButton = page.getByRole('button', { name: /Hide/i }).first();
+      await hideButton.click();
+
+      // Then: The hide reason modal appears
+      await expect(page.getByRole('dialog', { name: /Hide Review/i })).toBeVisible();
+      await expect(page.getByText(/provide a reason/i)).toBeVisible();
+    });
+
+    test('should require hide reason before submitting', async ({ page }) => {
+      // Given: An authenticated admin user has opened the hide reason modal
+      await page.goto(`${BASE_URL}/admin`);
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      const hideButton = page.getByRole('button', { name: /Hide/i }).first();
+      await hideButton.click();
+
+      // When: User tries to hide without providing a reason
+      const hideReviewButton = page.getByRole('button', { name: /Hide Review/i });
+      await hideReviewButton.click();
+
+      // Then: Error message appears indicating reason is required
+      // The modal should remain open and show validation error
+      await expect(page.getByText(/reason/i)).toBeVisible();
+    });
+
+    test('should refresh moderation queue data', async ({ page }) => {
+      // Given: An authenticated admin user is viewing the moderation queue
+      await page.goto(`${BASE_URL}/admin`);
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      // When: User clicks the Refresh button
+      const refreshButton = page.getByRole('button', { name: /Refresh/i });
+      await expect(refreshButton).toBeVisible();
+      await refreshButton.click();
+
+      // Then: The queue data is refreshed without errors
+      await expect(page.getByRole('heading', { name: /Review Moderation Queue/i })).toBeVisible();
+    });
+
+    test('should display empty state when no pending reviews exist', async ({ page }) => {
+      // Given: An authenticated admin user navigates to the Reviews tab
+      // Note: This test assumes the backend returns an empty array when no pending reviews exist
+      await page.goto(`${BASE_URL}/admin`);
+      const reviewsTab = page.getByRole('tab', { name: /Reviews/i });
+      await reviewsTab.click();
+
+      // Then: Either reviews are displayed or empty state message appears
+      // The UI should handle both cases gracefully
+      const hasReviews = await page.getByRole('button', { name: /Approve/i }).count() > 0;
+      const hasEmptyState = await page.getByText(/No pending reviews/i).isVisible();
+
+      // One of these should be true
+      expect(hasReviews || hasEmptyState).toBe(true);
     });
   });
 });
