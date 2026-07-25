@@ -16,10 +16,11 @@ clickhouse = { version = "0.13", optional = true }
 nats = { version = "0.26", optional = true }
 minio-rsc = { version = "0.2.6", optional = true }
 redis = { version = "0.27", features = ["tokio-comp"], optional = true }
+image = { version = "0.25", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
 
 [features]
 default = []
-integration_test = ["tokio", "clickhouse", "nats", "minio-rsc", "redis"]
+integration_test = ["tokio", "clickhouse", "nats", "minio-rsc", "redis", "image"]
