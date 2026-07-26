@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import { SearchBar } from '@/components/ui/SearchBar';
+
+// Storage keys for persistence
+const STORAGE_KEYS = {
+  SAVED_BUSINESSES: 'black-owned-saved-businesses',
+  FILTER_PREFERENCES: 'black-owned-filter-preferences',
+};
 
 // Mock data - in production this would come from an API
 const MOCK_BUSINESSES: Business[] = [
@@ -106,7 +113,54 @@ export default function DirectoryPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
   const [filters, setFilters] = useState<FilterOption>({});
   const [sort, setSort] = useState<SortOption>('relevance');
+  const [searchQuery, setSearchQuery] = useState('');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Load saved preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      // Load saved businesses
+      const saved = localStorage.getItem(STORAGE_KEYS.SAVED_BUSINESSES);
+      if (saved) {
+        setSavedBusinesses(new Set(JSON.parse(saved)));
+      }
+
+      // Load filter preferences
+      const prefs = localStorage.getItem(STORAGE_KEYS.FILTER_PREFERENCES);
+      if (prefs) {
+        const parsed = JSON.parse(prefs);
+        if (parsed.filters) setFilters(parsed.filters);
+        if (parsed.sort) setSort(parsed.sort);
+      }
+    } catch (error) {
+      console.warn('Failed to load saved preferences:', error);
+    }
+    setIsInitialized(true);
+  }, []);
+
+  // Persist saved businesses to localStorage
+  useEffect(() => {
+    if (!isInitialized) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.SAVED_BUSINESSES, JSON.stringify([...savedBusinesses]));
+    } catch (error) {
+      console.warn('Failed to save businesses:', error);
+    }
+  }, [savedBusinesses, isInitialized]);
+
+  // Persist filter preferences to localStorage
+  useEffect(() => {
+    if (!isInitialized) return;
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.FILTER_PREFERENCES,
+        JSON.stringify({ filters, sort })
+      );
+    } catch (error) {
+      console.warn('Failed to save filter preferences:', error);
+    }
+  }, [filters, sort, isInitialized]);
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
@@ -114,6 +168,10 @@ export default function DirectoryPage() {
 
   const handleSortChange = (newSort: SortOption) => {
     setSort(newSort);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query.toLowerCase().trim());
   };
 
   const handleViewDetails = (businessId: string) => {
@@ -156,6 +214,17 @@ export default function DirectoryPage() {
   const filteredBusinesses = useMemo(() => {
     let result = [...MOCK_BUSINESSES];
 
+    // Apply search query filter (real-time)
+    if (searchQuery) {
+      result = result.filter(
+        (b) =>
+          b.name.toLowerCase().includes(searchQuery) ||
+          b.description.toLowerCase().includes(searchQuery) ||
+          b.category.toLowerCase().includes(searchQuery) ||
+          b.tags.some((tag) => tag.toLowerCase().includes(searchQuery))
+      );
+    }
+
     // Apply filters
     if (filters.category) {
       result = result.filter((b) => b.category === filters.category);
@@ -191,7 +260,7 @@ export default function DirectoryPage() {
     }
 
     return result;
-  }, [filters, sort]);
+  }, [filters, sort, searchQuery]);
 
   const savedBusinessList = useMemo(() => {
     return MOCK_BUSINESSES.filter((b) => savedBusinesses.has(b.id));
@@ -221,6 +290,12 @@ export default function DirectoryPage() {
 
       {/* Main Content */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search Bar */}
+        <SearchBar
+          onSearch={handleSearch}
+          placeholder="Search by name, description, or tags..."
+        />
+
         {/* Tabs */}
         <Tabs
           tabs={[
@@ -265,11 +340,13 @@ export default function DirectoryPage() {
           <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
             <div className="text-6xl mb-4">🔍</div>
             <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
-              No businesses found
+              {searchQuery ? 'No businesses match your search' : 'No businesses found'}
             </h3>
             <p className="text-neutral-600 mb-6 max-w-md mx-auto">
               {activeTab === 'saved'
                 ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
+                : searchQuery
+                ? `No results for "${searchQuery}". Try different keywords or adjust your filters.`
                 : 'Try adjusting your filters to find more businesses.'}
             </p>
             {activeTab === 'all' && (
@@ -277,10 +354,11 @@ export default function DirectoryPage() {
                 onClick={() => {
                   setFilters({});
                   setSort('relevance');
+                  setSearchQuery('');
                 }}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
               >
-                Clear Filters
+                Clear All Filters & Search
               </button>
             )}
             {activeTab === 'saved' && (

@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Button from './Button';
 
 export interface SearchBarProps {
-  onSearch?: (query: string, filters: string[]) => void;
+  onSearch?: (query: string) => void;
   categories?: string[];
   placeholder?: string;
+  enableCategoryFilters?: boolean;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -26,6 +27,7 @@ export function SearchBar({
   onSearch = () => {},
   categories = DEFAULT_CATEGORIES,
   placeholder = 'Search for businesses...',
+  enableCategoryFilters = false,
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
@@ -39,15 +41,22 @@ export function SearchBar({
   };
 
   const handleSearch = () => {
-    const filters = selectedFilters.filter((f) => f !== 'All');
-    onSearch(query, filters);
+    onSearch(query);
   };
 
   const handleClear = () => {
     setQuery('');
     setSelectedFilters([]);
-    onSearch('', []);
+    onSearch('');
   };
+
+  // Debounced search for real-time updates
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      onSearch(query);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [query, onSearch]);
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -83,26 +92,28 @@ export function SearchBar({
         </div>
       </div>
 
-      {/* Category Filters */}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Category filters">
-        {categories.map((category) => {
-          const isSelected = selectedFilters.includes(category);
-          return (
-            <button
-              key={category}
-              onClick={() => handleFilterToggle(category)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                isSelected
-                  ? 'bg-heritage-ochre text-white shadow-md'
-                  : 'bg-white text-neutral-700 border-2 border-neutral-200 hover:border-heritage-ochre hover:text-heritage-ochre'
-              }`}
-              aria-pressed={isSelected}
-            >
-              {category}
-            </button>
-          );
-        })}
-      </div>
+      {/* Category Filters - Optional */}
+      {enableCategoryFilters && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Category filters">
+          {categories.map((category) => {
+            const isSelected = selectedFilters.includes(category);
+            return (
+              <button
+                key={category}
+                onClick={() => handleFilterToggle(category)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  isSelected
+                    ? 'bg-heritage-ochre text-white shadow-md'
+                    : 'bg-white text-neutral-700 border-2 border-neutral-200 hover:border-heritage-ochre hover:text-heritage-ochre'
+                }`}
+                aria-pressed={isSelected}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
