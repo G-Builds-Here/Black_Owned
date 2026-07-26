@@ -123,6 +123,10 @@ export default function SearchPage() {
     setQuery(searchQuery);
   };
 
+  const handleSuggestionClick = (suggestion: string) => {
+    setQuery(suggestion);
+  };
+
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
   };
@@ -151,6 +155,7 @@ export default function SearchPage() {
         {/* Search Bar */}
         <SearchBar
           onSearch={handleSearch}
+          onSuggestionClick={handleSuggestionClick}
           placeholder="Search by name, category, or location..."
         />
 
