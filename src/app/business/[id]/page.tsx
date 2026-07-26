@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
-import { notFound } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { notFound, useRouter } from 'next/navigation';
 import { Carousel } from '@/components/ui/Carousel';
 import { ReviewList, Review } from '@/components/ui/Review';
 import { Button, Badge, Card } from '@/components/ui';
 import { Navigation } from '@/components/ui/Navigation';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
 import { Toast, useToast } from '@/components/ui/Toast';
+import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 
 // Mock business data - in production this would come from an API
 const MOCK_BUSINESS = {
@@ -73,13 +74,77 @@ const MOCK_BUSINESS = {
   ] as Review[],
 };
 
+interface JSONLDStructuredData {
+  '@context': string;
+  '@type': string;
+  name: string;
+  description: string;
+  image: string[];
+  address: {
+    '@type': string;
+    streetAddress: string;
+    addressLocality: string;
+    addressRegion: string;
+    postalCode: string;
+    addressCountry: string;
+  };
+  aggregateRating: {
+    '@type': string;
+    ratingValue: string;
+    reviewCount: string;
+  };
+  priceRange: string;
+  url: string;
+  telephone: string;
+  openingHours: string[];
+}
+
 export default function BusinessDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'reviews' | 'reserve'>('overview');
   const [isSaved, setIsSaved] = useState(false);
+  const [isClaimed, setIsClaimed] = useState(false);
   const { addToast } = useToast();
 
   // In a real app, you would fetch the business data here
   const business = MOCK_BUSINESS;
+
+  // Generate JSON-LD structured data
+  const generateJSONLD = (): JSONLDStructuredData => {
+    const addressParts = business.address.split(',').map((s) => s.trim());
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      name: business.name,
+      description: business.description,
+      image: business.images,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: addressParts[0] || '',
+        addressLocality: addressParts[1] || '',
+        addressRegion: addressParts[2] || '',
+        postalCode: (addressParts[3] || '').match(/\d+/)?.[0] || '',
+        addressCountry: 'US',
+      },
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: business.rating.toFixed(1),
+        reviewCount: business.reviewCount.toString(),
+      },
+      priceRange: '$$',
+      url: `${window.location.origin}/business/${business.id}`,
+      telephone: business.phone,
+      openingHours: [
+        'Mo 11:00-22:00',
+        'Tu 11:00-22:00',
+        'We 11:00-22:00',
+        'Th 11:00-22:00',
+        'Fr 11:00-23:00',
+        'Sa 10:00-23:00',
+        'Su 10:00-21:00',
+      ],
+    };
+  };
 
   const handleSave = () => {
     setIsSaved(!isSaved);
@@ -125,6 +190,24 @@ export default function BusinessDetailPage({ params }: { params: Promise<{ id: s
     );
   };
 
+  const handleChat = () => {
+    addToast(
+      'Opening chat with ' + business.name,
+      { variant: 'success' as const },
+    );
+    // Navigate to chat page (LOC-0042)
+    router.push('/chat?businessId=' + business.id);
+  };
+
+  const handleClaim = () => {
+    addToast(
+      'Claim request initiated for ' + business.name,
+      { variant: 'success' as const },
+    );
+    // Navigate to claim page (LOC-0043)
+    router.push('/claim?businessId=' + business.id);
+  };
+
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 >= 0.5;
@@ -162,8 +245,16 @@ export default function BusinessDetailPage({ params }: { params: Promise<{ id: s
     return business.hours[today as keyof typeof business.hours];
   };
 
+  const jsonLd = generateJSONLD();
+
   return (
     <main className="min-h-screen bg-neutral-50">
+      {/* JSON-LD Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       {/* Navigation */}
       <Navigation
         onNavigate={(section) => {
@@ -191,9 +282,11 @@ export default function BusinessDetailPage({ params }: { params: Promise<{ id: s
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     {business.isVerified && (
-                      <Badge variant="secondary" size="sm" className="bg-green-600 text-white">
-                        ✓ Verified Business
-                      </Badge>
+                      <VerifiedBadge
+                        label="Claimed & Verified"
+                        size="sm"
+                        showIcon={true}
+                      />
                     )}
                     <Badge variant="primary" size="sm">
                       {business.category}
@@ -213,10 +306,18 @@ export default function BusinessDetailPage({ params }: { params: Promise<{ id: s
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 flex-wrap">
-                  <Button variant="primary" size="md" onClick={handleCall}>
+                  <Button variant="primary" size="md" onClick={handleChat}>
+                    💬 Chat
+                  </Button>
+                  {!isClaimed && (
+                    <Button variant="secondary" size="md" onClick={handleClaim}>
+                      🏢 Claim
+                    </Button>
+                  )}
+                  <Button variant="tertiary" size="md" onClick={handleCall}>
                     📞 Call
                   </Button>
-                  <Button variant="secondary" size="md" onClick={handleDirections}>
+                  <Button variant="ghost" size="md" onClick={handleDirections}>
                     🗺️ Directions
                   </Button>
                   <Button
@@ -302,6 +403,18 @@ export default function BusinessDetailPage({ params }: { params: Promise<{ id: s
                 <div className="mt-6">
                   <h3 className="font-semibold text-neutral-800 mb-3">Location</h3>
                   <p className="text-neutral-600">{business.address}</p>
+                  {/* Google Maps Embed */}
+                  <div className="mt-3 rounded-lg overflow-hidden border border-neutral-200">
+                    <iframe
+                      title={`Map for ${business.name}`}
+                      width="100%"
+                      height="250"
+                      style={{ border: 0 }}
+                      loading="lazy"
+                      src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyDummyKeyForDemo&q=${encodeURIComponent(business.address)}`}
+                      className="w-full"
+                    />
+                  </div>
                   <Button variant="ghost" size="sm" onClick={handleDirections} className="mt-2">
                     Get Directions →
                   </Button>
