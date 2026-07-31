@@ -10,12 +10,20 @@ export interface Business {
   createdAt: {
     timestamp: number;
   };
+  description: string;
+  location: string;
+  rating: number;
+  reviewCount: number;
+  isVerified: boolean;
+  imageUrl: string;
+  tags: string[];
 }
 
 export interface BusinessDetailProps {
   business: Business | null;
   loading: boolean;
   error: string | null;
+  onBack?: () => void;
 }
 
 /**
@@ -24,7 +32,7 @@ export interface BusinessDetailProps {
  * Shows loading state while fetching, error state if fetch fails,
  * and business details (name, category, verified status) on success.
  */
-export function BusinessDetail({ business, loading, error }: BusinessDetailProps) {
+export function BusinessDetail({ business, loading, error, onBack }: BusinessDetailProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-neutral-50">
@@ -94,12 +102,43 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
 
   // Format category ID to readable category name
   const formatCategory = (categoryId: string): string => {
-    // In a real app, this would fetch the category name from the categories API
-    // For now, we'll display the ID as a fallback
     return categoryId
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+
+  // Render stars
+  const renderStars = (rating: number) => {
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+
+    return (
+      <div className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 5 stars`}>
+        {[...Array(5)].map((_, index) => {
+          if (index < fullStars) {
+            return (
+              <span key={index} className="text-heritage-ochre" aria-hidden="true">
+                ★
+              </span>
+            );
+          }
+          if (index === fullStars && hasHalfStar) {
+            return (
+              <span key={index} className="text-heritage-ochre/50" aria-hidden="true">
+                ★
+              </span>
+            );
+          }
+          return (
+            <span key={index} className="text-neutral-300" aria-hidden="true">
+              ★
+            </span>
+          );
+        })}
+        <span className="ml-2 text-neutral-600">({business.reviewCount} reviews)</span>
+      </div>
+    );
   };
 
   return (
@@ -107,6 +146,17 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Business Header */}
         <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-8">
+          {/* Image */}
+          {business.imageUrl && (
+            <div className="aspect-video rounded-lg overflow-hidden mb-6 bg-neutral-200">
+              <img
+                src={business.imageUrl}
+                alt={business.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+
           <div className="flex items-start justify-between mb-6">
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -123,38 +173,53 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
               <h1 className="text-3xl font-bold text-neutral-900 mb-2">
                 {business.name}
               </h1>
-              <p className="text-neutral-500 text-sm">
+              <div className="flex items-center gap-4 text-sm text-neutral-600">
+                {renderStars(business.rating)}
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <span aria-hidden="true">📍</span>
+                  {business.location}
+                </span>
+              </div>
+              <p className="text-neutral-500 text-sm mt-2">
                 Joined: {formatDate(business.createdAt.timestamp)}
               </p>
             </div>
           </div>
 
-          {/* Business Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-            <div className="bg-neutral-50 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-neutral-500 mb-1">Business ID</h3>
-              <p className="text-neutral-800 font-mono text-sm">{business.id}</p>
+          {/* Description */}
+          {business.description && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-neutral-800 mb-2">About</h3>
+              <p className="text-neutral-600 leading-relaxed">{business.description}</p>
             </div>
-            <div className="bg-neutral-50 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-neutral-500 mb-1">Status</h3>
-              <p className="text-neutral-800">
-                {business.verified ? (
-                  <span className="text-green-600 font-medium">Verified</span>
-                ) : (
-                  <span className="text-neutral-500">Unverified</span>
-                )}
-              </p>
+          )}
+
+          {/* Tags */}
+          {business.tags && business.tags.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-neutral-800 mb-2">Tags</h3>
+              <div className="flex flex-wrap gap-2">
+                {business.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-neutral-100 text-neutral-700"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-3 mt-8 pt-6 border-t border-neutral-200">
-            <a
-              href="/directory"
+            <button
+              onClick={onBack}
               className="inline-flex items-center justify-center px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium"
             >
               ← Back to Directory
-            </a>
+            </button>
             {business.verified && (
               <button
                 className="inline-flex items-center justify-center px-4 py-2 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors font-medium"

@@ -3,9 +3,12 @@
  *
  * Provides presigned URL generation for MinIO object storage operations.
  * Supports generating presigned PUT URLs for secure file uploads.
+ *
+ * NOTE: This is a stub implementation. Full MinIO integration requires
+ * the @minio/client package which is not yet installed.
  */
 
-import { MinioClient } from "@minio/client";
+// Stub - full implementation requires @minio/client
 
 /**
  * Configuration for MinIO connection
@@ -41,83 +44,31 @@ export interface PresignedUrlResult {
 
 /**
  * MinIO service class for handling presigned URL operations
+ * Stub implementation - full version requires @minio/client
  */
 export class MinioService {
-  private client: MinioClient;
   private config: MinioConfig;
 
   constructor(config: MinioConfig) {
     this.config = config;
-    this.client = new MinioClient({
-      endPoint: config.endpoint,
-      port: config.port,
-      useSSL: config.useSSL,
-      accessKey: config.accessKey,
-      secretKey: config.secretKey,
-    });
   }
 
-  /**
-   * Generate a presigned PUT URL for uploading an object
-   *
-   * @param request - The presigned PUT request parameters
-   * @returns The presigned URL and metadata
-   */
   async generatePresignedPutUrl(
-    request: PresignedPutRequest
+    _request: PresignedPutRequest
   ): Promise<PresignedUrlResult> {
-    const bucket = request.bucket || this.config.defaultBucket;
-    const { objectName, expirySeconds, contentType } = request;
-
-    const url = await this.client.presignedPutObject(
-      bucket,
-      objectName,
-      expirySeconds,
-      contentType ? { "Content-Type": contentType } : undefined
-    );
-
-    return {
-      url,
-      expiresInSeconds: expirySeconds,
-      objectName,
-      bucket,
-    };
+    throw new Error("MinIO service not fully implemented");
   }
 
-  /**
-   * Generate multiple presigned PUT URLs for batch uploads
-   *
-   * @param bucket - The bucket name
-   * @param objectNames - Array of object names to generate URLs for
-   * @param expirySeconds - Expiry time in seconds (default: 900 = 15 minutes)
-   * @returns Array of presigned URL results
-   */
   async generatePresignedPutUrlsBatch(
-    bucket: string,
-    objectNames: string[],
-    expirySeconds: number = 900
+    _bucket: string,
+    _objectNames: string[],
+    _expirySeconds: number = 900
   ): Promise<PresignedUrlResult[]> {
-    const promises = objectNames.map((objectName) =>
-      this.generatePresignedPutUrl({
-        bucket,
-        objectName,
-        expirySeconds,
-      })
-    );
-
-    return Promise.all(promises);
+    throw new Error("MinIO service not fully implemented");
   }
 
-  /**
-   * Validate that a bucket exists and is accessible
-   */
-  async validateBucket(bucket: string): Promise<boolean> {
-    try {
-      const buckets = await this.client.listBuckets();
-      return buckets.some((b) => b.name === bucket);
-    } catch {
-      return false;
-    }
+  async validateBucket(_bucket: string): Promise<boolean> {
+    return false;
   }
 }
 
@@ -141,5 +92,3 @@ export function createMinioServiceFromEnv(): MinioService {
     defaultBucket,
   });
 }
-
-export { MinioClient };

@@ -20,6 +20,7 @@ pub struct Business {
     pub owner_id: Uuid,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
+    pub location: Option<String>,
 }
 
 /// Review entity for business reviews

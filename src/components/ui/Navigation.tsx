@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Button from './Button';
 
 export interface NavigationProps {
@@ -8,17 +10,26 @@ export interface NavigationProps {
 }
 
 export function Navigation({ onNavigate = () => {} }: NavigationProps) {
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: 'Home', href: '#home', section: 'home' as const },
-    { label: 'Directory', href: '#directory', section: 'directory' as const },
-    { label: 'About', href: '#about', section: 'home' as const },
-    { label: 'Contact', href: '#contact', section: 'home' as const },
+    { label: 'Home', href: '/', section: 'home' as const },
+    { label: 'Directory', href: '/directory', section: 'directory' as const },
+    { label: 'About', href: '/#about', section: 'home' as const },
+    { label: 'Contact', href: '/#contact', section: 'home' as const },
   ];
 
-  const handleNavClick = (section: string) => {
+  const handleNavClick = (section: string, href: string) => {
     onNavigate(section as 'directory' | 'admin' | 'user' | 'home');
+    if (href.startsWith('/')) {
+      router.push(href);
+    }
+    setMobileMenuOpen(false);
+  };
+
+  const handleLogoClick = () => {
+    router.push('/');
     setMobileMenuOpen(false);
   };
 
@@ -27,24 +38,31 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-heritage-ochre to-heritage-gold rounded-lg flex items-center justify-center">
+          <button
+            onClick={handleLogoClick}
+            className="flex items-center gap-2 group"
+            aria-label="Black Owned - Go to home"
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-heritage-ochre to-heritage-gold rounded-lg flex items-center justify-center group-hover:opacity-90 transition-opacity">
               <span className="text-white font-bold text-lg">BO</span>
             </div>
-            <span className="text-xl font-bold font-display">Black Owned</span>
-          </div>
+            <span className="text-xl font-bold font-display text-white group-hover:text-heritage-ochre transition-colors">Black Owned</span>
+          </button>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             {navItems.map((item) => (
-              <a
+              <Link
                 key={item.label}
                 href={item.href}
-                onClick={() => handleNavClick(item.section)}
-                className="text-neutral-300 hover:text-white transition-colors font-medium"
+                onClick={() => {
+                  onNavigate(item.section);
+                  setMobileMenuOpen(false);
+                }}
+                className="text-neutral-300 hover:text-heritage-ochre transition-colors font-medium"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
           </div>
 
@@ -53,7 +71,10 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleNavClick('admin')}
+              onClick={() => {
+                onNavigate('admin');
+                router.push('/admin');
+              }}
               className="text-neutral-300 hover:text-white"
             >
               Admin Console
@@ -61,7 +82,9 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => handleNavClick('user')}
+              onClick={() => {
+                onNavigate('user');
+              }}
             >
               Sign In
             </Button>
@@ -104,20 +127,26 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
           <div className="md:hidden py-4 border-t border-neutral-800">
             <div className="flex flex-col gap-4">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.label}
                   href={item.href}
-                  onClick={() => handleNavClick(item.section)}
-                  className="text-neutral-300 hover:text-white transition-colors font-medium py-2"
+                  onClick={() => {
+                    onNavigate(item.section);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-neutral-300 hover:text-heritage-ochre transition-colors font-medium py-2"
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
               <div className="pt-4 border-t border-neutral-800 flex flex-col gap-3">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleNavClick('admin')}
+                  onClick={() => {
+                    onNavigate('admin');
+                    router.push('/admin');
+                  }}
                   className="text-neutral-300 hover:text-white justify-center"
                 >
                   Admin Console
@@ -125,7 +154,9 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => handleNavClick('user')}
+                  onClick={() => {
+                    onNavigate('user');
+                  }}
                   className="justify-center"
                 >
                   Sign In

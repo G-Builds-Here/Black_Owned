@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('LOC-0051 E2E Validation', () => {
-  const BASE_URL = 'http://localhost:3001';
+  const BASE_URL = 'http://localhost:3000';
 
   test.describe('AC1: Design System Foundation', () => {
     test('should load the home page with design system colors', async ({ page }) => {

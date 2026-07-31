@@ -43,10 +43,11 @@ export function SearchBar({
     onSearch(query, filters);
   };
 
-  const handleClear = () => {
+  const handleClear = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setQuery('');
     setSelectedFilters([]);
-    onSearch('', []);
+    // Don't call onSearch - just clear locally
   };
 
   return (
@@ -59,14 +60,14 @@ export function SearchBar({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           placeholder={placeholder}
-          className="w-full px-6 py-4 pr-32 text-lg bg-white rounded-xl shadow-lg border-2 border-transparent focus:border-heritage-ochre focus:outline-none transition-colors"
+          className="w-full px-6 py-4 pr-32 text-lg bg-white text-neutral-900 rounded-xl shadow-lg border-2 border-transparent focus:border-heritage-ochre focus:outline-none transition-colors"
           aria-label="Search businesses"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
           <Button
             variant="ghost"
             size="md"
-            onClick={handleClear}
+            onClick={(e) => handleClear(e)}
             className="text-neutral-500 hover:text-neutral-700"
             aria-label="Clear search"
           >
@@ -90,7 +91,7 @@ export function SearchBar({
           return (
             <button
               key={category}
-              onClick={() => handleFilterToggle(category)}
+              onClick={(e) => { e.stopPropagation(); handleFilterToggle(category); }}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 isSelected
                   ? 'bg-heritage-ochre text-white shadow-md'

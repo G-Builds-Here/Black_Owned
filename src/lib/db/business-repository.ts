@@ -27,6 +27,11 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
+      location VARCHAR(255),
+      rating DECIMAL(3,2) DEFAULT 0,
+      review_count INTEGER DEFAULT 0,
+      image_url TEXT,
+      tags TEXT[],
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -45,6 +50,11 @@ function rowToBusiness(row: unknown): Business {
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
+    location: r.location as string | undefined,
+    rating: parseFloat((r.rating as string) || "0"),
+    reviewCount: parseInt((r.review_count as string) || "0", 10),
+    imageUrl: r.image_url as string | undefined,
+    tags: (r.tags as string[]) || [],
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -98,4 +108,20 @@ export async function findBusinessesByOwnerId(
     [ownerId]
   );
   return result.rows.map(rowToBusiness);
+}
+
+/**
+ * Update business name by ID
+ */
+export async function updateNameById(
+  client: PoolClient,
+  id: string,
+  name: string
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName} SET name = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id, name]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }

@@ -5,6 +5,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
 import { GraphQLClient } from 'graphql-request';
+import Link from 'next/link';
 
 const GRAPHQL_ENDPOINT = '/api/graphql';
 const client = new GraphQLClient(GRAPHQL_ENDPOINT);
@@ -204,8 +205,10 @@ export default function SearchPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-neutral-950 text-neutral-400 py-12 mt-16">
+      <footer className="bg-neutral-950 text-white py-12 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Kente-inspired top border */}
+          <div className="h-1 bg-gradient-to-r from-heritage-ochre via-heritage-gold to-heritage-forest mb-8" />
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <h4 className="text-white font-semibold mb-4">Black Owned</h4>
@@ -216,24 +219,23 @@ export default function SearchPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">Explore</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Businesses</a></li>
-                <li><a href="#" className="hover:text-white">Categories</a></li>
-                <li><a href="#" className="hover:text-white">Featured</a></li>
+                <li><Link href="/" className="hover:text-heritage-ochre transition-colors">Home</Link></li>
+                <li><Link href="/directory" className="hover:text-heritage-ochre transition-colors">Directory</Link></li>
+                <li><Link href="/#about" className="hover:text-heritage-ochre transition-colors">About</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Help Center</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-                <li><a href="#" className="hover:text-white">FAQ</a></li>
+                <li><Link href="/#contact" className="hover:text-heritage-ochre transition-colors">Contact</Link></li>
+                <li><Link href="/#faq" className="hover:text-heritage-ochre transition-colors">FAQ</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white">Terms of Service</a></li>
+                <li><Link href="/#privacy" className="hover:text-heritage-ochre transition-colors">Privacy</Link></li>
+                <li><Link href="/#terms" className="hover:text-heritage-ochre transition-colors">Terms</Link></li>
               </ul>
             </div>
           </div>

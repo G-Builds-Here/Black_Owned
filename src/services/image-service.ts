@@ -14,7 +14,7 @@ import {
   IMAGE_CATEGORY_CONFIGS,
 } from "../types/image";
 
-export { BusinessImageData, Image };
+export type { BusinessImageData, Image };
 
 /**
  * Generates a UUID v4 string for image IDs

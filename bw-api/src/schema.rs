@@ -48,6 +48,7 @@ pub struct GqlBusiness {
     pub status: String,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
+    pub location: Option<String>,
 }
 
 impl From<Business> for GqlBusiness {
@@ -61,6 +62,7 @@ impl From<Business> for GqlBusiness {
             status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
             verified: business.verified,
             created_at: business.created_at,
+            location: business.location,
         }
     }
 }
@@ -276,6 +278,7 @@ impl MutationRoot {
             owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
+            location: None,
         };
 
         Ok(business.into())

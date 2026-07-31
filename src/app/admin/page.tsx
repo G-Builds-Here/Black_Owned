@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
 import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import Link from 'next/link';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -125,10 +126,9 @@ export default function AdminConsole() {
           ]}
           selectedKey={activeTab}
           onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
-        />
-
-        {/* Dashboard Tab */}
-        <TabPanel value="dashboard" className="mt-6">
+        >
+          {/* Dashboard Tab */}
+          <TabPanel value="dashboard">
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card variant="elevated" padding="lg">
@@ -267,7 +267,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* User Management Tab */}
-        <TabPanel value="users" className="mt-6">
+        <TabPanel value="users">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -280,7 +280,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* Verifications Tab */}
-        <TabPanel value="verifications" className="mt-6">
+        <TabPanel value="verifications">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-neutral-800">Verification Queue</h2>
@@ -325,7 +325,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* Reviews Tab */}
-        <TabPanel value="reviews" className="mt-6">
+        <TabPanel value="reviews">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-neutral-800">Review Moderation Queue</h2>
@@ -362,7 +362,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* Settings Tab */}
-        <TabPanel value="settings" className="mt-6">
+        <TabPanel value="settings">
           <Card variant="elevated" padding="lg">
             <h2 className="text-xl font-bold text-neutral-800 mb-6">Platform Settings</h2>
             <div className="space-y-6">
@@ -406,12 +406,45 @@ export default function AdminConsole() {
             </div>
           </Card>
         </TabPanel>
+        </Tabs>
       </section>
 
       {/* Footer */}
-      <footer className="bg-neutral-950 text-neutral-400 py-12 mt-16">
+      <footer className="bg-neutral-950 text-white py-12 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center text-sm">
+          {/* Kente-inspired top border */}
+          <div className="h-1 bg-gradient-to-r from-heritage-ochre via-heritage-gold to-heritage-forest mb-8" />
+          <div className="grid md:grid-cols-4 gap-8">
+            <div>
+              <h4 className="text-white font-semibold mb-4">Black Owned</h4>
+              <p className="text-sm">
+                Celebrating and supporting Black-owned businesses across the nation.
+              </p>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Explore</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/" className="hover:text-heritage-ochre transition-colors">Home</Link></li>
+                <li><Link href="/directory" className="hover:text-heritage-ochre transition-colors">Directory</Link></li>
+                <li><Link href="/admin" className="hover:text-heritage-ochre transition-colors">Admin</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Support</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/#contact" className="hover:text-heritage-ochre transition-colors">Contact</Link></li>
+                <li><Link href="/#faq" className="hover:text-heritage-ochre transition-colors">FAQ</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Legal</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/#privacy" className="hover:text-heritage-ochre transition-colors">Privacy</Link></li>
+                <li><Link href="/#terms" className="hover:text-heritage-ochre transition-colors">Terms</Link></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-neutral-800 mt-8 pt-8 text-center text-sm">
             <p>&copy; 2026 Black Owned Admin Console. All rights reserved.</p>
           </div>
         </div>

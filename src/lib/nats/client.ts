@@ -4,7 +4,7 @@
  * NATS messaging client for publishing events.
  */
 
-import { connect, Connection, NatsConnection } from "nats";
+import { connect, NatsConnection } from "nats";
 
 let natsConnection: NatsConnection | null = null;
 

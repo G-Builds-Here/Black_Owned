@@ -1,6 +1,7 @@
 //! Image upload and processing routes.
 
-use crate::ApiResponse;
+use crate::{ApiResponse, graphql::schema::Schema};
+use axum::{Router, routing::get};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use uuid::Uuid;
@@ -310,4 +311,13 @@ mod tests {
         assert!(result.is_err());
     }
 
+}
+
+/// Create the images router
+pub fn router<S>() -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route("/", get(|| async { "Images endpoint" }))
 }

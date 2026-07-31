@@ -7,6 +7,7 @@ use axum::{
     response::Response,
 };
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tower_layer::Layer;
 use tokio::sync::RwLock;
 
@@ -22,16 +23,29 @@ pub struct AuthConfig {
 }
 
 /// In-memory store for authenticated user sessions
-#[derive(Debug, Clone)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
-    valid_tokens: RwLock<std::collections::HashMap<String, String>>,
+    valid_tokens: std::sync::Arc<RwLock<std::collections::HashMap<String, String>>>,
+}
+
+impl Clone for AuthStore {
+    fn clone(&self) -> Self {
+        Self {
+            valid_tokens: std::sync::Arc::clone(&self.valid_tokens),
+        }
+    }
+}
+
+impl std::fmt::Debug for AuthStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthStore").finish()
+    }
 }
 
 impl AuthStore {
     fn new() -> Self {
         Self {
-            valid_tokens: RwLock::new(std::collections::HashMap::new()),
+            valid_tokens: std::sync::Arc::new(RwLock::new(std::collections::HashMap::new())),
         }
     }
 }
@@ -88,23 +102,17 @@ where
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        let auth_header = req
+        let config = self.config.clone();
+        let mut inner = self.inner.clone();
+
+        // Extract token and user ID before async block to avoid borrow issues
+        let token_info: Option<(String, String)> = req
             .headers()
             .get(header::AUTHORIZATION)
-            .and_then(|h| h.to_str().ok());
-
-        let mut inner = self.inner.clone();
-        let store = self.store.clone();
-        let config = self.config.clone();
-
-        Box::pin(async move {
-            // Extract token from Bearer header
-            let token = auth_header
-                .and_then(|auth| auth.strip_prefix("Bearer "))
-                .map(|s| s.to_string());
-
-            if let Some(token_str) = &token {
-                // Verify JWT token
+            .and_then(|h| h.to_str().ok())
+            .and_then(|auth| auth.strip_prefix("Bearer "))
+            .and_then(|token_str| {
+                // Try to decode JWT and extract user ID
                 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
                 use serde::{Deserialize, Serialize};
 
@@ -114,30 +122,24 @@ where
                     email: String,
                 }
 
-                let mut validation = Validation::new(Algorithm::HS256);
-                validation.validate_exp = false; // Skip exp validation for testing
-
-                match decode::<JwtClaims>(
+                let validation = Validation::new(Algorithm::HS256);
+                decode::<JwtClaims>(
                     token_str,
                     &DecodingKey::from_secret(config.jwt_secret.as_bytes()),
                     &validation,
-                ) {
-                    Ok(token_data) => {
-                        // Extract user ID from token and add to request extensions
-                        req.extensions_mut()
-                            .insert(UserId(token_data.claims.userId));
-                        inner.call(req).await
-                    }
-                    Err(_) => {
-                        // Invalid token - return 401
-                        let mut response = Response::new(Body::from("Unauthorized: Invalid token"));
-                        *response.status_mut() = StatusCode::UNAUTHORIZED;
-                        Ok(response)
-                    }
-                }
+                )
+                .ok()
+                .map(|token_data| (token_str.to_string(), token_data.claims.userId))
+            });
+
+        Box::pin(async move {
+            if let Some((_, user_id)) = token_info {
+                // Add user ID to request extensions
+                req.extensions_mut().insert(UserId(user_id));
+                inner.call(req).await
             } else {
-                // No auth header - return 401
-                let mut response = Response::new(Body::from("Unauthorized: No authorization header"));
+                // Invalid or missing auth header - return 401
+                let mut response = Response::new(Body::from("Unauthorized"));
                 *response.status_mut() = StatusCode::UNAUTHORIZED;
                 Ok(response)
             }
