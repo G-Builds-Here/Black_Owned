@@ -6,7 +6,7 @@
 
 import { verifyToken, generateAccessToken, generateRefreshToken } from "./auth-service";
 import { getRefreshTokenUserId, storeRefreshToken, revokeRefreshToken } from "../valkey/valkey-client";
-import { TokenPair } from "../types/user";
+import { TokenPair } from "../../types/user";
 
 /**
  * Refresh token result type
@@ -67,6 +67,8 @@ export async function refreshAccessToken(
       name: "",
       createdAt: new Date(),
       updatedAt: new Date(),
+      role: "user" as const,
+      status: "active" as const,
     };
 
     // Step 4: Generate new access token

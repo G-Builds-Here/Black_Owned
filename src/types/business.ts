@@ -19,6 +19,11 @@ export interface Business {
   description: string | undefined;
   categoryId: string;
   verificationStatus: VerificationStatus;
+  location: string | undefined;
+  rating: number;
+  reviewCount: number;
+  imageUrl: string | undefined;
+  tags: string[];
   createdAt: Date;
   updatedAt: Date;
 }

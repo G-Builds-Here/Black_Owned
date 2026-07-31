@@ -1,7 +1,6 @@
 'use client';
 
 import React, { HTMLAttributes, forwardRef, useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 
 export interface DropdownItem {
   key: string;
@@ -29,8 +28,8 @@ export interface DropdownProps extends HTMLAttributes<HTMLDivElement> {
   closeOnOutsideClick?: boolean;
   /** Min width of dropdown */
   minWidth?: string;
-  /** Portal target */
-  portalTarget?: HTMLElement | null;
+  /** Trigger button className */
+  triggerClassName?: string;
 }
 
 const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
@@ -44,8 +43,8 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       closeOnItemClick = true,
       closeOnOutsideClick = true,
       minWidth = '160px',
-      portalTarget: portalTargetProp,
       className = '',
+      triggerClassName = '',
       ...props
     },
     ref
@@ -53,7 +52,6 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
     const [internalOpen, setInternalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const portalTarget = portalTargetProp || typeof document !== 'undefined' ? document.body : null;
 
     const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
 
@@ -161,7 +159,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
         <button
           type="button"
           onClick={() => handleOpenChange(!isOpen)}
-          className="inline-flex items-center gap-2"
+          className={`inline-flex items-center gap-2 ${triggerClassName}`}
           aria-expanded={isOpen}
           aria-haspopup="true"
         >
@@ -175,7 +173,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        {isOpen && portalTarget && createPortal(dropdownContent, portalTarget)}
+        {isOpen && dropdownContent}
       </div>
     );
   }

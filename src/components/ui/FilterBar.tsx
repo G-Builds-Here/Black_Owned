@@ -11,6 +11,7 @@ export type FilterOption = {
   minRating?: number;
   location?: string;
   verifiedOnly?: boolean;
+  showUnclaimedOnly?: boolean;
 };
 
 export interface FilterBarProps {
@@ -68,10 +69,26 @@ export default function FilterBar({
     onFilterChange(newFilters);
   };
 
-  const handleVerifiedToggle = () => {
-    const newFilters = { ...localFilters, verifiedOnly: !localFilters.verifiedOnly };
+  const handleStatusChange = (value: string) => {
+    const newFilters: FilterOption = { ...localFilters };
+    if (value === 'unclaimed') {
+      newFilters.showUnclaimedOnly = true;
+      delete newFilters.verifiedOnly;
+    } else if (value === 'verified') {
+      newFilters.verifiedOnly = true;
+      delete newFilters.showUnclaimedOnly;
+    } else {
+      delete newFilters.showUnclaimedOnly;
+      delete newFilters.verifiedOnly;
+    }
     setLocalFilters(newFilters);
     onFilterChange(newFilters);
+  };
+
+  const getDisplayStatus = (): string => {
+    if (localFilters.showUnclaimedOnly) return '📋 Unclaimed';
+    if (localFilters.verifiedOnly) return '✓ Verified';
+    return 'Status';
   };
 
   const handleSortChange = (sort: string) => {
@@ -89,149 +106,69 @@ export default function FilterBar({
     localFilters.category ||
     localFilters.minRating ||
     localFilters.location ||
-    localFilters.verifiedOnly;
+    localFilters.verifiedOnly ||
+    localFilters.showUnclaimedOnly;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-4 mb-6">
-      <div className="flex flex-wrap gap-4 items-end">
-        {/* Category Filter */}
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Category
-          </label>
-          <Dropdown
-            trigger={localFilters.category || 'Select category'}
-            items={[
-              { label: 'All Categories', key: '', onClick: () => handleCategoryChange('') },
-              ...categories.map((cat) => ({ label: cat, key: cat, onClick: () => handleCategoryChange(cat) })),
-            ]}
-          />
-        </div>
+    <div className="flex flex-wrap gap-2 items-center">
+      {/* Status Filter - Combined (Unclaimed/Verified/All) */}
+      <Dropdown
+        trigger={getDisplayStatus()}
+        items={[
+          { label: 'All Listings', key: 'all', onClick: () => handleStatusChange('all') },
+          { label: '📋 Unclaimed', key: 'unclaimed', onClick: () => handleStatusChange('unclaimed') },
+          { label: '✓ Verified', key: 'verified', onClick: () => handleStatusChange('verified') },
+        ]}
+        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
+      />
 
-        {/* Location Filter */}
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Location
-          </label>
-          <Dropdown
-            trigger={localFilters.location || 'Select location'}
-            items={[
-              { label: 'All Locations', key: '', onClick: () => handleLocationChange('') },
-              ...locations.map((loc) => ({ label: loc, key: loc, onClick: () => handleLocationChange(loc) })),
-            ]}
-          />
-        </div>
+      {/* Category Filter */}
+      <Dropdown
+        trigger={localFilters.category || 'Category'}
+        items={[
+          { label: 'All Categories', key: '', onClick: () => handleCategoryChange('') },
+          ...categories.map((cat) => ({ label: cat, key: cat, onClick: () => handleCategoryChange(cat) })),
+        ]}
+        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
+      />
 
-        {/* Rating Filter */}
-        <div className="flex-1 min-w-[150px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Minimum Rating
-          </label>
-          <Dropdown
-            trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Select rating'}
-            items={RATING_FILTERS.map((r) => ({
-              label: r.label,
-              key: r.value.toString(),
-              onClick: () => handleRatingChange(r.value),
-            }))}
-          />
-        </div>
+      {/* Location Filter */}
+      <Dropdown
+        trigger={localFilters.location || 'Location'}
+        items={[
+          { label: 'All Locations', key: '', onClick: () => handleLocationChange('') },
+          ...locations.map((loc) => ({ label: loc, key: loc, onClick: () => handleLocationChange(loc) })),
+        ]}
+        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
+      />
 
-        {/* Verified Only Toggle */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Verification
-          </label>
-          <Button
-            variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
-            size="md"
-            onClick={handleVerifiedToggle}
-          >
-            {localFilters.verifiedOnly ? '✓ Verified Only' : 'All Businesses'}
-          </Button>
-        </div>
+      {/* Rating Filter */}
+      <Dropdown
+        trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Min Rating'}
+        items={RATING_FILTERS.map((r) => ({
+          label: r.label,
+          key: r.value.toString(),
+          onClick: () => handleRatingChange(r.value),
+        }))}
+        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
+      />
 
-        {/* Sort Dropdown */}
-        <div className="flex-1 min-w-[150px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Sort By
-          </label>
-          <Dropdown
-            trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort by'}
-            items={SORT_OPTIONS.map((s) => ({
-              label: s.label,
-              key: s.value,
-              onClick: () => handleSortChange(s.value),
-            }))}
-          />
-        </div>
+      {/* Sort By Dropdown */}
+      <Dropdown
+        trigger={currentSort !== 'relevance' ? SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort By' : 'Sort By'}
+        items={SORT_OPTIONS.map((s) => ({
+          label: s.label,
+          key: s.value,
+          onClick: () => handleSortChange(s.value),
+        }))}
+        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
+      />
 
-        {/* Clear Filters */}
-        {hasActiveFilters && (
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
-              Actions
-            </label>
-            <Button variant="ghost" size="md" onClick={clearFilters}>
-              Clear All
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Active Filters Summary */}
+      {/* Clear Filters */}
       {hasActiveFilters && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-sm text-neutral-500">Active filters:</span>
-          {localFilters.category && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Category: {localFilters.category}
-              <button
-                onClick={() => handleCategoryChange('')}
-                className="hover:text-red-500"
-                aria-label="Remove category filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.location && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Location: {localFilters.location}
-              <button
-                onClick={() => handleLocationChange('')}
-                className="hover:text-red-500"
-                aria-label="Remove location filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.minRating && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Rating: {localFilters.minRating}+ ★
-              <button
-                onClick={() => handleRatingChange(0)}
-                className="hover:text-red-500"
-                aria-label="Remove rating filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.verifiedOnly && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
-              Verified Only
-              <button
-                onClick={handleVerifiedToggle}
-                className="hover:text-red-500"
-                aria-label="Remove verified filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-        </div>
+        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-[46px]">
+          Clear All
+        </Button>
       )}
     </div>
   );

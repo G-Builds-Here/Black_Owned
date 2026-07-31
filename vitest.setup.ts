@@ -11,7 +11,8 @@ global.PerformanceObserver = class {
   disconnect() {
     // Mock disconnect
   }
-};
+  static supportedEntryTypes: readonly string[] = [];
+} as any;
 
 // Mock performance API
 (global as any).performance = {

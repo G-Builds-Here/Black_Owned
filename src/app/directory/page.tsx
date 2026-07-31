@@ -1,86 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
-
-// Mock data - in production this would come from an API
-const MOCK_BUSINESSES: Business[] = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-  {
-    id: '4',
-    name: 'Heritage Wellness Center',
-    category: 'Health & Wellness',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Chicago, IL',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
-    tags: ['Wellness', 'Massage', 'Holistic'],
-  },
-  {
-    id: '5',
-    name: 'Golden Era Barbershop',
-    category: 'Personal Services',
-    rating: 4.7,
-    reviewCount: 312,
-    location: 'Houston, TX',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
-    tags: ['Barber', 'Grooming', 'Community'],
-  },
-  {
-    id: '6',
-    name: 'Rhythm & Blues Records',
-    category: 'Entertainment',
-    rating: 4.6,
-    reviewCount: 78,
-    location: 'New Orleans, LA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
-    tags: ['Music', 'Vinyl', 'Audio'],
-  },
-];
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const CATEGORIES = [
   'Food & Dining',
@@ -103,10 +29,112 @@ const LOCATIONS = [
 ];
 
 export default function DirectoryPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
   const [filters, setFilters] = useState<FilterOption>({});
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
+  const [fetchedBusinesses, setFetchedBusinesses] = useState<Business[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showMap, setShowMap] = useState(true);
+
+  // Read URL params on mount and apply filters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const searchParam = params.get('search');
+    const categoryParam = params.get('category');
+    const claimParam = params.get('claim');
+
+    if (searchParam) {
+      setFilters(prev => ({ ...prev, category: searchParam }));
+    }
+    if (categoryParam) {
+      setFilters(prev => ({ ...prev, category: categoryParam }));
+    }
+    if (claimParam) {
+      router.push('/business/claim');
+    }
+  }, []);
+
+  useEffect(() => {
+    const fetchBusinesses = async () => {
+      console.log('[Directory] Fetching businesses from backend...');
+      try {
+        const response = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `
+              query Businesses($first: Int, $after: String) {
+                businesses(first: $first, after: $after) {
+                  edges {
+                    cursor
+                    node {
+                      id
+                      name
+                      categoryId
+                      verified
+                      createdAt { timestamp }
+                      description
+                      ratingAvg
+                      reviewCount
+                      location
+                    }
+                  }
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
+                }
+              }
+            `,
+            variables: { first: 100, after: null },
+          }),
+        });
+
+        console.log('[Directory] Response status:', response.status);
+        const json = await response.json();
+        console.log('[Directory] Response:', json);
+
+        if (json.errors) {
+          console.error('[Directory] GraphQL errors:', json.errors);
+        } else if (json.data?.businesses?.edges) {
+          const edges = json.data.businesses.edges;
+          console.log('[Directory] Received', edges.length, 'businesses');
+          const businesses = edges.map((edge: any) => {
+            const b = edge.node;
+            return {
+              id: b.id,
+              name: b.name,
+              category: formatCategory(b.categoryId),
+              rating: b.ratingAvg || 0,
+              reviewCount: b.reviewCount || 0,
+              location: b.location || '',
+              isVerified: b.verified,
+              imageUrl: b.imageUrl || '',
+              description: b.description || '',
+              tags: b.tags || [],
+            };
+          });
+          console.log('[Directory] Mapped businesses:', businesses);
+          setFetchedBusinesses(businesses);
+        }
+      } catch (err) {
+        console.error('[Directory] Failed to fetch businesses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBusinesses();
+  }, []);
+
+  const formatCategory = (categoryId: string): string => {
+    return categoryId
+      .split('-')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
@@ -117,8 +145,7 @@ export default function DirectoryPage() {
   };
 
   const handleViewDetails = (businessId: string) => {
-    console.log('View details:', businessId);
-    // Navigate to business detail page
+    router.push(`/business/${businessId}`);
   };
 
   const handleSave = (businessId: string) => {
@@ -134,7 +161,7 @@ export default function DirectoryPage() {
   };
 
   const handleShare = async (businessId: string) => {
-    const business = MOCK_BUSINESSES.find((b) => b.id === businessId);
+    const business = fetchedBusinesses.find((b) => b.id === businessId);
     if (business && navigator.share) {
       try {
         await navigator.share({
@@ -146,17 +173,14 @@ export default function DirectoryPage() {
         console.log('Share cancelled');
       }
     } else {
-      // Fallback: copy to clipboard
       navigator.clipboard.writeText(`${window.location.href}?business=${businessId}`);
       alert('Link copied to clipboard!');
     }
   };
 
-  // Filter and sort businesses
   const filteredBusinesses = useMemo(() => {
-    let result = [...MOCK_BUSINESSES];
+    let result = [...fetchedBusinesses];
 
-    // Apply filters
     if (filters.category) {
       result = result.filter((b) => b.category === filters.category);
     }
@@ -170,32 +194,28 @@ export default function DirectoryPage() {
       result = result.filter((b) => b.isVerified);
     }
 
-    // Apply sort
     switch (sort) {
       case 'rating':
         result.sort((a, b) => b.rating - a.rating);
         break;
       case 'distance':
-        // Mock distance sorting - in production would use geolocation
         result.sort((a, b) => a.location.localeCompare(b.location));
         break;
       case 'newest':
-        // Mock newest - in production would use created date
         result.sort((a, b) => b.reviewCount - a.reviewCount);
         break;
       case 'relevance':
       default:
-        // Default sort by rating as relevance proxy
         result.sort((a, b) => b.rating - a.rating);
         break;
     }
 
     return result;
-  }, [filters, sort]);
+  }, [filters, sort, fetchedBusinesses]);
 
   const savedBusinessList = useMemo(() => {
-    return MOCK_BUSINESSES.filter((b) => savedBusinesses.has(b.id));
-  }, [savedBusinesses]);
+    return fetchedBusinesses.filter((b) => savedBusinesses.has(b.id));
+  }, [savedBusinesses, fetchedBusinesses]);
 
   const displayBusinesses = activeTab === 'all' ? filteredBusinesses : savedBusinessList;
 
@@ -208,132 +228,151 @@ export default function DirectoryPage() {
         }}
       />
 
-      {/* Page Header */}
-      <section className="bg-gradient-to-br from-heritage-midnight via-heritage-royal to-heritage-forest text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold mb-4">Business Directory</h1>
-          <p className="text-xl text-neutral-100 max-w-3xl">
-            Discover Black-owned businesses in your area. Filter by category, rating, and location
-            to find exactly what you need.
-          </p>
+      {/* Search & Filter Header */}
+      <section className="bg-white border-b border-neutral-200 sticky top-16 z-40">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+            {/* Search Input */}
+            <div className="flex-1">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search businesses, categories, or locations..."
+                  className="w-full px-4 py-2.5 pl-10 rounded-lg border border-neutral-300 focus:border-heritage-ochre focus:outline-none h-[46px]"
+                  value={filters.category || ''}
+                  onChange={(e) => handleFilterChange({ ...filters, category: e.target.value })}
+                />
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex gap-2 flex-wrap">
+              <FilterBar
+                categories={CATEGORIES}
+                locations={LOCATIONS}
+                onFilterChange={handleFilterChange}
+                onSortChange={handleSortChange}
+                currentSort={sort}
+                currentFilters={filters}
+              />
+            </div>
+
+            {/* Map Toggle */}
+            <div className="flex items-center">
+              <button
+                onClick={() => setShowMap(!showMap)}
+                className="px-4 py-2.5 rounded-lg border border-neutral-300 bg-white text-neutral-700 hover:border-heritage-ochre transition-colors h-[46px]"
+              >
+                {showMap ? 'Hide Map' : 'Show Map'}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Main Content */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tabs */}
-        <Tabs
-          tabs={[
-            { key: 'all', label: `All Businesses (${filteredBusinesses.length})` },
-            { key: 'saved', label: `Saved (${savedBusinesses.size})` },
-          ]}
-          selectedKey={activeTab}
-          onSelectionChange={(key) => setActiveTab(key as 'all' | 'saved')}
-        />
+      {/* Main Content - Split View */}
+      <section className="flex h-[calc(100vh-140px)] overflow-hidden">
+        {/* Business List */}
+        <div className={`overflow-y-auto bg-white ${showMap ? 'lg:w-[680px]' : 'w-full'}`}>
+          <div className="px-4 sm:px-6 lg:px-8 py-6">
+            {/* Results Count */}
+            <div className="mb-6 text-neutral-600">
+              {displayBusinesses.length} {displayBusinesses.length === 1 ? 'business' : 'businesses'} found
+            </div>
 
-        {/* Filter Bar */}
-        <FilterBar
-          categories={CATEGORIES}
-          locations={LOCATIONS}
-          onFilterChange={handleFilterChange}
-          onSortChange={handleSortChange}
-          currentSort={sort}
-          currentFilters={filters}
-        />
-
-        {/* Results Count */}
-        <div className="mb-6 text-neutral-600">
-          {displayBusinesses.length} {displayBusinesses.length === 1 ? 'business' : 'businesses'} found
+            {/* Business List */}
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-heritage-ochre border-t-transparent"></div>
+              </div>
+            ) : displayBusinesses.length > 0 ? (
+              <div className="space-y-4">
+                {displayBusinesses.map((business) => (
+                  <BusinessCard
+                    key={business.id}
+                    business={business}
+                    onViewDetails={handleViewDetails}
+                    onSave={handleSave}
+                    onShare={handleShare}
+                    enableLink={true}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Empty State */
+              <div className="text-center py-16 bg-neutral-50 rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-6xl mb-4">🔍</div>
+                <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
+                  No businesses found
+                </h3>
+                <p className="text-neutral-600 mb-6 max-w-md mx-auto">
+                  {activeTab === 'saved'
+                    ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
+                    : 'Try adjusting your filters to find more businesses.'}
+                </p>
+                {activeTab === 'all' && (
+                  <button
+                    onClick={() => {
+                      setFilters({});
+                      setSort('relevance');
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+                {activeTab === 'saved' && (
+                  <button
+                    onClick={() => setActiveTab('all')}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                  >
+                    Browse Directory
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Business Grid */}
-        {displayBusinesses.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayBusinesses.map((business) => (
-              <BusinessCard
+        {/* Map Panel */}
+        {showMap && (
+          <div className="hidden lg:flex flex-1 h-full bg-neutral-200 relative">
+            {/* Map Placeholder */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🗺️</div>
+                <p className="text-neutral-600 text-lg">Map View</p>
+                <p className="text-neutral-500 text-sm mt-2">
+                  Map integration coming soon
+                </p>
+              </div>
+            </div>
+
+            {/* Business Pins (placeholder) */}
+            {displayBusinesses.slice(0, 5).map((business, idx) => (
+              <button
                 key={business.id}
-                business={business}
-                onViewDetails={handleViewDetails}
-                onSave={handleSave}
-                onShare={handleShare}
-                enableLink={true}
-              />
-            ))}
-          </div>
-        ) : (
-          /* Empty State */
-          <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
-              No businesses found
-            </h3>
-            <p className="text-neutral-600 mb-6 max-w-md mx-auto">
-              {activeTab === 'saved'
-                ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
-                : 'Try adjusting your filters to find more businesses.'}
-            </p>
-            {activeTab === 'all' && (
-              <button
-                onClick={() => {
-                  setFilters({});
-                  setSort('relevance');
+                className="absolute bg-heritage-ochre text-white px-3 py-1.5 rounded-full text-sm font-medium shadow-lg hover:bg-heritage-terracotta transition-colors"
+                style={{
+                  left: `${20 + idx * 15}%`,
+                  top: `${30 + idx * 10}%`,
                 }}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                onClick={() => handleViewDetails(business.id)}
               >
-                Clear Filters
+                {business.name}
               </button>
-            )}
-            {activeTab === 'saved' && (
-              <button
-                onClick={() => setActiveTab('all')}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
-              >
-                Browse Directory
-              </button>
-            )}
+            ))}
           </div>
         )}
       </section>
-
-      {/* Footer */}
-      <footer className="bg-neutral-950 text-neutral-400 py-12 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <h4 className="text-white font-semibold mb-4">Black Owned</h4>
-              <p className="text-sm">
-                Celebrating and supporting Black-owned businesses across the nation.
-              </p>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Explore</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Businesses</a></li>
-                <li><a href="#" className="hover:text-white">Categories</a></li>
-                <li><a href="#" className="hover:text-white">Featured</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Support</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Help Center</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-                <li><a href="#" className="hover:text-white">FAQ</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white">Terms of Service</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-neutral-800 mt-8 pt-8 text-center text-sm">
-            <p>&copy; 2026 Black Owned. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </main>
   );
 }

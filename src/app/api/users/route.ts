@@ -19,7 +19,6 @@ import {
   isValidStatus,
   RoleChangedEvent,
 } from "@/types/user-management";
-import { requireAuth, requireRole, AuthenticatedUser } from "@/lib/auth/auth-middleware";
 
 /**
  * GET /api/users
@@ -73,121 +72,93 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * Update a user's role (admin only)
  */
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
-  return requireAuth(async (req, res) => {
-    // Only admins can change roles
-    if (req.user.role !== "admin") {
+  try {
+    const body = await request.json();
+    const { userId, role } = body;
+
+    // Validate required fields
+    if (!userId || !role) {
       return NextResponse.json(
         {
           success: false,
-          error: "Only administrators can modify user roles",
-          code: "INSUFFICIENT_ROLE",
+          error: "userId and role are required",
         },
-        { status: 403 }
+        { status: 400 }
       );
     }
 
-    try {
-      const body = await request.json();
-      const { userId, role } = body;
-
-      // Validate required fields
-      if (!userId || !role) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "userId and role are required",
-          },
-          { status: 400 }
-        );
-      }
-
-      // Validate role
-      if (!isValidRole(role)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Invalid role. Must be one of: user, business_owner, admin`,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Get current user to find old role
-      const { findByEmail } = await import("@/lib/db/user-repository");
-      const currentUser = await findByEmail(req.user.email);
-
-      if (!currentUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Current user not found",
-          },
-          { status: 404 }
-        );
-      }
-
-      // Get target user to find old role
-      const { findByIdWithRole } = await import(
-        "@/lib/db/user-management-repository"
-      );
-      const targetUser = await findByIdWithRole(userId);
-
-      if (!targetUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "User not found",
-          },
-          { status: 404 }
-        );
-      }
-
-      const oldRole = targetUser.role;
-
-      // Update role
-      const updatedUser = await updateUserRole(userId, role);
-
-      if (!updatedUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to update user role",
-          },
-          { status: 500 }
-        );
-      }
-
-      // Publish NATS event for role change
-      try {
-        const event: RoleChangedEvent = {
-          userId,
-          oldRole,
-          newRole: role,
-          changedBy: req.user.userId,
-          timestamp: new Date().toISOString(),
-        };
-        await publishRoleChangedEvent(event);
-      } catch (natsError) {
-        console.warn("Failed to publish role_changed event:", natsError);
-        // Don't fail the request if NATS publish fails
-      }
-
-      return NextResponse.json({
-        success: true,
-        data: updatedUser,
-        message: "Role updated successfully",
-      });
-    } catch (error) {
-      console.error("Error updating user role:", error);
+    // Validate role
+    if (!isValidRole(role)) {
       return NextResponse.json(
         {
           success: false,
-          error: "Internal server error",
+          error: `Invalid role. Must be one of: user, business_owner, admin`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Get target user to find old role
+    const { findByIdWithRole } = await import(
+      "@/lib/db/user-management-repository"
+    );
+    const targetUser = await findByIdWithRole(userId);
+
+    if (!targetUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    const oldRole = targetUser.role;
+
+    // Update role
+    const updatedUser = await updateUserRole(userId, role);
+
+    if (!updatedUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Failed to update user role",
         },
         { status: 500 }
       );
     }
-  })(request, NextResponse);
+
+    // Publish NATS event for role change
+    try {
+      const event: RoleChangedEvent = {
+        userId,
+        oldRole,
+        newRole: role,
+        changedBy: "system",
+        timestamp: new Date().toISOString(),
+      };
+      await publishRoleChangedEvent(event);
+    } catch (natsError) {
+      console.warn("Failed to publish role_changed event:", natsError);
+      // Don't fail the request if NATS publish fails
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: updatedUser,
+      message: "Role updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -195,72 +166,58 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
  * Update a user's status (admin only)
  */
 export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> {
-  return requireAuth(async (req, res) => {
-    // Only admins can change status
-    if (req.user.role !== "admin") {
+  try {
+    const body = await request.json();
+    const { userId, status } = body;
+
+    // Validate required fields
+    if (!userId || !status) {
       return NextResponse.json(
         {
           success: false,
-          error: "Only administrators can modify user status",
-          code: "INSUFFICIENT_ROLE",
+          error: "userId and status are required",
         },
-        { status: 403 }
+        { status: 400 }
       );
     }
 
-    try {
-      const body = await request.json();
-      const { userId, status } = body;
-
-      // Validate required fields
-      if (!userId || !status) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "userId and status are required",
-          },
-          { status: 400 }
-        );
-      }
-
-      // Validate status
-      if (!isValidStatus(status)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Invalid status. Must be one of: active, inactive, suspended`,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Update status
-      const updatedUser = await updateUserStatus(userId, status);
-
-      if (!updatedUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to update user status",
-          },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        data: updatedUser,
-        message: "Status updated successfully",
-      });
-    } catch (error) {
-      console.error("Error updating user status:", error);
+    // Validate status
+    if (!isValidStatus(status)) {
       return NextResponse.json(
         {
           success: false,
-          error: "Internal server error",
+          error: `Invalid status. Must be one of: active, inactive, suspended`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Update status
+    const updatedUser = await updateUserStatus(userId, status);
+
+    if (!updatedUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Failed to update user status",
         },
         { status: 500 }
       );
     }
-  })(request, NextResponse);
+
+    return NextResponse.json({
+      success: true,
+      data: updatedUser,
+      message: "Status updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating user status:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
 }

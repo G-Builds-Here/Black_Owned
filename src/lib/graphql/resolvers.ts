@@ -9,10 +9,11 @@ import {
 } from "../db/user-repository";
 import {
   hashPassword,
+  verifyPassword,
   generateTokenPair,
   verifyToken,
-  JwtPayload,
 } from "../auth/auth-service";
+import { JwtPayload } from "../../types/user";
 import {
   validatePassword,
   isValidEmail,
@@ -26,89 +27,10 @@ import {
   PresignedUrlResult,
 } from "../minio/minio-service";
 import {
-  findById as findBusinessById,
+  findBusinessById,
   updateNameById,
-  create as createBusiness,
-  Business as BusinessRecord,
 } from "../db/business-repository";
-
-/**
- * Mock business data for search
- */
-const MOCK_BUSINESSES = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-  {
-    id: '4',
-    name: 'Heritage Wellness Center',
-    category: 'Health & Wellness',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Chicago, IL',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
-    tags: ['Wellness', 'Massage', 'Holistic'],
-  },
-  {
-    id: '5',
-    name: 'Golden Era Barbershop',
-    category: 'Personal Services',
-    rating: 4.7,
-    reviewCount: 312,
-    location: 'Houston, TX',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
-    tags: ['Barber', 'Grooming', 'Community'],
-  },
-  {
-    id: '6',
-    name: 'Rhythm & Blues Records',
-    category: 'Entertainment',
-    rating: 4.6,
-    reviewCount: 78,
-    location: 'New Orleans, LA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
-    tags: ['Music', 'Vinyl', 'Audio'],
-  },
-];
+import type { Business } from "../../types/business";
 
 /**
  * Convert User record to GraphQL User type
@@ -193,6 +115,62 @@ export async function submitVerification(
 }
 
 /**
+ * Login mutation resolver
+ */
+export async function login(
+  _parent: unknown,
+  args: { email: string; password: string }
+): Promise<{
+  success: boolean;
+  user?: unknown;
+  tokens?: { accessToken: string; refreshToken: string };
+  error?: string;
+}> {
+  const { email, password } = args;
+
+  // Validate email format
+  if (!isValidEmail(email)) {
+    return {
+      success: false,
+      error: "Invalid email format",
+    };
+  }
+
+  // Normalize email to lowercase
+  const normalizedEmail = email.toLowerCase();
+
+  // Find user by email
+  const user = await findByEmail(normalizedEmail);
+  if (!user) {
+    return {
+      success: false,
+      error: "Invalid credentials",
+    };
+  }
+
+  // Verify password
+  const passwordValid = await verifyPassword(password, user.passwordHash);
+  if (!passwordValid) {
+    return {
+      success: false,
+      error: "Invalid credentials",
+    };
+  }
+
+  // Generate tokens
+  const tokens = generateTokenPair(user);
+
+  // Store refresh token in Valkey
+  await storeRefreshToken(tokens.refreshToken, user.id);
+
+  return {
+    success: true,
+    user: userToGraphqlUser(user),
+    tokens,
+  };
+}
+
+/**
  * Register mutation resolver
  */
 export async function register(
@@ -262,61 +240,23 @@ export function health(): string {
 }
 
 /**
- * Calculate relevance score for a business based on query match
- * Higher scores for matches in more prominent fields (name > description > category/location > tags)
- */
-function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: string): number {
-  if (!query) return 0;
-
-  const normalizedQuery = query.toLowerCase();
-  let score = 0;
-
-  // Name matches get highest weight (10 points per occurrence)
-  const nameLower = business.name.toLowerCase();
-  const nameOccurrences = (nameLower.match(new RegExp(normalizedQuery, 'g')) || []).length;
-  score += nameOccurrences * 10;
-
-  // Description matches get medium weight (5 points per occurrence)
-  if (business.description) {
-    const descLower = business.description.toLowerCase();
-    const descOccurrences = (descLower.match(new RegExp(normalizedQuery, 'g')) || []).length;
-    score += descOccurrences * 5;
-  }
-
-  // Category matches get medium weight (5 points)
-  if (business.category.toLowerCase().includes(normalizedQuery)) {
-    score += 5;
-  }
-
-  // Location matches get medium weight (5 points)
-  if (business.location.toLowerCase().includes(normalizedQuery)) {
-    score += 5;
-  }
-
-  // Tag matches get lower weight (3 points per tag)
-  if (business.tags) {
-    for (const tag of business.tags) {
-      if (tag.toLowerCase().includes(normalizedQuery)) {
-        score += 3;
-      }
-    }
-  }
-
-  return score;
-}
-
-/**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
+function businessToGraphqlBusiness(business: Business) {
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.category_id,
-    verified: business.verified,
+    categoryId: business.categoryId,
+    verified: business.verificationStatus === "verified",
     createdAt: {
-      timestamp: Math.floor(business.created_at.getTime() / 1000),
+      timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },
+    description: business.description || null,
+    location: business.location || null,
+    rating: business.rating || 0,
+    reviewCount: business.reviewCount || 0,
+    imageUrl: business.imageUrl || null,
+    tags: business.tags || [],
   };
 }
 
@@ -358,20 +298,28 @@ export async function updateBusiness(
 
   const userId = payload.userId;
 
-  // Verify ownership - only the business owner can update
-  const updatedBusiness = await updateNameById(id, name, userId);
+  // Get database client
+  const { getPool } = await import("../db/user-repository");
+  const client = await getPool().connect();
 
-  if (!updatedBusiness) {
+  try {
+    // Verify ownership - only the business owner can update
+    const updatedBusiness = await updateNameById(client, id, name);
+
+    if (!updatedBusiness) {
+      return {
+        success: false,
+        error: "Business not found or you are not the owner",
+      };
+    }
+
     return {
-      success: false,
-      error: "Business not found or you are not the owner",
+      success: true,
+      business: businessToGraphqlBusiness(updatedBusiness),
     };
+  } finally {
+    client.release();
   }
-
-  return {
-    success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
-  };
 }
 
 /**
@@ -388,7 +336,7 @@ export async function searchBusinesses(
   totalPages: number;
   facets: { category: string; count: number }[];
 }> {
-  const { query, page = 1, pageSize = 10 } = args;
+  const { query = "", page = 1, pageSize = 10 } = args;
 
   // Check cache first
   const cached = await getCachedResponse("searchBusinesses", { query, page, pageSize });
@@ -399,97 +347,64 @@ export async function searchBusinesses(
       page: number;
       pageSize: number;
       totalPages: number;
+      facets: { category: string; count: number }[];
     };
   }
 
-  const normalizedQuery = query.toLowerCase().trim();
+  const { getPool } = await import("../db/user-repository");
+  const client = await getPool().connect();
 
-  // If query is empty, return all businesses with no ranking
-  if (!normalizedQuery) {
-    const total = MOCK_BUSINESSES.length;
+  try {
+    const tableName = "businesses";
+
+    // Get total count
+    const countResult = await client.query(`SELECT COUNT(*) FROM ${tableName}`);
+    const total = parseInt(countResult.rows[0].count, 10);
     const totalPages = Math.ceil(total / pageSize);
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = MOCK_BUSINESSES.slice(startIndex, endIndex);
+    const offset = (page - 1) * pageSize;
 
-    // Calculate facets for all businesses
+    // Fetch businesses with pagination
+    const result = await client.query(
+      `SELECT * FROM ${tableName} ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+      [pageSize, offset]
+    );
+
+    const businesses = result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      categoryId: row.category_id,
+      verified: row.verification_status === "verified",
+      createdAt: {
+        timestamp: Math.floor(new Date(row.created_at).getTime() / 1000),
+      },
+      description: row.description || null,
+      location: row.location || null,
+      rating: row.rating ? parseFloat(row.rating) : 0,
+      reviewCount: row.review_count || 0,
+      imageUrl: row.image_url || null,
+      tags: row.tags || [],
+    }));
+
+    // Calculate facets
     const categoryCounts: Record<string, number> = {};
-    for (const business of MOCK_BUSINESSES) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
+    for (const business of businesses) {
+      categoryCounts[business.categoryId] = (categoryCounts[business.categoryId] || 0) + 1;
     }
     const facets = Object.entries(categoryCounts)
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
     return {
-      businesses: paginatedBusinesses,
+      businesses,
       total,
       page,
       pageSize,
       totalPages,
       facets,
     };
+  } finally {
+    client.release();
   }
-
-  // Score and filter businesses
-  const scoredBusinesses = MOCK_BUSINESSES
-    .map((business) => ({
-      business,
-      score: calculateRelevanceScore(business, normalizedQuery),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score); // Sort by relevance score descending
-
-  // Calculate facets from matched businesses
-  const categoryCounts: Record<string, number> = {};
-  for (const { business } of scoredBusinesses) {
-    categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-  }
-  const facets = Object.entries(categoryCounts)
-    .map(([category, count]) => ({ category, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // Paginate ranked results
-  const total = scoredBusinesses.length;
-  const totalPages = Math.ceil(total / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedBusinesses = scoredBusinesses
-    .slice(startIndex, endIndex)
-    .map((item) => item.business);
-
-  const result = {
-    businesses: paginatedBusinesses,
-    total,
-    page,
-    pageSize,
-    totalPages,
-    facets,
-  };
-
-  // Cache the response
-  await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-
-  return result;
-}
-
-/**
- * Convert Business entity to GraphQL Business type
- */
-function businessToGraphqlBusiness(business: Business): {
-  id: string;
-  name: string;
-  categoryId: string;
-  verified: boolean;
-  createdAt: { timestamp: number };
-} {
-  return {
-    id: business.id,
-    name: business.name,
-    categoryId: business.categoryId,
-    verified: business.verificationStatus === "verified",
-    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
-  };
 }
 
 /**
@@ -538,9 +453,10 @@ export async function createBusiness(
     };
   }
 
+  const { getPool } = await import("../db/user-repository");
   const client = await getPool().connect();
   try {
-    const business = await createBusinessInDb(
+    const business = await createBusinessInDbInternal(
       client,
       userId,
       input.name.trim(),
@@ -566,7 +482,7 @@ export async function createBusiness(
 /**
  * Internal function to create a business in the database
  */
-async function createBusinessInDb(
+async function createBusinessInDbInternal(
   client: import("pg").PoolClient,
   ownerId: string,
   name: string,
@@ -584,14 +500,37 @@ async function createBusinessInDb(
 }
 
 /**
+ * Get single business by ID
+ */
+export async function getBusiness(_parent: unknown, args: { id: string }) {
+  const { getPool } = await import("../db/user-repository");
+  const client = await getPool().connect();
+
+  try {
+    const { findBusinessById } = await import("../db/business-repository");
+    const business = await findBusinessById(client, args.id);
+
+    if (!business) {
+      return null;
+    }
+
+    return businessToGraphqlBusiness(business);
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
   Query: {
     health,
+    business: getBusiness,
     searchBusinesses,
   },
   Mutation: {
+    login,
     register,
     createBusiness,
     submitVerification,

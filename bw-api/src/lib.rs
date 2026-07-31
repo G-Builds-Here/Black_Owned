@@ -74,6 +74,7 @@ impl BusinessApi {
             owner_id: *owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
+            location: None,
         })
     }
 
