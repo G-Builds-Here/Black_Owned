@@ -164,7 +164,8 @@ mod tests {
     #[test]
     fn test_create_business_valid() {
         let category_id = uuid::Uuid::new_v4();
-        let result = BusinessApi::create_business("Test Business", &category_id);
+        let owner_id = uuid::Uuid::new_v4();
+        let result = BusinessApi::create_business("Test Business", None, &category_id, &owner_id);
 
         assert!(result.is_ok());
         let business = result.unwrap();
@@ -175,7 +176,8 @@ mod tests {
     #[test]
     fn test_create_business_empty_name() {
         let category_id = uuid::Uuid::new_v4();
-        let result = BusinessApi::create_business("", &category_id);
+        let owner_id = uuid::Uuid::new_v4();
+        let result = BusinessApi::create_business("", None, &category_id, &owner_id);
 
         assert!(result.is_err());
     }

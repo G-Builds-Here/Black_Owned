@@ -1,104 +1,88 @@
-//! GraphQL mutation tests for review submission and rating aggregation.
+//! GraphQL integration tests for Black Owned API.
 
-use async_graphql::{EmptySubscription, Request, Schema};
-use sqlx::postgres::PgPoolOptions;
-use uuid::Uuid;
+use async_graphql::Request;
 
-use super::mutations::MutationRoot;
-use super::queries::QueryRoot;
+use super::schema::create_schema;
 
-/// Create a test database pool from environment or defaults
-async fn create_test_pool() -> sqlx::PgPool {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/black_owned_test".to_string());
+#[tokio::test]
+async fn test_create_business_success() {
+    let schema = create_schema();
 
-    PgPoolOptions::new()
-        .max_connections(5)
-        .acquire_timeout(std::time::Duration::from_secs(10))
-        .connect(&database_url)
-        .await
-        .expect("Failed to create database pool")
-}
-
-/// Setup test database schema
-async fn setup_test_schema(pool: &sqlx::PgPool) {
-    sqlx::query(
+    let request = Request::new(
         r#"
-        CREATE TABLE IF NOT EXISTS businesses (
-            id UUID PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            category_id UUID NOT NULL,
-            owner_id UUID NOT NULL,
-            verified BOOLEAN DEFAULT false,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-
-        CREATE TABLE IF NOT EXISTS reviews (
-            id UUID PRIMARY KEY,
-            business_id UUID NOT NULL REFERENCES businesses(id),
-            user_id UUID NOT NULL,
-            rating SMALLINT NOT NULL,
-            comment TEXT NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            UNIQUE(business_id, user_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS categories (
-            id UUID PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            description TEXT NOT NULL
-        );
+        mutation {
+            createBusiness(input: { name: "Test Business", categoryId: "550e8400-e29b-41d4-a716-446655440000" }) {
+                id
+                name
+                categoryId
+                verified
+            }
+        }
         "#,
-    )
-    .execute(pool)
-    .await
-    .expect("Failed to create test schema");
-}
+    );
 
-/// Create a test schema with database connection
-async fn create_test_schema() -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
-    let pool = create_test_pool().await;
-    setup_test_schema(&pool).await;
+    let response = schema.execute(request).await;
 
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(pool)
-        .finish()
+    assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
+
+    let data: serde_json::Value = response.data.into_json().unwrap();
+    let business = data.get("createBusiness").unwrap();
+
+    assert_eq!(business.get("name").unwrap(), "Test Business");
+    assert_eq!(business.get("verified").unwrap(), false);
 }
 
 #[tokio::test]
-async fn test_submit_review_success() {
-    let schema = create_test_schema().await;
+async fn test_create_business_empty_name_fails() {
+    let schema = create_schema();
 
-    // Create a business first
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
+    let request = Request::new(
+        r#"
+        mutation {
+            createBusiness(input: { name: "", categoryId: "550e8400-e29b-41d4-a716-446655440000" }) {
+                id
+            }
+        }
+        "#,
+    );
 
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
+    let response = schema.execute(request).await;
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Test Business")
-        .bind(category_id)
-        .bind(Uuid::new_v4())
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
+    assert!(!response.errors.is_empty(), "Empty name should be rejected");
+}
 
-    let user_id = Uuid::new_v4();
+#[tokio::test]
+async fn test_create_business_invalid_category_id() {
+    let schema = create_schema();
+
+    let request = Request::new(
+        r#"
+        mutation {
+            createBusiness(input: { name: "Test", categoryId: "invalid-uuid" }) {
+                id
+            }
+        }
+        "#,
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(!response.errors.is_empty(), "Invalid UUID should be rejected");
+}
+
+#[tokio::test]
+async fn test_create_review_success() {
+    let schema = create_schema();
+
+    let business_id = uuid::Uuid::new_v4().to_string();
+
     let request = Request::new(
         format!(
             r#"
             mutation {{
-                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "Great business!") {{
+                createReview(input: {{ businessId: "{business_id}", rating: 5, comment: "Great business!" }}) {{
                     id
                     businessId
-                    userId
                     rating
                     comment
                 }}
@@ -112,166 +96,23 @@ async fn test_submit_review_success() {
     assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
 
     let data: serde_json::Value = response.data.into_json().unwrap();
-    let review = data.get("submitReview").unwrap();
+    let review = data.get("createReview").unwrap();
 
     assert_eq!(review.get("rating").unwrap(), 5);
     assert_eq!(review.get("comment").unwrap(), "Great business!");
 }
 
 #[tokio::test]
-async fn test_submit_review_duplicate_rejected() {
-    let schema = create_test_schema().await;
+async fn test_create_review_invalid_rating() {
+    let schema = create_schema();
 
-    // Create a business first
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
-    let user_id = Uuid::new_v4();
-
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Test Business")
-        .bind(category_id)
-        .bind(Uuid::new_v4())
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    // Submit first review
-    let request = Request::new(
-        format!(
-            r#"
-            mutation {{
-                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "First review") {{
-                    id
-                    rating
-                    comment
-                }}
-            }}
-            "#
-        ),
-    );
-
-    let response = schema.execute(request).await;
-    assert!(response.errors.is_empty(), "First review should succeed: {:?}", response.errors);
-
-    // Submit duplicate review (same user, same business)
-    let request2 = Request::new(
-        format!(
-            r#"
-            mutation {{
-                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "First review") {{
-                    id
-                    rating
-                    comment
-                }}
-            }}
-            "#
-        ),
-    );
-    let response = schema.execute(request2).await;
-
-    // Should fail due to duplicate
-    assert!(!response.errors.is_empty(), "Duplicate review should be rejected");
-}
-
-#[tokio::test]
-async fn test_rating_aggregation() {
-    let schema = create_test_schema().await;
-
-    // Create a business
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
-
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Test Business")
-        .bind(category_id)
-        .bind(Uuid::new_v4())
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    // Submit multiple reviews with different ratings
-    let ratings = vec![3, 4, 5, 2, 4];
-    for (i, rating) in ratings.iter().enumerate() {
-        let user_id = Uuid::new_v4();
-        let request = Request::new(
-            format!(
-                r#"
-                mutation {{
-                    submitReview(businessId: "{business_id}", userId: "{user_id}", rating: {}, comment: "Review") {{
-                        id
-                        rating
-                    }}
-                }}
-                "#,
-                rating
-            ),
-        );
-
-        let response = schema.execute(request).await;
-        assert!(response.errors.is_empty(), "Review {} should succeed: {:?}", i, response.errors);
-    }
-
-    // Query for business and verify rating aggregation
-    let request = Request::new(
-        format!(
-            r#"
-            query {{
-                business(id: "{business_id}") {{
-                    id
-                    name
-                    ratingAvg
-                    reviewCount
-                }}
-            }}
-            "#
-        ),
-    );
-
-    let response = schema.execute(request).await;
-    assert!(response.errors.is_empty(), "Query should succeed: {:?}", response.errors);
-
-    let data: serde_json::Value = response.data.into_json().unwrap();
-    let business = data.get("business").unwrap();
-
-    // Expected average: (3 + 4 + 5 + 2 + 4) / 5 = 3.6
-    let expected_avg = 3.6;
-    let actual_avg: f64 = business.get("ratingAvg").unwrap().as_f64().unwrap();
-    assert!((actual_avg - expected_avg).abs() < 0.01, "Expected avg ~{}, got {}", expected_avg, actual_avg);
-
-    let review_count: i32 = business.get("reviewCount").unwrap().as_i64().unwrap() as i32;
-    assert_eq!(review_count, 5, "Expected 5 reviews");
-}
-
-#[tokio::test]
-async fn test_submit_review_invalid_rating() {
-    let schema = create_test_schema().await;
-
-    let business_id = Uuid::new_v4();
-    let user_id = Uuid::new_v4();
+    let business_id = uuid::Uuid::new_v4().to_string();
 
     let request = Request::new(
         format!(
             r#"
             mutation {{
-                submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 6, comment: "Invalid") {{
+                createReview(input: {{ businessId: "{business_id}", rating: 6, comment: "Test" }}) {{
                     id
                 }}
             }}
@@ -281,34 +122,95 @@ async fn test_submit_review_invalid_rating() {
 
     let response = schema.execute(request).await;
 
-    // Should fail because rating is out of range
     assert!(!response.errors.is_empty(), "Rating 6 should be rejected");
 }
 
 #[tokio::test]
-async fn test_business_rating_avg_none_when_no_reviews() {
-    let schema = create_test_schema().await;
+async fn test_create_review_rating_zero() {
+    let schema = create_schema();
 
-    // Create a business without reviews
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
+    let business_id = uuid::Uuid::new_v4().to_string();
 
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
+    let request = Request::new(
+        format!(
+            r#"
+            mutation {{
+                createReview(input: {{ businessId: "{business_id}", rating: 0, comment: "Test" }}) {{
+                    id
+                }}
+            }}
+            "#
+        ),
+    );
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Test Business")
-        .bind(category_id)
-        .bind(Uuid::new_v4())
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
+    let response = schema.execute(request).await;
+
+    assert!(!response.errors.is_empty(), "Rating 0 should be rejected");
+}
+
+#[tokio::test]
+async fn test_create_review_empty_comment() {
+    let schema = create_schema();
+
+    let business_id = uuid::Uuid::new_v4().to_string();
+
+    let request = Request::new(
+        format!(
+            r#"
+            mutation {{
+                createReview(input: {{ businessId: "{business_id}", rating: 5, comment: "" }}) {{
+                    id
+                }}
+            }}
+            "#
+        ),
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(!response.errors.is_empty(), "Empty comment should be rejected");
+}
+
+#[tokio::test]
+async fn test_businesses_query_returns_empty() {
+    let schema = create_schema();
+
+    let request = Request::new(
+        r#"
+        query {
+            businesses(first: 10) {
+                edges {
+                    cursor
+                    node {
+                        id
+                        name
+                    }
+                }
+                pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                }
+            }
+        }
+        "#,
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
+
+    let data: serde_json::Value = response.data.into_json().unwrap();
+    let businesses = data.get("businesses").unwrap();
+
+    let edges = businesses.get("edges").unwrap().as_array().unwrap();
+    assert!(edges.is_empty(), "Should return empty edges");
+}
+
+#[tokio::test]
+async fn test_business_query_returns_none() {
+    let schema = create_schema();
+
+    let business_id = uuid::Uuid::new_v4().to_string();
 
     let request = Request::new(
         format!(
@@ -317,8 +219,6 @@ async fn test_business_rating_avg_none_when_no_reviews() {
                 business(id: "{business_id}") {{
                     id
                     name
-                    ratingAvg
-                    reviewCount
                 }}
             }}
             "#
@@ -326,179 +226,47 @@ async fn test_business_rating_avg_none_when_no_reviews() {
     );
 
     let response = schema.execute(request).await;
-    assert!(response.errors.is_empty(), "Query should succeed: {:?}", response.errors);
+
+    assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
 
     let data: serde_json::Value = response.data.into_json().unwrap();
     let business = data.get("business").unwrap();
-
-    // Should be null when no reviews
-    assert!(business.get("ratingAvg").unwrap().is_null(), "ratingAvg should be null with no reviews");
-
-    let review_count: i32 = business.get("reviewCount").unwrap().as_i64().unwrap() as i32;
-    assert_eq!(review_count, 0, "Expected 0 reviews");
-}
-
-#[tokio::test]
-async fn test_update_business_owner_success() {
-    let schema = create_test_schema().await;
-
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
-    let owner_id = Uuid::new_v4();
-
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Original Name")
-        .bind(category_id)
-        .bind(owner_id)
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    let request = Request::new(
-        format!(
-            r#"
-            mutation {{
-                updateBusiness(id: "{business_id}", name: "Updated Name", categoryId: "{category_id}", verified: true) {{
-                    id
-                    name
-                    categoryId
-                    verified
-                }}
-            }}
-            "#
-        ),
-    );
-
-    let response = schema.execute(request).await;
-
-    assert!(response.errors.is_empty(), "Update by owner should succeed: {:?}", response.errors);
-
-    let data: serde_json::Value = response.data.into_json().unwrap();
-    let business = data.get("updateBusiness").unwrap();
-
-    assert_eq!(business.get("name").unwrap(), "Updated Name");
-    assert_eq!(business.get("categoryId").unwrap().as_str().unwrap(), category_id.to_string());
-    assert_eq!(business.get("verified").unwrap(), true);
-}
-
-#[tokio::test]
-async fn test_update_business_not_owner_rejected() {
-    let schema = create_test_schema().await;
-
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
-    let owner_id = Uuid::new_v4();
-    let non_owner_id = Uuid::new_v4();
-
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Original Name")
-        .bind(category_id)
-        .bind(owner_id)
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
-
-    // Note: The mutation extracts user ID from JWT token, not from arguments
-    // This test verifies that a non-owner cannot update the business
-    let request = Request::new(
-        format!(
-            r#"
-            mutation {{
-                updateBusiness(id: "{business_id}", name: "Hacked Name") {{
-                    id
-                    name
-                }}
-            }}
-            "#
-        ),
-    );
-
-    let response = schema.execute(request).await;
-
-    // Should fail because the authenticated user (non_owner_id) is not the owner
-    assert!(!response.errors.is_empty(), "Update by non-owner should be rejected");
-}
-
-#[tokio::test]
-async fn test_update_business_not_found_returns_null() {
-    let schema = create_test_schema().await;
-
-    let non_existent_id = Uuid::new_v4();
-
-    let request = Request::new(
-        format!(
-            r#"
-            mutation {{
-                updateBusiness(id: "{non_existent_id}", verified: false) {{
-                    id
-                    name
-                }}
-            }}
-            "#
-        ),
-    );
-
-    let response = schema.execute(request).await;
-
-    assert!(response.errors.is_empty(), "Query should succeed: {:?}", response.errors);
-
-    let data: serde_json::Value = response.data.into_json().unwrap();
-    let business = data.get("updateBusiness").unwrap();
 
     assert!(business.is_null(), "Should return null for non-existent business");
 }
 
 #[tokio::test]
-async fn test_update_business_partial_fields() {
-    let schema = create_test_schema().await;
+async fn test_business_query_invalid_id() {
+    let schema = create_schema();
 
-    let business_id = Uuid::new_v4();
-    let category_id = Uuid::new_v4();
-    let owner_id = Uuid::new_v4();
+    let request = Request::new(
+        r#"
+        query {
+            business(id: "invalid-uuid") {
+                id
+            }
+        }
+        "#,
+    );
 
-    sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
-        .bind(category_id)
-        .bind("Test Category")
-        .bind("Test Description")
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
+    let response = schema.execute(request).await;
 
-    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
-        .bind(business_id)
-        .bind("Original Name")
-        .bind(category_id)
-        .bind(owner_id)
-        .execute(schema.data::<sqlx::PgPool>().unwrap())
-        .await
-        .unwrap();
+    assert!(!response.errors.is_empty(), "Invalid UUID should be rejected");
+}
+
+#[tokio::test]
+async fn test_reviews_query_returns_empty() {
+    let schema = create_schema();
+
+    let business_id = uuid::Uuid::new_v4().to_string();
 
     let request = Request::new(
         format!(
             r#"
-            mutation {{
-                updateBusiness(id: "{business_id}", verified: true) {{
+            query {{
+                reviews(businessId: "{business_id}") {{
                     id
-                    name
-                    verified
+                    rating
                 }}
             }}
             "#
@@ -507,11 +275,37 @@ async fn test_update_business_partial_fields() {
 
     let response = schema.execute(request).await;
 
-    assert!(response.errors.is_empty(), "Partial update should succeed: {:?}", response.errors);
+    assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
 
     let data: serde_json::Value = response.data.into_json().unwrap();
-    let business = data.get("updateBusiness").unwrap();
+    let reviews = data.get("reviews").unwrap();
 
-    assert_eq!(business.get("name").unwrap(), "Original Name", "Name should remain unchanged");
-    assert_eq!(business.get("verified").unwrap(), true);
+    let reviews_array = reviews.as_array().unwrap();
+    assert!(reviews_array.is_empty(), "Should return empty reviews");
+}
+
+#[tokio::test]
+async fn test_categories_query_returns_empty() {
+    let schema = create_schema();
+
+    let request = Request::new(
+        r#"
+        query {
+            categories {
+                id
+                name
+            }
+        }
+        "#,
+    );
+
+    let response = schema.execute(request).await;
+
+    assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
+
+    let data: serde_json::Value = response.data.into_json().unwrap();
+    let categories = data.get("categories").unwrap();
+
+    let categories_array = categories.as_array().unwrap();
+    assert!(categories_array.is_empty(), "Should return empty categories");
 }

@@ -1,0 +1,163 @@
+{
+  "ticket": "LOC-0030",
+  "phase": 6,
+  "phase_stories": [
+    "LOC-0053"
+  ],
+  "acs_merged": [
+    "LOC-0036-AC1",
+    "LOC-0036-AC2",
+    "LOC-0036-AC3",
+    "LOC-0036-AC4",
+    "LOC-0037-AC1",
+    "LOC-0037-AC2",
+    "LOC-0037-AC5",
+    "LOC-0047-AC1",
+    "LOC-0042-AC1",
+    "LOC-0042-AC2"
+  ],
+  "epic_branch": "epic/LOC-0030",
+  "acs": {
+    "LOC-0053-AC1": {
+      "ac_id": "LOC-0053-AC1",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0053",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0042-AC3",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0042-AC3"
+      ],
+      "normalized_deps": [
+        "LOC-0042-AC3"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0053-AC2": {
+      "ac_id": "LOC-0053-AC2",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0053",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0043-AC2",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0043-AC2"
+      ],
+      "normalized_deps": [
+        "LOC-0043-AC2"
+      ],
+      "dispatch_status": "blocked"
+    },
+    "LOC-0053-AC3": {
+      "ac_id": "LOC-0053-AC3",
+      "claim_exists": false,
+      "claim_owner": null,
+      "handoff_exists": false,
+      "handoff_complete": false,
+      "findings_file_exists": false,
+      "findings_sections": null,
+      "status": "unknown",
+      "story_key": "LOC-0053",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0044-AC1",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "missing: impl, commit-impl, qa, commit-qa"
+        },
+        {
+          "dep_ac": "LOC-0044-AC2",
+          "met": false,
+          "method": "handoff_incomplete",
+          "reason": "incomplete: qa, commit-qa"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0044-AC1",
+        "LOC-0044-AC2"
+      ],
+      "normalized_deps": [
+        "LOC-0044-AC1",
+        "LOC-0044-AC2"
+      ],
+      "dispatch_status": "blocked"
+    }
+  },
+  "dispatch": [],
+  "recovered": [],
+  "blocked": [
+    "LOC-0053-AC1",
+    "LOC-0053-AC2",
+    "LOC-0053-AC3"
+  ],
+  "blocked_details": [
+    {
+      "ac_id": "LOC-0053-AC1",
+      "unmet_deps": [
+        "LOC-0042-AC3"
+      ]
+    },
+    {
+      "ac_id": "LOC-0053-AC2",
+      "unmet_deps": [
+        "LOC-0043-AC2"
+      ]
+    },
+    {
+      "ac_id": "LOC-0053-AC3",
+      "unmet_deps": [
+        "LOC-0044-AC1",
+        "LOC-0044-AC2"
+      ]
+    }
+  ],
+  "in_progress": [],
+  "ready_to_merge": [],
+  "needs_salvage": [],
+  "unverified_garbage": [],
+  "unverified_garbage_details": [],
+  "concurrency_capped": [],
+  "dead_claims_released": [],
+  "concurrency": {
+    "max": 5,
+    "running": 0,
+    "slots_remaining": 5
+  },
+  "summary": {
+    "total_acs": 3,
+    "dispatch": 0,
+    "recovered": 0,
+    "blocked": 3,
+    "in_progress": 0,
+    "ready_to_merge": 0,
+    "needs_salvage": 0,
+    "unverified_garbage": 0,
+    "concurrency_capped": 0,
+    "dead_claims_released": 0
+  }
+}

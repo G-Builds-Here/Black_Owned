@@ -122,4 +122,22 @@ describe('Card', () => {
     expect(container.firstChild).toHaveClass('transition-all');
     expect(container.firstChild).toHaveClass('duration-200');
   });
+
+  it('clickable cards have role="button" for screen readers', () => {
+    render(<Card clickable>Clickable card</Card>);
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+
+  it('clickable cards are keyboard focusable', () => {
+    render(<Card clickable>Clickable card</Card>);
+    const card = screen.getByRole('button');
+    expect(card.tabIndex).toBe(0);
+  });
+
+  it('clickable cards have focus ring for keyboard navigation', () => {
+    const { container } = render(<Card clickable>Test</Card>);
+    expect(container.firstChild).toHaveClass('focus:ring-2');
+    expect(container.firstChild).toHaveClass('focus:ring-heritage-ochre');
+    expect(container.firstChild).toHaveClass('focus:ring-offset-2');
+  });
 });

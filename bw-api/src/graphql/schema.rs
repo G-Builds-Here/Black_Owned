@@ -15,3 +15,14 @@ pub fn create_schema() -> Schema {
     Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .finish()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_schema_creation() {
+        let _schema = create_schema();
+        // Schema creation succeeds without panicking
+    }
+}

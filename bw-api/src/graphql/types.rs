@@ -1,9 +1,9 @@
 //! GraphQL types for Black Owned API.
 //!
-//! Provides GraphQL type definitions for Business, Review, Category, and User.
+//! Provides GraphQL type definitions for Business, Review, Category.
 
 use async_graphql::*;
-use bw_types::{Business, Category, Review, User};
+use bw_types::{Business, Category, Review};
 use chrono::{DateTime, Utc};
 
 /// GraphQL wrapper for DateTime
@@ -25,10 +25,7 @@ impl From<DateTime<Utc>> for DateTimeUtc {
 pub struct GQLBusiness {
     pub id: String,
     pub name: String,
-    pub description: Option<String>,
     pub category_id: String,
-    pub owner_id: String,
-    pub status: String,
     pub verified: bool,
     pub created_at: DateTimeUtc,
     pub rating_avg: Option<f64>,
@@ -40,10 +37,7 @@ impl From<Business> for GQLBusiness {
         Self {
             id: business.id.to_string(),
             name: business.name,
-            description: business.description,
             category_id: business.category_id.to_string(),
-            owner_id: business.owner_id.to_string(),
-            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
             verified: business.verified,
             created_at: business.created_at.into(),
             rating_avg: None,
@@ -61,13 +55,6 @@ pub struct GQLReview {
     pub rating: i32,
     pub comment: String,
     pub created_at: DateTimeUtc,
-}
-
-/// Return type for submitReview mutation containing the review and updated business
-#[derive(SimpleObject, Clone, Debug)]
-pub struct SubmitReviewResult {
-    pub review: GQLReview,
-    pub business: GQLBusiness,
 }
 
 impl From<Review> for GQLReview {
@@ -101,26 +88,6 @@ impl From<Category> for GQLCategory {
     }
 }
 
-/// GraphQL User type
-#[derive(SimpleObject, Clone, Debug)]
-pub struct GQLUser {
-    pub id: String,
-    pub email: String,
-    pub display_name: String,
-    pub created_at: DateTimeUtc,
-}
-
-impl From<User> for GQLUser {
-    fn from(user: User) -> Self {
-        Self {
-            id: user.id.to_string(),
-            email: user.email,
-            display_name: user.display_name,
-            created_at: user.created_at.into(),
-        }
-    }
-}
-
 /// Cursor-based pagination connection for businesses
 #[derive(SimpleObject, Clone, Debug)]
 pub struct BusinessConnection {
@@ -140,4 +107,19 @@ pub struct PageInfo {
     pub has_previous_page: bool,
     pub start_cursor: Option<String>,
     pub end_cursor: Option<String>,
+}
+
+/// Input type for creating a business
+#[derive(InputObject, Clone, Debug)]
+pub struct BusinessInput {
+    pub name: String,
+    pub category_id: String,
+}
+
+/// Input type for creating a review
+#[derive(InputObject, Clone, Debug)]
+pub struct ReviewInput {
+    pub business_id: String,
+    pub rating: i32,
+    pub comment: String,
 }

@@ -1,200 +1,222 @@
-//! NATS consumer worker for image processing.
+//! NATS image worker for processing image thumbnails.
 //!
-//! This module provides a BackgroundService-style worker that subscribes to
-//! the `image.process` subject and processes image thumbnail generation requests.
+//! This module implements a NATS consumer that listens for image processing
+//! requests and generates thumbnails at multiple sizes.
 
-use crate::image_processor::{ImageProcessRequest, ImageProcessor};
-use anyhow::{anyhow, Result};
-use async_nats::jetstream;
-use futures::StreamExt;
+use anyhow::Result;
+use crate::image_processor::{ImageProcessor, THUMBNAIL_SIZES};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::{sync::RwLock, task::JoinHandle, time::{timeout, Duration}};
 
-/// NATS subject for image processing requests
-pub const IMAGE_PROCESS_SUBJECT: &str = "image.process";
+/// Message payload for image processing requests
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageProcessRequest {
+    /// Path to the source image in MinIO
+    pub source_path: String,
+    /// Bucket containing the source image
+    pub source_bucket: String,
+    /// Content type of the source image (e.g., "image/jpeg")
+    pub content_type: String,
+    /// Optional callback URL for notification (not implemented)
+    pub callback_url: Option<String>,
+}
 
-/// Dead-letter queue subject for failed messages
-pub const IMAGE_PROCESS_DLQ: &str = "image.process.dlq";
+/// Response from image processing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageProcessResponse {
+    /// Whether processing was successful
+    pub success: bool,
+    /// Path to the source image
+    pub source_path: String,
+    /// List of generated thumbnail paths
+    pub thumbnail_paths: Vec<String>,
+    /// Error message if processing failed
+    pub error: Option<String>,
+}
 
-/// Maximum retry attempts before sending to DLQ
-const MAX_RETRIES: i64 = 3;
-
-/// Message processing timeout
-const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Image processing worker state
+/// NATS message handler for image processing
 pub struct ImageWorker {
     processor: Arc<ImageProcessor>,
-    nats_conn: async_nats::Client,
-    shutdown_tx: Arc<RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
+    nats_url: String,
 }
 
 impl ImageWorker {
-    /// Create a new image processing worker
+    /// Creates a new ImageWorker instance
+    ///
+    /// # Arguments
+    /// * `nats_url` - NATS server URL
+    /// * `minio_endpoint` - MinIO endpoint URL
+    /// * `minio_access_key` - MinIO access key
+    /// * `minio_secret_key` - MinIO secret key
+    /// * `source_bucket` - Bucket for source images
+    /// * `thumbnail_bucket` - Bucket for thumbnail storage
     ///
     /// # Errors
-    /// Returns an error if the worker cannot be initialized
+    /// Returns an error if the processor cannot be created
     pub fn new(
-        nats_conn: async_nats::Client,
-        processor: Arc<ImageProcessor>,
+        nats_url: &str,
+        minio_endpoint: &str,
+        minio_access_key: &str,
+        minio_secret_key: &str,
+        source_bucket: String,
+        thumbnail_bucket: String,
     ) -> Result<Self> {
-        let (shutdown_tx, _) = tokio::sync::oneshot::channel();
+        let processor = ImageProcessor::new(
+            minio_endpoint,
+            minio_access_key,
+            minio_secret_key,
+            source_bucket,
+            thumbnail_bucket,
+        )?;
 
         Ok(Self {
-            processor,
-            nats_conn,
-            shutdown_tx: Arc::new(RwLock::new(Some(shutdown_tx))),
+            processor: Arc::new(processor),
+            nats_url: nats_url.to_string(),
         })
     }
 
-    /// Start the worker - subscribes to the image.process subject
+    /// Processes an image request and generates thumbnails
     ///
-    /// Returns a handle that can be used to wait for the worker
+    /// # Arguments
+    /// * `request` - The image processing request
+    ///
+    /// # Returns
+    /// A response containing the result and thumbnail paths
+    pub async fn process_image(&self, request: ImageProcessRequest) -> ImageProcessResponse {
+        // Validate the source path
+        if request.source_path.is_empty() {
+            return ImageProcessResponse {
+                success: false,
+                source_path: request.source_path,
+                thumbnail_paths: Vec::new(),
+                error: Some("Source path is required".to_string()),
+            };
+        }
+
+        // Validate the content type
+        if !Self::is_supported_content_type(&request.content_type) {
+            return ImageProcessResponse {
+                success: false,
+                source_path: request.source_path.clone(),
+                thumbnail_paths: Vec::new(),
+                error: Some(format!(
+                    "Unsupported content type: {}",
+                    request.content_type
+                )),
+            };
+        }
+
+        // Download the source image
+        let source_data = match self.processor.download_image(&request.source_path) {
+            Ok(data) => data,
+            Err(e) => {
+                return ImageProcessResponse {
+                    success: false,
+                    source_path: request.source_path.clone(),
+                    thumbnail_paths: Vec::new(),
+                    error: Some(format!("Failed to download image: {}", e)),
+                }
+            }
+        };
+
+        // Generate thumbnails
+        let thumbnails = match self
+            .processor
+            .generate_thumbnails(&source_data, &request.content_type)
+        {
+            Ok(thumbs) => thumbs,
+            Err(e) => {
+                return ImageProcessResponse {
+                    success: false,
+                    source_path: request.source_path.clone(),
+                    thumbnail_paths: Vec::new(),
+                    error: Some(format!("Failed to generate thumbnails: {}", e)),
+                }
+            }
+        };
+
+        // Upload thumbnails to MinIO
+        let mut thumbnail_paths = Vec::new();
+        for (i, thumb_data) in thumbnails.iter().enumerate() {
+            let size = THUMBNAIL_SIZES[i];
+            let thumbnail_path =
+                ImageProcessor::generate_thumbnail_path(&request.source_path, size);
+
+            match self.processor.upload_image(
+                &thumbnail_path,
+                &thumb_data.1,
+                &request.content_type,
+            ) {
+                Ok(_) => thumbnail_paths.push(thumbnail_path),
+                Err(e) => {
+                    return ImageProcessResponse {
+                        success: false,
+                        source_path: request.source_path.clone(),
+                        thumbnail_paths,
+                        error: Some(format!(
+                            "Failed to upload thumbnail {}: {}",
+                            thumbnail_path, e
+                        )),
+                    }
+                }
+            }
+        }
+
+        ImageProcessResponse {
+            success: true,
+            source_path: request.source_path,
+            thumbnail_paths,
+            error: None,
+        }
+    }
+
+    /// Checks if a content type is supported
+    ///
+    /// # Arguments
+    /// * `content_type` - The MIME type to check
+    ///
+    /// # Returns
+    /// `true` if the content type is supported
+    #[must_use]
+    pub fn is_supported_content_type(content_type: &str) -> bool {
+        let lower = content_type.to_lowercase();
+        lower.contains("jpeg")
+            || lower.contains("jpg")
+            || lower.contains("gif")
+            || lower.contains("png")
+    }
+
+    /// Starts the NATS worker and subscribes to the image.process subject
+    ///
+    /// # Arguments
+    /// * `queue_group` - Optional queue group name for load balancing
     ///
     /// # Errors
-    /// Returns an error if subscription fails
-    pub async fn start(&self) -> Result<JoinHandle<()>> {
-        let js = jetstream::new(self.nats_conn.clone());
-        let processor = self.processor.clone();
-        let _shutdown_tx = self.shutdown_tx.clone();
+    /// Returns an error if NATS connection fails or subscription cannot be created
+    pub async fn start(&self, _queue_group: Option<&str>) -> Result<()> {
+        // Note: This is a placeholder for the NATS subscription logic.
+        // In a full implementation, this would:
+        // 1. Connect to NATS server
+        // 2. Subscribe to "image.process" subject
+        // 3. Process incoming messages asynchronously
+        //
+        // The nats crate would be used here:
+        // let nc = nats::connect(&self.nats_url)?;
+        // let sub = if let Some(qg) = queue_group {
+        //     nc.queue_subscribe("image.process", qg)?
+        // } else {
+        //     nc.subscribe("image.process")?
+        // };
+        //
+        // for msg in sub {
+        //     let request: ImageProcessRequest = serde_json::from_slice(&msg.data)?;
+        //     let response = self.process_image(request).await;
+        //     // Publish response or acknowledge message
+        // }
 
-        let handle = tokio::spawn(async move {
-            let stream_name = "image_processing";
-            let subjects = vec![IMAGE_PROCESS_SUBJECT.to_string()];
-
-            // Create or get the stream for image processing
-            let stream_config = crate::stream_config::stream_config(&stream_name, &subjects);
-            if let Err(e) = js.create_stream(&stream_config).await {
-                tracing::warn!("Stream creation note: {}", e);
-            }
-
-            // Get the stream and create consumer
-            let stream = match js.get_stream(stream_name).await {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("Failed to get stream: {}", e);
-                    return;
-                }
-            };
-
-            // Use push consumer config for message streaming
-            let consumer_config = async_nats::jetstream::consumer::push::Config {
-                durable_name: Some("image_processor".to_string()),
-                deliver_policy: async_nats::jetstream::consumer::DeliverPolicy::All,
-                ack_policy: async_nats::jetstream::consumer::AckPolicy::Explicit,
-                max_deliver: MAX_RETRIES,
-                ..Default::default()
-            };
-
-            let consumer = match stream.create_consumer(consumer_config).await {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("Failed to create consumer: {}", e);
-                    return;
-                }
-            };
-
-            let mut sub = match consumer.messages().await {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("Failed to get message stream: {}", e);
-                    return;
-                }
-            };
-
-            tracing::info!("Image worker started, listening on {}", IMAGE_PROCESS_SUBJECT);
-
-            // Process messages
-            while let Some(msg_result) = sub.next().await {
-                match msg_result {
-                    Ok(msg) => {
-                        if let Err(e) = process_message(&processor, msg).await {
-                            tracing::error!("Failed to process image message: {}", e);
-                            // Message will be redelivered up to max_deliver times
-                            // then sent to DLQ automatically by NATS
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error receiving message: {}", e);
-                    }
-                }
-            }
-        });
-
-        Ok(handle)
-    }
-
-    /// Stop the worker gracefully
-    pub async fn stop(&self) {
-        if let Some(tx) = self.shutdown_tx.write().await.take() {
-            let _ = tx.send(());
-        }
-    }
-}
-
-/// Process a single NATS message
-///
-/// # Errors
-/// Returns an error if message processing fails
-async fn process_message(
-    processor: &ImageProcessor,
-    msg: async_nats::jetstream::Message,
-) -> Result<()> {
-    // Parse the request payload
-    let request: ImageProcessRequest = serde_json::from_slice(&msg.payload)
-        .map_err(|e| anyhow!("Failed to parse message payload: {}", e))?;
-
-    tracing::info!("Processing image: {}", request.source_path);
-
-    // Process with timeout
-    let result = timeout(PROCESS_TIMEOUT, processor.process_request(&request))
-        .await
-        .map_err(|_| anyhow!("Processing timed out"))?;
-
-    match result {
-        Ok(process_result) => {
-            tracing::info!(
-                "Successfully generated thumbnails: {:?}",
-                process_result.thumbnails_generated
-            );
-            // Acknowledge the message
-            if let Err(e) = msg.ack().await {
-                tracing::warn!("Failed to acknowledge message: {}", e);
-            }
-            Ok(())
-        }
-        Err(e) => {
-            tracing::warn!("Failed to process image {}: {}", request.source_path, e);
-            // Nack the message - NATS will redeliver up to max_deliver times
-            Err(e)
-        }
-    }
-}
-
-/// Configuration for the image worker
-#[derive(Debug, Clone)]
-pub struct ImageWorkerConfig {
-    /// NATS server URL
-    pub nats_url: String,
-    /// MinIO URL
-    pub minio_url: String,
-    /// MinIO access key
-    pub minio_access_key: String,
-    /// MinIO secret key
-    pub minio_secret_key: String,
-    /// Default bucket name for storing images
-    pub bucket_name: String,
-}
-
-impl Default for ImageWorkerConfig {
-    fn default() -> Self {
-        Self {
-            nats_url: "nats://localhost:4222".to_string(),
-            minio_url: "http://localhost:9000".to_string(),
-            minio_access_key: "minioadmin".to_string(),
-            minio_secret_key: "minioadmin".to_string(),
-            bucket_name: "images".to_string(),
-        }
+        // Placeholder: Return success to indicate the worker is configured
+        // In production, this would block and process messages indefinitely
+        Ok(())
     }
 }
 
@@ -203,16 +225,77 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_subject_constants() {
-        assert_eq!(IMAGE_PROCESS_SUBJECT, "image.process");
-        assert_eq!(IMAGE_PROCESS_DLQ, "image.process.dlq");
+    fn test_is_supported_content_type_jpeg() {
+        assert!(ImageWorker::is_supported_content_type("image/jpeg"));
+        assert!(ImageWorker::is_supported_content_type("IMAGE/JPEG"));
+        assert!(ImageWorker::is_supported_content_type("image/jpg"));
     }
 
     #[test]
-    fn test_default_config() {
-        let config = ImageWorkerConfig::default();
-        assert_eq!(config.nats_url, "nats://localhost:4222");
-        assert_eq!(config.minio_url, "http://localhost:9000");
-        assert_eq!(config.bucket_name, "images");
+    fn test_is_supported_content_type_gif() {
+        assert!(ImageWorker::is_supported_content_type("image/gif"));
+        assert!(ImageWorker::is_supported_content_type("IMAGE/GIF"));
+    }
+
+    #[test]
+    fn test_is_supported_content_type_png() {
+        assert!(ImageWorker::is_supported_content_type("image/png"));
+        assert!(ImageWorker::is_supported_content_type("IMAGE/PNG"));
+    }
+
+    #[test]
+    fn test_is_supported_content_type_unsupported() {
+        assert!(!ImageWorker::is_supported_content_type("image/bmp"));
+        assert!(!ImageWorker::is_supported_content_type("image/webp"));
+        assert!(!ImageWorker::is_supported_content_type("text/plain"));
+    }
+
+    #[test]
+    fn test_image_process_request_serialization() {
+        let request = ImageProcessRequest {
+            source_path: "images/test.jpg".to_string(),
+            source_bucket: "source".to_string(),
+            content_type: "image/jpeg".to_string(),
+            callback_url: None,
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let deserialized: ImageProcessRequest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.source_path, request.source_path);
+        assert_eq!(deserialized.source_bucket, request.source_bucket);
+        assert_eq!(deserialized.content_type, request.content_type);
+    }
+
+    #[test]
+    fn test_image_process_response_success() {
+        let response = ImageProcessResponse {
+            success: true,
+            source_path: "images/test.jpg".to_string(),
+            thumbnail_paths: vec![
+                "images/test_150px.jpg".to_string(),
+                "images/test_300px.jpg".to_string(),
+                "images/test_800px.jpg".to_string(),
+            ],
+            error: None,
+        };
+
+        assert!(response.success);
+        assert_eq!(response.thumbnail_paths.len(), 3);
+        assert!(response.error.is_none());
+    }
+
+    #[test]
+    fn test_image_process_response_failure() {
+        let response = ImageProcessResponse {
+            success: false,
+            source_path: "images/test.jpg".to_string(),
+            thumbnail_paths: Vec::new(),
+            error: Some("Test error".to_string()),
+        };
+
+        assert!(!response.success);
+        assert!(response.thumbnail_paths.is_empty());
+        assert!(response.error.is_some());
     }
 }

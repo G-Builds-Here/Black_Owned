@@ -103,14 +103,15 @@ export function SearchResults({
       {/* Business Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {businesses.map((business) => (
-          <BusinessCard
-            key={business.id}
-            business={business}
-            onViewDetails={(id) => console.log('View details:', id)}
-            onSave={(id) => console.log('Save:', id)}
-            onShare={(id) => console.log('Share:', id)}
-            enableLink={true}
-          />
+          <div key={business.id} data-business-name={business.name}>
+            <BusinessCard
+              business={business}
+              onViewDetails={(id) => console.log('View details:', id)}
+              onSave={(id) => console.log('Save:', id)}
+              onShare={(id) => console.log('Share:', id)}
+              enableLink={true}
+            />
+          </div>
         ))}
       </div>
 

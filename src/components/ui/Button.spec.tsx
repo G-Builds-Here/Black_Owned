@@ -143,4 +143,20 @@ describe('Button', () => {
     const { container } = render(<Button>Test</Button>);
     expect(container.firstChild).toHaveClass('active:scale-[0.98]');
   });
+
+  it('has aria-busy attribute when loading', () => {
+    render(<Button isLoading>Loading</Button>);
+    expect(screen.getByRole('button')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('loading spinner has aria-hidden attribute', () => {
+    render(<Button isLoading>Loading</Button>);
+    const spinner = screen.getByRole('button').querySelector('svg');
+    expect(spinner).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('has focus ring offset for keyboard navigation', () => {
+    const { container } = render(<Button>Test</Button>);
+    expect(container.firstChild).toHaveClass('focus:ring-offset-2');
+  });
 });

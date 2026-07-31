@@ -324,6 +324,210 @@ img[loading="lazy"] {
   }
 }
 
+/* Mobile Responsive Utilities */
+
+/* Safe area insets for notched devices (iOS, modern Android) */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Mobile-first responsive container */
+.mobile-responsive-container {
+  width: 100%;
+  min-height: 100vh;
+  padding-left: max(var(--safe-area-left), 1rem);
+  padding-right: max(var(--safe-area-right), 1rem);
+}
+
+/* Mobile bottom nav wrapper - accounts for safe area */
+.mobile-bottom-nav-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-bottom: var(--safe-area-bottom);
+  z-index: 50;
+}
+
+/* Responsive typography - scales with viewport */
+@media (max-width: 640px) {
+  h1 {
+    font-size: 1.75rem;
+    line-height: 2rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  h4 {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+
+  p {
+    font-size: 0.9375rem;
+  }
+}
+
+/* Responsive spacing */
+@media (max-width: 640px) {
+  .container,
+  .max-w-7xl {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* Touch-friendly tap targets - ensure all interactive elements meet 44px minimum */
+@media (max-width: 768px) {
+  button,
+  a,
+  input[type="button"],
+  input[type="submit"],
+  [role="button"],
+  select,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Ensure form inputs are finger-friendly */
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Responsive images - optimize for mobile bandwidth */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Responsive image container */
+.img-responsive {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* Picture element responsive behavior */
+picture img {
+  width: 100%;
+  height: auto;
+}
+
+/* Art direction for different breakpoints */
+@media (min-width: 768px) {
+  .img-mobile-optimize {
+    /* Use higher resolution images on tablet+ */
+  }
+}
+
+/* Lazy loading optimization for mobile */
+@media (max-width: 768px) {
+  img[loading="lazy"] {
+    /* More aggressive lazy loading on mobile */
+    content-visibility: auto;
+  }
+}
+
+/* Responsive grid layouts */
+.grid-mobile-single {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .grid-mobile-single {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-mobile-single {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Responsive padding/margin utilities */
+@media (max-width: 640px) {
+  .p-responsive {
+    padding: 0.75rem;
+  }
+
+  .px-responsive {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .py-responsive {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .m-responsive {
+    margin: 0.5rem;
+  }
+
+  .mx-responsive {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+
+  .my-responsive {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Hide elements on specific breakpoints */
+.hide-mobile {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .hide-mobile {
+    display: block;
+  }
+}
+
+.hide-tablet {
+  display: block;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hide-tablet {
+    display: none;
+  }
+}
+
+.hide-desktop {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .hide-desktop {
+    display: none;
+  }
+}
+
 /* Print styles */
 @media print {
   nav,

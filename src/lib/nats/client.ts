@@ -68,6 +68,29 @@ export async function publishRoleChangedEvent(
 }
 
 /**
+ * Publish a verification approved event to NATS
+ */
+export async function publishVerificationApprovedEvent(
+  businessId: string,
+  approvedBy: string
+): Promise<void> {
+  try {
+    const nc = await getNatsConnection();
+    const event = {
+      businessId,
+      approvedBy,
+      timestamp: new Date().toISOString(),
+    };
+
+    await nc.publish("verification.approved", new TextEncoder().encode(JSON.stringify(event)));
+    console.log(`Published verification.approved event for business ${businessId}`);
+  } catch (error) {
+    console.error("Failed to publish verification.approved event:", error);
+    throw error;
+  }
+}
+
+/**
  * Close NATS connection
  */
 export async function closeNatsConnection(): Promise<void> {

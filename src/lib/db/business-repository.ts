@@ -99,3 +99,42 @@ export async function findBusinessesByOwnerId(
   );
   return result.rows.map(rowToBusiness);
 }
+
+/**
+ * Update business description by ID
+ */
+export async function updateDescriptionById(
+  client: PoolClient,
+  id: string,
+  description: string,
+  ownerId: string
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET description = $1, updated_at = NOW()
+     WHERE id = $2 AND owner_id = $3
+     RETURNING *`,
+    [description, id, ownerId]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+}
+
+/**
+ * Update business verification status by ID (admin only)
+ */
+export async function updateVerificationStatusById(
+  client: PoolClient,
+  id: string,
+  verificationStatus: "unverified" | "pending" | "verified"
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET verification_status = $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [verificationStatus, id]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+}

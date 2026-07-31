@@ -8,6 +8,12 @@ import * as nats from "nats";
 import { Msg } from "nats";
 type Client = nats.NatsConnection;
 import { RoleChangedEvent, ROLE_CHANGED_SUBJECT } from "../../types/user-management";
+import {
+  SendMessagePayload,
+  ReceivedMessagePayload,
+  MESSAGE_SEND_SUBJECT,
+  MESSAGE_RECEIVE_SUBJECT,
+} from "../../types/message";
 
 /**
  * NATS connection instance
@@ -94,4 +100,27 @@ export async function checkNatsHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Send a message via NATS
+ * Returns a promise that resolves when the message is acknowledged
+ */
+export async function sendMessage(payload: SendMessagePayload): Promise<void> {
+  const client = await getNatsClient();
+  const messagePayload = JSON.stringify(payload);
+
+  client.publish(MESSAGE_SEND_SUBJECT, Buffer.from(messagePayload));
+}
+
+/**
+ * Subscribe to incoming messages
+ */
+export function subscribeToMessages(
+  callback: (payload: ReceivedMessagePayload) => void
+): void {
+  subscribe(MESSAGE_RECEIVE_SUBJECT, (msg: Msg) => {
+    const payload = JSON.parse(msg.data.toString()) as ReceivedMessagePayload;
+    callback(payload);
+  });
 }

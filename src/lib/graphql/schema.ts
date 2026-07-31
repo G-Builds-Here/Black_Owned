@@ -35,18 +35,12 @@ export const typeDefs = `#graphql
     tags: [String!]
   }
 
-  type CategoryFacet {
-    category: String!
-    count: Int!
-  }
-
   type SearchResults {
     businesses: [Business!]!
     total: Int!
     page: Int!
     pageSize: Int!
     totalPages: Int!
-    facets: [CategoryFacet!]!
   }
 
   type DateTimeUtc {
@@ -67,28 +61,107 @@ export const typeDefs = `#graphql
     business(id: String!): GQLBusiness
   }
 
-  type PresignedUrl {
+  type PresignedUrlResult {
     url: String!
     expiresInSeconds: Int!
     objectName: String!
     bucket: String!
   }
 
-  type SubmitVerificationResponse {
-    success: Boolean!
-    presignedUrls: [PresignedUrl!]
-    error: String
+  type FileValidationError {
+    fileName: String!
+    error: String!
+    code: String!
   }
 
-  type UpdateBusinessResponse {
+  type SubmitVerificationResponse {
+    success: Boolean!
+    presignedUrls: [PresignedUrlResult!]
+    error: String
+    fileErrors: [FileValidationError!]
+  }
+
+  # Verification Queue Types for Admin Review
+  type VerificationRecord {
+    id: ID!
+    businessId: ID!
+    businessName: String!
+    documentUrls: [String!]!
+    status: VerificationStatus!
+    submittedAt: String!
+    reviewedAt: String
+    reviewedBy: String
+    rejectionReason: String
+  }
+
+  enum VerificationStatus {
+    pending
+    approved
+    rejected
+  }
+
+  type ApproveVerificationResponse {
     success: Boolean!
     business: Business
     error: String
   }
 
+  type RejectVerificationResponse {
+    success: Boolean!
+    error: String
+  }
+
+  type VerificationQueueResult {
+    pendingCount: Int!
+    items: [VerificationRecord!]!
+  }
+
+  # Moderation Queue Types for Admin Review
+  type ReviewRecord {
+    id: ID!
+    businessId: ID!
+    businessName: String!
+    userId: ID!
+    userName: String!
+    rating: Int!
+    comment: String!
+    status: ReviewStatus!
+    createdAt: String!
+  }
+
+  enum ReviewStatus {
+    pending
+    approved
+    hidden
+  }
+
+  type ApproveReviewResponse {
+    success: Boolean!
+    error: String
+  }
+
+  type HideReviewResponse {
+    success: Boolean!
+    error: String
+  }
+
+  type ModerationQueueResult {
+    pendingCount: Int!
+    items: [ReviewRecord!]!
+  }
+
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
-    updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
+
+    # Admin verification review mutations
+    approveVerification(verificationId: ID!, reviewedBy: String!): ApproveVerificationResponse!
+    rejectVerification(verificationId: ID!, reviewedBy: String!, reason: String!): RejectVerificationResponse!
+    getPendingVerifications: VerificationQueueResult!
+
+    # Admin moderation review mutations
+    approveReview(reviewId: ID!, reviewedBy: String!): ApproveReviewResponse!
+    hideReview(reviewId: ID!, reviewedBy: String!, reason: String!): HideReviewResponse!
+    getPendingReviews: ModerationQueueResult!
   }
 `;
