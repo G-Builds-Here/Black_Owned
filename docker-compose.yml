@@ -1,4 +1,46 @@
 services:
+  bw-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: black-owned-bw-scraper
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/black_owned
+      - NATS_URL=nats://nats:4222
+      - VALKEY_URL=valkey://localhost:6379
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: black-owned-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: black_owned
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   clickhouse:
     image: clickhouse/clickhouse-server:23.8-alpine
     container_name: black-owned-clickhouse
@@ -80,3 +122,4 @@ volumes:
   nats-data:
   minio-data:
   valkey-data:
+  postgres-data:
