@@ -12,6 +12,16 @@ pub enum ScraperSource {
     Facebook,
 }
 
+impl std::fmt::Display for ScraperSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScraperSource::GoogleMaps => write!(f, "Google Maps"),
+            ScraperSource::Yelp => write!(f, "Yelp"),
+            ScraperSource::Facebook => write!(f, "Facebook"),
+        }
+    }
+}
+
 /// Business data extracted from scraping
 #[derive(Debug, Clone)]
 pub struct BusinessData {

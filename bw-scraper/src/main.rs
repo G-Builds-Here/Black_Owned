@@ -4,7 +4,7 @@
 //! and stores it in the Black Owned database.
 
 use anyhow::Result;
-use tracing::{info, Level};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod scraper;
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     info!("NATS connection established");
 
     info!("Connecting to Redis...");
-    let redis_client = redis::Client::open(&config.redis_url)?;
+    let redis_client = redis::Client::open(config.redis_url.as_str())?;
     let redis_conn = redis_client.get_tokio_connection().await?;
     info!("Redis connection established");
 

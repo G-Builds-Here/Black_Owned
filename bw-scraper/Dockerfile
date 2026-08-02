@@ -1,27 +1,42 @@
 # Multi-stage Dockerfile for bw-scraper
 # Stage 1: Builder - compile the application
-FROM rust:1.85-alpine AS builder
+FROM rust:1.88 AS builder
 
-# Install required dependencies for building
-RUN apk add --no-cache \
-    musl-dev \
-    openssl-dev \
-    pkgconfig \
-    build-base
-
-# Create a new Rust project
 WORKDIR /app
 
-# Copy root Cargo.toml for workspace resolution (from parent directory)
-COPY ../Cargo.toml ./
+# Copy bw-scraper source files first
+COPY ./src/ ./src/
 
-# Copy bw-scraper directory with its Cargo.toml
-COPY ./ ./
+# Create standalone Cargo.toml (no workspace inheritance) using heredoc
+RUN cat > ./Cargo.toml << 'CARGO_EOF'
+[package]
+name = "bw-scraper"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
 
-# Create dummy lib.rs in other workspace members for dependency resolution
-RUN mkdir -p bw-types/src && echo "" > bw-types/src/lib.rs && \
-    mkdir -p bw-ingestion/src && echo "" > bw-ingestion/src/lib.rs && \
-    mkdir -p bw-api/src && echo "" > bw-api/src/lib.rs
+[[bin]]
+name = "bw-scraper"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+async-nats = { version = "0.40" }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "chrono"] }
+redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp"] }
+clickhouse = { version = "0.13" }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+reqwest = { version = "0.12", features = ["json"] }
+scraper = "0.22"
+tokio-tungstenite = "0.24"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+CARGO_EOF
 
 # Build dependencies first (for better layer caching)
 RUN cargo build --release --bin bw-scraper && \
@@ -32,16 +47,17 @@ COPY ./src/ ./src/
 RUN cargo build --release --bin bw-scraper
 
 # Stage 2: Runtime - minimal image with just the binary
-FROM alpine:3.21 AS runtime
+FROM debian:bookworm-slim AS runtime
 
 # Install runtime dependencies only
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     ca-certificates \
-    libressl
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and group
-RUN addgroup -g 1000 -S scraper && \
-    adduser -u 1000 -S scraper -G scraper
+RUN groupadd --gid 1000 scraper && \
+    useradd --uid 1000 --gid scraper --create-home --shell /bin/bash scraper
 
 # Set working directory
 WORKDIR /app
