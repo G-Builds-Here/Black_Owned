@@ -17,6 +17,17 @@ export interface Business {
   imageUrl: string;
   description: string;
   tags: string[];
+  scrapedData?: ScrapeMetadata;
+}
+
+export interface ScrapeMetadata {
+  scrapedAt: string;
+  sourceUrl: string;
+  rawDescription?: string;
+  rawContactInfo?: string;
+  rawAddress?: string;
+  rawPhoneNumber?: string;
+  rawWebsite?: string;
 }
 
 export interface BusinessCardProps {
@@ -90,6 +101,7 @@ export default function BusinessCard({
       className="h-full flex flex-col"
       as={enableLink ? Link : 'div'}
       href={enableLink ? `/business/${business.id}` : undefined}
+      data-testid="business-card"
     >
       {/* Image */}
       <div className="relative aspect-video overflow-hidden rounded-t-lg bg-neutral-200">
@@ -124,8 +136,8 @@ export default function BusinessCard({
       </div>
 
       {/* Content */}
-      <div className="flex flex-col flex-grow p-4">
-        <h3 className="text-xl font-semibold mb-2 text-neutral-800">{business.name}</h3>
+      <div className="flex flex-col flex-grow p-4" data-testid="business-card-content">
+        <h3 className="text-xl font-semibold mb-2 text-neutral-800" data-testid="business-name">{business.name}</h3>
 
         {renderStars(business.rating)}
 
@@ -134,7 +146,7 @@ export default function BusinessCard({
           {business.location}
         </p>
 
-        <p className="text-sm text-neutral-600 mt-3 line-clamp-2 flex-grow">
+        <p className="text-sm text-neutral-600 mt-3 line-clamp-2 flex-grow" data-testid="business-description">
           {business.description}
         </p>
 
@@ -150,7 +162,7 @@ export default function BusinessCard({
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200">
+        <div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200" data-testid="business-card-actions">
           <Button variant="primary" size="sm" onClick={handleViewDetails} className="flex-1">
             View Details
           </Button>
