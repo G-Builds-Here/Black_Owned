@@ -21,6 +21,8 @@ export interface Business {
   verificationStatus: VerificationStatus;
   createdAt: Date;
   updatedAt: Date;
+  phone: string | undefined;
+  potentialDuplicateId: string | undefined;
 }
 
 /**

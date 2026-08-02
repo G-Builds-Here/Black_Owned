@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, normalizePhoneNumber } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -159,5 +159,39 @@ describe("Business Repository", () => {
         await cleanupUser(user.email);
       }
     });
+  });
+});
+
+describe("normalizePhoneNumber", () => {
+  it("removes parentheses and dashes", () => {
+    expect(normalizePhoneNumber("(555) 123-4567")).toBe("5551234567");
+  });
+
+  it("removes spaces", () => {
+    expect(normalizePhoneNumber("555 123 4567")).toBe("5551234567");
+  });
+
+  it("handles country code", () => {
+    expect(normalizePhoneNumber("+1-555-123-4567")).toBe("15551234567");
+  });
+
+  it("handles plain digits", () => {
+    expect(normalizePhoneNumber("5551234567")).toBe("5551234567");
+  });
+
+  it("trims whitespace", () => {
+    expect(normalizePhoneNumber("  (555) 123-4567  ")).toBe("5551234567");
+  });
+
+  it("handles dots as separator", () => {
+    expect(normalizePhoneNumber("555.123.4567")).toBe("5551234567");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(normalizePhoneNumber("")).toBe("");
+  });
+
+  it("returns empty string for whitespace only", () => {
+    expect(normalizePhoneNumber("   ")).toBe("");
   });
 });

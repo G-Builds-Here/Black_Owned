@@ -28,7 +28,10 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusiness,
+  create as createBusinessInRepo,
+  findBusinessByPhone,
+  updateBusinessWithDuplicateInfo,
+  normalizePhoneNumber,
   Business as BusinessRecord,
 } from "../db/business-repository";
 
@@ -308,7 +311,7 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
+function businessRecordToGraphql(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
@@ -370,7 +373,7 @@ export async function updateBusiness(
 
   return {
     success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
+    business: businessRecordToGraphql(updatedBusiness),
   };
 }
 
@@ -482,6 +485,8 @@ function businessToGraphqlBusiness(business: Business): {
   categoryId: string;
   verified: boolean;
   createdAt: { timestamp: number };
+  phone: string | undefined;
+  potentialDuplicateId: string | undefined;
 } {
   return {
     id: business.id,
@@ -489,6 +494,8 @@ function businessToGraphqlBusiness(business: Business): {
     categoryId: business.categoryId,
     verified: business.verificationStatus === "verified",
     createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
+    phone: business.phone,
+    potentialDuplicateId: business.potentialDuplicateId,
   };
 }
 
@@ -505,12 +512,14 @@ function getCurrentUserId(context: unknown): string | null {
  */
 export async function createBusiness(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string } },
+  args: { input: { name: string; description?: string; categoryId: string; phone?: string } },
   context: unknown
 ): Promise<{
   success: boolean;
   business?: unknown;
   error?: string;
+  isPotentialDuplicate?: boolean;
+  existingBusinessId?: string;
 }> {
   const { input } = args;
   const userId = getCurrentUserId(context);
@@ -540,17 +549,33 @@ export async function createBusiness(
 
   const client = await getPool().connect();
   try {
+    // Check for duplicate phone number if provided
+    let existingBusinessId: string | undefined;
+    let isPotentialDuplicate = false;
+
+    if (input.phone && input.phone.trim() !== "") {
+      const existingBusiness = await findBusinessByPhone(client, input.phone.trim());
+      if (existingBusiness) {
+        isPotentialDuplicate = true;
+        existingBusinessId = existingBusiness.id;
+      }
+    }
+
     const business = await createBusinessInDb(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
-      input.categoryId.trim()
+      input.categoryId.trim(),
+      input.phone?.trim(),
+      existingBusinessId
     );
 
     return {
       success: true,
       business: businessToGraphqlBusiness(business),
+      isPotentialDuplicate,
+      existingBusinessId,
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -571,14 +596,17 @@ async function createBusinessInDb(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
+  categoryId: string,
+  phone?: string,
+  potentialDuplicateId?: string
 ): Promise<Business> {
   const tableName = "businesses";
+  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, potential_duplicate_id)
+     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
      RETURNING *`,
-    [ownerId, name, description || null, categoryId]
+    [ownerId, name, description || null, categoryId, normalizedPhone || null, potentialDuplicateId || null]
   );
   return result.rows[0];
 }

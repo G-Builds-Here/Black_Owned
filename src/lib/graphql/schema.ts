@@ -2,6 +2,8 @@
  * GraphQL Schema Definition
  */
 
+import { businessTypeDefs } from "./business-schema";
+
 export const typeDefs = `#graphql
   type User {
     id: ID!
@@ -90,5 +92,9 @@ export const typeDefs = `#graphql
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
     updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
+    createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
   }
 `;
+
+// Merge business schema types into main schema
+export const fullTypeDefs = `${typeDefs}\n${businessTypeDefs}`;
