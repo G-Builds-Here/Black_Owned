@@ -1,4 +1,28 @@
 services:
+  bw-scraper:
+    build:
+      context: ./bw-scraper
+      dockerfile: Dockerfile
+    container_name: black-owned-bw-scraper
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://blackowned:password@postgres:5432/blackowned?sslmode=disable
+      - NATS_URL=nats://nats:4222
+      - REDIS_URL=redis://valkey:6379
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - RUST_LOG=info
+    restart: unless-stopped
+    networks:
+      - black-owned-network
+
   clickhouse:
     image: clickhouse/clickhouse-server:23.8-alpine
     container_name: black-owned-clickhouse
@@ -16,6 +40,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    networks:
+      - black-owned-network
 
   nats:
     image: nats:2.10-alpine
@@ -31,6 +57,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - black-owned-network
 
   minio:
     image: minio/minio:latest
@@ -50,6 +78,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    networks:
+      - black-owned-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: black-owned-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: blackowned
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: blackowned
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations/postgresql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blackowned -d blackowned"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - black-owned-network
 
   valkey:
     image: valkey/valkey:7.2-alpine
@@ -74,9 +125,16 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks:
+      - black-owned-network
+
+networks:
+  black-owned-network:
+    driver: bridge
 
 volumes:
   clickhouse-data:
   nats-data:
   minio-data:
+  postgres-data:
   valkey-data:

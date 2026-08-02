@@ -1,0 +1,28 @@
+[package]
+name = "bw-scraper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bw-scraper"
+path = "src/main.rs"
+
+[dependencies]
+bw-types = { path = "../bw-types" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+async-nats = { version = "0.40" }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "chrono"] }
+redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp"] }
+clickhouse = { version = "0.13" }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+reqwest = { version = "0.12", features = ["json"] }
+scraper = "0.22"
+tokio-tungstenite = "0.24"
