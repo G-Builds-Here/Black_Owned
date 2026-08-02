@@ -5,7 +5,8 @@
  * Supports generating presigned PUT URLs for secure file uploads.
  */
 
-import { MinioClient } from "@minio/client";
+import * as Minio from "minio";
+const MinioClient = Minio.Client;
 
 /**
  * Configuration for MinIO connection
