@@ -32,6 +32,8 @@ pub mod cache_service;
 #[cfg(feature = "integration_test")]
 pub mod cache_service;
 
+pub mod etl;
+
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
 
