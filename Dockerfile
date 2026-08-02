@@ -1,41 +1,44 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM rust:1.85-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/ui ./packages/ui
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN npm ci
-
-# Copy source code
-COPY src ./src
-COPY packages/ui ./packages/ui
+# Copy workspace files
+COPY Cargo.toml ./
+COPY Cargo.lock ./
+COPY bw-types ./bw-types
+COPY bw-ingestion ./bw-ingestion
+COPY bw-api ./bw-api
 
 # Build the application
-RUN npm run build
+RUN cargo build --release --bin bw-api
 
 # Production stage
-FROM node:20-alpine AS production
+FROM debian:bookworm-slim AS production
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/ui ./packages/ui
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install production dependencies only
-RUN npm ci --only=production
-
-# Copy built application from builder
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.js ./next.config.js
+# Copy the built binary
+COPY --from=builder /app/target/release/bw-api /app/bw-api
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["/app/bw-api"]
