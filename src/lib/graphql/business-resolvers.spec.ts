@@ -37,10 +37,12 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Ace Cafe",
       description: "Coffee shop",
-      categoryId: "cat-1",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
+      category_id: "cat-1",
+      rating: null,
+      review_count: 0,
+      verification_status: "unverified",
+      created_at: mockDate,
+      updated_at: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
@@ -69,6 +71,8 @@ describe("createBusiness mutation", () => {
     expect(result.business?.name).toBe("Ace Cafe");
     expect(result.business?.categoryId).toBe("cat-1");
     expect(result.business?.verified).toBe(false);
+    expect(result.business?.rating).toBeNull();
+    expect(result.business?.reviewCount).toBe(0);
   });
 
   it("returns validation error when name is missing", async () => {
@@ -201,10 +205,12 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Business With Description",
       description: "This is a detailed description of the business",
-      categoryId: "cat-2",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
+      category_id: "cat-2",
+      rating: null,
+      review_count: 0,
+      verification_status: "unverified",
+      created_at: mockDate,
+      updated_at: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
@@ -241,10 +247,12 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Business Without Description",
       description: null,
-      categoryId: "cat-3",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
+      category_id: "cat-3",
+      rating: null,
+      review_count: 0,
+      verification_status: "unverified",
+      created_at: mockDate,
+      updated_at: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
@@ -279,10 +287,12 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Trimmed Business Name",
       description: null,
-      categoryId: "cat-4",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
+      category_id: "cat-4",
+      rating: null,
+      review_count: 0,
+      verification_status: "unverified",
+      created_at: mockDate,
+      updated_at: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
@@ -306,5 +316,50 @@ describe("createBusiness mutation", () => {
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Trimmed Business Name");
     expect(result.business?.categoryId).toBe("cat-4");
+  });
+
+  it("creates business with rating and review count", async () => {
+    const mockUserId = "test-user-id-666";
+    const mockBusinessId = "business-id-111";
+    const mockDate = new Date("2026-07-19T10:00:00Z");
+
+    const mockBusiness = {
+      id: mockBusinessId,
+      ownerId: mockUserId,
+      name: "Rated Business",
+      description: "A business with ratings",
+      category_id: "cat-5",
+      rating: 4.5,
+      review_count: 25,
+      verification_status: "unverified",
+      created_at: mockDate,
+      updated_at: mockDate,
+    };
+
+    mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
+    };
+
+    const args = {
+      input: {
+        name: "Rated Business",
+        description: "A business with ratings",
+        categoryId: "cat-5",
+        rating: 4.5,
+        reviewCount: 25,
+      },
+    };
+
+    const result = await createBusiness(null, args, context);
+
+    expect(result.success).toBe(true);
+    expect(result.business?.name).toBe("Rated Business");
+    expect(result.business?.rating).toBe(4.5);
+    expect(result.business?.reviewCount).toBe(25);
   });
 });

@@ -313,6 +313,8 @@ function businessToGraphqlBusiness(business: BusinessRecord) {
     id: business.id,
     name: business.name,
     categoryId: business.category_id,
+    rating: business.rating,
+    reviewCount: business.review_count,
     verified: business.verified,
     createdAt: {
       timestamp: Math.floor(business.created_at.getTime() / 1000),
@@ -480,6 +482,8 @@ function businessToGraphqlBusiness(business: Business): {
   id: string;
   name: string;
   categoryId: string;
+  rating: number | null;
+  reviewCount: number;
   verified: boolean;
   createdAt: { timestamp: number };
 } {
@@ -487,6 +491,8 @@ function businessToGraphqlBusiness(business: Business): {
     id: business.id,
     name: business.name,
     categoryId: business.categoryId,
+    rating: business.rating,
+    reviewCount: business.reviewCount,
     verified: business.verificationStatus === "verified",
     createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
   };
@@ -505,7 +511,7 @@ function getCurrentUserId(context: unknown): string | null {
  */
 export async function createBusiness(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string } },
+  args: { input: { name: string; description?: string; categoryId: string; rating?: number; reviewCount?: number } },
   context: unknown
 ): Promise<{
   success: boolean;
@@ -545,7 +551,9 @@ export async function createBusiness(
       userId,
       input.name.trim(),
       input.description?.trim(),
-      input.categoryId.trim()
+      input.categoryId.trim(),
+      input.rating ?? null,
+      input.reviewCount ?? 0
     );
 
     return {
@@ -571,14 +579,16 @@ async function createBusinessInDb(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
+  categoryId: string,
+  rating: number | null = null,
+  reviewCount: number = 0
 ): Promise<Business> {
   const tableName = "businesses";
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, rating, review_count, verification_status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'unverified')
      RETURNING *`,
-    [ownerId, name, description || null, categoryId]
+    [ownerId, name, description || null, categoryId, rating ?? null, reviewCount]
   );
   return result.rows[0];
 }

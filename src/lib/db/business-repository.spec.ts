@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateBusinessRating } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -57,6 +57,8 @@ describe("Business Repository", () => {
           expect(business.name).toBe("Test Business");
           expect(business.description).toBe("Test description");
           expect(business.categoryId).toBe("cat-1");
+          expect(business.rating).toBeNull();
+          expect(business.reviewCount).toBe(0);
           expect(business.verificationStatus).toBe("unverified");
           expect(business.createdAt).toBeInstanceOf(Date);
           expect(business.updatedAt).toBeInstanceOf(Date);
@@ -79,6 +81,27 @@ describe("Business Repository", () => {
 
           expect(business.name).toBe("Test Business No Desc");
           expect(business.description).toBeUndefined();
+          expect(business.reviewCount).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("creates a business with rating and review count", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Rated Business", "Test description", "cat-3", 4.5, 25);
+
+          expect(business.name).toBe("Rated Business");
+          expect(business.rating).toBe(4.5);
+          expect(business.reviewCount).toBe(25);
         } finally {
           client.release();
         }
@@ -152,6 +175,52 @@ describe("Business Repository", () => {
         try {
           const businesses = await findBusinessesByOwnerId(client, user.id);
           expect(businesses.length).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+  });
+
+  describe("updateBusinessRating", () => {
+    it("updates business rating and review count", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Initial Business", "Desc", "cat-1");
+
+          const updated = await updateBusinessRating(client, business.id, 4.5, 25);
+
+          expect(updated).toBeDefined();
+          expect(updated?.rating).toBe(4.5);
+          expect(updated?.reviewCount).toBe(25);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("sets rating to null and updates review count", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Initial Business", "Desc", "cat-1", 3.0, 10);
+
+          const updated = await updateBusinessRating(client, business.id, null, 50);
+
+          expect(updated).toBeDefined();
+          expect(updated?.rating).toBeNull();
+          expect(updated?.reviewCount).toBe(50);
         } finally {
           client.release();
         }
