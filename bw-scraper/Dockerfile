@@ -12,18 +12,23 @@ RUN apk add --no-cache \
 # Create a new Rust project
 WORKDIR /app
 
-# Copy Cargo.toml for dependency resolution
-COPY Cargo.toml ./
+# Copy root Cargo.toml for workspace resolution (from parent directory)
+COPY ../Cargo.toml ./
 
-# Create source directory and a dummy main.rs for dependency resolution
-RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+# Copy bw-scraper directory with its Cargo.toml
+COPY ./ ./
+
+# Create dummy lib.rs in other workspace members for dependency resolution
+RUN mkdir -p bw-types/src && echo "" > bw-types/src/lib.rs && \
+    mkdir -p bw-ingestion/src && echo "" > bw-ingestion/src/lib.rs && \
+    mkdir -p bw-api/src && echo "" > bw-api/src/lib.rs
 
 # Build dependencies first (for better layer caching)
-RUN cargo build --release && \
+RUN cargo build --release --bin bw-scraper && \
     rm -rf target/release/.fingerprint/bw-scraper-*
 
 # Copy actual source files and rebuild
-COPY src/ ./src/
+COPY ./src/ ./src/
 RUN cargo build --release --bin bw-scraper
 
 # Stage 2: Runtime - minimal image with just the binary
@@ -32,7 +37,7 @@ FROM alpine:3.21 AS runtime
 # Install runtime dependencies only
 RUN apk add --no-cache \
     ca-certificates \
-    openssl-libs
+    libressl
 
 # Create non-root user and group
 RUN addgroup -g 1000 -S scraper && \

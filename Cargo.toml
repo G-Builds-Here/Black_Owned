@@ -4,6 +4,7 @@ members = [
     "bw-types",
     "bw-ingestion",
     "bw-api",
+    "bw-scraper",
 ]
 
 [workspace.package]
