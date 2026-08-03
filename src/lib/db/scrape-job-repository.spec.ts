@@ -161,6 +161,7 @@ describe("ScrapeJobRepository", () => {
       const job2 = await createScrapeJob(input);
 
       expect(job1.id).not.toBe(job2.id);
+
     });
   });
 
@@ -234,6 +235,7 @@ describe("ScrapeJobRepository", () => {
       const result = await findAllScrapeJobs(1, 20, "pending");
 
       expect(result.jobs.every((job) => job.status === "pending")).toBe(true);
+
     });
   });
 
@@ -406,6 +408,7 @@ describe("ScrapeJobRepository", () => {
       // Assert
       expect(summary7Days.total_jobs).toBe(5);
       expect(summary7Days.last_30_days.total_jobs).toBe(3);
+
     });
   });
 });

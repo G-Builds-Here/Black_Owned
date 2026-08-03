@@ -41,6 +41,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   } catch (error) {
     console.error("Scrape job summary error:", error);
+
     return NextResponse.json(
       {
         success: false,
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             !query && { field: "query", message: "Query is required" },
             !location && { field: "location", message: "Location is required" },
           ].filter(Boolean),
+
         },
         { status: 400 }
       );
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               message: `Source must be one of: ${validSources.join(", ")}`,
             },
           ],
+
         },
         { status: 400 }
       );
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   } catch (error) {
     console.error("Scrape job creation error:", error);
+
     return NextResponse.json(
       {
         success: false,

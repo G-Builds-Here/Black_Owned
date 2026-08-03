@@ -371,4 +371,5 @@ describe("GET /api/scrape-jobs/summary", () => {
     expect(response.status).toBe(200);
     expect(json.data.period.days).toBe(30);
   });
+
 });
