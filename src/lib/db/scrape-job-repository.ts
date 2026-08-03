@@ -45,7 +45,6 @@ export async function initializeScrapeJobSchema(): Promise<void> {
   } finally {
     client.release();
   }
-
 }
 
 /**
@@ -134,7 +133,6 @@ export async function findAllScrapeJobs(
   } finally {
     client.release();
   }
-
 }
 
 /**
@@ -244,5 +242,4 @@ export async function getScrapeJobSummary(days: number = 30): Promise<ScrapeJobS
   } finally {
     client.release();
   }
-
 }
