@@ -5,6 +5,7 @@ use axum::{
     http::{Request, StatusCode, header},
     response::Response,
 };
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_layer::Layer;
 use tokio::sync::RwLock;
@@ -21,24 +22,16 @@ pub struct AuthConfig {
 }
 
 /// In-memory store for authenticated user sessions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
-    valid_tokens: Arc<RwLock<std::collections::HashMap<String, String>>>,
-}
-
-impl Clone for AuthStore {
-    fn clone(&self) -> Self {
-        Self {
-            valid_tokens: self.valid_tokens.clone(),
-        }
-    }
+    valid_tokens: RwLock<std::collections::HashMap<String, String>>,
 }
 
 impl AuthStore {
     fn new() -> Self {
         Self {
-            valid_tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            valid_tokens: RwLock::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -94,27 +87,28 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        // Extract token from Bearer header - extract string before async block
-        let token = req
+    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+        let auth_header = req
             .headers()
             .get(header::AUTHORIZATION)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|auth| auth.strip_prefix("Bearer "))
-            .map(|s| s.to_string());
+            .and_then(|h| h.to_str().ok());
 
         let mut inner = self.inner.clone();
-        let _store = self.store.clone();
+        let store = self.store.clone();
         let config = self.config.clone();
 
         Box::pin(async move {
-            // Verify JWT token if token was extracted
+            // Extract token from Bearer header
+            let token = auth_header
+                .and_then(|auth| auth.strip_prefix("Bearer "))
+                .map(|s| s.to_string());
+
             if let Some(token_str) = &token {
+                // Verify JWT token
                 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
                 use serde::{Deserialize, Serialize};
 
                 #[derive(Debug, Deserialize, Serialize)]
-                #[allow(non_snake_case)]
                 struct JwtClaims {
                     userId: String,
                     email: String,
@@ -128,8 +122,10 @@ where
                     &DecodingKey::from_secret(config.jwt_secret.as_bytes()),
                     &validation,
                 ) {
-                    Ok(_token_data) => {
-                        // Token is valid - proceed with request
+                    Ok(token_data) => {
+                        // Extract user ID from token and add to request extensions
+                        req.extensions_mut()
+                            .insert(UserId(token_data.claims.userId));
                         inner.call(req).await
                     }
                     Err(_) => {
