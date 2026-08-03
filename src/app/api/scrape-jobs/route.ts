@@ -1,12 +1,55 @@
 /**
  * Scrape Jobs API Route
  *
- * REST endpoint for creating scrape jobs.
+ * REST endpoints for scrape job management.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createScrapeJob } from "@/lib/db/scrape-job-repository";
+import { createScrapeJob, getScrapeJobSummary } from "@/lib/db/scrape-job-repository";
 import { CreateScrapeJobInput } from "@/types/scrape-job";
+
+/**
+ * GET /api/scrape-jobs/summary
+ * Get scrape job summary statistics
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  try {
+    // Parse days parameter (default: 30)
+    const { searchParams } = new URL(request.url);
+    const days = parseInt(searchParams.get("days") || "30", 10) || 30;
+
+    const summary = await getScrapeJobSummary(days);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          total_jobs: summary.total_jobs,
+          successful_jobs: summary.successful_jobs,
+          failed_jobs: summary.failed_jobs,
+          pending_jobs: summary.pending_jobs,
+          running_jobs: summary.running_jobs,
+          period: {
+            days: days,
+            total_jobs: summary.last_30_days.total_jobs,
+            successful_jobs: summary.last_30_days.successful_jobs,
+            failed_jobs: summary.last_30_days.failed_jobs,
+          },
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Scrape job summary error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/scrape-jobs
