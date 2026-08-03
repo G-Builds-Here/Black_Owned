@@ -4,19 +4,19 @@
  * Integration tests require actual browser and network access
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { GoogleMapsScraper, ScrapedBusiness } from './google-maps-scraper';
 
 // Mock playwright
-vi.mock('playwright', () => ({
+jest.mock('playwright', () => ({
   chromium: {
-    launch: vi.fn().mockResolvedValue({
-      newContext: vi.fn().mockResolvedValue({
-        newPage: vi.fn().mockResolvedValue({
-          goto: vi.fn().mockResolvedValue({}),
-          waitForSelector: vi.fn().mockResolvedValue({}),
-          waitForTimeout: vi.fn().mockResolvedValue(undefined),
-          evaluate: vi.fn().mockResolvedValue([
+    launch: jest.fn().mockResolvedValue({
+      newContext: jest.fn().mockResolvedValue({
+        newPage: jest.fn().mockResolvedValue({
+          goto: jest.fn().mockResolvedValue({}),
+          waitForSelector: jest.fn().mockResolvedValue({}),
+          waitForTimeout: jest.fn().mockResolvedValue(undefined),
+          evaluate: jest.fn().mockResolvedValue([
             {
               name: 'Test Business',
               category: 'Test Category',
@@ -28,14 +28,14 @@ vi.mock('playwright', () => ({
               tags: ['test'],
             },
           ]),
-          close: vi.fn().mockResolvedValue(undefined),
-          $: vi.fn().mockResolvedValue({
-            click: vi.fn().mockResolvedValue(undefined),
+          close: jest.fn().mockResolvedValue(undefined),
+          $: jest.fn().mockResolvedValue({
+            click: jest.fn().mockResolvedValue(undefined),
           }),
         }),
-        close: vi.fn().mockResolvedValue(undefined),
+        close: jest.fn().mockResolvedValue(undefined),
       }),
-      close: vi.fn().mockResolvedValue(undefined),
+      close: jest.fn().mockResolvedValue(undefined),
     }),
   },
 }));
@@ -45,7 +45,7 @@ describe('GoogleMapsScraper', () => {
 
   beforeEach(() => {
     scraper = new GoogleMapsScraper({ headless: true });
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   afterEach(async () => {
@@ -124,22 +124,22 @@ describe('GoogleMapsScraper', () => {
 
       // Override evaluate to return null
       const mockPage = {
-        goto: vi.fn().mockResolvedValue({}),
-        waitForSelector: vi.fn().mockResolvedValue({}),
-        waitForTimeout: vi.fn().mockResolvedValue(undefined),
-        evaluate: vi.fn().mockResolvedValue(null),
-        close: vi.fn().mockResolvedValue(undefined),
-        $: vi.fn().mockResolvedValue(null),
+        goto: jest.fn().mockResolvedValue({}),
+        waitForSelector: jest.fn().mockResolvedValue({}),
+        waitForTimeout: jest.fn().mockResolvedValue(undefined),
+        evaluate: jest.fn().mockResolvedValue(null),
+        close: jest.fn().mockResolvedValue(undefined),
+        $: jest.fn().mockResolvedValue(null),
       };
 
       const mockContext = {
-        newPage: vi.fn().mockResolvedValue(mockPage),
-        close: vi.fn().mockResolvedValue(undefined),
+        newPage: jest.fn().mockResolvedValue(mockPage),
+        close: jest.fn().mockResolvedValue(undefined),
       };
 
       const mockBrowser = {
-        newContext: vi.fn().mockResolvedValue(mockContext),
-        close: vi.fn().mockResolvedValue(undefined),
+        newContext: jest.fn().mockResolvedValue(mockContext),
+        close: jest.fn().mockResolvedValue(undefined),
       };
 
       (mockBrowser.newContext as jest.Mock).mockResolvedValue(mockContext);
