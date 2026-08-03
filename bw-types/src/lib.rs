@@ -109,7 +109,7 @@ mod tests {
         let business = Business {
             id: Uuid::new_v4(),
             name: "Test Business".to_string(),
-            description: Some("Test description".to_string()),
+            description: Some("A test business".to_string()),
             category_id: Uuid::new_v4(),
             owner_id: Uuid::new_v4(),
             verified: true,
@@ -130,6 +130,8 @@ mod tests {
         assert_eq!(business.category_id, deserialized.category_id);
         assert_eq!(business.verified, deserialized.verified);
         assert_eq!(business.created_at, deserialized.created_at);
+<<<<<<< HEAD
+        assert_eq!(business.description, deserialized.description);
         assert_eq!(business.address, deserialized.address);
         assert_eq!(business.phone, deserialized.phone);
         assert_eq!(business.website, deserialized.website);
