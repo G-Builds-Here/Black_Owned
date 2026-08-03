@@ -6,7 +6,6 @@
  * and all services pass health checks within 60 seconds
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
