@@ -20,16 +20,8 @@ pub struct MutationRoot;
 /// Extract user ID from JWT token in Authorization header
 fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
     let auth_header = ctx
-        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string())
-        .or_else(|| {
-            ctx.req()
-                .headers()
-                .get(axum::http::header::AUTHORIZATION)
-                .and_then(|h| h.to_str().ok())
-                .filter(|s| s.starts_with("Bearer "))
-                .map(|s| s.trim_start_matches("Bearer ").to_string())
-        });
+        .data::<axum::Extension<axum_extra::headers::Authorization<axum_extra::headers::Bearer>>>()
+        .map(|ext| ext.0.token().to_string());
 
     auth_header
         .ok_or_else(|| Error::new("Authorization header is required"))
@@ -58,10 +50,10 @@ impl MutationRoot {
         })?;
 
         // Extract user ID from JWT token
-        let user_id = ctx
-            .data::<UserId>()
-            .map(|uid| uid.0.clone())
-            .ok_or_else(|| Error::new("Unauthorized: User not authenticated"))?;
+        let user_id = match ctx.data::<UserId>() {
+            Some(uid) => uid.0.clone(),
+            None => return Err(Error::new("Unauthorized: User not authenticated")),
+        };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user ID from token: {:?}", e))
@@ -115,10 +107,10 @@ impl MutationRoot {
         })?;
 
         // Extract user ID from JWT token
-        let user_id = ctx
-            .data::<UserId>()
-            .map(|uid| uid.0.clone())
-            .ok_or_else(|| Error::new("Unauthorized: User not authenticated"))?;
+        let user_id = match ctx.data::<UserId>() {
+            Some(uid) => uid.0.clone(),
+            None => return Err(Error::new("Unauthorized: User not authenticated")),
+        };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user ID from token: {:?}", e))
