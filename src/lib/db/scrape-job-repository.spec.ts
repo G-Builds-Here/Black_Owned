@@ -3,6 +3,7 @@
  */
 
 import {
+  cancelScrapeJob,
   createScrapeJob,
   findScrapeJobById,
   findAllScrapeJobs,
@@ -409,3 +410,51 @@ describe("ScrapeJobRepository", () => {
     });
   });
 });
+
+  describe("cancelScrapeJob", () => {
+    it("should cancel a running scrape job", async () => {
+      const mockJob = {
+        id: "test-id",
+        source: "google-maps",
+        query: "cancel test",
+        location: "location",
+        status: "cancelled",
+        business_count: 0,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [mockJob] });
+
+      const cancelled = await cancelScrapeJob("test-id");
+
+      expect(cancelled?.status).toBe("cancelled");
+      expect(cancelled?.updated_at).toBeInstanceOf(Date);
+    });
+
+    it("should return null when job is not found", async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await cancelScrapeJob("00000000-0000-0000-0000-000000000000");
+      expect(result).toBeNull();
+    });
+
+    it("should return null when job is not in running status", async () => {
+      // Job is already completed, so UPDATE returns no rows
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await cancelScrapeJob("test-id");
+      expect(result).toBeNull();
+    });
+
+    it("should only cancel jobs with running status", async () => {
+      // Job with pending status should not be cancellable
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await cancelScrapeJob("test-id");
+      expect(result).toBeNull();
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("status = 'running'"),
+        expect.any(Array)
+      );
+    });
+  });

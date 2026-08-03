@@ -12,7 +12,7 @@ export type ScraperSource = "google-maps" | "yelp" | "facebook";
 /**
  * Scrape job status - tracks the lifecycle of a scrape job
  */
-export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
+export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
  * Input for creating a new scrape job
