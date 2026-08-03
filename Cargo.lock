@@ -557,6 +557,7 @@ dependencies = [
  "lettre",
  "minio-rsc",
  "redis",
+ "regex",
  "serde",
  "serde_json",
  "tokio",
