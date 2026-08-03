@@ -6,4 +6,5 @@
 
 export * from "./business";
 export * from "./review";
+export * from "./scrape-job";
 export * from "./user";
