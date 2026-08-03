@@ -12,5 +12,10 @@ module.exports = {
   moduleNameMapper: {
     "^next/server$": "<rootDir>/__mocks__/next-server.ts",
     "^@/(.*)$": "<rootDir>/src/$1",
+    "\\.(css|less|scss|sass)$": "jest-transform-stub",
+    "\\.(jpg|jpeg|png|gif|svg|webp)$": "<rootDir>/__mocks__/file-mock.js",
+  },
+  testEnvironmentOptions: {
+    customExportConditions: [""],
   },
 };
