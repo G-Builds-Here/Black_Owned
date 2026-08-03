@@ -206,6 +206,22 @@ describe("GoogleMapsScraper", () => {
       expect(result.pagination.totalPages).toBeLessThanOrEqual(2);
     });
 
+    it("navigates to correct Google Maps search URL", async () => {
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([]);
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
+
+      await scraper.scrape("Italian restaurants", "Seattle, WA");
+
+      expect(mockPage.goto).toHaveBeenCalled();
+      const callArgs = mockPage.goto.mock.calls[0];
+      expect(callArgs[0]).toContain("google.com/maps/search");
+      expect(callArgs[0]).toContain("Italian%20restaurants");
+      expect(callArgs[0]).toContain("Seattle%2C%20WA");
+    });
+
     it("handles empty results gracefully", async () => {
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockRejectedValue(
