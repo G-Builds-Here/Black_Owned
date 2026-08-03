@@ -7,12 +7,11 @@
 /**
  * Scraped business data from Facebook
  */
-export interface ScrapedBusiness {
+export interface ScrapedFacebookBusiness {
   name: string;
-  address?: string;
+  address: string;
   phone?: string;
   website?: string;
-  category?: string;
   rating?: number;
   reviewCount?: number;
   source: "facebook";
@@ -22,7 +21,7 @@ export interface ScrapedBusiness {
 /**
  * Scraper pagination info
  */
-export interface ScraperPagination {
+export interface FacebookScraperPagination {
   currentPage: number;
   totalPages: number;
   resultsPerPage: number;
@@ -33,33 +32,62 @@ export interface ScraperPagination {
 /**
  * Scraper result with pagination metadata
  */
-export interface ScraperResult {
-  businesses: ScrapedBusiness[];
-  pagination: ScraperPagination;
+export interface FacebookScraperResult {
+  businesses: ScrapedFacebookBusiness[];
+  pagination: FacebookScraperPagination;
   source: "facebook";
   query: string;
-  location: string;
   timestamp: Date;
+  loginRequired?: boolean;
+  rateLimited?: boolean;
 }
 
 /**
  * Scraper options
  */
-export interface ScraperOptions {
+export interface FacebookScraperOptions {
   maxPages?: number;
   delayBetweenPagesMs?: number;
   includeDuplicates?: boolean;
+  handleLoginPrompt?: boolean;
+  handleRateLimiting?: boolean;
 }
 
 /**
  * Scraper job state for tracking progress
  */
-export interface ScraperJobState {
+export interface FacebookScraperJobState {
   query: string;
-  location: string;
   currentPage: number;
   totalPages: number;
-  businessesCollected: ScrapedBusiness[];
+  businessesCollected: ScrapedFacebookBusiness[];
   isComplete: boolean;
+  loginRequired?: boolean;
+  rateLimited?: boolean;
   error?: string;
+}
+
+/**
+ * Scraper error types
+ */
+export enum FacebookScraperErrorType {
+  PAGE_NOT_FOUND = "PAGE_NOT_FOUND",
+  LOGIN_REQUIRED = "LOGIN_REQUIRED",
+  RATE_LIMITED = "RATE_LIMITED",
+  NETWORK_ERROR = "NETWORK_ERROR",
+  UNKNOWN = "UNKNOWN",
+}
+
+/**
+ * Scraper error with type information
+ */
+export class FacebookScraperError extends Error {
+  constructor(
+    public readonly type: FacebookScraperErrorType,
+    message: string,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "FacebookScraperError";
+  }
 }

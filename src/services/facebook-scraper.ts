@@ -1,16 +1,20 @@
 /**
  * Facebook Scraper
  *
- * Scrapes Facebook for business page search results.
+ * Scrapes Facebook for business page details using Puppeteer.
+ * Extracts: name, address, phone, website, rating, review_count
+ * Handles: login prompts, pagination, rate limiting
  */
 
-import { Browser, Page, BrowserContext } from "playwright";
+import puppeteer, { Browser, Page } from "puppeteer";
 import {
-  ScraperOptions,
-  ScraperResult,
-  ScrapedBusiness,
-  ScraperPagination,
-  ScraperJobState,
+  ScrapedFacebookBusiness,
+  FacebookScraperPagination,
+  FacebookScraperResult,
+  FacebookScraperOptions,
+  FacebookScraperJobState,
+  FacebookScraperErrorType,
+  FacebookScraperError,
 } from "../types/facebook-scraper";
 
 const DEFAULT_MAX_PAGES = 5;
@@ -22,15 +26,16 @@ const FACEBOOK_SEARCH_URL = "https://www.facebook.com/search/pages";
  */
 export class FacebookScraper {
   private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
-  private options: Required<ScraperOptions>;
+  private options: Required<FacebookScraperOptions>;
 
-  constructor(options: ScraperOptions = {}) {
+  constructor(options: FacebookScraperOptions = {}) {
     this.options = {
       maxPages: options.maxPages ?? DEFAULT_MAX_PAGES,
       delayBetweenPagesMs:
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
+      handleLoginPrompt: options.handleLoginPrompt ?? true,
+      handleRateLimiting: options.handleRateLimiting ?? true,
     };
   }
 
@@ -39,13 +44,9 @@ export class FacebookScraper {
    */
   async initialize(): Promise<void> {
     if (!this.browser) {
-      const { chromium } = await import("playwright");
-      this.browser = await chromium.launch({
+      this.browser = await puppeteer.launch({
         headless: true,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      this.context = await this.browser.newContext({
-        viewport: { width: 1280, height: 720 },
       });
     }
   }
@@ -54,10 +55,6 @@ export class FacebookScraper {
    * Close the browser
    */
   async close(): Promise<void> {
-    if (this.context) {
-      await this.context.close();
-      this.context = null;
-    }
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -70,18 +67,37 @@ export class FacebookScraper {
   async scrape(
     query: string,
     location: string
-  ): Promise<ScraperResult> {
+  ): Promise<FacebookScraperResult> {
     await this.initialize();
 
-    const page = await this.context!.newPage();
-    const businesses: ScrapedBusiness[] = [];
+    const page = await this.browser!.newPage();
+    const businesses: ScrapedFacebookBusiness[] = [];
     let currentPage = 0;
+    let loginRequired = false;
+    let rateLimited = false;
 
     try {
       // Build search URL with query and location
       const searchUrl = `${FACEBOOK_SEARCH_URL}?q=${encodeURIComponent(query)}&geo=${encodeURIComponent(location)}`;
 
-      await page.goto(searchUrl, { waitUntil: "networkidle" });
+      await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 30000 });
+
+      // Check for login prompt
+      if (await this.checkLoginPrompt(page)) {
+        loginRequired = true;
+        if (this.options.handleLoginPrompt) {
+          console.log("Login prompt detected - proceeding with public data only");
+        }
+      }
+
+      // Check for rate limiting
+      if (await this.checkRateLimiting(page)) {
+        rateLimited = true;
+        if (this.options.handleRateLimiting) {
+          console.log("Rate limit detected - proceeding with caution");
+        }
+      }
+
       await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
 
       // Extract business pages from search results
@@ -122,15 +138,18 @@ export class FacebookScraper {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
-      throw new Error(`Facebook scraping failed: ${errorMessage}`);
+      throw new FacebookScraperError(
+        FacebookScraperErrorType.NETWORK_ERROR,
+        `Facebook scraping failed: ${errorMessage}`
+      );
     } finally {
       await page.close();
     }
 
-    const pagination: ScraperPagination = {
+    const pagination: FacebookScraperPagination = {
       currentPage,
       totalPages: Math.min(currentPage, this.options.maxPages),
-      resultsPerPage: businesses.length / currentPage,
+      resultsPerPage: businesses.length / Math.max(currentPage, 1),
       totalResults: businesses.length,
       hasNextPage: currentPage < this.options.maxPages,
     };
@@ -142,13 +161,15 @@ export class FacebookScraper {
       query,
       location,
       timestamp: new Date(),
+      loginRequired,
+      rateLimited,
     };
   }
 
   /**
    * Get current job state for progress tracking
    */
-  getJobState(query: string, location: string): ScraperJobState {
+  getJobState(query: string, location: string): FacebookScraperJobState {
     return {
       query,
       location,
@@ -160,13 +181,60 @@ export class FacebookScraper {
   }
 
   /**
+   * Check if login prompt is displayed
+   */
+  private async checkLoginPrompt(page: Page): Promise<boolean> {
+    const loginSelectors = [
+      'input[name="email"]',
+      'input[name="login_email"]',
+      '[data-testid="login_email"]',
+      'form[action*="login"]',
+      '[aria-label*="Log In"]',
+    ];
+
+    for (const selector of loginSelectors) {
+      const element = await page.$(selector);
+      if (element) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if rate limiting is active
+   */
+  private async checkRateLimiting(page: Page): Promise<boolean> {
+    const rateLimitSelectors = [
+      '[data-testid="rate_limit"]',
+      '[aria-label*="rate limit"]',
+      '.rate-limit-message',
+      '[class*="rate-limit"]',
+    ];
+
+    for (const selector of rateLimitSelectors) {
+      const element = await page.$(selector);
+      if (element) {
+        return true;
+      }
+    }
+
+    const content = await page.content();
+    return (
+      content.includes("We have detected unusual activity") ||
+      content.includes("Temporarily Blocked") ||
+      content.includes("Action Blocked")
+    );
+  }
+
+  /**
    * Extract business data from the current page
    */
   private async extractBusinessesFromPage(
     page: Page
-  ): Promise<ScrapedBusiness[]> {
+  ): Promise<ScrapedFacebookBusiness[]> {
     return await page.evaluate(() => {
-      const businesses: ScrapedBusiness[] = [];
+      const businesses: ScrapedFacebookBusiness[] = [];
       const pageUnits = document.querySelectorAll('[data-pagelet="PageUnits"]');
 
       pageUnits.forEach((unit) => {

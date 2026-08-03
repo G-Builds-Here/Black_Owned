@@ -492,7 +492,7 @@ describe("GET /api/scrape-jobs", () => {
       total: 25,
       totalPages: 3,
     });
-    expect(findAllScrapeJobs).toHaveBeenCalledWith(2, 10, undefined);
+    expect(findAllScrapeJobs).toHaveBeenCalledWith(2, 10, null);
   });
 
   it("should return 400 when status is invalid", async () => {

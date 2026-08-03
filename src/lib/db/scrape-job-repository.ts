@@ -70,18 +70,37 @@ export async function createScrapeJob(
 /**
  * Get scrape job by ID
  */
-export async function findScrapeJobById(id: string): Promise<ScrapeJob | null> {
-  const client = await getPool().connect();
-  try {
-    const result = await client.query<ScrapeJob>(
+export async function findScrapeJobById(id: string): Promise<ScrapeJob | null>;
+export async function findScrapeJobById(client: PoolClient, id: string): Promise<ScrapeJob | null>;
+export async function findScrapeJobById(
+  param1: string | PoolClient,
+  id?: string
+): Promise<ScrapeJob | null> {
+  const isClient = typeof param1 !== 'string';
+  const client = isClient ? param1 : null;
+  const jobId = isClient ? param1 : id;
+
+  if (!isClient) {
+    const client = await getPool().connect();
+    try {
+      const result = await client.query<ScrapeJob>(
+        `SELECT id, source, query, location, status, business_count, created_at, updated_at
+         FROM scrape_jobs
+         WHERE id = $1`,
+        [jobId]
+      );
+      return result.rows[0] || null;
+    } finally {
+      client.release();
+    }
+  } else {
+    const result = await param1.query<ScrapeJob>(
       `SELECT id, source, query, location, status, business_count, created_at, updated_at
        FROM scrape_jobs
        WHERE id = $1`,
-      [id]
+      [jobId]
     );
     return result.rows[0] || null;
-  } finally {
-    client.release();
   }
 }
 

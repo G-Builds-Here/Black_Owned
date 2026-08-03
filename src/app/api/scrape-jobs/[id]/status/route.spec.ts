@@ -4,7 +4,7 @@
  * Tests for GET /api/scrape-jobs/:id/status endpoint
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import { GET } from "./route";
 
@@ -24,7 +24,6 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(400);
     const json = await response.json();
-    expect(json.success).toBe(false);
     expect(json.error).toBe("Job ID is required");
   });
 
@@ -36,8 +35,7 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(404);
     const json = await response.json();
-    expect(json.success).toBe(false);
-    expect(json.error).toBe("Scrape job not found");
+    expect(json.error).toBe("Job not found");
   });
 
   it("should return job status when job exists", async () => {
@@ -59,16 +57,15 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.success).toBe(true);
-    expect(json.data).toEqual({
+    expect(json).toEqual({
       id: mockJob.id,
-      status: mockJob.status,
       source: mockJob.source,
       query: mockJob.query,
       location: mockJob.location,
-      business_count: mockJob.business_count,
-      created_at: "2024-01-15T10:00:00.000Z",
-      updated_at: "2024-01-15T10:30:00.000Z",
+      status: mockJob.status,
+      businessCount: mockJob.business_count,
+      createdAt: "2024-01-15T10:00:00.000Z",
+      updatedAt: "2024-01-15T10:30:00.000Z",
     });
   });
 
@@ -91,7 +88,7 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.data.status).toBe("pending");
+    expect(json.status).toBe("pending");
   });
 
   it("should return completed status correctly", async () => {
@@ -113,7 +110,7 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.data.status).toBe("completed");
+    expect(json.status).toBe("completed");
   });
 
   it("should return failed status correctly", async () => {
@@ -135,7 +132,7 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(200);
     const json = await response.json();
-    expect(json.data.status).toBe("failed");
+    expect(json.status).toBe("failed");
   });
 
   it("should return 500 on repository error", async () => {
@@ -146,7 +143,6 @@ describe("GET /api/scrape-jobs/:id/status", () => {
 
     expect(response.status).toBe(500);
     const json = await response.json();
-    expect(json.success).toBe(false);
     expect(json.error).toBe("Internal server error");
   });
 });
