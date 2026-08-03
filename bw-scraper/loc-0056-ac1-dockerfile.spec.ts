@@ -17,12 +17,12 @@ describe('LOC-0056-AC1 Dockerfile Validation', () => {
   });
 
   describe('Multi-stage build structure', () => {
-    it('should have a builder stage using rust:1.85-alpine', () => {
-      expect(dockerfileContent).toMatch(/FROM rust:1\.85-alpine.*AS builder/s);
+    it('should have a builder stage using rust:1.88', () => {
+      expect(dockerfileContent).toMatch(/FROM rust:1\.88.*AS builder/s);
     });
 
-    it('should have a runtime stage using alpine:3.21', () => {
-      expect(dockerfileContent).toMatch(/FROM alpine:3\.21.*AS runtime/s);
+    it('should have a runtime stage using debian:bookworm-slim', () => {
+      expect(dockerfileContent).toMatch(/FROM debian:bookworm-slim.*AS runtime/s);
     });
 
     it('should have exactly 2 FROM statements (multi-stage)', () => {
@@ -38,11 +38,11 @@ describe('LOC-0056-AC1 Dockerfile Validation', () => {
 
   describe('Non-root user configuration', () => {
     it('should create a scraper group', () => {
-      expect(dockerfileContent).toMatch(/addgroup.*-S.*scraper/s);
+      expect(dockerfileContent).toMatch(/groupadd.*--gid\s+1000.*scraper/s);
     });
 
     it('should create a scraper user with UID 1000', () => {
-      expect(dockerfileContent).toMatch(/adduser.*-u\s+1000.*-S.*scraper/s);
+      expect(dockerfileContent).toMatch(/useradd.*--uid\s+1000.*--gid\s+scraper.*scraper/s);
     });
 
     it('should set USER to scraper', () => {
@@ -59,9 +59,9 @@ describe('LOC-0056-AC1 Dockerfile Validation', () => {
       expect(dockerfileContent).toMatch(/ca-certificates/s);
     });
 
-    it('should install OpenSSL runtime library (libressl)', () => {
-      // Alpine 3.21 uses libressl, not openssl-libs
-      expect(dockerfileContent).toMatch(/libressl/s);
+    it('should install OpenSSL runtime library (libssl3)', () => {
+      // Debian bookworm uses libssl3, not libressl
+      expect(dockerfileContent).toMatch(/libssl3/s);
     });
   });
 
