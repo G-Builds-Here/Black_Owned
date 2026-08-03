@@ -172,7 +172,8 @@ describe("normalizePhoneNumber", () => {
   });
 
   it("handles country code", () => {
-    expect(normalizePhoneNumber("+1-555-123-4567")).toBe("15551234567");
+    // Strips leading "1" for 11-digit US numbers to enable exact matching
+    expect(normalizePhoneNumber("+1-555-123-4567")).toBe("5551234567");
   });
 
   it("handles plain digits", () => {

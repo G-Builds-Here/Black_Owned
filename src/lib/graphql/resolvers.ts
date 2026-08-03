@@ -6,6 +6,7 @@ import {
   findByEmail,
   create,
   initializeUserSchema,
+  getPool,
 } from "../db/user-repository";
 import {
   hashPassword,
@@ -488,12 +489,15 @@ function businessToGraphqlBusiness(business: Business): {
   phone: string | undefined;
   potentialDuplicateId: string | undefined;
 } {
+  // Handle both camelCase (Business type) and snake_case (raw DB rows)
+  const createdAtDate = business.createdAt || (business as Record<string, unknown>).created_at as Date;
+  const categoryId = business.categoryId || (business as Record<string, unknown>).category_id as string;
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.categoryId,
+    categoryId: categoryId,
     verified: business.verificationStatus === "verified",
-    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
+    createdAt: { timestamp: Math.floor(createdAtDate.getTime() / 1000) },
     phone: business.phone,
     potentialDuplicateId: business.potentialDuplicateId,
   };
@@ -600,7 +604,8 @@ async function createBusinessInDb(
   phone?: string,
   potentialDuplicateId?: string
 ): Promise<Business> {
-  const tableName = "businesses";
+  const schema = process.env.POSTGRES_SCHEMA;
+  const tableName = schema ? `${schema}.businesses` : "businesses";
   const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
   const result = await client.query<Business>(
     `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, potential_duplicate_id)

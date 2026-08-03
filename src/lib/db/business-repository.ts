@@ -129,14 +129,18 @@ export async function findBusinessesByOwnerId(
 
 /**
  * Normalize phone number to exact match format.
- * Removes all non-digit characters to create a canonical 10/11-digit representation.
+ * Removes all non-digit characters and strips leading country code "1" for US numbers.
+ * Returns a canonical 10-digit representation.
  * Examples:
  *   "(555) 123-4567" -> "5551234567"
  *   "555-123-4567" -> "5551234567"
- *   "+1-555-123-4567" -> "15551234567"
+ *   "+1-555-123-4567" -> "5551234567"
+ *   "1-555-123-4567" -> "5551234567"
  */
 export function normalizePhoneNumber(phone: string): string {
-  return phone.trim().replace(/\D/g, "");
+  const digits = phone.trim().replace(/\D/g, "");
+  // Strip leading "1" for 11-digit US numbers
+  return digits.length === 11 && digits.startsWith("1") ? digits.substring(1) : digits;
 }
 
 /**
