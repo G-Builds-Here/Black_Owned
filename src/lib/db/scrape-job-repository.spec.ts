@@ -1,266 +1,290 @@
 /**
- * Scrape Job Repository Tests
+ * Scrape Job Repository Unit Tests
  */
 
+import { getPool } from "./user-repository";
 import {
+  initializeScrapeJobSchema,
   createScrapeJob,
   findScrapeJobById,
-  findAllScrapeJobs,
   updateScrapeJobStatus,
-  updateScrapeJobBusinessCount,
-  initializeScrapeJobSchema,
+  findScrapeJobs,
 } from "./scrape-job-repository";
-import { CreateScrapeJobInput, ScraperSource, ScrapeJobStatus } from "../../types/scrape-job";
-import { getPool } from "./user-repository";
+import { ScrapeJobStatus } from "../../types/scrape-job";
 
-describe("ScrapeJobRepository", () => {
-  beforeAll(async () => {
-    // Initialize schema before tests
-    await initializeScrapeJobSchema();
-  });
+describe("Scrape Job Repository", () => {
+  const testPrefix = `scrapejob-${Date.now()}`;
 
-  afterAll(async () => {
-    // Clean up all test data
+  async function cleanupTestJobs(): Promise<void> {
     const client = await getPool().connect();
     try {
-      // Delete all jobs created during tests (all sources used in tests)
-      await client.query("DELETE FROM scrape_jobs WHERE source IN ('google-maps', 'yelp', 'facebook', 'test-cleanup')");
+      await client.query("DELETE FROM scrape_jobs WHERE source LIKE $1", [`%${testPrefix}%`]);
     } finally {
       client.release();
     }
+  }
+
+  beforeAll(async () => {
+    await cleanupTestJobs();
+  });
+
+  afterAll(async () => {
+    await cleanupTestJobs();
   });
 
   describe("createScrapeJob", () => {
-    it("should create a scrape job with valid input", async () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "black owned restaurants",
-        location: "New York, NY",
-      };
-
-      const result = await createScrapeJob(input);
-
-      expect(result).toBeDefined();
-      expect(result.id).toBeDefined();
-      expect(result.source).toBe(input.source);
-      expect(result.query).toBe(input.query);
-      expect(result.location).toBe(input.location);
-      expect(result.status).toBe("pending");
-      expect(result.created_at).toBeInstanceOf(Date);
-    });
-
-    it("should create a scrape job with yelp source", async () => {
-      const input: CreateScrapeJobInput = {
-        source: "yelp",
-        query: "black owned cafes",
-        location: "Los Angeles, CA",
-      };
-
-      const result = await createScrapeJob(input);
-
-      expect(result.source).toBe("yelp");
-      expect(result.status).toBe("pending");
-    });
-
-    it("should create a scrape job with facebook source", async () => {
-      const input: CreateScrapeJobInput = {
-        source: "facebook",
-        query: "black owned businesses",
-        location: "Chicago, IL",
-      };
-
-      const result = await createScrapeJob(input);
-
-      expect(result.source).toBe("facebook");
-      expect(result.status).toBe("pending");
-    });
-
-    it("should generate unique IDs for each job", async () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "test query",
-        location: "test location",
-      };
-
-      const job1 = await createScrapeJob(input);
-      const job2 = await createScrapeJob(input);
-
-      expect(job1.id).not.toBe(job2.id);
-    });
-  });
-
-  describe("findScrapeJobById", () => {
-    it("should find a scrape job by ID", async () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "find test query",
-        location: "find test location",
-      };
-
-      const created = await createScrapeJob(input);
-      const found = await findScrapeJobById(created.id);
-
-      expect(found).toBeDefined();
-      expect(found?.id).toBe(created.id);
-      expect(found?.source).toBe(input.source);
-    });
-
-    it("should return null for non-existent ID", async () => {
-      const result = await findScrapeJobById("00000000-0000-0000-0000-000000000000");
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("findAllScrapeJobs", () => {
-    beforeEach(async () => {
-      // Clean up all test data before each test
+    it("creates a scrape job with pending status", async () => {
       const client = await getPool().connect();
       try {
-        await client.query("DELETE FROM scrape_jobs WHERE source IN ('google-maps', 'yelp', 'facebook', 'test-cleanup')");
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-source`,
+          query: "test query",
+          location: "New York, NY",
+        });
+
+        expect(job.id).toBeDefined();
+        expect(job.source).toBe(`${testPrefix}-source`);
+        expect(job.query).toBe("test query");
+        expect(job.location).toBe("New York, NY");
+        expect(job.status).toBe("pending");
+        expect(job.resultCount).toBeUndefined();
+        expect(job.errorMessage).toBeUndefined();
+        expect(job.createdAt).toBeInstanceOf(Date);
+        expect(job.updatedAt).toBeInstanceOf(Date);
       } finally {
         client.release();
       }
     });
 
-    it("should return empty list when no jobs exist", async () => {
-      const result = await findAllScrapeJobs(1, 20);
+    it("creates a scrape job with special characters in query", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
 
-      expect(result.jobs).toEqual([]);
-      expect(result.total).toBe(0);
-      expect(result.page).toBe(1);
-      expect(result.pageSize).toBe(20);
-      expect(result.totalPages).toBe(0);
-    });
-
-    it("should return paginated results", async () => {
-      // Create test jobs
-      for (let i = 0; i < 5; i++) {
-        await createScrapeJob({
-          source: "test-cleanup" as ScraperSource,
-          query: `test query ${i}`,
-          location: "test location",
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-special`,
+          query: "Software engineer @ startup (remote)",
+          location: "San Francisco, CA",
         });
+
+        expect(job.query).toBe("Software engineer @ startup (remote)");
+      } finally {
+        client.release();
       }
+    });
+  });
 
-      const result = await findAllScrapeJobs(1, 2);
+  describe("findScrapeJobById", () => {
+    it("finds a scrape job by ID", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
 
-      expect(result.jobs.length).toBe(2);
-      expect(result.total).toBe(5);
-      expect(result.page).toBe(1);
-      expect(result.pageSize).toBe(2);
-      expect(result.totalPages).toBe(3);
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-find`,
+          query: "find test",
+          location: "Chicago, IL",
+        });
+
+        const found = await findScrapeJobById(client, job.id);
+
+        expect(found).toBeDefined();
+        expect(found?.id).toBe(job.id);
+        expect(found?.source).toBe(`${testPrefix}-find`);
+      } finally {
+        client.release();
+      }
     });
 
-    it("should filter by status", async () => {
-      await createScrapeJob({
-        source: "google-maps",
-        query: "pending job",
-        location: "location",
-      });
-
-      const pendingJob = await createScrapeJob({
-        source: "yelp",
-        query: "another job",
-        location: "location",
-      });
-      await updateScrapeJobStatus(pendingJob.id, "running");
-
-      const result = await findAllScrapeJobs(1, 20, "pending");
-
-      expect(result.jobs.every((job) => job.status === "pending")).toBe(true);
-    });
-
-    it("should return results sorted by created_at descending", async () => {
-      await createScrapeJob({
-        source: "google-maps",
-        query: "first job",
-        location: "location",
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      const secondJob = await createScrapeJob({
-        source: "yelp",
-        query: "second job",
-        location: "location",
-      });
-
-      const result = await findAllScrapeJobs(1, 10);
-
-      expect(result.jobs[0].id).toBe(secondJob.id);
+    it("returns undefined for non-existent job", async () => {
+      const client = await getPool().connect();
+      try {
+        const result = await findScrapeJobById(client, "00000000-0000-0000-0000-000000000000");
+        expect(result).toBeUndefined();
+      } finally {
+        client.release();
+      }
     });
   });
 
   describe("updateScrapeJobStatus", () => {
-    it("should update scrape job status", async () => {
-      const job = await createScrapeJob({
-        source: "google-maps",
-        query: "status test",
-        location: "location",
-      });
+    it("updates job status from pending to running", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
 
-      const updated = await updateScrapeJobStatus(job.id, "running");
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-running`,
+          query: "running test",
+          location: "Boston, MA",
+        });
 
-      expect(updated?.status).toBe("running");
-      expect(updated?.updated_at).toBeInstanceOf(Date);
+        expect(job.status).toBe("pending");
+
+        const updated = await updateScrapeJobStatus(client, job.id, "running");
+
+        expect(updated).toBeDefined();
+        expect(updated?.status).toBe("running");
+        expect(updated?.errorMessage).toBeUndefined();
+      } finally {
+        client.release();
+      }
     });
 
-    it("should update status through all states", async () => {
-      const job = await createScrapeJob({
-        source: "google-maps",
-        query: "state test",
-        location: "location",
-      });
+    it("updates job status to completed with result count", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
 
-      const running = await updateScrapeJobStatus(job.id, "running");
-      const completed = await updateScrapeJobStatus(running!.id, "completed");
-      const failed = await updateScrapeJobStatus(job.id, "failed");
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-completed`,
+          query: "completed test",
+          location: "Seattle, WA",
+        });
 
-      expect(running?.status).toBe("running");
-      expect(completed?.status).toBe("completed");
-      expect(failed?.status).toBe("failed");
+        const updated = await updateScrapeJobStatus(client, job.id, "completed", 42);
+
+        expect(updated?.status).toBe("completed");
+        expect(updated?.resultCount).toBe(42);
+      } finally {
+        client.release();
+      }
     });
 
-    it("should return null for non-existent ID", async () => {
-      const result = await updateScrapeJobStatus(
-        "00000000-0000-0000-0000-000000000000",
-        "running"
-      );
-      expect(result).toBeNull();
+    it("updates job status to failed with error message", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-failed`,
+          query: "failed test",
+          location: "Austin, TX",
+        });
+
+        const updated = await updateScrapeJobStatus(
+          client,
+          job.id,
+          "failed",
+          undefined,
+          "Connection timeout after 30s"
+        );
+
+        expect(updated?.status).toBe("failed");
+        expect(updated?.errorMessage).toBe("Connection timeout after 30s");
+      } finally {
+        client.release();
+      }
+    });
+
+    it("returns undefined for non-existent job update", async () => {
+      const client = await getPool().connect();
+      try {
+        const result = await updateScrapeJobStatus(
+          client,
+          "00000000-0000-0000-0000-000000000000",
+          "completed"
+        );
+        expect(result).toBeUndefined();
+      } finally {
+        client.release();
+      }
     });
   });
 
-  describe("updateScrapeJobBusinessCount", () => {
-    it("should update business count", async () => {
-      const job = await createScrapeJob({
-        source: "google-maps",
-        query: "count test",
-        location: "location",
-      });
+  describe("findScrapeJobs", () => {
+    it("returns all jobs when no filter specified", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
 
-      const updated = await updateScrapeJobBusinessCount(job.id, 42);
+        await createScrapeJob(client, {
+          source: `${testPrefix}-all-1`,
+          query: "all test 1",
+          location: "Denver, CO",
+        });
 
-      expect(updated?.business_count).toBe(42);
+        await createScrapeJob(client, {
+          source: `${testPrefix}-all-2`,
+          query: "all test 2",
+          location: "Miami, FL",
+        });
+
+        const jobs = await findScrapeJobs(client);
+
+        expect(jobs.length).toBeGreaterThanOrEqual(2);
+      } finally {
+        client.release();
+      }
     });
 
-    it("should handle zero business count", async () => {
-      const job = await createScrapeJob({
-        source: "google-maps",
-        query: "zero count test",
-        location: "location",
-      });
+    it("filters jobs by status", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
 
-      const updated = await updateScrapeJobBusinessCount(job.id, 0);
+        const pendingJob = await createScrapeJob(client, {
+          source: `${testPrefix}-pending-filter`,
+          query: "pending filter test",
+          location: "Portland, OR",
+        });
 
-      expect(updated?.business_count).toBe(0);
+        await updateScrapeJobStatus(client, pendingJob.id, "completed", 10);
+
+        const completedJobs = await findScrapeJobs(
+          client,
+          "completed" as ScrapeJobStatus
+        );
+
+        const found = completedJobs.find((j) => j.id === pendingJob.id);
+        expect(found).toBeDefined();
+        expect(found?.status).toBe("completed");
+      } finally {
+        client.release();
+      }
     });
 
-    it("should return null for non-existent ID", async () => {
-      const result = await updateScrapeJobBusinessCount(
-        "00000000-0000-0000-0000-000000000000",
-        10
-      );
-      expect(result).toBeNull();
+    it("limits results when limit specified", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const jobs = await findScrapeJobs(client, undefined, 1);
+        expect(jobs.length).toBeLessThanOrEqual(1);
+      } finally {
+        client.release();
+      }
+    });
+
+    it("returns jobs ordered by created_at descending", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job1 = await createScrapeJob(client, {
+          source: `${testPrefix}-order-1`,
+          query: "order test 1",
+          location: "Phoenix, AZ",
+        });
+
+        // Small delay to ensure different timestamps
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        const job2 = await createScrapeJob(client, {
+          source: `${testPrefix}-order-2`,
+          query: "order test 2",
+          location: "Philadelphia, PA",
+        });
+
+        const jobs = await findScrapeJobs(client);
+
+        // Most recent should be first
+        expect(jobs[0].id).toBe(job2.id);
+      } finally {
+        client.release();
+      }
     });
   });
 });
