@@ -97,7 +97,7 @@ mod tests {
         let business = Business {
             id: Uuid::new_v4(),
             name: "Test Business".to_string(),
-            description: Some("A test business".to_string()),
+            description: Some("Test description".to_string()),
             category_id: Uuid::new_v4(),
             owner_id: Uuid::new_v4(),
             verified: true,
@@ -239,7 +239,9 @@ mod tests {
         let business = BusinessBuilder::default()
             .id(Uuid::new_v4())
             .name("Test")
+            .description("Test description".to_string())
             .category_id(Uuid::new_v4())
+            .owner_id(Uuid::new_v4())
             .verified(true)
             .created_at(Utc::now())
             .build()
