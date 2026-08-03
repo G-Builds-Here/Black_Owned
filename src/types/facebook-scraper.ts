@@ -7,11 +7,12 @@
 /**
  * Scraped business data from Facebook
  */
-export interface ScrapedFacebookBusiness {
+export interface ScrapedBusiness {
   name: string;
-  address: string;
+  address?: string;
   phone?: string;
   website?: string;
+  category?: string;
   rating?: number;
   reviewCount?: number;
   source: "facebook";
@@ -21,7 +22,7 @@ export interface ScrapedFacebookBusiness {
 /**
  * Scraper pagination info
  */
-export interface FacebookScraperPagination {
+export interface ScraperPagination {
   currentPage: number;
   totalPages: number;
   resultsPerPage: number;
@@ -32,62 +33,33 @@ export interface FacebookScraperPagination {
 /**
  * Scraper result with pagination metadata
  */
-export interface FacebookScraperResult {
-  businesses: ScrapedFacebookBusiness[];
-  pagination: FacebookScraperPagination;
+export interface ScraperResult {
+  businesses: ScrapedBusiness[];
+  pagination: ScraperPagination;
   source: "facebook";
   query: string;
+  location: string;
   timestamp: Date;
-  loginRequired?: boolean;
-  rateLimited?: boolean;
 }
 
 /**
  * Scraper options
  */
-export interface FacebookScraperOptions {
+export interface ScraperOptions {
   maxPages?: number;
   delayBetweenPagesMs?: number;
   includeDuplicates?: boolean;
-  handleLoginPrompt?: boolean;
-  handleRateLimiting?: boolean;
 }
 
 /**
  * Scraper job state for tracking progress
  */
-export interface FacebookScraperJobState {
+export interface ScraperJobState {
   query: string;
+  location: string;
   currentPage: number;
   totalPages: number;
-  businessesCollected: ScrapedFacebookBusiness[];
+  businessesCollected: ScrapedBusiness[];
   isComplete: boolean;
-  loginRequired?: boolean;
-  rateLimited?: boolean;
   error?: string;
-}
-
-/**
- * Scraper error types
- */
-export enum FacebookScraperErrorType {
-  PAGE_NOT_FOUND = "PAGE_NOT_FOUND",
-  LOGIN_REQUIRED = "LOGIN_REQUIRED",
-  RATE_LIMITED = "RATE_LIMITED",
-  NETWORK_ERROR = "NETWORK_ERROR",
-  UNKNOWN = "UNKNOWN",
-}
-
-/**
- * Scraper error with type information
- */
-export class FacebookScraperError extends Error {
-  constructor(
-    public readonly type: FacebookScraperErrorType,
-    message: string,
-    public readonly details?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = "FacebookScraperError";
-  }
 }
