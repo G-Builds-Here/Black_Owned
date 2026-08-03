@@ -178,3 +178,19 @@ export async function updateScrapeJobBusinessCount(
     client.release();
   }
 }
+
+/**
+ * Delete scrape job by ID (hard delete)
+ */
+export async function deleteScrapeJob(id: string): Promise<boolean> {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `DELETE FROM scrape_jobs WHERE id = $1`,
+      [id]
+    );
+    return result.rowCount !== null && result.rowCount > 0;
+  } finally {
+    client.release();
+  }
+}
