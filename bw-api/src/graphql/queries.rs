@@ -61,7 +61,9 @@ impl QueryRoot {
                 let business = Business {
                     id,
                     name,
+                    description: None,
                     category_id,
+                    owner_id: Uuid::nil(),
                     verified,
                     created_at,
                 };
@@ -121,7 +123,9 @@ impl QueryRoot {
         let business = Business {
             id: bid,
             name,
+            description: None,
             category_id,
+            owner_id: Uuid::nil(),
             verified,
             created_at,
         };
@@ -129,7 +133,7 @@ impl QueryRoot {
         Ok(Some(GQLBusinessWithRatings::with_ratings(
             business,
             rating_stats.0,
-            rating_stats.1 as i32,
+            rating_stats.1,
         )))
     }
 
@@ -210,7 +214,9 @@ impl QueryRoot {
                 GQLBusiness::from(Business {
                     id,
                     name,
+                    description: None,
                     category_id,
+                    owner_id: Uuid::nil(),
                     verified,
                     created_at,
                 })

@@ -17,27 +17,6 @@ use crate::middleware::UserId;
 /// Mutation root for GraphQL API
 pub struct MutationRoot;
 
-/// Extract user ID from JWT token in Authorization header
-fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
-    let auth_header = ctx
-        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string())
-        .or_else(|| {
-            ctx.req()
-                .headers()
-                .get(axum::http::header::AUTHORIZATION)
-                .and_then(|h| h.to_str().ok())
-                .filter(|s| s.starts_with("Bearer "))
-                .map(|s| s.trim_start_matches("Bearer ").to_string())
-        });
-
-    auth_header
-        .ok_or_else(|| Error::new("Authorization header is required"))
-        .and_then(|token| {
-            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
-        })
-}
-
 #[Object]
 impl MutationRoot {
     /// Create a new business
@@ -61,7 +40,7 @@ impl MutationRoot {
         let user_id = ctx
             .data::<UserId>()
             .map(|uid| uid.0.clone())
-            .ok_or_else(|| Error::new("Unauthorized: User not authenticated"))?;
+            .map_err(|_| Error::new("Unauthorized: User not authenticated"))?;
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user ID from token: {:?}", e))
@@ -118,7 +97,7 @@ impl MutationRoot {
         let user_id = ctx
             .data::<UserId>()
             .map(|uid| uid.0.clone())
-            .ok_or_else(|| Error::new("Unauthorized: User not authenticated"))?;
+            .map_err(|_| Error::new("Unauthorized: User not authenticated"))?;
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user ID from token: {:?}", e))
@@ -202,7 +181,7 @@ impl MutationRoot {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
 
-        if rating < 1 || rating > 5 {
+        if !(1..=5).contains(&rating) {
             return Err(Error::new("Rating must be between 1 and 5"));
         }
 
@@ -285,10 +264,11 @@ impl MutationRoot {
         let business = Business {
             id: business_row.0,
             name: business_row.1,
+            description: None,
             category_id: business_row.2,
+            owner_id: business_row.5,
             verified: business_row.3,
             created_at: business_row.4,
-            owner_id: business_row.5,
         };
 
         let mut gql_business: GQLBusiness = business.into();

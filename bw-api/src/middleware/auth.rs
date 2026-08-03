@@ -2,11 +2,10 @@
 
 use axum::{
     body::Body,
-    extract::Extension,
     http::{Request, StatusCode, header},
     response::Response,
 };
-use std::net::SocketAddr;
+use std::sync::Arc;
 use tower_layer::Layer;
 use tokio::sync::RwLock;
 
@@ -23,15 +22,16 @@ pub struct AuthConfig {
 
 /// In-memory store for authenticated user sessions
 #[derive(Debug, Clone)]
+#[expect(dead_code)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
-    valid_tokens: RwLock<std::collections::HashMap<String, String>>,
+    valid_tokens: Arc<RwLock<std::collections::HashMap<String, String>>>,
 }
 
 impl AuthStore {
     fn new() -> Self {
         Self {
-            valid_tokens: RwLock::new(std::collections::HashMap::new()),
+            valid_tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
         }
     }
 }
@@ -65,6 +65,7 @@ impl<S> Layer<S> for AuthLayer {
 }
 
 /// Authentication middleware service
+#[expect(dead_code)]
 pub struct AuthMiddleware<S> {
     inner: S,
     store: Arc<AuthStore>,
@@ -88,27 +89,25 @@ where
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        let auth_header = req
+        // Extract token value before entering async block to avoid borrow issues
+        let token: Option<String> = req
             .headers()
             .get(header::AUTHORIZATION)
-            .and_then(|h| h.to_str().ok());
+            .and_then(|h| h.to_str().ok())
+            .and_then(|auth| auth.strip_prefix("Bearer "))
+            .map(|s| s.to_string());
 
         let mut inner = self.inner.clone();
-        let store = self.store.clone();
         let config = self.config.clone();
 
         Box::pin(async move {
-            // Extract token from Bearer header
-            let token = auth_header
-                .and_then(|auth| auth.strip_prefix("Bearer "))
-                .map(|s| s.to_string());
-
             if let Some(token_str) = &token {
                 // Verify JWT token
                 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
                 use serde::{Deserialize, Serialize};
 
                 #[derive(Debug, Deserialize, Serialize)]
+                #[allow(non_snake_case)]
                 struct JwtClaims {
                     userId: String,
                     email: String,

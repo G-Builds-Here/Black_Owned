@@ -8,9 +8,10 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Email delivery status
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum EmailStatus {
     /// Email is pending delivery
+    #[default]
     Pending,
     /// Email has been sent
     Sent,
@@ -20,12 +21,6 @@ pub enum EmailStatus {
     Delivered,
     /// Email bounced
     Bounced(String),
-}
-
-impl Default for EmailStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
 }
 
 /// Email message structure
