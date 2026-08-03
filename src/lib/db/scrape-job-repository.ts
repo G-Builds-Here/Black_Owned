@@ -178,3 +178,24 @@ export async function updateScrapeJobBusinessCount(
     client.release();
   }
 }
+
+/**
+ * Cancel a running scrape job
+ * @param id - The job ID to cancel
+ * @returns The updated scrape job or null if not found or not in running status
+ */
+export async function cancelScrapeJob(id: string): Promise<ScrapeJob | null> {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query<ScrapeJob>(
+      `UPDATE scrape_jobs
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'running'
+       RETURNING id, source, query, location, status, business_count, created_at, updated_at`,
+      [id]
+    );
+    return result.rows[0] || null;
+  } finally {
+    client.release();
+  }
+}
