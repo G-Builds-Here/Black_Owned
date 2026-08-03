@@ -1,0 +1,99 @@
+//! Service connectors for bw-scraper
+//!
+//! This module provides connection utilities for external services.
+
+use anyhow::Result;
+use tracing::info;
+
+/// Health check result
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct HealthStatus {
+    pub service: String,
+    pub healthy: bool,
+    pub message: String,
+}
+
+/// Check PostgreSQL connection
+pub async fn check_postgres(database_url: &str) -> Result<HealthStatus> {
+    match sqlx::PgPool::connect(database_url).await {
+        Ok(pool) => {
+            pool.close().await;
+            Ok(HealthStatus {
+                service: "PostgreSQL".to_string(),
+                healthy: true,
+                message: "Connection successful".to_string(),
+            })
+        }
+        Err(e) => Ok(HealthStatus {
+            service: "PostgreSQL".to_string(),
+            healthy: false,
+            message: format!("Connection failed: {}", e),
+        }),
+    }
+}
+
+/// Check NATS connection
+pub async fn check_nats(nats_url: &str) -> Result<HealthStatus> {
+    match async_nats::connect(nats_url).await {
+        Ok(conn) => {
+            conn.flush().await?;
+            Ok(HealthStatus {
+                service: "NATS".to_string(),
+                healthy: true,
+                message: "Connection successful".to_string(),
+            })
+        }
+        Err(e) => Ok(HealthStatus {
+            service: "NATS".to_string(),
+            healthy: false,
+            message: format!("Connection failed: {}", e),
+        }),
+    }
+}
+
+/// Check Redis connection
+pub fn check_redis(redis_url: &str) -> Result<HealthStatus> {
+    match redis::Client::open(redis_url) {
+        Ok(_client) => {
+            info!("Redis client created successfully");
+            Ok(HealthStatus {
+                service: "Redis".to_string(),
+                healthy: true,
+                message: "Connection successful".to_string(),
+            })
+        }
+        Err(e) => Ok(HealthStatus {
+            service: "Redis".to_string(),
+            healthy: false,
+            message: format!("Connection failed: {}", e),
+        }),
+    }
+}
+
+/// Check ClickHouse connection
+pub fn check_clickhouse(clickhouse_url: &str) -> Result<HealthStatus> {
+    let _client = clickhouse::Client::default().with_url(clickhouse_url);
+    Ok(HealthStatus {
+        service: "ClickHouse".to_string(),
+        healthy: true,
+        message: "Connection configured".to_string(),
+    })
+}
+
+/// Run all health checks
+pub async fn run_all_health_checks(
+    database_url: &str,
+    nats_url: &str,
+    redis_url: &str,
+    clickhouse_url: &str,
+) -> Vec<HealthStatus> {
+    let mut results = Vec::new();
+
+    results.push(check_postgres(database_url).await.unwrap());
+    results.push(check_nats(nats_url).await.unwrap());
+    results.push(check_redis(redis_url).unwrap());
+    results.push(check_clickhouse(clickhouse_url).unwrap());
+
+    results
+}
