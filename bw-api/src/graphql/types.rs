@@ -141,3 +141,34 @@ pub struct PageInfo {
     pub start_cursor: Option<String>,
     pub end_cursor: Option<String>,
 }
+
+/// Scrape job status enum
+#[derive(Enum, Clone, Debug, Eq, PartialEq)]
+pub enum ScrapeJobStatus {
+    Success,
+    Failed,
+    Running,
+}
+
+/// Scrape job type for GraphQL
+#[derive(SimpleObject, Clone, Debug)]
+pub struct ScrapeJob {
+    pub id: String,
+    pub job_name: String,
+    pub target_url: String,
+    pub status: ScrapeJobStatus,
+    pub error_message: Option<String>,
+    pub items_scraped: u32,
+    pub started_at: DateTimeUtc,
+    pub completed_at: Option<DateTimeUtc>,
+}
+
+/// Aggregated scrape job statistics
+#[derive(SimpleObject, Clone, Debug)]
+pub struct ScrapeJobStats {
+    pub total_jobs: i32,
+    pub successful_jobs: i32,
+    pub failed_jobs: i32,
+    pub total_items_scraped: i32,
+    pub period_days: i32,
+}
