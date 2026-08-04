@@ -25,14 +25,12 @@ impl From<DateTime<Utc>> for DateTimeUtc {
 pub struct GQLBusiness {
     pub id: String,
     pub name: String,
-    pub description: Option<String>,
-    pub category_id: String,
-    pub owner_id: String,
-    pub status: String,
-    pub verified: bool,
-    pub created_at: DateTimeUtc,
-    pub rating_avg: Option<f64>,
-    pub review_count: i32,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub website: Option<String>,
+    pub category: Option<String>,
+    pub rating: Option<f64>,
+    pub review_count: Option<i32>,
 }
 
 impl From<Business> for GQLBusiness {
@@ -40,14 +38,12 @@ impl From<Business> for GQLBusiness {
         Self {
             id: business.id.to_string(),
             name: business.name,
-            description: business.description,
-            category_id: business.category_id.to_string(),
-            owner_id: business.owner_id.to_string(),
-            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
-            verified: business.verified,
-            created_at: business.created_at.into(),
-            rating_avg: None,
-            review_count: 0,
+            address: business.address,
+            phone: business.phone,
+            website: business.website,
+            category: business.category,
+            rating: business.rating,
+            review_count: business.review_count.map(|c| c as i32),
         }
     }
 }

@@ -58,9 +58,10 @@ impl BusinessApi {
     /// Returns an error if the business name is empty.
     pub fn create_business(
         name: &str,
-        description: Option<&str>,
-        category_id: &uuid::Uuid,
-        owner_id: &uuid::Uuid,
+        address: Option<&str>,
+        phone: Option<&str>,
+        website: Option<&str>,
+        category: Option<&str>,
     ) -> Result<Business, String> {
         if name.trim().is_empty() {
             return Err("Name is required".to_string());
@@ -69,15 +70,10 @@ impl BusinessApi {
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: name.to_string(),
-            description: description.map(String::from),
-            category_id: *category_id,
-            owner_id: *owner_id,
-            verified: false,
-            created_at: chrono::Utc::now(),
-            address: None,
-            phone: None,
-            website: None,
-            category: None,
+            address: address.map(String::from),
+            phone: phone.map(String::from),
+            website: website.map(String::from),
+            category: category.map(String::from),
             rating: None,
             review_count: None,
         })
@@ -169,19 +165,23 @@ mod tests {
 
     #[test]
     fn test_create_business_valid() {
-        let category_id = uuid::Uuid::new_v4();
-        let result = BusinessApi::create_business("Test Business", &category_id);
+        let result = BusinessApi::create_business(
+            "Test Business",
+            Some("123 Main St"),
+            Some("555-1234"),
+            Some("https://example.com"),
+            Some("Retail"),
+        );
 
         assert!(result.is_ok());
         let business = result.unwrap();
         assert_eq!(business.name, "Test Business");
-        assert_eq!(business.category_id, category_id);
+        assert_eq!(business.address, Some("123 Main St".to_string()));
     }
 
     #[test]
     fn test_create_business_empty_name() {
-        let category_id = uuid::Uuid::new_v4();
-        let result = BusinessApi::create_business("", &category_id);
+        let result = BusinessApi::create_business("", None, None, None, None);
 
         assert!(result.is_err());
     }
