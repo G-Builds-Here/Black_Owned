@@ -12,7 +12,7 @@ use bw_types::{Business, Category, Review};
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLCategory, GQLReview, PageInfo};
+use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLBusinessWithRatings, GQLCategory, GQLReview, PageInfo};
 
 /// Query root for GraphQL API
 pub struct QueryRoot;
@@ -34,14 +34,14 @@ impl QueryRoot {
         let after_cursor = after.as_ref().map(|c| c.parse::<i64>().unwrap_or(0));
 
         let query = r#"
-            SELECT id, name, address, phone, website, category, rating, review_count
+            SELECT id, name, category_id, verified, created_at
             FROM businesses
             WHERE ($1 IS NULL OR id > $1)
             ORDER BY id
             LIMIT $2
         "#;
 
-        let rows = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<f64>, Option<i64>)>(query)
+        let rows = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(query)
             .bind(after_cursor)
             .bind(limit as i64)
             .fetch_all(db)
@@ -57,16 +57,15 @@ impl QueryRoot {
 
         let edges: Vec<_> = rows
             .into_iter()
-            .map(|(id, name, address, phone, website, category, rating, review_count)| {
+            .map(|(id, name, category_id, verified, created_at)| {
                 let business = Business {
                     id,
                     name,
-                    address,
-                    phone,
-                    website,
-                    category,
-                    rating,
-                    review_count: review_count.map(|c| c as u32),
+                    description: None,
+                    category_id,
+                    owner_id: Uuid::nil(),
+                    verified,
+                    created_at,
                 };
                 let cursor = id.to_string();
                 let node = GQLBusiness::from(business);
@@ -89,7 +88,7 @@ impl QueryRoot {
     }
 
     /// Get a single business by ID with rating aggregation
-    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusiness>> {
+    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusinessWithRatings>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
@@ -99,30 +98,43 @@ impl QueryRoot {
         })?;
 
         // Get business data
-        let row = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<f64>, Option<i64>)>(
-            "SELECT id, name, address, phone, website, category, rating, review_count FROM businesses WHERE id = $1",
+        let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
+            "SELECT id, name, category_id, verified, created_at FROM businesses WHERE id = $1",
         )
         .bind(business_id)
         .fetch_optional(db)
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        let Some((bid, name, address, phone, website, category, rating, review_count)) = row else {
+        let Some((bid, name, category_id, verified, created_at)) = row else {
             return Ok(None);
         };
+
+        // Get rating aggregation
+        let rating_stats = sqlx::query_as::<_, (Option<f64>, i64)>(
+            "SELECT AVG(rating::float), COUNT(*) FROM reviews WHERE business_id = $1",
+        )
+        .bind(business_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?
+        .unwrap_or((None, 0));
 
         let business = Business {
             id: bid,
             name,
-            address,
-            phone,
-            website,
-            category,
-            rating,
-            review_count: review_count.map(|c| c as u32),
+            description: None,
+            category_id,
+            owner_id: Uuid::nil(),
+            verified,
+            created_at,
         };
 
-        Ok(Some(GQLBusiness::from(business)))
+        Ok(Some(GQLBusinessWithRatings::with_ratings(
+            business,
+            rating_stats.0,
+            rating_stats.1,
+        )))
     }
 
     /// Get reviews for a business
@@ -188,8 +200,8 @@ impl QueryRoot {
 
         let search_pattern = format!("%{}%", query);
 
-        let rows = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<f64>, Option<i64>)>(
-            "SELECT id, name, address, phone, website, category, rating, review_count FROM businesses WHERE name ILIKE $1",
+        let rows = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
+            "SELECT id, name, category_id, verified, created_at FROM businesses WHERE name ILIKE $1",
         )
         .bind(search_pattern)
         .fetch_all(db)
@@ -198,16 +210,15 @@ impl QueryRoot {
 
         Ok(rows
             .into_iter()
-            .map(|(id, name, address, phone, website, category, rating, review_count)| {
+            .map(|(id, name, category_id, verified, created_at)| {
                 GQLBusiness::from(Business {
                     id,
                     name,
-                    address,
-                    phone,
-                    website,
-                    category,
-                    rating,
-                    review_count: review_count.map(|c| c as u32),
+                    description: None,
+                    category_id,
+                    owner_id: Uuid::nil(),
+                    verified,
+                    created_at,
                 })
             })
             .collect())

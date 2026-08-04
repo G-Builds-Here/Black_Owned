@@ -17,27 +17,6 @@ use crate::middleware::UserId;
 /// Mutation root for GraphQL API
 pub struct MutationRoot;
 
-/// Extract user ID from JWT token in Authorization header
-fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
-    let auth_header = ctx
-        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string())
-        .or_else(|| {
-            ctx.req()
-                .headers()
-                .get(axum::http::header::AUTHORIZATION)
-                .and_then(|h| h.to_str().ok())
-                .filter(|s| s.starts_with("Bearer "))
-                .map(|s| s.trim_start_matches("Bearer ").to_string())
-        });
-
-    auth_header
-        .ok_or_else(|| Error::new("Authorization header is required"))
-        .and_then(|token| {
-            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
-        })
-}
-
 #[Object]
 impl MutationRoot {
     /// Create a new business
@@ -45,10 +24,8 @@ impl MutationRoot {
         &self,
         ctx: &Context<'_>,
         name: String,
-        address: Option<String>,
-        phone: Option<String>,
-        website: Option<String>,
-        category: Option<String>,
+        description: Option<String>,
+        category_id: String,
     ) -> Result<GQLBusiness> {
         // Validate name is required
         if name.trim().is_empty() {
@@ -59,23 +36,35 @@ impl MutationRoot {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
 
+        // Extract user ID from JWT token
+        let user_id = ctx
+            .data::<UserId>()
+            .map(|uid| uid.0.clone())
+            .map_err(|_| Error::new("Unauthorized: User not authenticated"))?;
+
+        let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
+            Error::new(format!("Invalid user ID from token: {:?}", e))
+        })?;
+
+        let category_uuid = Uuid::parse_str(&category_id).map_err(|e| {
+            Error::new(format!("Invalid category UUID: {:?}", e))
+        })?;
+
         let id = Uuid::new_v4();
 
-        let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<f64>, Option<i64>)>(
+        let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Uuid, Uuid, bool, chrono::DateTime<Utc>)>(
             r#"
-            INSERT INTO businesses (id, name, address, phone, website, category, rating, review_count)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, name, address, phone, website, category, rating, review_count
+            INSERT INTO businesses (id, name, description, category_id, owner_id, verified, created_at)
+            VALUES ($1, $2, $3, $4, $5, false, $6)
+            RETURNING id, name, description, category_id, owner_id, verified, created_at
             "#,
         )
         .bind(id)
         .bind(&name)
-        .bind(&address)
-        .bind(&phone)
-        .bind(&website)
-        .bind(&category)
-        .bind(None::<f64>)
-        .bind(None::<i64>)
+        .bind(&description)
+        .bind(category_uuid)
+        .bind(user_uuid)
+        .bind(Utc::now())
         .fetch_one(db)
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
@@ -83,12 +72,11 @@ impl MutationRoot {
         Ok(GQLBusiness::from(Business {
             id: result.0,
             name: result.1,
-            address: result.2,
-            phone: result.3,
-            website: result.4,
-            category: result.5,
-            rating: result.6,
-            review_count: result.7.map(|c| c as u32),
+            description: result.2,
+            category_id: result.3,
+            owner_id: result.4,
+            verified: result.5,
+            created_at: result.6,
         }))
     }
 
@@ -98,51 +86,81 @@ impl MutationRoot {
         ctx: &Context<'_>,
         id: String,
         name: Option<String>,
-        address: Option<String>,
-        phone: Option<String>,
-        website: Option<String>,
-        category: Option<String>,
+        category_id: Option<String>,
+        verified: Option<bool>,
     ) -> Result<Option<GQLBusiness>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
+        })?;
+
+        // Extract user ID from JWT token
+        let user_id = ctx
+            .data::<UserId>()
+            .map(|uid| uid.0.clone())
+            .map_err(|_| Error::new("Unauthorized: User not authenticated"))?;
+
+        let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
+            Error::new(format!("Invalid user ID from token: {:?}", e))
         })?;
 
         let business_id = Uuid::parse_str(&id).map_err(|e| {
             Error::new(format!("Invalid business UUID: {:?}", e))
         })?;
 
-        let row = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<f64>, Option<i64>)>(
-            r#"
-            UPDATE businesses
-            SET name = COALESCE($2, name),
-                address = COALESCE($3, address),
-                phone = COALESCE($4, phone),
-                website = COALESCE($5, website),
-                category = COALESCE($6, category)
-            WHERE id = $1
-            RETURNING id, name, address, phone, website, category, rating, review_count
-            "#,
+        let name_ref = name.as_deref();
+        let category_uuid = category_id
+            .map(|s| Uuid::parse_str(&s))
+            .transpose()
+            .map_err(|e| Error::new(format!("Invalid category UUID: {:?}", e)))?;
+
+        // First, check if the business exists and get its owner
+        let current_owner = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT owner_id FROM businesses WHERE id = $1",
         )
         .bind(business_id)
-        .bind(name.as_deref())
-        .bind(address.as_deref())
-        .bind(phone.as_deref())
-        .bind(website.as_deref())
-        .bind(category.as_deref())
         .fetch_optional(db)
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        Ok(row.map(|(bid, n, a, p, w, c, r, rc)| {
+        match current_owner {
+            Some((owner_id,)) => {
+                // Verify the user is the owner
+                if owner_id != user_uuid {
+                    return Err(Error::new("Forbidden: You are not the owner of this business"));
+                }
+            }
+            None => {
+                return Ok(None);
+            }
+        }
+
+        let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
+            r#"
+            UPDATE businesses
+            SET name = COALESCE($2, name),
+                category_id = COALESCE($3, category_id),
+                verified = COALESCE($4, verified)
+            WHERE id = $1
+            RETURNING id, name, category_id, verified, created_at, owner_id
+            "#,
+        )
+        .bind(business_id)
+        .bind(name_ref)
+        .bind(category_uuid)
+        .bind(verified)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
+
+        Ok(row.map(|(bid, n, cid, v, ca, oid)| {
             GQLBusiness::from(Business {
                 id: bid,
                 name: n,
-                address: a,
-                phone: p,
-                website: w,
-                category: c,
-                rating: r,
-                review_count: rc.map(|c| c as u32),
+                description: None,
+                category_id: cid,
+                owner_id: oid,
+                verified: v,
+                created_at: ca,
             })
         }))
     }
@@ -163,7 +181,7 @@ impl MutationRoot {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
 
-        if rating < 1 || rating > 5 {
+        if !(1..=5).contains(&rating) {
             return Err(Error::new("Rating must be between 1 and 5"));
         }
 
@@ -235,8 +253,8 @@ impl MutationRoot {
         let review_count = count as i32;
 
         // Fetch business details
-        let business_row = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<f64>, Option<i64>)>(
-            "SELECT id, name, address, phone, website, category, rating, review_count FROM businesses WHERE id = $1",
+        let business_row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
+            "SELECT id, name, category_id, verified, created_at, owner_id FROM businesses WHERE id = $1",
         )
         .bind(business_uuid)
         .fetch_one(db)
@@ -246,17 +264,16 @@ impl MutationRoot {
         let business = Business {
             id: business_row.0,
             name: business_row.1,
-            address: business_row.2,
-            phone: business_row.3,
-            website: business_row.4,
-            category: business_row.5,
-            rating: business_row.6,
-            review_count: business_row.7.map(|c| c as u32),
+            description: None,
+            category_id: business_row.2,
+            owner_id: business_row.5,
+            verified: business_row.3,
+            created_at: business_row.4,
         };
 
         let mut gql_business: GQLBusiness = business.into();
-        gql_business.rating = rating_avg;
-        gql_business.review_count = Some(review_count);
+        gql_business.rating_avg = rating_avg;
+        gql_business.review_count = review_count;
 
         Ok(SubmitReviewResult {
             review: GQLReview::from(review),

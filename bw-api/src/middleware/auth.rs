@@ -21,18 +21,11 @@ pub struct AuthConfig {
 }
 
 /// In-memory store for authenticated user sessions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[expect(dead_code)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
     valid_tokens: Arc<RwLock<std::collections::HashMap<String, String>>>,
-}
-
-impl Clone for AuthStore {
-    fn clone(&self) -> Self {
-        Self {
-            valid_tokens: self.valid_tokens.clone(),
-        }
-    }
 }
 
 impl AuthStore {
@@ -72,6 +65,7 @@ impl<S> Layer<S> for AuthLayer {
 }
 
 /// Authentication middleware service
+#[expect(dead_code)]
 pub struct AuthMiddleware<S> {
     inner: S,
     store: Arc<AuthStore>,
@@ -94,9 +88,9 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        // Extract token from Bearer header - extract string before async block
-        let token = req
+    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+        // Extract token value before entering async block to avoid borrow issues
+        let token: Option<String> = req
             .headers()
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
@@ -104,12 +98,11 @@ where
             .map(|s| s.to_string());
 
         let mut inner = self.inner.clone();
-        let _store = self.store.clone();
         let config = self.config.clone();
 
         Box::pin(async move {
-            // Verify JWT token if token was extracted
             if let Some(token_str) = &token {
+                // Verify JWT token
                 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
                 use serde::{Deserialize, Serialize};
 
@@ -128,8 +121,10 @@ where
                     &DecodingKey::from_secret(config.jwt_secret.as_bytes()),
                     &validation,
                 ) {
-                    Ok(_token_data) => {
-                        // Token is valid - proceed with request
+                    Ok(token_data) => {
+                        // Extract user ID from token and add to request extensions
+                        req.extensions_mut()
+                            .insert(UserId(token_data.claims.userId));
                         inner.call(req).await
                     }
                     Err(_) => {
