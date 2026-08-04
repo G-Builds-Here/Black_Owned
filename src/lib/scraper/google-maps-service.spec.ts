@@ -231,5 +231,67 @@ describe("Google Maps Scraper Service", () => {
       expect(firstResult.hours).toBeDefined();
       expect(firstResult.priceLevel).toBeDefined();
     });
+
+    it("should capture phone number when available in business data", async () => {
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const result = await searchGoogleMapsSearch(request);
+
+      // AC requirement: phone number is captured if available
+      const resultsWithPhone = result.data.filter((item) => item.phone !== undefined);
+      expect(resultsWithPhone.length).toBeGreaterThan(0);
+
+      resultsWithPhone.forEach((business) => {
+        expect(business.phone).toMatch(/^\(555\)/);
+      });
+    });
+
+    it("should capture website URL when available in business data", async () => {
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const result = await searchGoogleMapsSearch(request);
+
+      // AC requirement: website URL is captured if available
+      const resultsWithWebsite = result.data.filter((item) => item.website !== undefined);
+      expect(resultsWithWebsite.length).toBeGreaterThan(0);
+
+      resultsWithWebsite.forEach((business) => {
+        expect(business.website).toMatch(/^https?:\/\//);
+      });
+    });
+
+    it("should handle business results where phone may be undefined", async () => {
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const result = await searchGoogleMapsSearch(request);
+
+      // AC requirement: phone is captured IF available - undefined is acceptable
+      result.data.forEach((business) => {
+        if (business.phone !== undefined) {
+          expect(typeof business.phone).toBe("string");
+        }
+      });
+    });
+
+    it("should handle business results where website may be undefined", async () => {
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const result = await searchGoogleMapsSearch(request);
+
+      // AC requirement: website is captured IF available - undefined is acceptable
+      result.data.forEach((business) => {
+        if (business.website !== undefined) {
+          expect(typeof business.website).toBe("string");
+        }
+      });
+    });
   });
 });
