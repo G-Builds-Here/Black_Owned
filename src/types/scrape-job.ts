@@ -1,66 +1,58 @@
 /**
  * Scrape Job Types
  *
- * Defines the data structures for web scraping jobs.
+ * Types for managing web scraping jobs in the Black Owned directory.
  */
 
 /**
- * Status of a scrape job
+ * Scraper source - the external platform to scrape from
  */
-export type ScrapeJobStatus = "Pending" | "Running" | "Completed" | "Failed" | "Cancelled";
+export type ScraperSource = "google-maps" | "yelp" | "facebook";
 
 /**
- * Scrape job entity stored in PostgreSQL
+ * Scrape job status - tracks the lifecycle of a scrape job
+ */
+export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
+
+/**
+ * Input for creating a new scrape job
+ */
+export interface CreateScrapeJobInput {
+  source: ScraperSource;
+  query: string;
+  location: string;
+}
+
+/**
+ * Scrape job entity stored in the database
  */
 export interface ScrapeJob {
   id: string;
-  source: string;
+  source: ScraperSource;
   query: string;
   location: string;
   status: ScrapeJobStatus;
-  createdAt: Date;
-  updatedAt: Date;
+  business_count: number;
+  created_at: Date;
+  updated_at: Date;
 }
 
 /**
- * Creates a new scrape job with default values
+ * Result from creating a scrape job
  */
-export function createScrapeJob(
-  id: string,
-  source: string,
-  query: string,
-  location: string
-): ScrapeJob {
-  const now = new Date();
-  return {
-    id,
-    source,
-    query,
-    location,
-    status: "Pending",
-    createdAt: now,
-    updatedAt: now,
-  };
+export interface CreateScrapeJobResult {
+  id: string;
+  source: ScraperSource;
+  query: string;
+  location: string;
+  status: "pending";
+  created_at: Date;
 }
 
 /**
- * Updates the status of a scrape job
+ * Validation error for scrape job creation
  */
-export function updateScrapeJobStatus(
-  job: ScrapeJob,
-  status: ScrapeJobStatus
-): ScrapeJob {
-  return {
-    ...job,
-    status,
-    updatedAt: new Date(),
-  };
-}
-
-/**
- * Validates that a status value is a valid ScrapeJobStatus
- */
-export function isValidScrapeJobStatus(status: string): status is ScrapeJobStatus {
-  const validStatuses: ScrapeJobStatus[] = ["Pending", "Running", "Completed", "Failed", "Cancelled"];
-  return validStatuses.includes(status as ScrapeJobStatus);
+export interface ScrapeJobValidationError {
+  field: string;
+  message: string;
 }
