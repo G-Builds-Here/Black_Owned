@@ -193,4 +193,200 @@ describe('AnalyticsPage', () => {
       expect(screen.getByText('success')).toBeInTheDocument();
     });
   });
+
+  it('displays average job duration when data is available', async () => {
+    const mockStatsWithDurations = {
+      totalJobs: 100,
+      successfulJobs: 85,
+      failedJobs: 15,
+      totalItemsScraped: 5000,
+      periodDays: 30,
+      avgDurationSeconds: 125,
+      minDurationSeconds: 45,
+      maxDurationSeconds: 340,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatsWithDurations,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Avg Duration')).toBeInTheDocument();
+    });
+
+    // 125 seconds = 2m 5s
+    expect(screen.getByText('2m 5s')).toBeInTheDocument();
+  });
+
+  it('displays minimum job duration when data is available', async () => {
+    const mockStatsWithDurations = {
+      totalJobs: 100,
+      successfulJobs: 85,
+      failedJobs: 15,
+      totalItemsScraped: 5000,
+      periodDays: 30,
+      avgDurationSeconds: 125,
+      minDurationSeconds: 45,
+      maxDurationSeconds: 340,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatsWithDurations,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Min Duration')).toBeInTheDocument();
+    });
+
+    // 45 seconds = 45s
+    expect(screen.getByText('45s')).toBeInTheDocument();
+  });
+
+  it('displays maximum job duration when data is available', async () => {
+    const mockStatsWithDurations = {
+      totalJobs: 100,
+      successfulJobs: 85,
+      failedJobs: 15,
+      totalItemsScraped: 5000,
+      periodDays: 30,
+      avgDurationSeconds: 125,
+      minDurationSeconds: 45,
+      maxDurationSeconds: 340,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatsWithDurations,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Max Duration')).toBeInTheDocument();
+    });
+
+    // 340 seconds = 5m 40s
+    expect(screen.getByText('5m 40s')).toBeInTheDocument();
+  });
+
+  it('displays N/A for duration metrics when no data exists', async () => {
+    const mockEmptyStats = {
+      totalJobs: 0,
+      successfulJobs: 0,
+      failedJobs: 0,
+      totalItemsScraped: 0,
+      periodDays: 30,
+      avgDurationSeconds: null,
+      minDurationSeconds: null,
+      maxDurationSeconds: null,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockEmptyStats,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Avg Duration')).toBeInTheDocument();
+    });
+
+    // Verify N/A is displayed for null durations
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+  });
+
+  it('displays correct subtitle for each duration metric', async () => {
+    const mockStatsWithDurations = {
+      totalJobs: 100,
+      successfulJobs: 85,
+      failedJobs: 15,
+      totalItemsScraped: 5000,
+      periodDays: 30,
+      avgDurationSeconds: 125,
+      minDurationSeconds: 45,
+      maxDurationSeconds: 340,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatsWithDurations,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Avg Duration')).toBeInTheDocument();
+    });
+
+    // Verify subtitles for each duration metric
+    expect(screen.getByText('Completed jobs only')).toBeInTheDocument();
+    expect(screen.getByText('Fastest job')).toBeInTheDocument();
+    expect(screen.getByText('Longest job')).toBeInTheDocument();
+  });
+
+  it('displays all three duration metric cards in the UI', async () => {
+    const mockStatsWithDurations = {
+      totalJobs: 100,
+      successfulJobs: 85,
+      failedJobs: 15,
+      totalItemsScraped: 5000,
+      periodDays: 30,
+      avgDurationSeconds: 125,
+      minDurationSeconds: 45,
+      maxDurationSeconds: 340,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatsWithDurations,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Avg Duration')).toBeInTheDocument();
+    });
+
+    // Verify all three duration metric labels are present
+    expect(screen.getByText('Avg Duration')).toBeInTheDocument();
+    expect(screen.getByText('Min Duration')).toBeInTheDocument();
+    expect(screen.getByText('Max Duration')).toBeInTheDocument();
+  });
 });

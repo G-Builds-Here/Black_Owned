@@ -80,7 +80,7 @@ impl BusinessIngestionHandler {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
             description: Some(input.category_name.clone()),
-            category_id: *_category_id,
+            category_id: _category_id.to_owned(),
             owner_id: _owner_id,
             verified: false,
             created_at: chrono::Utc::now(),

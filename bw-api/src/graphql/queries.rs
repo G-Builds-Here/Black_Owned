@@ -240,15 +240,18 @@ impl QueryRoot {
         let since = Utc::now() - chrono::Duration::days(period_days as i64);
 
         // Query for aggregated stats from PostgreSQL scrape_jobs table
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64)>(
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64, Option<f64>, Option<i64>, Option<i64>)>(
             r#"
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE status = 'success') as successful,
                 COUNT(*) FILTER (WHERE status = 'failed') as failed,
-                COALESCE(SUM(items_scraped), 0) as total_items
+                COALESCE(SUM(items_scraped), 0) as total_items,
+                AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration,
+                MIN(EXTRACT(EPOCH FROM (completed_at - started_at)))::integer as min_duration,
+                MAX(EXTRACT(EPOCH FROM (completed_at - started_at)))::integer as max_duration
             FROM scrape_jobs
-            WHERE started_at >= $1
+            WHERE started_at >= $1 AND completed_at IS NOT NULL
             "#,
         )
         .bind(since)
@@ -262,6 +265,9 @@ impl QueryRoot {
             failed_jobs: row.2 as i32,
             total_items_scraped: row.3 as i32,
             period_days,
+            avg_duration_seconds: row.4,
+            min_duration_seconds: row.5,
+            max_duration_seconds: row.6,
         })
     }
 

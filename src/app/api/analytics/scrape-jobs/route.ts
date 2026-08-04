@@ -6,6 +6,9 @@ interface ScrapeJobStats {
   failedJobs: number;
   totalItemsScraped: number;
   periodDays: number;
+  avgDurationSeconds: number | null;
+  minDurationSeconds: number | null;
+  maxDurationSeconds: number | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -28,6 +31,9 @@ export async function GET(request: NextRequest) {
       failedJobs: 0,
       totalItemsScraped: 0,
       periodDays: days,
+      avgDurationSeconds: null,
+      minDurationSeconds: null,
+      maxDurationSeconds: null,
     };
 
     return NextResponse.json(mockStats);
