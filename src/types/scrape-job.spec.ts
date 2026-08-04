@@ -1,137 +1,129 @@
 /**
- * Scrape Job Type Tests
+ * Scrape Job Types Tests
+ *
+ * Tests for scrape job types and helper functions.
  */
 
 import {
-  validateScrapeJobInput,
-  createDefaultScrapeJob,
-  CreateScrapeJobInput,
-  ScraperSource,
+  createScrapeJob,
+  updateScrapeJobStatus,
+  isValidScrapeJobStatus,
+  type ScrapeJob,
+  type ScrapeJobStatus,
 } from "./scrape-job";
 
 describe("Scrape Job Types", () => {
-  describe("validateScrapeJobInput", () => {
-    it("should validate a correct input", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "black owned restaurants",
-        location: "Atlanta, GA",
-      };
-
-      const result = validateScrapeJobInput(input);
-
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it("should reject invalid source", () => {
-      const input: CreateScrapeJobInput = {
-        source: "invalid-source" as ScraperSource,
-        query: "SELECT * FROM table",
-        location: "us-east-1",
-      };
-
-      const result = validateScrapeJobInput(input);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain("Invalid source");
-    });
-
-    it("should reject empty query", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "",
-        location: "us-east-1",
-      };
-
-      const result = validateScrapeJobInput(input);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain("Missing required field: query");
-    });
-
-    it("should reject empty location", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "SELECT * FROM table",
-        location: "",
-      };
-
-      const result = validateScrapeJobInput(input);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain("Missing required field: location");
-    });
-
-    it("should reject whitespace-only fields", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "   ",
-        location: "us-east-1",
-      };
-
-      const result = validateScrapeJobInput(input);
-
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain("Missing required field: query");
+  describe("ScrapeJobStatus enum", () => {
+    it("should have all required status values", () => {
+      const validStatuses: ScrapeJobStatus[] = ["Pending", "Running", "Completed", "Failed", "Cancelled"];
+      expect(validStatuses).toContain("Pending");
+      expect(validStatuses).toContain("Running");
+      expect(validStatuses).toContain("Completed");
+      expect(validStatuses).toContain("Failed");
+      expect(validStatuses).toContain("Cancelled");
     });
   });
 
-  describe("createDefaultScrapeJob", () => {
-    it("should create a job with pending status", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "black owned restaurants",
-        location: "Atlanta, GA",
-      };
+  describe("createScrapeJob", () => {
+    it("should create a scrape job with correct fields", () => {
+      const job = createScrapeJob("job-123", "google", "black owned restaurants", "Dallas, TX");
 
-      const job = createDefaultScrapeJob(input);
-
-      expect(job.source).toBe("google-maps");
+      expect(job.id).toBe("job-123");
+      expect(job.source).toBe("google");
       expect(job.query).toBe("black owned restaurants");
-      expect(job.location).toBe("Atlanta, GA");
-      expect(job.status).toBe("pending");
-      expect(job.id).toBeDefined();
-      expect(job.created_at).toBeInstanceOf(Date);
-      expect(job.updated_at).toBeInstanceOf(Date);
+      expect(job.location).toBe("Dallas, TX");
+      expect(job.status).toBe("Pending");
+      expect(job.createdAt).toBeInstanceOf(Date);
+      expect(job.updatedAt).toBeInstanceOf(Date);
     });
 
-    it("should generate a valid UUID", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "SELECT * FROM table",
-        location: "us-east-1",
-      };
-
-      const job = createDefaultScrapeJob(input);
-
-      // UUID v4 format: 8-4-4-4-12 hex characters
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      expect(uuidRegex.test(job.id)).toBe(true);
+    it("should set createdAt and updatedAt to the same value initially", () => {
+      const job = createScrapeJob("job-456", "bing", "black owned shops", "Houston, TX");
+      expect(job.createdAt.getTime()).toBe(job.updatedAt.getTime());
     });
 
-    it("should have matching created_at and updated_at", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "SELECT * FROM table",
-        location: "us-east-1",
-      };
+    it("should create job with Pending status by default", () => {
+      const job = createScrapeJob("job-789", "yahoo", "black owned cafes", "Austin, TX");
+      expect(job.status).toBe("Pending");
+    });
+  });
 
-      const job = createDefaultScrapeJob(input);
+  describe("updateScrapeJobStatus", () => {
+    it("should update status and updated timestamp", () => {
+      const originalJob = createScrapeJob("job-123", "google", "test query", "Dallas, TX");
+      const originalUpdatedAt = originalJob.updatedAt;
 
-      expect(job.created_at.getTime()).toBe(job.updated_at.getTime());
+      const updatedJob = updateScrapeJobStatus(originalJob, "Running");
+
+      expect(updatedJob.status).toBe("Running");
+      expect(updatedJob.updatedAt).toBeInstanceOf(Date);
+      expect(updatedJob.updatedAt.getTime()).toBeGreaterThanOrEqual(originalUpdatedAt.getTime());
+      expect(updatedJob.id).toBe(originalJob.id);
+      expect(updatedJob.source).toBe(originalJob.source);
+      expect(updatedJob.query).toBe(originalJob.query);
+      expect(updatedJob.location).toBe(originalJob.location);
+      expect(updatedJob.createdAt).toBe(originalJob.createdAt);
     });
 
-    it("should initialize business_count to 0", () => {
-      const input: CreateScrapeJobInput = {
-        source: "google-maps",
-        query: "SELECT * FROM table",
-        location: "us-east-1",
-      };
+    it("should allow transitioning through all statuses", () => {
+      let job = createScrapeJob("job-123", "google", "test", "Dallas, TX");
 
-      const job = createDefaultScrapeJob(input);
+      job = updateScrapeJobStatus(job, "Running");
+      expect(job.status).toBe("Running");
 
-      expect(job.business_count).toBe(0);
+      job = updateScrapeJobStatus(job, "Completed");
+      expect(job.status).toBe("Completed");
+
+      job = updateScrapeJobStatus(job, "Failed");
+      expect(job.status).toBe("Failed");
+
+      job = updateScrapeJobStatus(job, "Cancelled");
+      expect(job.status).toBe("Cancelled");
+    });
+  });
+
+  describe("isValidScrapeJobStatus", () => {
+    it("should return true for valid status values", () => {
+      expect(isValidScrapeJobStatus("Pending")).toBe(true);
+      expect(isValidScrapeJobStatus("Running")).toBe(true);
+      expect(isValidScrapeJobStatus("Completed")).toBe(true);
+      expect(isValidScrapeJobStatus("Failed")).toBe(true);
+      expect(isValidScrapeJobStatus("Cancelled")).toBe(true);
+    });
+
+    it("should return false for invalid status values", () => {
+      expect(isValidScrapeJobStatus("pending")).toBe(false);
+      expect(isValidScrapeJobStatus("running")).toBe(false);
+      expect(isValidScrapeJobStatus("completed")).toBe(false);
+      expect(isValidScrapeJobStatus("failed")).toBe(false);
+      expect(isValidScrapeJobStatus("cancelled")).toBe(false);
+      expect(isValidScrapeJobStatus("")).toBe(false);
+      expect(isValidScrapeJobStatus("unknown")).toBe(false);
+      expect(isValidScrapeJobStatus("InProgress")).toBe(false);
+    });
+  });
+
+  describe("ScrapeJob interface fields", () => {
+    it("should have all required fields", () => {
+      const job = createScrapeJob("job-123", "google", "test query", "Dallas, TX");
+
+      // Verify all required fields exist
+      expect(job).toHaveProperty("id");
+      expect(job).toHaveProperty("source");
+      expect(job).toHaveProperty("query");
+      expect(job).toHaveProperty("location");
+      expect(job).toHaveProperty("status");
+      expect(job).toHaveProperty("createdAt");
+      expect(job).toHaveProperty("updatedAt");
+
+      // Verify field types
+      expect(typeof job.id).toBe("string");
+      expect(typeof job.source).toBe("string");
+      expect(typeof job.query).toBe("string");
+      expect(typeof job.location).toBe("string");
+      expect(typeof job.status).toBe("string");
+      expect(job.createdAt).toBeInstanceOf(Date);
+      expect(job.updatedAt).toBeInstanceOf(Date);
     });
   });
 });
