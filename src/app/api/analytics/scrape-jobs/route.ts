@@ -5,6 +5,9 @@ interface ScrapeJobStats {
   successfulJobs: number;
   failedJobs: number;
   totalItemsScraped: number;
+  totalBusinessesScraped: number;
+  totalBusinessesImported: number;
+  importRate: number;
   periodDays: number;
 }
 
@@ -27,6 +30,9 @@ export async function GET(request: NextRequest) {
       successfulJobs: 0,
       failedJobs: 0,
       totalItemsScraped: 0,
+      totalBusinessesScraped: 0,
+      totalBusinessesImported: 0,
+      importRate: 0,
       periodDays: days,
     };
 

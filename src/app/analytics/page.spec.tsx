@@ -17,6 +17,9 @@ describe('AnalyticsPage', () => {
         successfulJobs: 0,
         failedJobs: 0,
         totalItemsScraped: 0,
+        totalBusinessesScraped: 0,
+        totalBusinessesImported: 0,
+        importRate: 0,
         periodDays: 30,
       }),
     });
@@ -35,6 +38,9 @@ describe('AnalyticsPage', () => {
         successfulJobs: 0,
         failedJobs: 0,
         totalItemsScraped: 0,
+        totalBusinessesScraped: 0,
+        totalBusinessesImported: 0,
+        importRate: 0,
         periodDays: 30,
       }),
     });
@@ -63,6 +69,9 @@ describe('AnalyticsPage', () => {
       successfulJobs: 135,
       failedJobs: 15,
       totalItemsScraped: 45000,
+      totalBusinessesScraped: 100,
+      totalBusinessesImported: 75,
+      importRate: 75.0,
       periodDays: 30,
     };
 
@@ -78,6 +87,8 @@ describe('AnalyticsPage', () => {
       expect(screen.getByText('135')).toBeInTheDocument();
       expect(screen.getByText('15')).toBeInTheDocument();
       expect(screen.getByText('45,000')).toBeInTheDocument();
+      expect(screen.getByText('100')).toBeInTheDocument();
+      expect(screen.getByText('75')).toBeInTheDocument();
     });
   });
 
@@ -90,6 +101,9 @@ describe('AnalyticsPage', () => {
           successfulJobs: 0,
           failedJobs: 0,
           totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
           periodDays: 30,
         }),
       })
@@ -124,6 +138,9 @@ describe('AnalyticsPage', () => {
           successfulJobs: 0,
           failedJobs: 0,
           totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
           periodDays: 7,
         }),
       })
@@ -159,6 +176,9 @@ describe('AnalyticsPage', () => {
       successfulJobs: 4,
       failedJobs: 1,
       totalItemsScraped: 1000,
+      totalBusinessesScraped: 5,
+      totalBusinessesImported: 3,
+      importRate: 60.0,
       periodDays: 30,
     };
 
@@ -191,6 +211,40 @@ describe('AnalyticsPage', () => {
       expect(screen.getByText('Recent Jobs')).toBeInTheDocument();
       expect(screen.getByText('Business Scraper')).toBeInTheDocument();
       expect(screen.getByText('success')).toBeInTheDocument();
+    });
+  });
+
+  it('displays businesses scraped and imported stats', async () => {
+    const mockStats = {
+      totalJobs: 10,
+      successfulJobs: 8,
+      failedJobs: 2,
+      totalItemsScraped: 500,
+      totalBusinessesScraped: 50,
+      totalBusinessesImported: 35,
+      importRate: 70.0,
+      periodDays: 30,
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStats,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+
+    render(<AnalyticsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Businesses Scraped')).toBeInTheDocument();
+      expect(screen.getByText('Businesses Imported')).toBeInTheDocument();
+      expect(screen.getByText('50')).toBeInTheDocument();
+      expect(screen.getByText('35')).toBeInTheDocument();
+      expect(screen.getByText(/70\.0/)).toBeInTheDocument();
+      expect(screen.getByText(/import rate/)).toBeInTheDocument();
     });
   });
 });
