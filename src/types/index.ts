@@ -7,4 +7,4 @@
 export * from "./business";
 export * from "./review";
 export * from "./user";
-export * from "./scrape-job";
+export * from "./scraper-result";
