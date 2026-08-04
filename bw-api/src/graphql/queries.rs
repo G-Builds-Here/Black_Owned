@@ -14,7 +14,7 @@ use bw_types::{Business, Category, Review};
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLBusinessWithRatings, GQLCategory, GQLReview, PageInfo, ScrapeJob, ScrapeJobStats, ScrapeJobStatus};
+use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLCategory, GQLReview, PageInfo, ScrapeJob, ScrapeJobStats, ScrapeJobStatus};
 
 /// Query root for GraphQL API
 pub struct QueryRoot;
@@ -68,6 +68,12 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
+                    address: None,
+                    phone: None,
+                    website: None,
+                    category: None,
+                    rating: None,
+                    review_count: Some(0),
                 };
                 let cursor = id.to_string();
                 let node = GQLBusiness::from(business);
@@ -89,8 +95,8 @@ impl QueryRoot {
         })
     }
 
-    /// Get a single business by ID with rating aggregation
-    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusinessWithRatings>> {
+    /// Get a single business by ID
+    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusiness>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
@@ -99,7 +105,6 @@ impl QueryRoot {
             Error::new(format!("Invalid UUID: {:?}", e))
         })?;
 
-        // Get business data
         let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
             "SELECT id, name, category_id, verified, created_at FROM businesses WHERE id = $1",
         )
@@ -112,16 +117,6 @@ impl QueryRoot {
             return Ok(None);
         };
 
-        // Get rating aggregation
-        let rating_stats = sqlx::query_as::<_, (Option<f64>, i64)>(
-            "SELECT AVG(rating::float), COUNT(*) FROM reviews WHERE business_id = $1",
-        )
-        .bind(business_id)
-        .fetch_optional(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?
-        .unwrap_or((None, 0));
-
         let business = Business {
             id: bid,
             name,
@@ -130,13 +125,15 @@ impl QueryRoot {
             owner_id: Uuid::nil(),
             verified,
             created_at,
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: Some(0),
         };
 
-        Ok(Some(GQLBusinessWithRatings::with_ratings(
-            business,
-            rating_stats.0,
-            rating_stats.1,
-        )))
+        Ok(Some(GQLBusiness::from(business)))
     }
 
     /// Get reviews for a business
@@ -221,6 +218,12 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
+                    address: None,
+                    phone: None,
+                    website: None,
+                    category: None,
+                    rating: None,
+                    review_count: Some(0),
                 })
             })
             .collect())
