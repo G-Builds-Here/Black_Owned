@@ -696,6 +696,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bw_scraper"
+version = "0.1.0"
+dependencies = [
+ "async-nats 0.33.0",
+ "axum 0.7.9",
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
