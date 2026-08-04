@@ -28,7 +28,7 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusiness,
+  create as createBusinessRecord,
   Business as BusinessRecord,
 } from "../db/business-repository";
 
@@ -308,7 +308,7 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
+function businessRecordToGraphql(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
@@ -370,7 +370,7 @@ export async function updateBusiness(
 
   return {
     success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
+    business: businessRecordToGraphql(updatedBusiness),
   };
 }
 
@@ -503,9 +503,9 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusiness(
+export async function createBusinessMutation(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string } },
+  args: { input: { name: string; description?: string; categoryId: string; address?: string } },
   context: unknown
 ): Promise<{
   success: boolean;
@@ -540,12 +540,13 @@ export async function createBusiness(
 
   const client = await getPool().connect();
   try {
-    const business = await createBusinessInDb(
+    const business = await createBusinessRecord(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
-      input.categoryId.trim()
+      input.categoryId.trim(),
+      input.address?.trim()
     );
 
     return {
@@ -564,26 +565,6 @@ export async function createBusiness(
 }
 
 /**
- * Internal function to create a business in the database
- */
-async function createBusinessInDb(
-  client: import("pg").PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
-  categoryId: string
-): Promise<Business> {
-  const tableName = "businesses";
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId]
-  );
-  return result.rows[0];
-}
-
-/**
  * Resolvers object
  */
 export const resolvers = {
@@ -593,7 +574,7 @@ export const resolvers = {
   },
   Mutation: {
     register,
-    createBusiness,
+    createBusiness: createBusinessMutation,
     submitVerification,
     updateBusiness,
   },

@@ -17,6 +17,12 @@ export interface TestBusiness {
   name: string;
   formattedName: string;
   description?: string;
+  address?: string;
+}
+
+export interface TestBusinessWithImages extends TestBusiness {
+  category?: string;
+  imageCount?: number;
 }
 
 export type UserRole = "customer" | "business_owner" | "admin";
@@ -73,28 +79,43 @@ export function isTestEmail(email: string): boolean {
  */
 export function generateTestBusinesses(count: number = 5): TestBusiness[] {
   const businessTemplates = [
-    "Black Beauty Salon",
-    "Community Grocery Store",
-    "Tech Solutions LLC",
-    "Family Restaurant",
-    "Fitness Center",
-    "Bookstore & Cafe",
-    "Auto Repair Shop",
-    "Hair Studio",
+    { name: "Black Beauty Salon", address: "123 Main St, Atlanta, GA", category: "health-wellness" },
+    { name: "Community Grocery Store", address: "456 Oak Ave, Atlanta, GA", category: "food-dining" },
+    { name: "Tech Solutions LLC", address: "789 Tech Blvd, Atlanta, GA", category: "professional-services" },
+    { name: "Family Restaurant", address: "321 Food Lane, Atlanta, GA", category: "food-dining" },
+    { name: "Fitness Center", address: "555 Health Way, Atlanta, GA", category: "health-wellness" },
+    { name: "Bookstore & Cafe", address: "777 Book St, Atlanta, GA", category: "retail-fashion" },
+    { name: "Auto Repair Shop", address: "999 Garage Rd, Atlanta, GA", category: "automotive" },
+    { name: "Hair Studio", address: "111 Style Ave, Atlanta, GA", category: "health-wellness" },
   ];
 
   return Array.from({ length: count }, (_, i) => {
     const template = businessTemplates[i % businessTemplates.length];
     const suffix = count > businessTemplates.length ? ` (${i + 1})` : "";
-    const name = `${template}${suffix}`;
+    const name = `${template.name}${suffix}`;
 
     return {
       id: `biz-${i + 1}`,
       name,
       formattedName: formatBusinessName(name),
       description: `Test business - ${name}`,
+      address: template.address,
+      category: template.category,
     };
   });
+}
+
+/**
+ * Generates test businesses with image metadata for seeding
+ * Returns businesses with category and image count for image generation
+ */
+export function generateBusinessesWithImages(count: number = 5): TestBusinessWithImages[] {
+  const businesses = generateTestBusinesses(count);
+  return businesses.map((biz) => ({
+    ...biz,
+    category: biz.category || "other",
+    imageCount: Math.floor(Math.random() * 3) + 2, // 2-4 images
+  }));
 }
 
 /**

@@ -29,6 +29,7 @@ export const typeDefs = `#graphql
     rating: Float!
     reviewCount: Int!
     location: String!
+    address: String
     isVerified: Boolean!
     imageUrl: String
     description: String

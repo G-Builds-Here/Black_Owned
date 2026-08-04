@@ -82,6 +82,7 @@ impl BusinessIngestionHandler {
             description: None,
             category_id: *category_id,
             verified: false,
+            address: None,
             created_at: chrono::Utc::now(),
             owner_id,
         })

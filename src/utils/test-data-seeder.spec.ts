@@ -97,6 +97,22 @@ describe("Test Data Seeder", () => {
       expect(businesses[0].formattedName).toBeDefined();
       expect(businesses[0].formattedName).toContain(businesses[0].name);
     });
+
+    it("includes address field for each business", () => {
+      const businesses = generateTestBusinesses(5);
+      businesses.forEach((biz) => {
+        expect(biz.address).toBeDefined();
+        expect(typeof biz.address).toBe("string");
+        expect(biz.address!.length).toBeGreaterThan(0);
+      });
+    });
+
+    it("includes category field for each business", () => {
+      const businesses = generateTestBusinesses(5);
+      businesses.forEach((biz) => {
+        expect(biz.category).toBeDefined();
+      });
+    });
   });
 
   describe("generateTestUsers", () => {
@@ -144,8 +160,8 @@ describe("Test Data Seeder", () => {
 
     it("associates business owners with businesses when provided", () => {
       const businesses = [
-        { id: "biz-1", name: "Test Biz 1", formattedName: "BWS-TEST: Test Biz 1" },
-        { id: "biz-2", name: "Test Biz 2", formattedName: "BWS-TEST: Test Biz 2" },
+        { id: "biz-1", name: "Test Biz 1", formattedName: "BWS-TEST: Test Biz 1", address: "123 Test St", category: "food-dining" },
+        { id: "biz-2", name: "Test Biz 2", formattedName: "BWS-TEST: Test Biz 2", address: "456 Test Ave", category: "retail-fashion" },
       ];
       const users = generateTestUsers(5, businesses);
       const businessOwners = users.filter((u) => u.role === "business_owner");
@@ -157,7 +173,7 @@ describe("Test Data Seeder", () => {
 
     it("customers and admin do not have associated business IDs", () => {
       const businesses = [
-        { id: "biz-1", name: "Test Biz 1", formattedName: "BWS-TEST: Test Biz 1" },
+        { id: "biz-1", name: "Test Biz 1", formattedName: "BWS-TEST: Test Biz 1", address: "123 Test St", category: "food-dining" },
       ];
       const users = generateTestUsers(5, businesses);
       const nonOwners = users.filter((u) => u.role !== "business_owner");

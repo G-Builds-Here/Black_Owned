@@ -19,6 +19,7 @@ pub struct Business {
     pub category_id: Uuid,
     pub owner_id: Uuid,
     pub verified: bool,
+    pub address: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -99,6 +100,7 @@ mod tests {
             name: "Test Business".to_string(),
             category_id: Uuid::new_v4(),
             verified: true,
+            address: Some("123 Main St".to_string()),
             created_at: Utc::now(),
         };
 

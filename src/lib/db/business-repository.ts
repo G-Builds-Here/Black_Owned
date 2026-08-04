@@ -27,6 +27,7 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
+      address TEXT,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -45,6 +46,7 @@ function rowToBusiness(row: unknown): Business {
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
+    address: r.address as string | undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -58,14 +60,15 @@ export async function createBusiness(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
+  categoryId: string,
+  address: string | undefined
 ): Promise<Business> {
   const tableName = getTableName();
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, address)
+     VALUES ($1, $2, $3, $4, 'unverified', $5)
      RETURNING *`,
-    [ownerId, name, description || null, categoryId]
+    [ownerId, name, description || null, categoryId, address || null]
   );
   return rowToBusiness(result.rows[0]);
 }
@@ -98,4 +101,28 @@ export async function findBusinessesByOwnerId(
     [ownerId]
   );
   return result.rows.map(rowToBusiness);
+}
+
+/**
+ * Update business name by ID (only if user is the owner)
+ */
+export async function updateNameById(
+  id: string,
+  name: string,
+  ownerId: string
+): Promise<Business | undefined> {
+  const client = await getPool().connect();
+  try {
+    const tableName = getTableName();
+    const result = await client.query<Business>(
+      `UPDATE ${tableName}
+       SET name = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND owner_id = $3
+       RETURNING *`,
+      [name, id, ownerId]
+    );
+    return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+  } finally {
+    client.release();
+  }
 }
