@@ -1,74 +1,63 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { findScrapeJobById, deleteScrapeJob } from '@/lib/db/scrape-job-repository';
-import { findBusinessById } from '@/lib/db/business-repository';
-import { getPool } from '@/lib/db/user-repository';
+/**
+ * Scrape Job Management API Route
+ *
+ * GET /api/scrape-jobs/[id] - Get a specific scrape job
+ * DELETE /api/scrape-jobs/[id] - Delete a scrape job
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import {
+  findScrapeJobById,
+  deleteScrapeJob,
+} from "@/lib/db/scrape-job-repository";
+import { requireAuth, AuthenticatedUser } from "@/lib/auth/auth-middleware";
 
 /**
- * GET /api/scrape-jobs/:id
- * Get scrape job details with business information
+ * GET /api/scrape-jobs/[id]
+ * Get a specific scrape job by ID
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
-    const { id } = params;
+    const { id } = await context.params;
 
-    if (!id || id.trim() === '') {
+    // Validate UUID format
+    if (!isValidUuid(id)) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Job ID is required'
+          error: "Invalid job ID format",
+          code: "INVALID_ID",
         },
         { status: 400 }
       );
     }
 
-    const client = await getPool().connect();
-    try {
-      const scrapeJob = await findScrapeJobById(client, id);
+    const job = await findScrapeJobById(id);
 
-      if (!scrapeJob) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Scrape job not found'
-          },
-          { status: 404 }
-        );
-      }
-
-      // Fetch associated business details if business_count > 0
-      let businessDetails = null;
-      if (scrapeJob.business_count > 0) {
-        // For now, return null - business details would be fetched separately
-        // This is a placeholder for future enhancement
-        businessDetails = null;
-      }
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: scrapeJob.id,
-          source: scrapeJob.source,
-          query: scrapeJob.query,
-          location: scrapeJob.location,
-          status: scrapeJob.status,
-          business_count: scrapeJob.business_count,
-          created_at: scrapeJob.created_at.toISOString(),
-          updated_at: scrapeJob.updated_at.toISOString(),
-          business_details: businessDetails
-        }
-      });
-    } finally {
-      client.release();
+    if (!job) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Scrape job not found",
+          code: "NOT_FOUND",
+        },
+        { status: 404 }
+      );
     }
+
+    return NextResponse.json({
+      success: true,
+      data: job,
+    });
   } catch (error) {
-    console.error('Get scrape job error:', error);
+    console.error("Error fetching scrape job:", error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Internal server error'
+        error: "Internal server error",
       },
       { status: 500 }
     );
@@ -76,65 +65,90 @@ export async function GET(
 }
 
 /**
- * DELETE /api/scrape-jobs/:id
- * Delete a scrape job
+ * DELETE /api/scrape-jobs/[id]
+ * Delete a scrape job by ID (admin only)
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-
-    if (!id || id.trim() === '') {
+  context: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  return requireAuth(async (req, res) => {
+    // Only admins can delete scrape jobs
+    if (req.user.role !== "admin") {
       return NextResponse.json(
         {
           success: false,
-          error: 'Job ID is required'
+          error: "Only administrators can delete scrape jobs",
+          code: "INSUFFICIENT_ROLE",
         },
-        { status: 400 }
+        { status: 403 }
       );
     }
 
-    const client = await getPool().connect();
     try {
-      const deletedJob = await deleteScrapeJob(client, id);
+      const { id } = await context.params;
 
-      if (!deletedJob) {
+      // Validate UUID format
+      if (!isValidUuid(id)) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Scrape job not found'
+            error: "Invalid job ID format",
+            code: "INVALID_ID",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Check if job exists
+      const existingJob = await findScrapeJobById(id);
+      if (!existingJob) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Scrape job not found",
+            code: "NOT_FOUND",
           },
           { status: 404 }
         );
       }
 
+      // Delete the job
+      const deleted = await deleteScrapeJob(id);
+
+      if (!deleted) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to delete scrape job",
+            code: "DELETE_FAILED",
+          },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
-        message: 'Scrape job deleted successfully',
-        data: {
-          id: deletedJob.id,
-          source: deletedJob.source,
-          query: deletedJob.query,
-          location: deletedJob.location,
-          status: deletedJob.status,
-          business_count: deletedJob.business_count,
-          created_at: deletedJob.created_at.toISOString(),
-          updated_at: deletedJob.updated_at.toISOString()
-        }
+        message: "Scrape job deleted successfully",
+        data: { id },
       });
-    } finally {
-      client.release();
+    } catch (error) {
+      console.error("Error deleting scrape job:", error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Internal server error",
+        },
+        { status: 500 }
+      );
     }
-  } catch (error) {
-    console.error('Delete scrape job error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error'
-      },
-      { status: 500 }
-    );
-  }
+  })(request, NextResponse);
+}
+
+/**
+ * Validate UUID format
+ */
+function isValidUuid(id: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
 }
