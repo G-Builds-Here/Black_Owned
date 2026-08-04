@@ -1,286 +1,321 @@
 /**
  * Scrape Jobs API Route Tests
- *
- * Tests for GET /api/scrape-jobs endpoint
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { GET } from "./route";
+import { NextRequest } from "next/server";
+import { POST, GET } from "./route";
 
-// Mock the repository
-jest.mock("@/lib/db/scrape-job-repository", () => ({
-  findAllScrapeJobs: jest.fn(),
-  initializeScrapeJobSchema: jest.fn(),
+// Mock the database modules
+jest.mock("@/lib/db/user-repository", () => ({
+  getPool: jest.fn(),
 }));
 
-import {
-  findAllScrapeJobs,
-  initializeScrapeJobSchema,
-} from "@/lib/db/scrape-job-repository";
+jest.mock("@/lib/db/scrape-job-repository", () => ({
+  initializeScrapeJobSchema: jest.fn().mockResolvedValue(undefined),
+  createScrapeJob: jest.fn(),
+  findScrapeJobs: jest.fn(),
+  findScrapeJobById: jest.fn(),
+  updateScrapeJobStatus: jest.fn(),
+}));
 
-// Mock types
-interface MockScrapeJob {
-  id: string;
-  source: "google-maps" | "yelp" | "facebook";
-  query: string;
-  location: string;
-  status: "pending" | "running" | "completed" | "failed";
-  business_count: number;
-  created_at: Date;
-  updated_at: Date;
-}
+const { createScrapeJob, findScrapeJobs } = require("@/lib/db/scrape-job-repository");
 
-interface MockFindAllResult {
-  jobs: MockScrapeJob[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
+describe("Scrape Jobs API Route", () => {
+  const mockPool = {
+    connect: jest.fn(),
+  };
 
-describe("GET /api/scrape-jobs", () => {
+  const mockClient = {
+    query: jest.fn(),
+    release: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Setup mock pool
+    (require("@/lib/db/user-repository").getPool as jest.Mock).mockReturnValue(mockPool);
+    mockPool.connect.mockResolvedValue(mockClient);
+
+    // Mock client.query to return a mock job
+    mockClient.query.mockResolvedValue({
+      rows: [
+        {
+          id: "test-job-id",
+          source: "linkedin",
+          query: "software engineer",
+          location: "New York, NY",
+          status: "pending",
+          result_count: null,
+          error_message: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    // Mock createScrapeJob to return the expected job
+    createScrapeJob.mockImplementation(async (client, input) => ({
+      id: "test-job-id",
+      source: input.source,
+      query: input.query,
+      location: input.location,
+      status: "pending" as const,
+      resultCount: undefined,
+      errorMessage: undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    // Mock findScrapeJobs - tests will set their own values with mockResolvedValueOnce
+    findScrapeJobs.mockImplementation(async () => []);
   });
 
-  describe("Success cases", () => {
-    it("should return all jobs with default pagination", async () => {
-      const mockResult: MockFindAllResult = {
-        jobs: [
-          {
-            id: "123e4567-e89b-12d3-a456-42661417000",
-            source: "google-maps",
-            query: "restaurants",
-            location: "Los Angeles",
-            status: "completed",
-            business_count: 50,
-            created_at: new Date("2024-01-15T10:00:00Z"),
-            updated_at: new Date("2024-01-15T10:30:00Z"),
-          },
-        ],
-        total: 1,
-        page: 1,
-        pageSize: 20,
-        totalPages: 1,
-      };
-
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue(mockResult);
-
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs");
-      const response = await GET(request);
-
-      expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body.success).toBe(true);
-      // Date objects are serialized to ISO strings by JSON.stringify
-      expect(body.data.jobs[0].id).toBe("123e4567-e89b-12d3-a456-42661417000");
-      expect(body.data.jobs[0].source).toBe("google-maps");
-      expect(body.data.jobs[0].query).toBe("restaurants");
-      expect(body.data.jobs[0].location).toBe("Los Angeles");
-      expect(body.data.jobs[0].status).toBe("completed");
-      expect(body.data.jobs[0].business_count).toBe(50);
-      expect(body.data.jobs[0].created_at).toBe("2024-01-15T10:00:00.000Z");
-      expect(body.data.jobs[0].updated_at).toBe("2024-01-15T10:30:00.000Z");
-      expect(body.data.total).toBe(1);
-      expect(body.data.page).toBe(1);
-      expect(body.data.pageSize).toBe(20);
-      expect(body.data.totalPages).toBe(1);
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(1, 20, undefined);
-    });
-
-    it("should return jobs with custom pagination", async () => {
-      const mockResult: MockFindAllResult = {
-        jobs: [],
-        total: 0,
-        page: 2,
-        pageSize: 50,
-        totalPages: 0,
-      };
-
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue(mockResult);
-
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?page=2&pageSize=50"
-      );
-      const response = await GET(request);
-
-      expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body.success).toBe(true);
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(2, 50, undefined);
-    });
-
-    it("should filter jobs by status", async () => {
-      const mockResult: MockFindAllResult = {
-        jobs: [],
-        total: 0,
-        page: 1,
-        pageSize: 20,
-        totalPages: 0,
-      };
-
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue(mockResult);
-
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?status=completed"
-      );
-      const response = await GET(request);
-
-      expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body.success).toBe(true);
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(1, 20, "completed");
-    });
-
-    it("should filter jobs by source", async () => {
-      const mockResult: MockFindAllResult = {
-        jobs: [],
-        total: 0,
-        page: 1,
-        pageSize: 20,
-        totalPages: 0,
-      };
-
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue(mockResult);
-
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?source=google-maps"
-      );
-      const response = await GET(request);
-
-      expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body.success).toBe(true);
-      // Note: source filter is validated but not passed to repository (repository may not support it yet)
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(1, 20, undefined);
-    });
-
-    it("should filter jobs by both status and source", async () => {
-      const mockResult: MockFindAllResult = {
-        jobs: [],
-        total: 0,
-        page: 1,
-        pageSize: 20,
-        totalPages: 0,
-      };
-
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue(mockResult);
-
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?status=running&source=yelp"
-      );
-      const response = await GET(request);
-
-      expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body.success).toBe(true);
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(1, 20, "running");
-    });
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  describe("Validation errors", () => {
-    it("should return 400 for invalid page number (less than 1)", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
+  describe("POST /api/scrape-jobs", () => {
+    it("creates a scrape job with valid input", async () => {
+      const requestBody = {
+        source: "linkedin",
+        query: "software engineer",
+        location: "New York, NY",
+      };
 
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?page=0"
-      );
-      const response = await GET(request);
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
 
-      expect(response.status).toBe(400);
-      const body = await response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toContain("Invalid pagination parameters");
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(json.success).toBe(true);
+      expect(json.data.source).toBe("linkedin");
+      expect(json.data.query).toBe("software engineer");
+      expect(json.data.location).toBe("New York, NY");
+      expect(json.data.status).toBe("pending");
+      expect(json.message).toBe("Scrape job created successfully");
     });
 
-    it("should return 400 for invalid page number (negative)", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
+    it("returns 400 when source is missing", async () => {
+      const requestBody = {
+        query: "software engineer",
+        location: "New York, NY",
+      };
 
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?page=-1"
-      );
-      const response = await GET(request);
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
 
-      expect(response.status).toBe(400);
-      const body = await response.json();
-      expect(body.success).toBe(false);
-    });
-
-    it("should return 400 for invalid pageSize (less than 1)", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?pageSize=0"
-      );
-      const response = await GET(request);
+      const response = await POST(request);
+      const json = await response.json();
 
       expect(response.status).toBe(400);
-      const body = await response.json();
-      expect(body.success).toBe(false);
+      expect(json.success).toBe(false);
+      expect(json.error).toContain("source");
     });
 
-    it("should return 400 for invalid pageSize (greater than 100)", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
+    it("returns 400 when query is missing", async () => {
+      const requestBody = {
+        source: "linkedin",
+        location: "New York, NY",
+      };
 
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?pageSize=101"
-      );
-      const response = await GET(request);
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
 
       expect(response.status).toBe(400);
-      const body = await response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toContain("Invalid pagination parameters");
+      expect(json.success).toBe(false);
+      expect(json.error).toContain("query");
     });
 
-    it("should return 400 for invalid status filter", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
+    it("returns 400 when location is missing", async () => {
+      const requestBody = {
+        source: "linkedin",
+        query: "software engineer",
+      };
 
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?status=invalid"
-      );
-      const response = await GET(request);
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
 
       expect(response.status).toBe(400);
-      const body = await response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toContain("Invalid status");
+      expect(json.success).toBe(false);
+      expect(json.error).toContain("location");
     });
 
-    it("should return 400 for invalid source filter", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
+    it("returns 400 when all fields are missing", async () => {
+      const requestBody = {};
 
-      const request = new NextRequest(
-        "http://localhost:3000/api/scrape-jobs?source=twitter"
-      );
-      const response = await GET(request);
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
 
       expect(response.status).toBe(400);
-      const body = await response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toContain("Invalid source");
+      expect(json.success).toBe(false);
+      expect(json.error).toContain("source");
+      expect(json.error).toContain("query");
+      expect(json.error).toContain("location");
     });
-  });
 
-  describe("Error handling", () => {
-    it("should return 500 on repository error", async () => {
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockRejectedValue(
-        new Error("Database connection failed")
-      );
+    it("handles empty string values as missing", async () => {
+      const requestBody = {
+        source: "",
+        query: "",
+        location: "",
+      };
 
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs");
-      const response = await GET(request);
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.success).toBe(false);
+    });
+
+    it("handles special characters in input", async () => {
+      const requestBody = {
+        source: "github",
+        query: "Rust developer (remote) @ startup",
+        location: "San Francisco, CA",
+      };
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(json.data.query).toBe("Rust developer (remote) @ startup");
+    });
+
+    it("returns 500 on database error", async () => {
+      // Reset the mock to throw an error for this test
+      createScrapeJob.mockRejectedValueOnce(new Error("Database connection failed"));
+
+      const requestBody = {
+        source: "linkedin",
+        query: "software engineer",
+        location: "New York, NY",
+      };
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
 
       expect(response.status).toBe(500);
-      const body = await response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toBe("Internal server error");
+      expect(json.success).toBe(false);
+      expect(json.error).toBe("Internal server error");
+    });
+  });
+
+  describe("GET /api/scrape-jobs", () => {
+    it("returns all scrape jobs", async () => {
+      findScrapeJobs.mockResolvedValueOnce([
+        {
+          id: "job-1",
+          source: "linkedin",
+          query: "job 1",
+          location: "NY",
+          status: "pending" as const,
+          resultCount: null,
+          errorMessage: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: "job-2",
+          source: "github",
+          query: "job 2",
+          location: "CA",
+          status: "completed" as const,
+          resultCount: 10,
+          errorMessage: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs");
+      const response = await GET(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.data.length).toBe(2);
+    });
+
+    it("filters jobs by status", async () => {
+      findScrapeJobs.mockResolvedValueOnce([
+        {
+          id: "job-1",
+          source: "linkedin",
+          query: "job 1",
+          location: "NY",
+          status: "pending" as const,
+          resultCount: null,
+          errorMessage: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs?status=pending");
+      const response = await GET(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.data.length).toBe(1);
+      expect(json.data[0].status).toBe("pending");
+    });
+
+    it("returns 500 on database error", async () => {
+      findScrapeJobs.mockRejectedValueOnce(new Error("Database connection failed"));
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs");
+      const response = await GET(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(json.success).toBe(false);
+      expect(json.error).toBe("Internal server error");
     });
   });
 });

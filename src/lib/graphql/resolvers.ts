@@ -31,6 +31,7 @@ import {
   create as createBusiness,
   Business as BusinessRecord,
 } from "../db/business-repository";
+import { getGoogleMapsScraper, SearchParams } from "../../services/google-maps-scraper";
 
 /**
  * Mock business data for search
@@ -375,7 +376,18 @@ export async function updateBusiness(
 }
 
 /**
+ * Convert scraped business to internal format
+ */
+function scrapedBusinessToInternal(scraped: typeof MOCK_BUSINESSES[0]): typeof MOCK_BUSINESSES[0] {
+  return {
+    ...scraped,
+    id: scraped.id || `scraped-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  };
+}
+
+/**
  * Search businesses resolver with pagination, relevance ranking, and caching
+ * Uses Google Maps scraper for live search results
  */
 export async function searchBusinesses(
   _parent: unknown,
@@ -399,6 +411,7 @@ export async function searchBusinesses(
       page: number;
       pageSize: number;
       totalPages: number;
+      facets: { category: string; count: number }[];
     };
   }
 
@@ -421,7 +434,7 @@ export async function searchBusinesses(
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
-    return {
+    const result = {
       businesses: paginatedBusinesses,
       total,
       page,
@@ -429,48 +442,99 @@ export async function searchBusinesses(
       totalPages,
       facets,
     };
+
+    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
+    return result;
   }
 
-  // Score and filter businesses
-  const scoredBusinesses = MOCK_BUSINESSES
-    .map((business) => ({
-      business,
-      score: calculateRelevanceScore(business, normalizedQuery),
-    }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score); // Sort by relevance score descending
+  try {
+    // Use Google Maps scraper for live search
+    const scraper = getGoogleMapsScraper();
+    const searchParams: SearchParams = { query: normalizedQuery };
 
-  // Calculate facets from matched businesses
-  const categoryCounts: Record<string, number> = {};
-  for (const { business } of scoredBusinesses) {
-    categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
+    const scrapedBusinesses = await scraper.searchBusinesses(searchParams);
+
+    // Convert scraped businesses to internal format
+    const formattedBusinesses = scrapedBusinesses.map((scraped, index) => ({
+      id: `scraped-${index}-${Date.now()}`,
+      name: scraped.name,
+      category: scraped.category,
+      rating: scraped.rating,
+      reviewCount: scraped.reviewCount,
+      location: scraped.location,
+      isVerified: true, // Scraped businesses are from Google Maps
+      imageUrl: scraped.imageUrl,
+      description: scraped.description,
+      tags: scraped.tags,
+    }));
+
+    // Calculate facets from scraped results
+    const categoryCounts: Record<string, number> = {};
+    for (const business of formattedBusinesses) {
+      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
+    }
+    const facets = Object.entries(categoryCounts)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Paginate results
+    const total = formattedBusinesses.length;
+    const totalPages = Math.ceil(total / pageSize) || 0;
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedBusinesses = formattedBusinesses.slice(startIndex, endIndex);
+
+    const result = {
+      businesses: paginatedBusinesses,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      facets,
+    };
+
+    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
+    return result;
+  } catch (error) {
+    console.error("Google Maps scraper failed, falling back to mock data:", error);
+
+    // Fallback to mock data if scraper fails
+    const scoredBusinesses = MOCK_BUSINESSES
+      .map((business) => ({
+        business,
+        score: calculateRelevanceScore(business, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    const categoryCounts: Record<string, number> = {};
+    for (const { business } of scoredBusinesses) {
+      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
+    }
+    const facets = Object.entries(categoryCounts)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const total = scoredBusinesses.length;
+    const totalPages = Math.ceil(total / pageSize) || 0;
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedBusinesses = scoredBusinesses
+      .slice(startIndex, endIndex)
+      .map((item) => item.business);
+
+    const result = {
+      businesses: paginatedBusinesses,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      facets,
+    };
+
+    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
+    return result;
   }
-  const facets = Object.entries(categoryCounts)
-    .map(([category, count]) => ({ category, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // Paginate ranked results
-  const total = scoredBusinesses.length;
-  const totalPages = Math.ceil(total / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedBusinesses = scoredBusinesses
-    .slice(startIndex, endIndex)
-    .map((item) => item.business);
-
-  const result = {
-    businesses: paginatedBusinesses,
-    total,
-    page,
-    pageSize,
-    totalPages,
-    facets,
-  };
-
-  // Cache the response
-  await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-
-  return result;
 }
 
 /**
