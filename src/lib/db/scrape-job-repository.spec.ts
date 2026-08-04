@@ -9,6 +9,7 @@ import {
   findScrapeJobById,
   updateScrapeJobStatus,
   findScrapeJobs,
+  deleteScrapeJob,
 } from "./scrape-job-repository";
 import { ScrapeJobStatus } from "../../types/scrape-job";
 
@@ -282,6 +283,95 @@ describe("Scrape Job Repository", () => {
 
         // Most recent should be first
         expect(jobs[0].id).toBe(job2.id);
+      } finally {
+        client.release();
+      }
+    });
+  });
+
+  describe("deleteScrapeJob", () => {
+    it("deletes a scrape job and returns the deleted job", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-delete`,
+          query: "delete test",
+          location: "Dallas, TX",
+        });
+
+        const deleted = await deleteScrapeJob(client, job.id);
+
+        expect(deleted).toBeDefined();
+        expect(deleted?.id).toBe(job.id);
+        expect(deleted?.source).toBe(`${testPrefix}-delete`);
+
+        const found = await findScrapeJobById(client, job.id);
+        expect(found).toBeUndefined();
+      } finally {
+        client.release();
+      }
+    });
+
+    it("returns undefined for non-existent job deletion", async () => {
+      const client = await getPool().connect();
+      try {
+        const result = await deleteScrapeJob(
+          client,
+          "00000000-0000-0000-0000-000000000000"
+        );
+        expect(result).toBeUndefined();
+      } finally {
+        client.release();
+      }
+    });
+
+    it("deletes job with completed status", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-delete-completed`,
+          query: "delete completed test",
+          location: "Houston, TX",
+        });
+
+        await updateScrapeJobStatus(client, job.id, "completed", 100);
+
+        const deleted = await deleteScrapeJob(client, job.id);
+
+        expect(deleted?.status).toBe("completed");
+        expect(deleted?.resultCount).toBe(100);
+      } finally {
+        client.release();
+      }
+    });
+
+    it("deletes job with failed status and error message", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-delete-failed`,
+          query: "delete failed test",
+          location: "Phoenix, AZ",
+        });
+
+        await updateScrapeJobStatus(
+          client,
+          job.id,
+          "failed",
+          undefined,
+          "Test error message"
+        );
+
+        const deleted = await deleteScrapeJob(client, job.id);
+
+        expect(deleted?.status).toBe("failed");
+        expect(deleted?.errorMessage).toBe("Test error message");
       } finally {
         client.release();
       }
