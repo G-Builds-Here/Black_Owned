@@ -64,22 +64,21 @@ describe("YelpScraper", () => {
   describe("scrape with pagination", () => {
     it("handles single page of results (less than 10)", async () => {
       const mockBusinesses: ScrapedBusiness[] = [
-        [
-          {
-            name: "Business 1",
-            address: "123 Main St",
-            source: "yelp",
-            rating: 4.5,
-            reviewCount: 100,
-          },
-          {
-            name: "Business 2",
-            address: "456 Oak Ave",
-            source: "yelp",
-            rating: 4.0,
-            reviewCount: 50,
-          },
-        ] as ScrapedBusiness[];
+        {
+          name: "Business 1",
+          address: "123 Main St",
+          source: "yelp",
+          rating: 4.5,
+          reviewCount: 100,
+        },
+        {
+          name: "Business 2",
+          address: "456 Oak Ave",
+          source: "yelp",
+          rating: 4.0,
+          reviewCount: 50,
+        },
+      ];
 
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockResolvedValue(undefined);
