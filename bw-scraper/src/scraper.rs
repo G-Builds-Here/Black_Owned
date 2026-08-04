@@ -172,7 +172,6 @@ impl GoogleMapsScraper {
 
     /// Transform a PlaceResult into a Business entity
     fn transform_to_business(&self, place: &PlaceResult) -> Result<Business, Box<dyn std::error::Error + Send + Sync>> {
-        let description = place.description.clone();
         let business = BusinessBuilder::default()
             .id(Uuid::new_v4())
             .name(&place.name)
@@ -180,13 +179,7 @@ impl GoogleMapsScraper {
             .owner_id(Uuid::new_v4()) // Placeholder - would be the scraper/system user
             .verified(false) // Newly scraped businesses are unverified
             .created_at(Utc::now())
-            .description(description)
-            .address(place.address.clone())
-            .phone(place.phone.clone())
-            .website(place.website.clone())
-            .category(place.category.clone())
-            .rating(place.rating)
-            .review_count(place.review_count.map(|c| c as i32))
+            .description(place.description.clone())
             .build()?;
         Ok(business)
     }

@@ -52,7 +52,7 @@ impl From<Business> for GQLBusiness {
     }
 }
 
-/// GraphQL Business type with ratings
+/// GraphQL Business type with rating aggregation
 #[derive(SimpleObject, Clone, Debug)]
 pub struct GQLBusinessWithRatings {
     pub id: String,
@@ -68,6 +68,7 @@ pub struct GQLBusinessWithRatings {
 }
 
 impl GQLBusinessWithRatings {
+    /// Create a new GQLBusinessWithRatings from a Business with rating stats
     pub fn with_ratings(business: Business, rating_avg: Option<f64>, review_count: i64) -> Self {
         Self {
             id: business.id.to_string(),
@@ -175,7 +176,7 @@ pub struct PageInfo {
 }
 
 /// Scrape job status enum
-#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Enum, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScrapeJobStatus {
     Success,
     Failed,
@@ -203,7 +204,4 @@ pub struct ScrapeJobStats {
     pub failed_jobs: i32,
     pub total_items_scraped: i32,
     pub period_days: i32,
-    pub avg_duration_seconds: Option<f64>,
-    pub min_duration_seconds: Option<i64>,
-    pub max_duration_seconds: Option<i64>,
 }
