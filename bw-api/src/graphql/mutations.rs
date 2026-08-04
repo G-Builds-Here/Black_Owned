@@ -37,10 +37,10 @@ impl MutationRoot {
         })?;
 
         // Extract user ID from JWT token
-        let user_id = ctx
-            .data::<UserId>()
-            .map(|uid| uid.0.clone())
-            .map_err(|_| Error::new("Unauthorized: User not authenticated"))?;
+        let user_id = match ctx.data::<UserId>() {
+            Ok(uid) => uid.0.clone(),
+            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
+        };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user ID from token: {:?}", e))
@@ -94,10 +94,10 @@ impl MutationRoot {
         })?;
 
         // Extract user ID from JWT token
-        let user_id = ctx
-            .data::<UserId>()
-            .map(|uid| uid.0.clone())
-            .map_err(|_| Error::new("Unauthorized: User not authenticated"))?;
+        let user_id = match ctx.data::<UserId>() {
+            Ok(uid) => uid.0.clone(),
+            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
+        };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
             Error::new(format!("Invalid user ID from token: {:?}", e))
@@ -181,7 +181,7 @@ impl MutationRoot {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
 
-        if !(1..=5).contains(&rating) {
+        if rating < 1 || rating > 5 {
             return Err(Error::new("Rating must be between 1 and 5"));
         }
 
@@ -266,9 +266,9 @@ impl MutationRoot {
             name: business_row.1,
             description: None,
             category_id: business_row.2,
-            owner_id: business_row.5,
             verified: business_row.3,
             created_at: business_row.4,
+            owner_id: business_row.5,
         };
 
         let mut gql_business: GQLBusiness = business.into();

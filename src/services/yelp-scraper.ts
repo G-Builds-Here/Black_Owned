@@ -7,11 +7,11 @@
 
 import { Browser, Page, BrowserContext } from "playwright";
 import {
-  RawScrapedBusiness as ScrapedBusiness,
+  ScrapedBusiness,
   ScraperResult,
   ScraperOptions,
   ScraperJobState,
-} from "../types/scraper-result";
+} from "../types/yelp-scraper";
 import { ScraperSource } from "../types/scrape-job";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
@@ -166,7 +166,7 @@ export class YelpScraper {
           totalResults,
           hasNextPage: false,
         },
-        source: "yelp" as ScraperSource,
+        source: "yelp",
         query,
         location,
         timestamp: new Date(),
