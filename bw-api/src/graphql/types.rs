@@ -33,6 +33,12 @@ pub struct GQLBusiness {
     pub created_at: DateTimeUtc,
     pub rating_avg: Option<f64>,
     pub review_count: i32,
+    /// Business address (optional - may not be available for all businesses)
+    pub address: Option<String>,
+    /// Phone number (optional)
+    pub phone: Option<String>,
+    /// Website URL (optional)
+    pub website: Option<String>,
 }
 
 impl From<Business> for GQLBusiness {
@@ -46,8 +52,11 @@ impl From<Business> for GQLBusiness {
             status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
             verified: business.verified,
             created_at: business.created_at.into(),
-            rating_avg: None,
-            review_count: 0,
+            rating_avg: business.rating,
+            review_count: business.review_count.unwrap_or(0),
+            address: business.address,
+            phone: business.phone,
+            website: business.website,
         }
     }
 }

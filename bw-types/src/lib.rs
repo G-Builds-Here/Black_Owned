@@ -20,6 +20,18 @@ pub struct Business {
     pub owner_id: Uuid,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
+    /// Business address (optional - may not be available for all businesses)
+    pub address: Option<String>,
+    /// Phone number (optional)
+    pub phone: Option<String>,
+    /// Website URL (optional)
+    pub website: Option<String>,
+    /// Category name from scraper (optional)
+    pub category: Option<String>,
+    /// Average rating 1-5 (optional)
+    pub rating: Option<f64>,
+    /// Number of reviews (optional)
+    pub review_count: Option<i32>,
 }
 
 /// Review entity for business reviews
@@ -102,6 +114,12 @@ mod tests {
             owner_id: Uuid::new_v4(),
             verified: true,
             created_at: Utc::now(),
+            address: Some("123 Main St".to_string()),
+            phone: Some("555-1234".to_string()),
+            website: Some("https://example.com".to_string()),
+            category: Some("Restaurant".to_string()),
+            rating: Some(4.5),
+            review_count: Some(10),
         };
 
         let json = serde_json::to_string(&business).unwrap();
@@ -112,6 +130,12 @@ mod tests {
         assert_eq!(business.category_id, deserialized.category_id);
         assert_eq!(business.verified, deserialized.verified);
         assert_eq!(business.created_at, deserialized.created_at);
+        assert_eq!(business.address, deserialized.address);
+        assert_eq!(business.phone, deserialized.phone);
+        assert_eq!(business.website, deserialized.website);
+        assert_eq!(business.category, deserialized.category);
+        assert_eq!(business.rating, deserialized.rating);
+        assert_eq!(business.review_count, deserialized.review_count);
     }
 
     #[test]
@@ -244,10 +268,22 @@ mod tests {
             .owner_id(Uuid::new_v4())
             .verified(true)
             .created_at(Utc::now())
+            .address(Some("123 Main St".to_string()))
+            .phone(Some("555-1234".to_string()))
+            .website(Some("https://example.com".to_string()))
+            .category(Some("Restaurant".to_string()))
+            .rating(Some(4.5))
+            .review_count(Some(10))
             .build()
             .unwrap();
 
         assert_eq!(business.name, "Test");
         assert!(business.verified);
+        assert_eq!(business.address, Some("123 Main St".to_string()));
+        assert_eq!(business.phone, Some("555-1234".to_string()));
+        assert_eq!(business.website, Some("https://example.com".to_string()));
+        assert_eq!(business.category, Some("Restaurant".to_string()));
+        assert_eq!(business.rating, Some(4.5));
+        assert_eq!(business.review_count, Some(10));
     }
 }
