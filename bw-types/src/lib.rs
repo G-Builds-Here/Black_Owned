@@ -10,16 +10,20 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Business entity representing a black-owned business
+/// AC: LOC-0071-AC2 - Must have all required fields: id, name, address, phone, website, category, rating, review_count
+/// All optional fields must be Option<T> types
+/// Must derive Serialize, Deserialize, sqlx::FromRow
 #[derive(Debug, Clone, Serialize, Deserialize, Builder, PartialEq)]
 #[builder(setter(into))]
 pub struct Business {
     pub id: Uuid,
     pub name: String,
-    pub description: Option<String>,
-    pub category_id: Uuid,
-    pub owner_id: Uuid,
-    pub verified: bool,
-    pub created_at: DateTime<Utc>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub website: Option<String>,
+    pub category: Option<String>,
+    pub rating: Option<f64>,
+    pub review_count: Option<u32>,
 }
 
 /// Review entity for business reviews
@@ -93,13 +97,62 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_business_has_all_required_fields() {
+        // AC: LOC-0071-AC2 - Business must have all required fields: id, name, address, phone, website, category, rating, review_count
+        let business = Business {
+            id: Uuid::new_v4(),
+            name: "Test Business".to_string(),
+            address: Some("123 Main St".to_string()),
+            phone: Some("555-1234".to_string()),
+            website: Some("https://example.com".to_string()),
+            category: Some("Retail".to_string()),
+            rating: Some(4.5),
+            review_count: Some(10),
+        };
+
+        assert_eq!(business.id, business.id);
+        assert_eq!(business.name, "Test Business");
+        assert!(business.address.is_some());
+        assert!(business.phone.is_some());
+        assert!(business.website.is_some());
+        assert!(business.category.is_some());
+        assert!(business.rating.is_some());
+        assert!(business.review_count.is_some());
+    }
+
+    #[test]
+    fn test_business_all_optional_fields_are_option_types() {
+        // AC: All optional fields must be Option<T> types
+        let business_minimal = Business {
+            id: Uuid::new_v4(),
+            name: "Minimal Business".to_string(),
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
+        };
+
+        assert!(business_minimal.address.is_none());
+        assert!(business_minimal.phone.is_none());
+        assert!(business_minimal.website.is_none());
+        assert!(business_minimal.category.is_none());
+        assert!(business_minimal.rating.is_none());
+        assert!(business_minimal.review_count.is_none());
+    }
+
+    #[test]
     fn test_business_roundtrip() {
         let business = Business {
             id: Uuid::new_v4(),
             name: "Test Business".to_string(),
-            category_id: Uuid::new_v4(),
-            verified: true,
-            created_at: Utc::now(),
+            address: Some("123 Main St".to_string()),
+            phone: Some("555-1234".to_string()),
+            website: Some("https://example.com".to_string()),
+            category: Some("Retail".to_string()),
+            rating: Some(4.5),
+            review_count: Some(10),
         };
 
         let json = serde_json::to_string(&business).unwrap();
@@ -107,9 +160,12 @@ mod tests {
 
         assert_eq!(business.id, deserialized.id);
         assert_eq!(business.name, deserialized.name);
-        assert_eq!(business.category_id, deserialized.category_id);
-        assert_eq!(business.verified, deserialized.verified);
-        assert_eq!(business.created_at, deserialized.created_at);
+        assert_eq!(business.address, deserialized.address);
+        assert_eq!(business.phone, deserialized.phone);
+        assert_eq!(business.website, deserialized.website);
+        assert_eq!(business.category, deserialized.category);
+        assert_eq!(business.rating, deserialized.rating);
+        assert_eq!(business.review_count, deserialized.review_count);
     }
 
     #[test]
@@ -237,13 +293,17 @@ mod tests {
         let business = BusinessBuilder::default()
             .id(Uuid::new_v4())
             .name("Test")
-            .category_id(Uuid::new_v4())
-            .verified(true)
-            .created_at(Utc::now())
+            .address(Some("123 Main St".to_string()))
+            .phone(Some("555-1234".to_string()))
+            .website(Some("https://example.com".to_string()))
+            .category(Some("Retail".to_string()))
+            .rating(4.5)
+            .review_count(10u32)
             .build()
             .unwrap();
 
         assert_eq!(business.name, "Test");
-        assert!(business.verified);
+        assert!(business.address.is_some());
+        assert!(business.phone.is_some());
     }
 }
