@@ -148,3 +148,18 @@ export async function findScrapeJobs(
   );
   return result.rows.map(rowToScrapeJob);
 }
+
+/**
+ * Delete a scrape job by ID
+ */
+export async function deleteScrapeJob(
+  client: PoolClient,
+  id: string
+): Promise<ScrapeJob | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<ScrapeJob>(
+    `DELETE FROM ${tableName} WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return result.rows[0] ? rowToScrapeJob(result.rows[0]) : undefined;
+}
