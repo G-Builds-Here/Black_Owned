@@ -77,6 +77,12 @@ impl MutationRoot {
             owner_id: result.4,
             verified: result.5,
             created_at: result.6,
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: Some(0),
         }))
     }
 
@@ -161,6 +167,12 @@ impl MutationRoot {
                 owner_id: oid,
                 verified: v,
                 created_at: ca,
+                address: None,
+                phone: None,
+                website: None,
+                category: None,
+                rating: None,
+                review_count: Some(0),
             })
         }))
     }
@@ -269,6 +281,12 @@ impl MutationRoot {
             verified: business_row.3,
             created_at: business_row.4,
             owner_id: business_row.5,
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: Some(0),
         };
 
         let mut gql_business: GQLBusiness = business.into();
