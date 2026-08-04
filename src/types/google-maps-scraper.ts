@@ -14,6 +14,7 @@ export interface ScrapedBusiness {
   website?: string;
   rating?: number;
   reviewCount?: number;
+  category?: string;
   source: "google-maps";
   sourceId?: string;
 }

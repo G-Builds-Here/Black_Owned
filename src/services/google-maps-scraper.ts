@@ -219,6 +219,7 @@ export class GoogleMapsScraper {
           website?: string;
           rating?: number;
           reviewCount?: number;
+          category?: string;
         }> = [];
 
         // Try multiple selector patterns for Google Maps' DOM structure
@@ -245,6 +246,9 @@ export class GoogleMapsScraper {
           const websiteEl = element.querySelector(
             'a[href*="http"], [class*="website"], [data-testid="place-website"]'
           );
+          const categoryEl = element.querySelector(
+            '[class*="category"], [data-testid="place-category"], .business-category, span:has-text("restaurant"):not([class*="title"])'
+          );
 
           if (!nameEl) {
             continue;
@@ -263,6 +267,7 @@ export class GoogleMapsScraper {
           );
           const phone = phoneEl?.textContent?.trim() ?? undefined;
           const website = websiteEl?.getAttribute("href") ?? undefined;
+          const category = categoryEl?.textContent?.trim() ?? undefined;
 
           results.push({
             name,
@@ -271,6 +276,7 @@ export class GoogleMapsScraper {
             website,
             rating,
             reviewCount,
+            category,
           });
         }
 
