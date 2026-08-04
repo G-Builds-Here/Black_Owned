@@ -52,6 +52,39 @@ impl From<Business> for GQLBusiness {
     }
 }
 
+/// GraphQL Business type with rating aggregation
+#[derive(SimpleObject, Clone, Debug)]
+pub struct GQLBusinessWithRatings {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub category_id: String,
+    pub owner_id: String,
+    pub status: String,
+    pub verified: bool,
+    pub created_at: DateTimeUtc,
+    pub rating_avg: Option<f64>,
+    pub review_count: i32,
+}
+
+impl GQLBusinessWithRatings {
+    /// Create a new GQLBusinessWithRatings from a Business with rating stats
+    pub fn with_ratings(business: Business, rating_avg: Option<f64>, review_count: i64) -> Self {
+        Self {
+            id: business.id.to_string(),
+            name: business.name,
+            description: business.description,
+            category_id: business.category_id.to_string(),
+            owner_id: business.owner_id.to_string(),
+            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
+            verified: business.verified,
+            created_at: business.created_at.into(),
+            rating_avg,
+            review_count: review_count as i32,
+        }
+    }
+}
+
 /// GraphQL Review type
 #[derive(SimpleObject, Clone, Debug)]
 pub struct GQLReview {
@@ -143,7 +176,7 @@ pub struct PageInfo {
 }
 
 /// Scrape job status enum
-#[derive(Enum, Clone, Debug, Eq, PartialEq)]
+#[derive(Enum, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScrapeJobStatus {
     Success,
     Failed,
