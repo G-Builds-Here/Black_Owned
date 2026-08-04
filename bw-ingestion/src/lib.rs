@@ -61,7 +61,7 @@ impl BusinessIngestionHandler {
     /// Returns an error if the business name or owner email is empty.
     pub fn process_record(
         input: &BusinessInput,
-        category_id: &uuid::Uuid,
+        _category_id: &uuid::Uuid,
     ) -> Result<Business, String> {
         if input.name.is_empty() {
             return Err("Business name cannot be empty".to_string());
@@ -73,17 +73,18 @@ impl BusinessIngestionHandler {
 
         // Parse owner email to UUID - for now use a placeholder UUID since email is not a UUID
         // In production, this would look up the user ID from the email
-        let owner_id = uuid::Uuid::parse_str(&input.owner_email)
+        let _owner_id = uuid::Uuid::parse_str(&input.owner_email)
             .unwrap_or_else(|_| uuid::Uuid::new_v4());
 
         Ok(Business {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
-            description: None,
-            category_id: *category_id,
-            verified: false,
-            created_at: chrono::Utc::now(),
-            owner_id,
+            address: None,
+            phone: None,
+            website: None,
+            category: Some(input.category_name.clone()),
+            rating: None,
+            review_count: None,
         })
     }
 
