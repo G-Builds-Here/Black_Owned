@@ -9,6 +9,9 @@ interface ScrapeJobStats {
   failedJobs: number;
   totalItemsScraped: number;
   periodDays: number;
+  avgDurationSeconds: number | null;
+  minDurationSeconds: number | null;
+  maxDurationSeconds: number | null;
 }
 
 interface ScrapeJob {
@@ -80,6 +83,16 @@ export default function AnalyticsPage() {
   const successRate = stats && stats.totalJobs > 0
     ? ((stats.successfulJobs / stats.totalJobs) * 100).toFixed(1)
     : '0.0';
+
+  const formatDuration = (seconds: number | null) => {
+    if (seconds === null) return 'N/A';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs}s`;
+    }
+    return `${secs}s`;
+  };
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -155,6 +168,33 @@ export default function AnalyticsPage() {
                   <p className="text-sm text-neutral-600 mb-2">Items Scraped</p>
                   <p className="text-4xl font-bold text-heritage-ochre">{stats.totalItemsScraped.toLocaleString()}</p>
                   <p className="text-xs text-neutral-500 mt-1">Total records</p>
+                </div>
+              </Card>
+            </div>
+
+            {/* Duration Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card variant="elevated" padding="lg">
+                <div className="text-center">
+                  <p className="text-sm text-neutral-600 mb-2">Avg Duration</p>
+                  <p className="text-4xl font-bold text-blue-600">{formatDuration(stats.avgDurationSeconds)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Completed jobs only</p>
+                </div>
+              </Card>
+
+              <Card variant="elevated" padding="lg">
+                <div className="text-center">
+                  <p className="text-sm text-neutral-600 mb-2">Min Duration</p>
+                  <p className="text-4xl font-bold text-purple-600">{formatDuration(stats.minDurationSeconds)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Fastest job</p>
+                </div>
+              </Card>
+
+              <Card variant="elevated" padding="lg">
+                <div className="text-center">
+                  <p className="text-sm text-neutral-600 mb-2">Max Duration</p>
+                  <p className="text-4xl font-bold text-orange-600">{formatDuration(stats.maxDurationSeconds)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Longest job</p>
                 </div>
               </Card>
             </div>
