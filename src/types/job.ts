@@ -17,7 +17,7 @@ export interface Job {
   title: string;
   company: string;
   location: string;
-  description: string;
+  description?: string;
   url: string;
   status: JobStatus;
   createdAt: Date;
@@ -32,7 +32,7 @@ export interface CreateJobInput {
   title: string;
   company: string;
   location: string;
-  description: string;
+  description?: string;
   url: string;
 }
 
