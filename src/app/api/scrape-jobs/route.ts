@@ -1,115 +1,72 @@
 /**
  * Scrape Jobs API Route
  *
- * POST /api/scrape-jobs - Create a new scrape job
+ * GET /api/scrape-jobs - List all scrape jobs with pagination and filtering
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import {
+  findAllScrapeJobs,
   initializeScrapeJobSchema,
-  createScrapeJob,
 } from "@/lib/db/scrape-job-repository";
-import { validateScrapeJobInput } from "@/types/scrape-job";
+import { ScrapeJobStatus } from "@/types/scrape-job";
 
 /**
  * GET /api/scrape-jobs
- * List scrape jobs (optional: filter by status)
+ * List all scrape jobs with pagination and optional filtering by status and source
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    // Initialize schema on first request
+    await initializeScrapeJobSchema();
+
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || undefined;
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
+    const status = searchParams.get("status") as ScrapeJobStatus | null;
+    const source = searchParams.get("source");
 
-    // Get database pool
-    const { getPool } = await import("@/lib/db/user-repository");
-    const pool = getPool();
-    const client = await pool.connect();
-
-    try {
-      // Initialize schema on first request
-      await initializeScrapeJobSchema(client);
-
-      const { findScrapeJobs } = await import("@/lib/db/scrape-job-repository");
-      const jobs = await findScrapeJobs(client, status as "pending" | "running" | "completed" | "failed" | undefined);
-
-      return NextResponse.json({
-        success: true,
-        data: jobs,
-      });
-    } finally {
-      client.release();
+    // Validate pagination parameters
+    if (page < 1 || pageSize < 1 || pageSize > 100) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid pagination parameters. Page must be >= 1, pageSize must be 1-100.",
+        },
+        { status: 400 }
+      );
     }
+
+    // Validate status filter if provided
+    if (status && !["pending", "running", "completed", "failed"].includes(status)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid status. Must be one of: pending, running, completed, failed.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate source filter if provided
+    if (source && !["google-maps", "yelp", "facebook"].includes(source)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid source. Must be one of: google-maps, yelp, facebook.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const result = await findAllScrapeJobs(page, pageSize, status || undefined);
+
+    return NextResponse.json({
+      success: true,
+      data: result,
+    });
   } catch (error) {
     console.error("Error fetching scrape jobs:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * POST /api/scrape-jobs
- * Create a new scrape job
- */
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  try {
-    const body = await request.json();
-    const { source, query, location } = body;
-
-    // Validate required fields
-    if (!source || !query || !location) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields: source, query, and location are all required",
-        },
-        { status: 400 }
-      );
-    }
-
-    const input = { source, query, location };
-
-    // Validate input
-    const validation = validateScrapeJobInput(input);
-    if (!validation.valid) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: validation.errors.join(", "),
-        },
-        { status: 400 }
-      );
-    }
-
-    // Get database pool
-    const { getPool } = await import("@/lib/db/user-repository");
-    const pool = getPool();
-    const client = await pool.connect();
-
-    try {
-      // Initialize schema on first request
-      await initializeScrapeJobSchema(client);
-
-      // Create the scrape job
-      const job = await createScrapeJob(client, input);
-
-      return NextResponse.json(
-        {
-          success: true,
-          data: job,
-          message: "Scrape job created successfully",
-        },
-        { status: 201 }
-      );
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error("Error creating scrape job:", error);
     return NextResponse.json(
       {
         success: false,
