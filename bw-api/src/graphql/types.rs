@@ -143,7 +143,7 @@ pub struct PageInfo {
 }
 
 /// Scrape job status enum
-#[derive(Enum, Clone, Debug, Eq, PartialEq)]
+#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ScrapeJobStatus {
     Success,
     Failed,
