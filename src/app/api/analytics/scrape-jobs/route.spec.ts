@@ -35,6 +35,9 @@ describe('Scrape Jobs Stats API', () => {
       successfulJobs: 0,
       failedJobs: 0,
       totalItemsScraped: 0,
+      totalBusinessesScraped: 0,
+      totalBusinessesImported: 0,
+      importRate: 0,
       periodDays: 30,
       avgDurationSeconds: null,
       minDurationSeconds: null,
@@ -133,11 +136,17 @@ describe('Scrape Jobs Stats API', () => {
     expect(data).toHaveProperty('successfulJobs');
     expect(data).toHaveProperty('failedJobs');
     expect(data).toHaveProperty('totalItemsScraped');
+    expect(data).toHaveProperty('totalBusinessesScraped');
+    expect(data).toHaveProperty('totalBusinessesImported');
+    expect(data).toHaveProperty('importRate');
     expect(data).toHaveProperty('periodDays');
     expect(typeof data.totalJobs).toBe('number');
     expect(typeof data.successfulJobs).toBe('number');
     expect(typeof data.failedJobs).toBe('number');
     expect(typeof data.totalItemsScraped).toBe('number');
+    expect(typeof data.totalBusinessesScraped).toBe('number');
+    expect(typeof data.totalBusinessesImported).toBe('number');
+    expect(typeof data.importRate).toBe('number');
     expect(typeof data.periodDays).toBe('number');
   });
 });
