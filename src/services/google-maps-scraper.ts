@@ -7,11 +7,11 @@
 
 import { Browser, Page, BrowserContext } from "playwright";
 import {
-  ScrapedBusiness,
+  RawScrapedBusiness as ScrapedBusiness,
   ScraperResult,
   ScraperOptions,
   ScraperJobState,
-} from "../types/google-maps-scraper";
+} from "../types/scraper-result";
 import { ScraperSource } from "../types/scrape-job";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
@@ -172,7 +172,7 @@ export class GoogleMapsScraper {
           totalResults: collectedBusinesses.length,
           hasNextPage,
         },
-        source: "google-maps",
+        source: "google-maps" as ScraperSource,
         query,
         location,
         timestamp: new Date(),
@@ -193,7 +193,7 @@ export class GoogleMapsScraper {
           totalResults: collectedBusinesses.length,
           hasNextPage: false,
         },
-        source: "google-maps",
+        source: "google-maps" as ScraperSource,
         query,
         location,
         timestamp: new Date(),

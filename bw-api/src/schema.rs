@@ -276,6 +276,12 @@ impl MutationRoot {
             owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         };
 
         Ok(business.into())

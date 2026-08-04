@@ -68,6 +68,12 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
+                    address: None,
+                    phone: None,
+                    website: None,
+                    category: None,
+                    rating: None,
+                    review_count: None,
                 };
                 let cursor = id.to_string();
                 let node = GQLBusiness::from(business);
@@ -130,6 +136,12 @@ impl QueryRoot {
             owner_id: Uuid::nil(),
             verified,
             created_at,
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         };
 
         Ok(Some(GQLBusinessWithRatings::with_ratings(
@@ -221,6 +233,12 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
+                    address: None,
+                    phone: None,
+                    website: None,
+                    category: None,
+                    rating: None,
+                    review_count: None,
                 })
             })
             .collect())

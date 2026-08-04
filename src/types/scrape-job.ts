@@ -56,3 +56,56 @@ export interface ScrapeJobValidationError {
   field: string;
   message: string;
 }
+
+/**
+ * Validation result for scrape job input
+ */
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Validates scrape job input
+ */
+export function validateScrapeJobInput(input: CreateScrapeJobInput): ValidationResult {
+  const errors: string[] = [];
+
+  // Validate source
+  const validSources: ScraperSource[] = ["google-maps", "yelp", "facebook"];
+  if (!validSources.includes(input.source)) {
+    errors.push(`Invalid source. Must be one of: ${validSources.join(", ")}`);
+  }
+
+  // Validate query
+  if (!input.query || input.query.trim() === "") {
+    errors.push("Missing required field: query");
+  }
+
+  // Validate location
+  if (!input.location || input.location.trim() === "") {
+    errors.push("Missing required field: location");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Creates a default scrape job with pending status
+ */
+export function createDefaultScrapeJob(input: CreateScrapeJobInput): ScrapeJob {
+  const now = new Date();
+  return {
+    id: crypto.randomUUID(),
+    source: input.source,
+    query: input.query,
+    location: input.location,
+    status: "pending",
+    business_count: 0,
+    created_at: now,
+    updated_at: now,
+  };
+}
