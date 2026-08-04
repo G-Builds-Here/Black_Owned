@@ -33,12 +33,6 @@ pub struct GQLBusiness {
     pub created_at: DateTimeUtc,
     pub rating_avg: Option<f64>,
     pub review_count: i32,
-    /// Business address (optional - may not be available for all businesses)
-    pub address: Option<String>,
-    /// Phone number (optional)
-    pub phone: Option<String>,
-    /// Website URL (optional)
-    pub website: Option<String>,
 }
 
 impl From<Business> for GQLBusiness {
@@ -52,16 +46,13 @@ impl From<Business> for GQLBusiness {
             status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
             verified: business.verified,
             created_at: business.created_at.into(),
-            rating_avg: business.rating,
-            review_count: business.review_count.unwrap_or(0),
-            address: business.address,
-            phone: business.phone,
-            website: business.website,
+            rating_avg: None,
+            review_count: 0,
         }
     }
 }
 
-/// GraphQL Business type with ratings
+/// GraphQL Business type with rating aggregation
 #[derive(SimpleObject, Clone, Debug)]
 pub struct GQLBusinessWithRatings {
     pub id: String,
@@ -77,6 +68,7 @@ pub struct GQLBusinessWithRatings {
 }
 
 impl GQLBusinessWithRatings {
+    /// Create a new GQLBusinessWithRatings from a Business with rating stats
     pub fn with_ratings(business: Business, rating_avg: Option<f64>, review_count: i64) -> Self {
         Self {
             id: business.id.to_string(),
@@ -184,7 +176,7 @@ pub struct PageInfo {
 }
 
 /// Scrape job status enum
-#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Enum, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScrapeJobStatus {
     Success,
     Failed,
@@ -212,7 +204,4 @@ pub struct ScrapeJobStats {
     pub failed_jobs: i32,
     pub total_items_scraped: i32,
     pub period_days: i32,
-    pub avg_duration_seconds: Option<f64>,
-    pub min_duration_seconds: Option<i64>,
-    pub max_duration_seconds: Option<i64>,
 }
