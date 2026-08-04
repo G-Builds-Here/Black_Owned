@@ -39,6 +39,9 @@ describe('Scrape Jobs Stats API', () => {
       totalBusinessesImported: 0,
       importRate: 0,
       periodDays: 30,
+      avgDurationSeconds: null,
+      minDurationSeconds: null,
+      maxDurationSeconds: null,
     });
   });
 

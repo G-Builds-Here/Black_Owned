@@ -9,6 +9,9 @@ interface ScrapeJobStats {
   totalBusinessesImported: number;
   importRate: number;
   periodDays: number;
+  avgDurationSeconds: number | null;
+  minDurationSeconds: number | null;
+  maxDurationSeconds: number | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -34,6 +37,9 @@ export async function GET(request: NextRequest) {
       totalBusinessesImported: 0,
       importRate: 0,
       periodDays: days,
+      avgDurationSeconds: null,
+      minDurationSeconds: null,
+      maxDurationSeconds: null,
     };
 
     return NextResponse.json(mockStats);
