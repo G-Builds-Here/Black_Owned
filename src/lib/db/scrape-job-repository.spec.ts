@@ -9,6 +9,7 @@ import {
   updateScrapeJobStatus,
   updateScrapeJobBusinessCount,
   initializeScrapeJobSchema,
+  cancelScrapeJob,
 } from "./scrape-job-repository";
 import { CreateScrapeJobInput, ScraperSource, ScrapeJobStatus } from "../../types/scrape-job";
 import { getPool } from "./user-repository";
@@ -261,6 +262,75 @@ describe("ScrapeJobRepository", () => {
         10
       );
       expect(result).toBeNull();
+    });
+  });
+
+  describe("cancelScrapeJob", () => {
+    it("should cancel a running scrape job", async () => {
+      const job = await createScrapeJob({
+        source: "google-maps",
+        query: "cancel test",
+        location: "location",
+      });
+
+      // First set to running
+      await updateScrapeJobStatus(job.id, "running");
+
+      // Then cancel
+      const cancelled = await cancelScrapeJob(job.id);
+
+      expect(cancelled?.status).toBe("cancelled");
+      expect(cancelled?.updated_at).toBeInstanceOf(Date);
+    });
+
+    it("should return null when job is not in running status", async () => {
+      const job = await createScrapeJob({
+        source: "google-maps",
+        query: "cancel test 2",
+        location: "location",
+      });
+
+      // Job starts as pending, try to cancel without running
+      const cancelled = await cancelScrapeJob(job.id);
+
+      expect(cancelled).toBeNull();
+    });
+
+    it("should return null for non-existent job", async () => {
+      const result = await cancelScrapeJob("00000000-0000-0000-0000-000000000000");
+      expect(result).toBeNull();
+    });
+
+    it("should not allow cancelling an already completed job", async () => {
+      const job = await createScrapeJob({
+        source: "google-maps",
+        query: "cancel test 3",
+        location: "location",
+      });
+
+      // Set to completed
+      await updateScrapeJobStatus(job.id, "completed");
+
+      // Try to cancel
+      const cancelled = await cancelScrapeJob(job.id);
+
+      expect(cancelled).toBeNull();
+    });
+
+    it("should not allow cancelling an already failed job", async () => {
+      const job = await createScrapeJob({
+        source: "google-maps",
+        query: "cancel test 4",
+        location: "location",
+      });
+
+      // Set to failed
+      await updateScrapeJobStatus(job.id, "failed");
+
+      // Try to cancel
+      const cancelled = await cancelScrapeJob(job.id);
+
+      expect(cancelled).toBeNull();
     });
   });
 });
