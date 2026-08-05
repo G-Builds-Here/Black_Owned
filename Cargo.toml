@@ -3,7 +3,8 @@ resolver = "2"
 members = [
     "bw-types",
     "bw-ingestion",
-    "bw-api", "bw-scraper",
+    "bw-api",
+    "bw-scraper",
 ]
 
 [workspace.package]
@@ -12,26 +13,8 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
-# Internal crates
-bw-types = { path = "bw-types" }
-
-# Async runtime
-tokio = { version = "1.0", features = ["full"] }
-
-# Database
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "chrono", "uuid"] }
-
-# Messaging (NATS)
-async-nats = "0.33"
-
-# Web framework
-axum = { version = "0.7", features = ["http2", "macros"] }
-
-# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-# Builders and time
 derive_builder = "0.20"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
