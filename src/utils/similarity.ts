@@ -90,6 +90,8 @@ export function normalizeString(str: string): string {
   return str
     .toLowerCase()
     .trim()
+    // Remove parenthetical content (e.g., "(Main Entrance)" -> "")
+    .replace(/\s*\([^)]*\)/g, '')
     // Remove common business suffixes
     .replace(/\b(llc|inc|corp|corporation|ltd|limited|co|company)\b/gi, '')
     // Normalize street abbreviations
@@ -98,7 +100,14 @@ export function normalizeString(str: string): string {
     .replace(/\b(boulevard|blvd)\b/gi, 'blvd')
     .replace(/\b(road|rd)\b/gi, 'rd')
     .replace(/\b(drive|dr)\b/gi, 'dr')
-    // Remove punctuation and extra spaces
+    // Normalize state names to abbreviations
+    .replace(/\b(washington)\b/gi, 'wa')
+    .replace(/\b(california)\b/gi, 'ca')
+    .replace(/\b(new york)\b/gi, 'ny')
+    .replace(/\b(texas)\b/gi, 'tx')
+    .replace(/\b(florida)\b/gi, 'fl')
+    // Remove punctuation (apostrophes removed entirely, not replaced with spaces)
+    .replace(/'/g, '')
     .replace(/[^\w\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

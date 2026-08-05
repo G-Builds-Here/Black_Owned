@@ -29,8 +29,8 @@ export interface DuplicateDetectionConfig {
  * Default configuration for duplicate detection
  */
 export const DEFAULT_DUPLICATE_CONFIG: DuplicateDetectionConfig = {
-  nameThreshold: 0.8,
-  addressThreshold: 0.85,
+  nameThreshold: 0.6,
+  addressThreshold: 0.8,
   nameWeight: 0.6,
   addressWeight: 0.4,
 };
