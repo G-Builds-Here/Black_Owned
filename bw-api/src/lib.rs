@@ -74,6 +74,12 @@ impl BusinessApi {
             owner_id: *owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         })
     }
 
@@ -164,18 +170,22 @@ mod tests {
     #[test]
     fn test_create_business_valid() {
         let category_id = uuid::Uuid::new_v4();
-        let result = BusinessApi::create_business("Test Business", &category_id);
+        let owner_id = uuid::Uuid::new_v4();
+        let result = BusinessApi::create_business("Test Business", Some("Test description"), &category_id, &owner_id);
 
         assert!(result.is_ok());
         let business = result.unwrap();
         assert_eq!(business.name, "Test Business");
         assert_eq!(business.category_id, category_id);
+        assert_eq!(business.owner_id, owner_id);
+        assert_eq!(business.description, Some("Test description".to_string()));
     }
 
     #[test]
     fn test_create_business_empty_name() {
         let category_id = uuid::Uuid::new_v4();
-        let result = BusinessApi::create_business("", &category_id);
+        let owner_id = uuid::Uuid::new_v4();
+        let result = BusinessApi::create_business("", None, &category_id, &owner_id);
 
         assert!(result.is_err());
     }
