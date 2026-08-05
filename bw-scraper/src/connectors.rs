@@ -7,6 +7,7 @@ use tracing::info;
 
 /// Health check result
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct HealthStatus {
     pub service: String,
     pub healthy: bool,
