@@ -55,7 +55,7 @@ pub async fn check_nats(nats_url: &str) -> Result<HealthStatus> {
 /// Check Redis connection
 pub fn check_redis(redis_url: &str) -> Result<HealthStatus> {
     match redis::Client::open(redis_url) {
-        Ok(client) => {
+        Ok(_client) => {
             info!("Redis client created successfully");
             Ok(HealthStatus {
                 service: "Redis".to_string(),

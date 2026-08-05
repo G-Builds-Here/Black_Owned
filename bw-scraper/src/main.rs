@@ -27,20 +27,20 @@ async fn main() -> Result<()> {
     let config = config::Config::from_env()?;
 
     info!("Connecting to PostgreSQL...");
-    let pg_pool = sqlx::PgPool::connect(&config.database_url).await?;
+    let _pg_pool = sqlx::PgPool::connect(&config.database_url).await?;
     info!("PostgreSQL connection established");
 
     info!("Connecting to NATS...");
-    let nats_conn = async_nats::connect(&config.nats_url).await?;
+    let _nats_conn = async_nats::connect(&config.nats_url).await?;
     info!("NATS connection established");
 
     info!("Connecting to Redis...");
     let redis_client = redis::Client::open(config.redis_url.as_str())?;
-    let redis_conn = redis_client.get_tokio_connection().await?;
+    let _redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
     info!("Redis connection established");
 
     info!("Connecting to ClickHouse...");
-    let clickhouse_client = clickhouse::Client::default()
+    let _clickhouse_client = clickhouse::Client::default()
         .with_url(&config.clickhouse_url);
     info!("ClickHouse connection configured");
 
