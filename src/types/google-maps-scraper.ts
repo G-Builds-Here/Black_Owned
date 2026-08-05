@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Google Maps Scraper Types
  *
  * Types for the Google Maps web scraper that extracts business data.
@@ -49,6 +49,10 @@ export interface ScraperOptions {
   maxPages?: number;
   delayBetweenPagesMs?: number;
   includeDuplicates?: boolean;
+  credentials?: {
+    email: string;
+    password: string;
+  };
 }
 
 /**

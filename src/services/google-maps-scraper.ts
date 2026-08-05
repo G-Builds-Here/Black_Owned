@@ -1,8 +1,9 @@
-/**
+﻿/**
  * Google Maps Scraper Service
  *
  * Web scraper for extracting business data from Google Maps using Playwright.
  * Handles pagination to capture all results when more than 10 exist.
+ * Supports login authentication for accessing protected content.
  */
 
 import { Browser, Page, BrowserContext } from "playwright";
@@ -32,6 +33,7 @@ export class GoogleMapsScraper {
       delayBetweenPagesMs:
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
+      credentials: options.credentials ?? undefined,
     };
   }
 
@@ -65,6 +67,96 @@ export class GoogleMapsScraper {
       throw new Error(
         `Failed to initialize browser: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  }
+
+  /**
+   * Check if a login prompt is detected on the page
+   */
+  private async detectLoginPrompt(page: Page): Promise<boolean> {
+    try {
+      const hasLoginPrompt = await page.evaluate(() => {
+        const loginSelectors = [
+          'a[href*="login"]',
+          'a[href*="signin"]',
+          '[class*="login"]',
+          '[class*="signin"]',
+          '[class*="sign-in"]',
+          '[class*="auth"]',
+          '[data-testid*="login"]',
+          'button:has-text("Sign in")',
+          'button:has-text("Log in")',
+          'button:has-text("Sign In")',
+          'button:has-text("Log In")',
+        ];
+
+        for (const selector of loginSelectors) {
+          if (document.querySelector(selector)) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      return hasLoginPrompt;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Perform login with configured credentials
+   */
+  private async performLogin(page: Page): Promise<boolean> {
+    if (!this.options.credentials) {
+      return false;
+    }
+
+    try {
+      console.log("Attempting to log in to Google Maps...");
+
+      // Navigate to Google login page
+      await page.goto("https://accounts.google.com/signin", {
+        waitUntil: "networkidle",
+        timeout: 30000,
+      });
+
+      // Wait for email input
+      await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+
+      // Enter email
+      await page.fill('input[type="email"]', this.options.credentials.email);
+      await page.click('button:has-text("Next")');
+
+      // Wait for password input
+      await page.waitForSelector('input[type="password"]', { timeout: 10000 });
+
+      // Enter password
+      await page.fill('input[type="password"]', this.options.credentials.password);
+      await page.click('button:has-text("Next")');
+
+      // Wait for navigation or timeout
+      try {
+        await page.waitForNavigation({ timeout: 15000 });
+        console.log("Login successful");
+        return true;
+      } catch {
+        // Check if we're still on login page
+        const stillOnLogin = await page.evaluate(() => {
+          return !!document.querySelector('input[type="password"]');
+        });
+
+        if (!stillOnLogin) {
+          console.log("Login successful (navigation detected)");
+          return true;
+        }
+
+        console.log("Login may require additional steps (2FA, etc.)");
+        return false;
+      }
+    } catch (error) {
+      console.log("Login failed or not required:", error);
+      return false;
     }
   }
 
@@ -119,6 +211,16 @@ export class GoogleMapsScraper {
         query
       )}/${encodeURIComponent(location)}`;
       await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
+
+      // Check for login prompt and perform login if credentials are configured
+      const loginPromptDetected = await this.detectLoginPrompt(page);
+      if (loginPromptDetected && this.options.credentials) {
+        const loginSuccessful = await this.performLogin(page);
+        if (loginSuccessful) {
+          // Re-navigate to search results after login
+          await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
+        }
+      }
 
       // Wait for results to load
       let resultsLoaded = false;
@@ -250,55 +352,59 @@ export class GoogleMapsScraper {
             '[class*="category"], [data-testid="place-category"], .business-category, span:has-text("restaurant"):not([class*="title"])'
           );
 
-          if (!nameEl) {
-            continue;
+          if (nameEl && addressEl) {
+            const name = nameEl.textContent?.trim() || "";
+            const address = addressEl.textContent?.trim() || "";
+
+            // Parse rating from text (e.g., "4.5 ★★★★★")
+            let rating: number | undefined;
+            if (ratingEl) {
+              const ratingText = ratingEl.textContent || ratingEl.getAttribute("aria-label") || "";
+              const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
+              if (ratingMatch) {
+                rating = parseFloat(ratingMatch[1]);
+              }
+            }
+
+            // Parse review count (e.g., "(1,234) reviews" or "1,234 reviews")
+            let reviewCount: number | undefined;
+            if (reviewsEl) {
+              const reviewsText = reviewsEl.textContent || "";
+              const reviewMatch = reviewsText.match(/(\d{1,3}(?:,\d{3})*)/);
+              if (reviewMatch) {
+                reviewCount = parseInt(reviewMatch[1].replace(/,/g, ""), 10);
+              }
+            }
+
+            results.push({
+              name,
+              address,
+              phone: phoneEl?.textContent?.trim(),
+              website: websiteEl?.getAttribute("href"),
+              rating,
+              reviewCount,
+              category: categoryEl?.textContent?.trim(),
+            });
           }
-
-          const name = nameEl.textContent?.trim();
-          if (!name) {
-            continue;
-          }
-
-          const address = addressEl?.textContent?.trim() ?? "";
-          const ratingText = ratingEl?.textContent?.trim() ?? "";
-          const rating = this.parseRating(ratingText);
-          const reviewCount = this.parseReviewCount(
-            reviewsEl?.textContent?.trim() ?? ""
-          );
-          const phone = phoneEl?.textContent?.trim() ?? undefined;
-          const website = websiteEl?.getAttribute("href") ?? undefined;
-          const category = categoryEl?.textContent?.trim() ?? undefined;
-
-          results.push({
-            name,
-            address,
-            phone,
-            website,
-            rating,
-            reviewCount,
-            category,
-          });
         }
 
         return results;
       });
 
-      // Filter duplicates in the Node.js context where seenNames is accessible
-      const filteredBusinesses = businesses.filter((b) => {
-        if (this.options.includeDuplicates) {
-          return true;
+      // Filter duplicates and build ScrapedBusiness objects
+      const filteredBusinesses: ScrapedBusiness[] = [];
+      for (const business of businesses) {
+        if (!this.options.includeDuplicates && seenNames.has(business.name)) {
+          continue;
         }
-        if (seenNames.has(b.name)) {
-          return false;
-        }
-        seenNames.add(b.name);
-        return true;
-      });
+        seenNames.add(business.name);
+        filteredBusinesses.push({
+          ...business,
+          source: "google-maps",
+        });
+      }
 
-      return filteredBusinesses.map((b) => ({
-        ...b,
-        source: "google-maps" as const,
-      }));
+      return filteredBusinesses;
     } catch (error) {
       console.error("Error extracting businesses from page:", error);
       return [];
@@ -306,85 +412,71 @@ export class GoogleMapsScraper {
   }
 
   /**
-   * Parse rating from text (e.g., "4.5" from "4.5 star")
+   * Parse rating from text
    */
   private parseRating(text: string): number | undefined {
+    if (!text) return undefined;
     const match = text.match(/(\d+\.?\d*)/);
-    if (match) {
-      const rating = parseFloat(match[1]);
-      if (!isNaN(rating) && rating > 0 && rating <= 5) {
-        return rating;
-      }
-    }
-    return undefined;
+    return match ? parseFloat(match[1]) : undefined;
   }
 
   /**
-   * Parse review count from text (e.g., "123" from "123 reviews")
+   * Parse review count from text
    */
   private parseReviewCount(text: string): number | undefined {
-    const match = text.match(/(\d+)/);
-    if (match) {
-      const count = parseInt(match[1], 10);
-      if (!isNaN(count) && count > 0) {
-        return count;
-      }
-    }
-    return undefined;
+    if (!text) return undefined;
+    const match = text.match(/(\d{1,3}(?:,\d{3})*)/);
+    return match ? parseInt(match[1].replace(/,/g, ""), 10) : undefined;
   }
 
   /**
    * Navigate to the next page of results
    */
-  private async goToNextPage(
-    page: Page,
-    currentPage: number
-  ): Promise<boolean> {
+  private async goToNextPage(page: Page, currentPage: number): Promise<boolean> {
     try {
-      // Try to find and click the "Next" or "More" button
-      const nextButtonSelectors = [
-        'button[aria-label="Next"]',
-        'button[aria-label="More places"]',
-        'a[aria-label="Next page"]',
-        '[class*="next"], [class*="Next"]',
-        'button:has-text("Next")',
-        'button:has-text("More")',
-        'button:has-text("More places")',
-        '[data-testid="pagination-next"]',
-      ];
+      // Wait a moment for page to stabilize
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      for (const selector of nextButtonSelectors) {
-        try {
-          const nextButton = await page.$(selector);
-          if (nextButton) {
-            const isVisible = await nextButton.isVisible();
-            const isDisabled = await nextButton.isDisabled();
+      // Try multiple selector patterns for the "Next" button
+      const nextButton = await page.$(
+        'button[aria-label*="Next"], button[aria-label*="Next"], a[aria-label*="Next"], [aria-label*="Next"], .next-button, .pagination-next, [data-testid="pagination-next"]'
+      );
 
-            if (isVisible && !isDisabled) {
-              await nextButton.click();
-              await page.waitForLoadState("networkidle", { timeout: 10000 });
-              return true;
-            }
-          }
-        } catch {
-          // Try next selector
-          continue;
-        }
+      if (!nextButton) {
+        return false;
       }
 
-      // No next button found
-      return false;
+      // Check if button is disabled
+      const isDisabled = await page.evaluate((btn) => {
+        return btn.hasAttribute("disabled") || btn.getAttribute("aria-disabled") === "true";
+      }, nextButton);
+
+      if (isDisabled) {
+        return false;
+      }
+
+      // Click the next button
+      await nextButton.click();
+
+      // Wait for page to load
+      try {
+        await page.waitForLoadState("networkidle", { timeout: 15000 });
+      } catch {
+        // Continue even if timeout
+      }
+
+      return true;
     } catch (error) {
-      console.error("Error navigating to next page:", error);
+      console.log("No more pages or error navigating:", error);
       return false;
     }
   }
 
   /**
-   * Get the current job state (for progress tracking)
+   * Get the current state of the scraper job
    */
   getJobState(): ScraperJobState | null {
-    return null; // Implementation detail - state is tracked per scrape call
+    return null; // Placeholder - would track actual state in a real implementation
   }
 }
 
