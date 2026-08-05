@@ -6,6 +6,7 @@ import {
   findByEmail,
   create,
   initializeUserSchema,
+  getPool,
 } from "../db/user-repository";
 import {
   hashPassword,
@@ -28,10 +29,12 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusiness,
+  create as createBusinessInRepo,
+  findBusinessByPhone,
+  updateBusinessWithDuplicateInfo,
+  normalizePhoneNumber,
   Business as BusinessRecord,
 } from "../db/business-repository";
-import { getGoogleMapsScraper, SearchParams } from "../../services/google-maps-scraper";
 
 /**
  * Mock business data for search
@@ -309,7 +312,7 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
+function businessRecordToGraphql(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
@@ -371,33 +374,12 @@ export async function updateBusiness(
 
   return {
     success: true,
-    business: businessToGraphqlUserBusiness(updatedBusiness),
-  };
-}
-
-/**
- * Convert scraped business to internal format
- */
-function scrapedBusinessToInternal(scraped: typeof MOCK_BUSINESSES[0]): typeof MOCK_BUSINESSES[0] {
-  return {
-    ...scraped,
-    id: scraped.id || `scraped-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-  };
-}
-
-/**
- * Convert scraped business to internal format
- */
-function scrapedBusinessToInternal(scraped: typeof MOCK_BUSINESSES[0]): typeof MOCK_BUSINESSES[0] {
-  return {
-    ...scraped,
-    id: scraped.id || `scraped-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    business: businessRecordToGraphql(updatedBusiness),
   };
 }
 
 /**
  * Search businesses resolver with pagination, relevance ranking, and caching
- * Uses Google Maps scraper for live search results
  */
 export async function searchBusinesses(
   _parent: unknown,
@@ -421,7 +403,6 @@ export async function searchBusinesses(
       page: number;
       pageSize: number;
       totalPages: number;
-      facets: { category: string; count: number }[];
     };
   }
 
@@ -444,7 +425,7 @@ export async function searchBusinesses(
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
-    const result = {
+    return {
       businesses: paginatedBusinesses,
       total,
       page,
@@ -452,117 +433,73 @@ export async function searchBusinesses(
       totalPages,
       facets,
     };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
   }
 
-  try {
-    // Use Google Maps scraper for live search
-    const scraper = getGoogleMapsScraper();
-    const searchParams: SearchParams = { query: normalizedQuery };
+  // Score and filter businesses
+  const scoredBusinesses = MOCK_BUSINESSES
+    .map((business) => ({
+      business,
+      score: calculateRelevanceScore(business, normalizedQuery),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score); // Sort by relevance score descending
 
-    const scrapedBusinesses = await scraper.searchBusinesses(searchParams);
-
-    // Convert scraped businesses to internal format
-    const formattedBusinesses = scrapedBusinesses.map((scraped, index) => ({
-      id: `scraped-${index}-${Date.now()}`,
-      name: scraped.name,
-      category: scraped.category,
-      rating: scraped.rating,
-      reviewCount: scraped.reviewCount,
-      location: scraped.location,
-      isVerified: true, // Scraped businesses are from Google Maps
-      imageUrl: scraped.imageUrl,
-      description: scraped.description,
-      tags: scraped.tags,
-    }));
-
-    // Calculate facets from scraped results
-    const categoryCounts: Record<string, number> = {};
-    for (const business of formattedBusinesses) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-    }
-    const facets = Object.entries(categoryCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-
-    // Paginate results
-    const total = formattedBusinesses.length;
-    const totalPages = Math.ceil(total / pageSize) || 0;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = formattedBusinesses.slice(startIndex, endIndex);
-
-    const result = {
-      businesses: paginatedBusinesses,
-      total,
-      page,
-      pageSize,
-      totalPages,
-      facets,
-    };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
-  } catch (error) {
-    console.error("Google Maps scraper failed, falling back to mock data:", error);
-
-    // Fallback to mock data if scraper fails
-    const scoredBusinesses = MOCK_BUSINESSES
-      .map((business) => ({
-        business,
-        score: calculateRelevanceScore(business, normalizedQuery),
-      }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    const categoryCounts: Record<string, number> = {};
-    for (const { business } of scoredBusinesses) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-    }
-    const facets = Object.entries(categoryCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const total = scoredBusinesses.length;
-    const totalPages = Math.ceil(total / pageSize) || 0;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = scoredBusinesses
-      .slice(startIndex, endIndex)
-      .map((item) => item.business);
-
-    const result = {
-      businesses: paginatedBusinesses,
-      total,
-      page,
-      pageSize,
-      totalPages,
-      facets,
-    };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
+  // Calculate facets from matched businesses
+  const categoryCounts: Record<string, number> = {};
+  for (const { business } of scoredBusinesses) {
+    categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
   }
+  const facets = Object.entries(categoryCounts)
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Paginate ranked results
+  const total = scoredBusinesses.length;
+  const totalPages = Math.ceil(total / pageSize);
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedBusinesses = scoredBusinesses
+    .slice(startIndex, endIndex)
+    .map((item) => item.business);
+
+  const result = {
+    businesses: paginatedBusinesses,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    facets,
+  };
+
+  // Cache the response
+  await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
+
+  return result;
 }
 
 /**
- * Convert Business entity to GraphQL Business type (for user-owned businesses)
+ * Convert Business entity to GraphQL Business type
  */
-function businessToGraphqlUserBusiness(business: Business): {
+function businessToGraphqlBusiness(business: Business): {
   id: string;
   name: string;
   categoryId: string;
   verified: boolean;
   createdAt: { timestamp: number };
+  phone: string | undefined;
+  potentialDuplicateId: string | undefined;
 } {
+  // Handle both camelCase (Business type) and snake_case (raw DB rows)
+  const createdAtDate = business.createdAt || (business as Record<string, unknown>).created_at as Date;
+  const categoryId = business.categoryId || (business as Record<string, unknown>).category_id as string;
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.categoryId,
+    categoryId: categoryId,
     verified: business.verificationStatus === "verified",
-    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
+    createdAt: { timestamp: Math.floor(createdAtDate.getTime() / 1000) },
+    phone: business.phone,
+    potentialDuplicateId: business.potentialDuplicateId,
   };
 }
 
@@ -577,14 +514,16 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusinessMutation(
+export async function createBusiness(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string } },
+  args: { input: { name: string; description?: string; categoryId: string; phone?: string } },
   context: unknown
 ): Promise<{
   success: boolean;
   business?: unknown;
   error?: string;
+  isPotentialDuplicate?: boolean;
+  existingBusinessId?: string;
 }> {
   const { input } = args;
   const userId = getCurrentUserId(context);
@@ -614,17 +553,33 @@ export async function createBusinessMutation(
 
   const client = await getPool().connect();
   try {
+    // Check for duplicate phone number if provided
+    let existingBusinessId: string | undefined;
+    let isPotentialDuplicate = false;
+
+    if (input.phone && input.phone.trim() !== "") {
+      const existingBusiness = await findBusinessByPhone(client, input.phone.trim());
+      if (existingBusiness) {
+        isPotentialDuplicate = true;
+        existingBusinessId = existingBusiness.id;
+      }
+    }
+
     const business = await createBusinessInDb(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
-      input.categoryId.trim()
+      input.categoryId.trim(),
+      input.phone?.trim(),
+      existingBusinessId
     );
 
     return {
       success: true,
-      business: businessToGraphqlUserBusiness(business),
+      business: businessToGraphqlBusiness(business),
+      isPotentialDuplicate,
+      existingBusinessId,
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -645,28 +600,20 @@ async function createBusinessInDb(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
+  categoryId: string,
+  phone?: string,
+  potentialDuplicateId?: string
 ): Promise<Business> {
-  const tableName = "businesses";
+  const schema = process.env.POSTGRES_SCHEMA;
+  const tableName = schema ? `${schema}.businesses` : "businesses";
+  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, potential_duplicate_id)
+     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
      RETURNING *`,
-    [ownerId, name, description || null, categoryId]
+    [ownerId, name, description || null, categoryId, normalizedPhone || null, potentialDuplicateId || null]
   );
   return result.rows[0];
-}
-
-/**
- * Get business by ID query resolver
- */
-export async function getBusinessById(
-  _parent: unknown,
-  args: { id: string }
-): Promise<unknown | null> {
-  // For now, return null - this would need database integration
-  console.log('Get business by ID:', args.id);
-  return null;
 }
 
 /**
@@ -676,16 +623,11 @@ export const resolvers = {
   Query: {
     health,
     searchBusinesses,
-    business: getBusinessById,
   },
   Mutation: {
     register,
-    createBusiness: createBusinessMutation,
+    createBusiness,
     submitVerification,
     updateBusiness,
-    login,
   },
 };
-
-// Export login for direct route usage
-export { login } from "./login-resolvers";

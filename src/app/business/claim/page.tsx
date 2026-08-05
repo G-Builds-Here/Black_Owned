@@ -49,13 +49,18 @@ export default function ClaimBusinessPage() {
                 name: "${formData.name}"
                 description: "${formData.description}"
                 categoryId: "${formData.category}"
+                phone: "${formData.phone}"
               }) {
                 success
                 business {
                   id
                   name
+                  phone
+                  potentialDuplicateId
                 }
                 error
+                isPotentialDuplicate
+                existingBusinessId
               }
             }
           `,
