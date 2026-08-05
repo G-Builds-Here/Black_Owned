@@ -1,173 +1,61 @@
-﻿/**
- * Google Maps Scraper Service
- *
- * Web scraper for extracting business data from Google Maps using Playwright.
- * Handles pagination to capture all results when more than 10 exist.
- * Supports login authentication for accessing protected content.
- */
-
-import { Browser, Page, BrowserContext } from "playwright";
-import {
-  ScrapedBusiness,
-  ScraperResult,
-  ScraperOptions,
-  ScraperJobState,
-} from "../types/google-maps-scraper";
-import { ScraperSource } from "../types/scrape-job";
-
-const DEFAULT_RESULTS_PER_PAGE = 10;
-const DEFAULT_MAX_PAGES = 10;
-const DEFAULT_DELAY_BETWEEN_PAGES_MS = 1000;
-
 /**
- * Google Maps scraper class with pagination support
+ * Google Maps Scraper Service
+ * Scrapes business data from Google Maps search results
  */
-export class GoogleMapsScraper {
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
-  private options: Required<ScraperOptions>;
 
-  constructor(options: ScraperOptions = {}) {
-    this.options = {
-      maxPages: options.maxPages ?? DEFAULT_MAX_PAGES,
-      delayBetweenPagesMs:
-        options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
-      includeDuplicates: options.includeDuplicates ?? false,
-      credentials: options.credentials ?? undefined,
+import { chromium, Browser, Page, BrowserContext } from 'playwright';
+
+export interface ScrapedBusiness {
+  name: string;
+  category: string;
+  rating: number;
+  reviewCount: number;
+  location: string;
+  imageUrl: string;
+  description: string;
+  tags: string[];
+}
+
+export interface ScraperConfig {
+  headless?: boolean;
+  timeoutMs?: number;
+  maxResults?: number;
+}
+
+export interface SearchParams {
+  query: string;
+  location?: string;
+}
+
+class GoogleMapsScraper {
+  private browser: Browser | null = null;
+  private config: Required<ScraperConfig>;
+
+  constructor(config?: ScraperConfig) {
+    this.config = {
+      headless: config?.headless ?? true,
+      timeoutMs: config?.timeoutMs ?? 60000,
+      maxResults: config?.maxResults ?? 20,
     };
   }
 
   /**
-   * Initialize the browser and context
+   * Initialize the browser
    */
-  private async initialize(): Promise<void> {
-    if (this.context) {
+  async initialize(): Promise<void> {
+    if (this.browser) {
       return;
     }
 
-    try {
-      const { chromium } = await import("playwright");
-      this.browser = await chromium.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-        ],
-      });
-
-      this.context = await this.browser.newContext({
-        viewport: { width: 1280, height: 720 },
-        userAgent:
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      });
-    } catch (error) {
-      console.error("Failed to initialize browser:", error);
-      throw new Error(
-        `Failed to initialize browser: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
-
-  /**
-   * Check if a login prompt is detected on the page
-   */
-  private async detectLoginPrompt(page: Page): Promise<boolean> {
-    try {
-      const hasLoginPrompt = await page.evaluate(() => {
-        const loginSelectors = [
-          'a[href*="login"]',
-          'a[href*="signin"]',
-          '[class*="login"]',
-          '[class*="signin"]',
-          '[class*="sign-in"]',
-          '[class*="auth"]',
-          '[data-testid*="login"]',
-          'button:has-text("Sign in")',
-          'button:has-text("Log in")',
-          'button:has-text("Sign In")',
-          'button:has-text("Log In")',
-        ];
-
-        for (const selector of loginSelectors) {
-          if (document.querySelector(selector)) {
-            return true;
-          }
-        }
-        return false;
-      });
-
-      return hasLoginPrompt;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Perform login with configured credentials
-   */
-  private async performLogin(page: Page): Promise<boolean> {
-    if (!this.options.credentials) {
-      return false;
-    }
-
-    try {
-      console.log("Attempting to log in to Google Maps...");
-
-      // Navigate to Google login page
-      await page.goto("https://accounts.google.com/signin", {
-        waitUntil: "networkidle",
-        timeout: 30000,
-      });
-
-      // Wait for email input
-      await page.waitForSelector('input[type="email"]', { timeout: 10000 });
-
-      // Enter email
-      await page.fill('input[type="email"]', this.options.credentials.email);
-      await page.click('button:has-text("Next")');
-
-      // Wait for password input
-      await page.waitForSelector('input[type="password"]', { timeout: 10000 });
-
-      // Enter password
-      await page.fill('input[type="password"]', this.options.credentials.password);
-      await page.click('button:has-text("Next")');
-
-      // Wait for navigation or timeout
-      try {
-        await page.waitForNavigation({ timeout: 15000 });
-        console.log("Login successful");
-        return true;
-      } catch {
-        // Check if we're still on login page
-        const stillOnLogin = await page.evaluate(() => {
-          return !!document.querySelector('input[type="password"]');
-        });
-
-        if (!stillOnLogin) {
-          console.log("Login successful (navigation detected)");
-          return true;
-        }
-
-        console.log("Login may require additional steps (2FA, etc.)");
-        return false;
-      }
-    } catch (error) {
-      console.log("Login failed or not required:", error);
-      return false;
-    }
+    this.browser = await chromium.launch({
+      headless: this.config.headless,
+    });
   }
 
   /**
    * Close the browser
    */
   async close(): Promise<void> {
-    if (this.context) {
-      await this.context.close();
-      this.context = null;
-    }
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -175,316 +63,233 @@ export class GoogleMapsScraper {
   }
 
   /**
-   * Scrape businesses from Google Maps with pagination
+   * Search for businesses on Google Maps
    */
-  async scrape(
-    query: string,
-    location: string
-  ): Promise<ScraperResult> {
+  async searchBusinesses(params: SearchParams): Promise<ScrapedBusiness[]> {
     await this.initialize();
 
-    if (!this.context) {
-      throw new Error("Browser context not initialized");
+    if (!this.browser) {
+      throw new Error('Browser not initialized');
     }
 
-    const page = await this.context.newPage();
-    const collectedBusinesses: ScrapedBusiness[] = [];
-    const seenNames = new Set<string>();
+    const context = await this.browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
 
-    // Initialize job state outside try block for error handling access
-    const jobState: ScraperJobState = {
-      query,
-      location,
-      currentPage: 0,
-      totalPages: 0,
-      businessesCollected: [],
-      isComplete: false,
-    };
-
-    // Process pages
-    let currentPage = 1;
-    let hasNextPage = true;
+    const page = await context.newPage();
 
     try {
+      // Build search URL
+      const searchQuery = params.location
+        ? `${params.query} in ${params.location}`
+        : params.query;
+
+      const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+
       // Navigate to Google Maps search
-      const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(
-        query
-      )}/${encodeURIComponent(location)}`;
-      await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
-
-      // Check for login prompt and perform login if credentials are configured
-      const loginPromptDetected = await this.detectLoginPrompt(page);
-      if (loginPromptDetected && this.options.credentials) {
-        const loginSuccessful = await this.performLogin(page);
-        if (loginSuccessful) {
-          // Re-navigate to search results after login
-          await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
-        }
-      }
-
-      // Wait for results to load
-      let resultsLoaded = false;
-      try {
-        await page.waitForSelector(
-          '[data-testid="resultsList"] , .section-results, [role="feed"]',
-          { timeout: 10000 }
-        );
-        resultsLoaded = true;
-      } catch {
-        // Continue even if selector not found - may have different structure
-        resultsLoaded = false;
-      }
-
-      while (hasNextPage && currentPage <= this.options.maxPages) {
-        jobState.currentPage = currentPage;
-
-        // Extract businesses from current page
-        const businesses = await this.extractBusinessesFromPage(
-          page,
-          seenNames
-        );
-
-        collectedBusinesses.push(...businesses);
-        jobState.businessesCollected = [...collectedBusinesses];
-
-        // Check if we have more pages
-        if (currentPage < this.options.maxPages) {
-          hasNextPage = await this.goToNextPage(page, currentPage);
-          if (hasNextPage) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, this.options.delayBetweenPagesMs)
-            );
-            currentPage++;
-          }
-        } else {
-          hasNextPage = false;
-        }
-
-        jobState.totalPages = currentPage;
-      }
-
-      jobState.isComplete = true;
-
-      return {
-        businesses: collectedBusinesses,
-        pagination: {
-          currentPage,
-          totalPages: currentPage,
-          resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
-          totalResults: collectedBusinesses.length,
-          hasNextPage,
-        },
-        source: "google-maps",
-        query,
-        location,
-        timestamp: new Date(),
-      };
-    } catch (error) {
-      jobState.error =
-        error instanceof Error ? error.message : String(error);
-      jobState.isComplete = true;
-
-      console.error("Error scraping Google Maps:", error);
-
-      return {
-        businesses: collectedBusinesses,
-        pagination: {
-          currentPage,
-          totalPages: currentPage,
-          resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
-          totalResults: collectedBusinesses.length,
-          hasNextPage: false,
-        },
-        source: "google-maps",
-        query,
-        location,
-        timestamp: new Date(),
-      };
-    } finally {
-      await page.close();
-    }
-  }
-
-  /**
-   * Extract businesses from the current page
-   */
-  private async extractBusinessesFromPage(
-    page: Page,
-    seenNames: Set<string>
-  ): Promise<ScrapedBusiness[]> {
-    try {
-      const businesses = await page.evaluate(() => {
-        const results: Array<{
-          name: string;
-          address: string;
-          phone?: string;
-          website?: string;
-          rating?: number;
-          reviewCount?: number;
-          category?: string;
-        }> = [];
-
-        // Try multiple selector patterns for Google Maps' DOM structure
-        const businessElements = document.querySelectorAll(
-          '[data-place-id], [role="article"], .section-result, [class*="place"], [data-testid="result"]'
-        );
-
-        for (const element of businessElements) {
-          const nameEl = element.querySelector(
-            'h3, .section-result-title, [class*="title"], [data-testid="place-title"]'
-          );
-          const addressEl = element.querySelector(
-            '[class*="address"], [data-testid="place-address"], .section-result-addr'
-          );
-          const ratingEl = element.querySelector(
-            '[class*="rating"], [data-testid="place-rating"]'
-          );
-          const reviewsEl = element.querySelector(
-            '[class*="reviews"], [data-testid="place-review-count"]'
-          );
-          const phoneEl = element.querySelector(
-            '[class*="phone"], [data-testid="place-phone"]'
-          );
-          const websiteEl = element.querySelector(
-            'a[href*="http"], [class*="website"], [data-testid="place-website"]'
-          );
-          const categoryEl = element.querySelector(
-            '[class*="category"], [data-testid="place-category"], .business-category, span:has-text("restaurant"):not([class*="title"])'
-          );
-
-          if (nameEl && addressEl) {
-            const name = nameEl.textContent?.trim() || "";
-            const address = addressEl.textContent?.trim() || "";
-
-            // Parse rating from text (e.g., "4.5 ★★★★★")
-            let rating: number | undefined;
-            if (ratingEl) {
-              const ratingText = ratingEl.textContent || ratingEl.getAttribute("aria-label") || "";
-              const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
-              if (ratingMatch) {
-                rating = parseFloat(ratingMatch[1]);
-              }
-            }
-
-            // Parse review count (e.g., "(1,234) reviews" or "1,234 reviews")
-            let reviewCount: number | undefined;
-            if (reviewsEl) {
-              const reviewsText = reviewsEl.textContent || "";
-              const reviewMatch = reviewsText.match(/(\d{1,3}(?:,\d{3})*)/);
-              if (reviewMatch) {
-                reviewCount = parseInt(reviewMatch[1].replace(/,/g, ""), 10);
-              }
-            }
-
-            results.push({
-              name,
-              address,
-              phone: phoneEl?.textContent?.trim(),
-              website: websiteEl?.getAttribute("href"),
-              rating,
-              reviewCount,
-              category: categoryEl?.textContent?.trim(),
-            });
-          }
-        }
-
-        return results;
+      await page.goto(searchUrl, {
+        waitUntil: 'networkidle',
+        timeout: this.config.timeoutMs,
       });
 
-      // Filter duplicates and build ScrapedBusiness objects
-      const filteredBusinesses: ScrapedBusiness[] = [];
-      for (const business of businesses) {
-        if (!this.options.includeDuplicates && seenNames.has(business.name)) {
-          continue;
+      // Wait for results to load
+      await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
+        // Continue even if selector not found - results may still load
+      });
+
+      // Wait a moment for dynamic content
+      await page.waitForTimeout(2000);
+
+      // Extract business cards from the results
+      const businesses = await this.extractBusinesses(page);
+
+      return businesses.slice(0, this.config.maxResults);
+    } catch (error) {
+      console.error('Error scraping Google Maps:', error);
+      throw error;
+    } finally {
+      await page.close();
+      await context.close();
+    }
+  }
+
+  /**
+   * Extract business data from the page
+   */
+  private async extractBusinesses(page: Page): Promise<ScrapedBusiness[]> {
+    return page.evaluate(() => {
+      const businesses: ScrapedBusiness[] = [];
+
+      // Try multiple selectors for business cards
+      const selectors = [
+        '[data-item-id]',
+        '[role="article"]',
+        'div[role="main"] > div:first-child > div',
+        'div[jsaction]',
+      ];
+
+      for (const selector of selectors) {
+        const elements = document.querySelectorAll(selector);
+
+        for (const el of Array.from(elements)) {
+          const business = this.extractBusinessFromElement(el as HTMLElement);
+          if (business && business.name) {
+            // Avoid duplicates
+            if (!businesses.some((b) => b.name === business.name)) {
+              businesses.push(business);
+            }
+          }
         }
-        seenNames.add(business.name);
-        filteredBusinesses.push({
-          ...business,
-          source: "google-maps",
-        });
+
+        if (businesses.length > 0) {
+          break;
+        }
       }
 
-      return filteredBusinesses;
-    } catch (error) {
-      console.error("Error extracting businesses from page:", error);
-      return [];
+      return businesses;
+    });
+  }
+
+  /**
+   * Extract business data from a single element
+   */
+  private extractBusinessFromElement(el: HTMLElement): ScrapedBusiness | null {
+    // Extract name
+    const nameEl = el.querySelector('h3, [role="heading"]') as HTMLElement | null;
+    const name = nameEl?.textContent?.trim();
+
+    if (!name) {
+      return null;
     }
+
+    // Extract category
+    const categoryEl = el.querySelector('button, [aria-label]') as HTMLElement | null;
+    const category = categoryEl?.getAttribute('aria-label')?.split(',')[1]?.trim() || 'Unknown';
+
+    // Extract rating
+    const ratingEl = el.querySelector('[aria-label*="star"], [data-star-rating]') as HTMLElement | null;
+    const ratingText = ratingEl?.getAttribute('aria-label')?.match(/([\d.]+)\s*star/)?.[1];
+    const rating = ratingText ? parseFloat(ratingText) : 0;
+
+    // Extract review count
+    const reviewEl = el.querySelector('span') as HTMLElement | null;
+    const reviewText = reviewEl?.textContent || '';
+    const reviewCountMatch = reviewText.match(/([\d,]+)\s*(?:review|reviews?|ratings?)/i);
+    const reviewCount = reviewCountMatch ? parseInt(reviewCountMatch[1].replace(/,/g, ''), 10) : 0;
+
+    // Extract location (may be in the aria-label or nearby text)
+    const location = categoryEl?.getAttribute('aria-label')?.split(',').slice(2).join(',').trim() || '';
+
+    return {
+      name,
+      category: category || 'Business',
+      rating,
+      reviewCount,
+      location: location || 'Location not available',
+      imageUrl: '',
+      description: '',
+      tags: [],
+    };
   }
 
   /**
-   * Parse rating from text
+   * Get detailed information for a specific business
    */
-  private parseRating(text: string): number | undefined {
-    if (!text) return undefined;
-    const match = text.match(/(\d+\.?\d*)/);
-    return match ? parseFloat(match[1]) : undefined;
-  }
+  async getBusinessDetails(searchQuery: string): Promise<ScrapedBusiness | null> {
+    await this.initialize();
 
-  /**
-   * Parse review count from text
-   */
-  private parseReviewCount(text: string): number | undefined {
-    if (!text) return undefined;
-    const match = text.match(/(\d{1,3}(?:,\d{3})*)/);
-    return match ? parseInt(match[1].replace(/,/g, ""), 10) : undefined;
-  }
+    if (!this.browser) {
+      throw new Error('Browser not initialized');
+    }
 
-  /**
-   * Navigate to the next page of results
-   */
-  private async goToNextPage(page: Page, currentPage: number): Promise<boolean> {
+    const context = await this.browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+
+    const page = await context.newPage();
+
     try {
-      // Wait a moment for page to stabilize
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
 
-      // Try multiple selector patterns for the "Next" button
-      const nextButton = await page.$(
-        'button[aria-label*="Next"], button[aria-label*="Next"], a[aria-label*="Next"], [aria-label*="Next"], .next-button, .pagination-next, [data-testid="pagination-next"]'
-      );
+      await page.goto(searchUrl, {
+        waitUntil: 'networkidle',
+        timeout: this.config.timeoutMs,
+      });
 
-      if (!nextButton) {
-        return false;
+      await page.waitForTimeout(2000);
+
+      // Click on the first result to get details
+      const firstResult = await page.$('[data-item-id]');
+      if (firstResult) {
+        await firstResult.click();
+        await page.waitForTimeout(2000);
+
+        return this.extractBusinessDetails(page);
       }
 
-      // Check if button is disabled
-      const isDisabled = await page.evaluate((btn) => {
-        return btn.hasAttribute("disabled") || btn.getAttribute("aria-disabled") === "true";
-      }, nextButton);
-
-      if (isDisabled) {
-        return false;
-      }
-
-      // Click the next button
-      await nextButton.click();
-
-      // Wait for page to load
-      try {
-        await page.waitForLoadState("networkidle", { timeout: 15000 });
-      } catch {
-        // Continue even if timeout
-      }
-
-      return true;
+      return null;
     } catch (error) {
-      console.log("No more pages or error navigating:", error);
-      return false;
+      console.error('Error getting business details:', error);
+      return null;
+    } finally {
+      await page.close();
+      await context.close();
     }
   }
 
   /**
-   * Get the current state of the scraper job
+   * Extract detailed business information
    */
-  getJobState(): ScraperJobState | null {
-    return null; // Placeholder - would track actual state in a real implementation
+  private extractBusinessDetails(page: Page): Promise<ScrapedBusiness | null> {
+    return page.evaluate(() => {
+      const nameEl = document.querySelector('h1[role="heading"]') as HTMLElement | null;
+      const name = nameEl?.textContent?.trim();
+
+      if (!name) {
+        return null;
+      }
+
+      // Extract category from button with aria-label
+      const categoryEl = document.querySelector('button[aria-label*=","]') as HTMLElement | null;
+      const category = categoryEl?.getAttribute('aria-label')?.split(',')[1]?.trim() || 'Business';
+
+      // Extract rating
+      const ratingEl = document.querySelector('[aria-label*="star"]') as HTMLElement | null;
+      const ratingText = ratingEl?.getAttribute('aria-label')?.match(/([\d.]+)\s*star/)?.[1];
+      const rating = ratingText ? parseFloat(ratingText) : 0;
+
+      // Extract review count
+      const reviewEl = document.querySelector('button[aria-label*="review"]') as HTMLElement | null;
+      const reviewText = reviewEl?.getAttribute('aria-label') || '';
+      const reviewCountMatch = reviewText.match(/([\d,]+)\s*(?:review|reviews?)/i);
+      const reviewCount = reviewCountMatch ? parseInt(reviewCountMatch[1].replace(/,/g, ''), 10) : 0;
+
+      // Extract address
+      const addressEl = document.querySelector('button[aria-label*="Address"]') as HTMLElement | null;
+      const location = addressEl?.getAttribute('aria-label')?.split('\n')[1]?.trim() || '';
+
+      return {
+        name,
+        category,
+        rating,
+        reviewCount,
+        location: location || 'Location not available',
+        imageUrl: '',
+        description: '',
+        tags: [],
+      };
+    });
   }
 }
 
-/**
- * Factory function to create a Google Maps scraper instance
- */
-export function createGoogleMapsScraper(
-  options: ScraperOptions = {}
-): GoogleMapsScraper {
-  return new GoogleMapsScraper(options);
+// Singleton instance
+let scraperInstance: GoogleMapsScraper | null = null;
+
+export function getGoogleMapsScraper(config?: ScraperConfig): GoogleMapsScraper {
+  if (!scraperInstance) {
+    scraperInstance = new GoogleMapsScraper(config);
+  }
+  return scraperInstance;
 }
+
+export { GoogleMapsScraper };

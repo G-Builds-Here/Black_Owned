@@ -99,3 +99,26 @@ export async function findBusinessesByOwnerId(
   );
   return result.rows.map(rowToBusiness);
 }
+
+/**
+ * Update business name by ID (owner verification included)
+ * Returns the updated business if successful and owner matches, undefined otherwise
+ */
+export async function updateNameById(
+  client: PoolClient,
+  id: string,
+  name: string,
+  ownerId: string
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName} SET name = $1, updated_at = NOW()
+     WHERE id = $2 AND owner_id = $3
+     RETURNING *`,
+    [name, id, ownerId]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+}
+
+// Alias for createBusiness to match import pattern
+export { createBusiness as create };

@@ -4,7 +4,7 @@
  * Scrapes Facebook for business page search results.
  */
 
-import { Browser, Page } from "playwright";
+import { Browser, Page, BrowserContext } from "playwright";
 import {
   ScraperOptions,
   ScraperResult,

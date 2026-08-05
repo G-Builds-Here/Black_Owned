@@ -53,7 +53,7 @@ export function initWebVitals(): void {
       const clsObserver = new PerformanceObserver((entryList) => {
         for (const entry of entryList.getEntries()) {
           const clsEntry = entry as PerformanceEntry;
-          if (!(clsEntry as PerformanceEntry).hastype) {
+          if ((clsEntry as any).type !== 'layout-shift') {
             clsValue += (clsEntry as any).value || 0;
           }
         }
@@ -99,11 +99,11 @@ export function checkPerformanceThresholds(): {
 } {
   const m = getMetrics();
   const results = [
-    { metric: 'LCP', value: m.lcp / 1000, threshold: 2.5, status: m.lcp / 1000 < 2.5 ? 'PASS' : 'FAIL' },
-    { metric: 'FID', value: m.fid, threshold: 100, status: m.fid < 100 ? 'PASS' : 'FAIL' },
-    { metric: 'CLS', value: m.cls, threshold: 0.1, status: m.cls < 0.1 ? 'PASS' : 'FAIL' },
-    { metric: 'FCP', value: m.fcp / 1000, threshold: 3, status: m.fcp / 1000 < 3 ? 'PASS' : 'FAIL' },
-    { metric: 'TTI', value: m.tti / 1000, threshold: 5, status: m.tti / 1000 < 5 ? 'PASS' : 'FAIL' },
+    { metric: 'LCP', value: m.lcp / 1000, threshold: 2.5, status: (m.lcp / 1000 < 2.5 ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL' },
+    { metric: 'FID', value: m.fid, threshold: 100, status: (m.fid < 100 ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL' },
+    { metric: 'CLS', value: m.cls, threshold: 0.1, status: (m.cls < 0.1 ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL' },
+    { metric: 'FCP', value: m.fcp / 1000, threshold: 3, status: (m.fcp / 1000 < 3 ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL' },
+    { metric: 'TTI', value: m.tti / 1000, threshold: 5, status: (m.tti / 1000 < 5 ? 'PASS' : 'FAIL') as 'PASS' | 'FAIL' },
   ];
 
   const passed = results.every((r) => r.status === 'PASS');
