@@ -4,10 +4,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
-import { GraphQLClient } from 'graphql-request';
 
 const GRAPHQL_ENDPOINT = '/api/graphql';
-const client = new GraphQLClient(GRAPHQL_ENDPOINT);
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -100,7 +98,14 @@ export default function SearchPage() {
         pageSize: 10,
       };
 
-      const data = await client.request<SearchBusinessesQuery>(graphqlQuery, variables);
+      const response = await fetch(`${GRAPHQL_ENDPOINT}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: graphqlQuery, variables }),
+      });
+
+      const result = await response.json();
+      const data = result.data as SearchBusinessesQuery;
       setResults(data.searchBusinesses.businesses);
       setTotalPages(data.searchBusinesses.totalPages);
       setTotalResults(data.searchBusinesses.total);

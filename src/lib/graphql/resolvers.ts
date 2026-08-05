@@ -371,7 +371,7 @@ export async function updateBusiness(
 
   return {
     success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
+    business: businessToGraphqlUserBusiness(updatedBusiness),
   };
 }
 
@@ -538,9 +538,9 @@ export async function searchBusinesses(
 }
 
 /**
- * Convert Business entity to GraphQL Business type
+ * Convert Business entity to GraphQL Business type (for user-owned businesses)
  */
-function businessToGraphqlBusiness(business: Business): {
+function businessToGraphqlUserBusiness(business: Business): {
   id: string;
   name: string;
   categoryId: string;
@@ -567,7 +567,7 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusiness(
+export async function createBusinessMutation(
   _parent: unknown,
   args: { input: { name: string; description?: string; categoryId: string } },
   context: unknown
@@ -614,7 +614,7 @@ export async function createBusiness(
 
     return {
       success: true,
-      business: businessToGraphqlBusiness(business),
+      business: businessToGraphqlUserBusiness(business),
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -648,17 +648,34 @@ async function createBusinessInDb(
 }
 
 /**
+ * Get business by ID query resolver
+ */
+export async function getBusinessById(
+  _parent: unknown,
+  args: { id: string }
+): Promise<unknown | null> {
+  // For now, return null - this would need database integration
+  console.log('Get business by ID:', args.id);
+  return null;
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
   Query: {
     health,
     searchBusinesses,
+    business: getBusinessById,
   },
   Mutation: {
     register,
-    createBusiness,
+    createBusiness: createBusinessMutation,
     submitVerification,
     updateBusiness,
+    login,
   },
 };
+
+// Export login for direct route usage
+export { login } from "./login-resolvers";

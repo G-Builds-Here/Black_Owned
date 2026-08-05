@@ -73,121 +73,137 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * Update a user's role (admin only)
  */
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
-  return requireAuth(async (req, res) => {
-    // Only admins can change roles
-    if (req.user.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Only administrators can modify user roles",
-          code: "INSUFFICIENT_ROLE",
-        },
-        { status: 403 }
-      );
-    }
+  // Extract and verify token
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Authentication required",
+        code: "MISSING_TOKEN",
+      },
+      { status: 401 }
+    );
+  }
 
-    try {
-      const body = await request.json();
-      const { userId, role } = body;
+  const token = authHeader.substring(7);
+  const { verifyToken } = await import("@/lib/auth/auth-middleware");
 
-      // Validate required fields
-      if (!userId || !role) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "userId and role are required",
-          },
-          { status: 400 }
-        );
-      }
+  let user;
+  try {
+    user = verifyToken(token);
+  } catch {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Invalid or expired token",
+      },
+      { status: 401 }
+    );
+  }
 
-      // Validate role
-      if (!isValidRole(role)) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Invalid role. Must be one of: user, business_owner, admin`,
-          },
-          { status: 400 }
-        );
-      }
+  // Only admins can change roles
+  if (user.role !== "admin") {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Only administrators can modify user roles",
+        code: "INSUFFICIENT_ROLE",
+      },
+      { status: 403 }
+    );
+  }
 
-      // Get current user to find old role
-      const { findByEmail } = await import("@/lib/db/user-repository");
-      const currentUser = await findByEmail(req.user.email);
+  const body = await request.json();
+  const { userId, role } = body;
 
-      if (!currentUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Current user not found",
-          },
-          { status: 404 }
-        );
-      }
+  // Validate required fields
+  if (!userId || !role) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "userId and role are required",
+      },
+      { status: 400 }
+    );
+  }
 
-      // Get target user to find old role
-      const { findByIdWithRole } = await import(
-        "@/lib/db/user-management-repository"
-      );
-      const targetUser = await findByIdWithRole(userId);
+  // Validate role
+  if (!isValidRole(role)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Invalid role. Must be one of: user, business_owner, admin`,
+      },
+      { status: 400 }
+    );
+  }
 
-      if (!targetUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "User not found",
-          },
-          { status: 404 }
-        );
-      }
+  // Get current user to find old role
+  const { findByEmail } = await import("@/lib/db/user-repository");
+  const currentUser = await findByEmail(user.email);
 
-      const oldRole = targetUser.role;
+  if (!currentUser) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Current user not found",
+      },
+      { status: 404 }
+    );
+  }
 
-      // Update role
-      const updatedUser = await updateUserRole(userId, role);
+  // Get target user to find old role
+  const { findByIdWithRole } = await import(
+    "@/lib/db/user-management-repository"
+  );
+  const targetUser = await findByIdWithRole(userId);
 
-      if (!updatedUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Failed to update user role",
-          },
-          { status: 500 }
-        );
-      }
+  if (!targetUser) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "User not found",
+      },
+      { status: 404 }
+    );
+  }
 
-      // Publish NATS event for role change
-      try {
-        const event: RoleChangedEvent = {
-          userId,
-          oldRole,
-          newRole: role,
-          changedBy: req.user.userId,
-          timestamp: new Date().toISOString(),
-        };
-        await publishRoleChangedEvent(event);
-      } catch (natsError) {
-        console.warn("Failed to publish role_changed event:", natsError);
-        // Don't fail the request if NATS publish fails
-      }
+  const oldRole = targetUser.role;
 
-      return NextResponse.json({
-        success: true,
-        data: updatedUser,
-        message: "Role updated successfully",
-      });
-    } catch (error) {
-      console.error("Error updating user role:", error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Internal server error",
-        },
-        { status: 500 }
-      );
-    }
-  })(request, NextResponse);
+  // Update role
+  const updatedUser = await updateUserRole(userId, role);
+
+  if (!updatedUser) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to update user role",
+      },
+      { status: 500 }
+    );
+  }
+
+  // Publish NATS event for role change
+  try {
+    const event: RoleChangedEvent = {
+      userId,
+      oldRole,
+      newRole: role,
+      changedBy: user.userId,
+      timestamp: new Date().toISOString(),
+    };
+    await publishRoleChangedEvent(event);
+  } catch (natsError) {
+    console.warn("Failed to publish role_changed event:", natsError);
+    // Don't fail the request if NATS publish fails
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: updatedUser,
+    message: "Role updated successfully",
+  });
 }
 
 /**
@@ -195,9 +211,38 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
  * Update a user's status (admin only)
  */
 export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> {
-  return requireAuth(async (req, res) => {
+  try {
+    // Extract and verify token
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          code: "MISSING_TOKEN",
+        },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+    const { verifyToken } = await import("@/lib/auth/auth-middleware");
+
+    let user;
+    try {
+      user = verifyToken(token);
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired token",
+        },
+        { status: 401 }
+      );
+    }
+
     // Only admins can change status
-    if (req.user.role !== "admin") {
+    if (user.role !== "admin") {
       return NextResponse.json(
         {
           success: false,
@@ -262,5 +307,14 @@ export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> 
         { status: 500 }
       );
     }
-  })(request, NextResponse);
+  } catch (error) {
+    console.error("Error updating user status:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
 }

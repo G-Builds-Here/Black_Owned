@@ -126,7 +126,7 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
             categoryId: createMatch[3],
           },
         },
-        { headers: { authorization: 'Bearer token' } }
+        { user: { id: 'test-user' } }
       );
       return result;
     }
