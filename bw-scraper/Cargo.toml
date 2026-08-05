@@ -1,48 +1,31 @@
 [package]
-name = "bw_scraper"
+name = "bw-scraper"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 license.workspace = true
 
-[features]
-default = ["scraper", "api", "importer"]
-scraper = []
-api = ["axum", "tokio/net"]
-importer = ["sqlx"]
-analytics = ["clickhouse"]
-full = ["scraper", "api", "importer", "analytics"]
+[[bin]]
+name = "bw-scraper"
+path = "src/main.rs"
 
 [dependencies]
-# Workspace dependencies
-bw-types = { workspace = true }
-
-# Async runtime
+bw-types = { path = "../bw-types" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+anyhow = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-
-# Database (PostgreSQL) - optional via importer feature
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres"], optional = true }
-
-# NATS JetStream messaging
-async-nats = "0.33"
-
-# HTTP API server - optional via api feature
-axum = { version = "0.7", features = ["macros"], optional = true }
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Logging and tracing
-tracing = "0.1"
+async-nats = { version = "0.40" }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "chrono"] }
+redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp"] }
+clickhouse = { version = "0.13" }
+tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+reqwest = { version = "0.12", features = ["json"] }
+scraper = "0.22"
+tokio-tungstenite = "0.24"
 
-# Utilities
-uuid = { version = "1.0", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-
-# ClickHouse for analytics (optional)
-clickhouse = { version = "0.12", optional = true }
-
-# Playwright for web scraping (optional)
-# Note: playwright-rs not available on crates.io; placeholder for future integration
-# playwright = { version = "0.0.20", optional = true }
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util"] }
