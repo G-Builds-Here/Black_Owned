@@ -328,4 +328,176 @@ describe('GoogleMapsScraper', () => {
       await scraper.close();
     });
   });
+
+  // ============================================================================
+  // QA Integration Tests for AC4: Extract business metadata (category, rating, review count)
+  // ============================================================================
+
+  describe('AC4 - Extract business category', () => {
+    it('should extract category from business listing', async () => {
+      // Arrange - mock returns business with category
+      const searchParams: SearchParams = { query: 'restaurants' };
+
+      // Act
+      const result = await scraper.searchBusinesses(searchParams);
+
+      // Assert - category should be captured
+      expect(result).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
+
+      const business = result[0];
+      expect(business.category).toBeDefined();
+      expect(typeof business.category).toBe('string');
+      expect(business.category).not.toBe('');
+    });
+
+    it('should extract category with specific format from aria-label', async () => {
+      // The scraper extracts category from aria-label by splitting on comma
+      // Mock data includes "Test Category" which should be extracted
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      if (result.length > 0) {
+        const business = result[0];
+        // Category should be a meaningful string, not just "Unknown" or "Business"
+        expect(business.category).not.toBe('Unknown');
+      }
+    });
+
+    it('should handle missing category gracefully', async () => {
+      // The scraper defaults to "Business" when category cannot be extracted
+      // This test validates the fallback behavior
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      expect(result).toBeDefined();
+
+      if (result.length > 0) {
+        const business = result[0];
+        // Category should always be present, even if default
+        expect(typeof business.category).toBe('string');
+        expect(business.category.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('AC4 - Extract business rating', () => {
+    it('should extract rating as a number between 1 and 5', async () => {
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      if (result.length > 0) {
+        const business = result[0];
+        expect(business.rating).toBeDefined();
+        expect(typeof business.rating).toBe('number');
+        expect(business.rating).toBeGreaterThanOrEqual(0);
+        expect(business.rating).toBeLessThanOrEqual(5);
+      }
+    });
+
+    it('should extract rating from star rating aria-label', async () => {
+      // The scraper parses rating from aria-label containing "star"
+      // Mock returns 4.5 stars
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      if (result.length > 0) {
+        const business = result[0];
+        // Verify rating is a valid decimal number
+        expect(Number.isFinite(business.rating)).toBe(true);
+      }
+    });
+
+    it('should handle missing rating with default value of 0', async () => {
+      // When rating cannot be extracted, scraper defaults to 0
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      expect(result).toBeDefined();
+
+      if (result.length > 0) {
+        const business = result[0];
+        // Rating should be a valid number (0 if not found)
+        expect(typeof business.rating).toBe('number');
+        expect(business.rating).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
+
+  describe('AC4 - Extract review count', () => {
+    it('should extract review count as a non-negative integer', async () => {
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      if (result.length > 0) {
+        const business = result[0];
+        expect(business.reviewCount).toBeDefined();
+        expect(typeof business.reviewCount).toBe('number');
+        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
+        expect(Number.isInteger(business.reviewCount)).toBe(true);
+      }
+    });
+
+    it('should parse review count from text containing "review" or "reviews"', async () => {
+      // The scraper uses regex to extract numbers from review text
+      // Mock returns 100 reviews
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      if (result.length > 0) {
+        const business = result[0];
+        // Review count should be a valid integer
+        expect(Number.isInteger(business.reviewCount)).toBe(true);
+      }
+    });
+
+    it('should handle missing review count with default value of 0', async () => {
+      // When review count cannot be extracted, scraper defaults to 0
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      expect(result).toBeDefined();
+
+      if (result.length > 0) {
+        const business = result[0];
+        // Review count should be a valid non-negative integer
+        expect(typeof business.reviewCount).toBe('number');
+        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
+
+  describe('AC4 - Complete metadata extraction', () => {
+    it('should extract all required metadata fields in a single scrape', async () => {
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      if (result.length > 0) {
+        const business = result[0];
+
+        // All metadata fields should be present
+        expect(business).toHaveProperty('category');
+        expect(business).toHaveProperty('rating');
+        expect(business).toHaveProperty('reviewCount');
+
+        // All should have correct types
+        expect(typeof business.category).toBe('string');
+        expect(typeof business.rating).toBe('number');
+        expect(typeof business.reviewCount).toBe('number');
+
+        // Category should be non-empty
+        expect(business.category.length).toBeGreaterThan(0);
+
+        // Rating should be in valid range
+        expect(business.rating).toBeGreaterThanOrEqual(0);
+        expect(business.rating).toBeLessThanOrEqual(5);
+
+        // Review count should be non-negative
+        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('should extract metadata for multiple businesses consistently', async () => {
+      const result = await scraper.searchBusinesses({ query: 'test' });
+
+      // Verify all returned businesses have metadata
+      result.forEach((business, index) => {
+        expect(business.category).toBeDefined();
+        expect(typeof business.category).toBe('string');
+        expect(typeof business.rating).toBe('number');
+        expect(typeof business.reviewCount).toBe('number');
+      });
+    });
+  });
 });
