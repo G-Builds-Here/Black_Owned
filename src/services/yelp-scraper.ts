@@ -241,11 +241,20 @@ export class YelpScraper {
         );
         const category = categoryEl?.textContent?.trim();
 
+        // Extract phone number - look for tel: links or phone patterns
+        const phoneEl = element.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null;
+        const phone = phoneEl?.href?.replace('tel:', '')?.trim() ||
+                      element.textContent?.match(/(\+?\d[\d\s-]{7,}\d)/)?.[0]?.trim();
+
+        // Extract website - look for website icon or http links
+        const websiteEl = element.querySelector('a[href*="yelp.com/biz"]') as HTMLAnchorElement | null;
+        const website = websiteEl?.href?.trim();
+
         results.push({
           name,
           address,
-          phone: undefined,
-          website: undefined,
+          phone: phone || undefined,
+          website: website || undefined,
           category,
           rating,
           reviewCount,

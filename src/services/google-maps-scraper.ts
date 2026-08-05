@@ -180,6 +180,15 @@ class GoogleMapsScraper {
     // Extract location (may be in the aria-label or nearby text)
     const location = categoryEl?.getAttribute('aria-label')?.split(',').slice(2).join(',').trim() || '';
 
+    // Extract phone number - look for phone icon or phone number patterns
+    const phoneEl = el.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null;
+    const phone = phoneEl?.href?.replace('tel:', '')?.trim() ||
+                  el.textContent?.match(/(\+?\d[\d\s-]{7,}\d)/)?.[0]?.trim();
+
+    // Extract website - look for website icon or URL patterns
+    const websiteEl = el.querySelector('a[href^="http"]') as HTMLAnchorElement | null;
+    const website = websiteEl?.href?.trim();
+
     return {
       name,
       category: category || 'Business',
@@ -189,6 +198,8 @@ class GoogleMapsScraper {
       imageUrl: '',
       description: '',
       tags: [],
+      phone: phone || undefined,
+      website: website || undefined,
     };
   }
 
