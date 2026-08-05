@@ -23,6 +23,8 @@ pub mod image_worker;
 pub mod stream_config;
 
 pub mod cache_invalidator;
+
+#[cfg(not(feature = "integration_test"))]
 pub mod cache_service;
 
 #[cfg(feature = "integration_test")]
