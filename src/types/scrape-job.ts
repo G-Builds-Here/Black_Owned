@@ -7,7 +7,7 @@
 /**
  * Job scraping status
  */
-export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
+export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
  * ScrapeJob entity stored in PostgreSQL
@@ -63,4 +63,45 @@ export function validateScrapeJobInput(input: CreateScrapeJobInput): { valid: bo
 export function isValidScrapeJobStatus(status: string): status is ScrapeJobStatus {
   const validStatuses: ScrapeJobStatus[] = ["pending", "running", "completed", "failed"];
   return validStatuses.includes(status as ScrapeJobStatus);
+}
+
+/**
+ * Valid scrape job status values
+ */
+const VALID_STATUSES: ScrapeJobStatus[] = ["pending", "running", "completed", "failed", "cancelled"];
+
+/**
+ * Status transition map - defines allowed transitions from each status
+ */
+const STATUS_TRANSITIONS: Record<ScrapeJobStatus, ScrapeJobStatus[]> = {
+  pending: ["running"],
+  running: ["completed", "failed", "cancelled"],
+  completed: [],
+  failed: [],
+  cancelled: [],
+};
+
+/**
+ * Check if a status value is valid
+ */
+export function isValidScrapeJobStatus(status: string): status is ScrapeJobStatus {
+  return VALID_STATUSES.includes(status as ScrapeJobStatus);
+}
+
+/**
+ * Check if a status transition is valid
+ */
+export function isValidStatusTransition(
+  from: ScrapeJobStatus,
+  to: ScrapeJobStatus
+): boolean {
+  const allowedTransitions = STATUS_TRANSITIONS[from];
+  return allowedTransitions.includes(to);
+}
+
+/**
+ * Get allowed transitions for a given status
+ */
+export function getAllowedTransitions(status: ScrapeJobStatus): ScrapeJobStatus[] {
+  return STATUS_TRANSITIONS[status] || [];
 }

@@ -1,72 +1,123 @@
 /**
  * Scrape Jobs API Route
  *
- * GET /api/scrape-jobs - List all scrape jobs with pagination and filtering
+ * REST endpoints for scrape job management.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  findAllScrapeJobs,
-  initializeScrapeJobSchema,
-} from "@/lib/db/scrape-job-repository";
-import { ScrapeJobStatus } from "@/types/scrape-job";
+import { createScrapeJob, getScrapeJobSummary } from "@/lib/db/scrape-job-repository";
+import { CreateScrapeJobInput } from "@/types/scrape-job";
 
 /**
- * GET /api/scrape-jobs
- * List all scrape jobs with pagination and optional filtering by status and source
+ * GET /api/scrape-jobs/summary
+ * Get scrape job summary statistics
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    // Initialize schema on first request
-    await initializeScrapeJobSchema();
-
+    // Parse days parameter (default: 30)
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
-    const status = searchParams.get("status") as ScrapeJobStatus | null;
-    const source = searchParams.get("source");
+    const days = parseInt(searchParams.get("days") || "30", 10) || 30;
 
-    // Validate pagination parameters
-    if (page < 1 || pageSize < 1 || pageSize > 100) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid pagination parameters. Page must be >= 1, pageSize must be 1-100.",
+    const summary = await getScrapeJobSummary(days);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          total_jobs: summary.total_jobs,
+          successful_jobs: summary.successful_jobs,
+          failed_jobs: summary.failed_jobs,
+          pending_jobs: summary.pending_jobs,
+          running_jobs: summary.running_jobs,
+          period: {
+            days: days,
+            total_jobs: summary.last_30_days.total_jobs,
+            successful_jobs: summary.last_30_days.successful_jobs,
+            failed_jobs: summary.last_30_days.failed_jobs,
+          },
         },
-        { status: 400 }
-      );
-    }
-
-    // Validate status filter if provided
-    if (status && !["pending", "running", "completed", "failed"].includes(status)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid status. Must be one of: pending, running, completed, failed.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate source filter if provided
-    if (source && !["google-maps", "yelp", "facebook"].includes(source)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid source. Must be one of: google-maps, yelp, facebook.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const result = await findAllScrapeJobs(page, pageSize, status || undefined);
-
-    return NextResponse.json({
-      success: true,
-      data: result,
-    });
+      },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error("Error fetching scrape jobs:", error);
+    console.error("Scrape job summary error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/scrape-jobs
+ * Create a new scrape job
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body = await request.json();
+    const { source, query, location } = body;
+
+    // Validate required fields
+    if (!source || !query || !location) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields: source, query, location",
+          errors: [
+            !source && { field: "source", message: "Source is required" },
+            !query && { field: "query", message: "Query is required" },
+            !location && { field: "location", message: "Location is required" },
+          ].filter(Boolean),
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate source
+    const validSources = ["google-maps", "yelp", "facebook"];
+    if (!validSources.includes(source)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid source",
+          errors: [
+            {
+              field: "source",
+              message: `Source must be one of: ${validSources.join(", ")}`,
+            },
+          ],
+        },
+        { status: 400 }
+      );
+    }
+
+    const input: CreateScrapeJobInput = {
+      source,
+      query,
+      location,
+    };
+
+    const result = await createScrapeJob(input);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          id: result.id,
+          source: result.source,
+          query: result.query,
+          location: result.location,
+          status: result.status,
+          created_at: result.created_at,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Scrape job creation error:", error);
     return NextResponse.json(
       {
         success: false,
