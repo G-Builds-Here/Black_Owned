@@ -1,7 +1,6 @@
 //! Data ingestion module for Black Owned platform.
 
 pub mod scraper_rate_limiter;
-
 pub mod chat_consumer;
 
 #[cfg(feature = "integration_test")]
