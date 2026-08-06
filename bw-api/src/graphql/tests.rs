@@ -415,7 +415,7 @@ async fn test_update_business_not_owner_rejected() {
     let business_id = Uuid::new_v4();
     let category_id = Uuid::new_v4();
     let owner_id = Uuid::new_v4();
-    let non_owner_id = Uuid::new_v4();
+    let _non_owner_id = Uuid::new_v4();
 
     sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
         .bind(category_id)

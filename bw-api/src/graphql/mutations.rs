@@ -18,7 +18,6 @@ use crate::middleware::UserId;
 pub struct MutationRoot;
 
 
-
 #[Object]
 impl MutationRoot {
     /// Create a new business

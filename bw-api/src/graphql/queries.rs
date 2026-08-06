@@ -63,7 +63,7 @@ impl QueryRoot {
                     name,
                     description: None,
                     category_id,
-                    owner_id: Uuid::nil(),
+                    owner_id: Uuid::new_v4(),
                     verified,
                     created_at,
                 };
@@ -125,7 +125,7 @@ impl QueryRoot {
             name,
             description: None,
             category_id,
-            owner_id: Uuid::nil(),
+            owner_id: Uuid::new_v4(),
             verified,
             created_at,
         };
@@ -133,7 +133,7 @@ impl QueryRoot {
         Ok(Some(GQLBusinessWithRatings::with_ratings(
             business,
             rating_stats.0,
-            rating_stats.1,
+            rating_stats.1 as i32,
         )))
     }
 
@@ -216,7 +216,7 @@ impl QueryRoot {
                     name,
                     description: None,
                     category_id,
-                    owner_id: Uuid::nil(),
+                    owner_id: Uuid::new_v4(),
                     verified,
                     created_at,
                 })

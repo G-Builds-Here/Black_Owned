@@ -23,30 +23,54 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
                 <span class='fraction'>0/16</span>
+=======
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>16/16</span>
+>>>>>>> feature/LOC-0055-AC3
             </div>
         
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
                 <span class='fraction'>0/5</span>
+=======
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>5/5</span>
+>>>>>>> feature/LOC-0055-AC3
             </div>
         
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
                 <span class='fraction'>0/2</span>
+=======
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>2/2</span>
+>>>>>>> feature/LOC-0055-AC3
             </div>
         
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
                 <span class='fraction'>0/16</span>
+=======
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>16/16</span>
+>>>>>>> feature/LOC-0055-AC3
             </div>
         
             
@@ -61,7 +85,11 @@
             </div>
         </template>
     </div>
+<<<<<<< HEAD
     <div class='status-line low'></div>
+=======
+    <div class='status-line high'></div>
+>>>>>>> feature/LOC-0055-AC3
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -263,6 +291,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<<<<<<< HEAD
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -287,6 +316,32 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+=======
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+>>>>>>> feature/LOC-0055-AC3
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -295,9 +350,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<<<<<<< HEAD
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+=======
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+>>>>>>> feature/LOC-0055-AC3
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * User Types
@@ -381,6 +442,7 @@ export interface PasswordValidation {
  * - At least one digit
  * - At least one special character
  */
+<<<<<<< HEAD
 <span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >v</span>alidatePassword(</span>password: string): PasswordValidation {
   const errors: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
 &nbsp;
@@ -405,6 +467,32 @@ export interface PasswordValidation {
   }
 &nbsp;
 <span class="cstat-no" title="statement not covered" >  return {</span>
+=======
+export function validatePassword(password: string): PasswordValidation {
+  const errors: string[] = [];
+&nbsp;
+  if (password.length &lt; 8) {
+    errors.push("Password must be at least 8 characters long");
+  }
+&nbsp;
+  if (!/[A-Z]/.test(password)) {
+    errors.push("Password must contain at least one uppercase letter");
+  }
+&nbsp;
+  if (!/[a-z]/.test(password)) {
+    errors.push("Password must contain at least one lowercase letter");
+  }
+&nbsp;
+  if (!/[0-9]/.test(password)) {
+    errors.push("Password must contain at least one digit");
+  }
+&nbsp;
+  if (!/[!@#$%^&amp;*()_+\-=\[\]{};':"\\|,.&lt;&gt;\/?]/.test(password)) {
+    errors.push("Password must contain at least one special character");
+  }
+&nbsp;
+  return {
+>>>>>>> feature/LOC-0055-AC3
     valid: errors.length === 0,
     errors,
   };
@@ -413,9 +501,15 @@ export interface PasswordValidation {
 /**
  * Validates email format
  */
+<<<<<<< HEAD
 <span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >i</span>sValidEmail(</span>email: string): boolean {
   const emailRegex = <span class="cstat-no" title="statement not covered" >/^[^\s@]+@[^\s@]+\.[^\s@]+$/;</span>
 <span class="cstat-no" title="statement not covered" >  return emailRegex.test(email);</span>
+=======
+export function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+>>>>>>> feature/LOC-0055-AC3
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -424,7 +518,11 @@ export interface PasswordValidation {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+<<<<<<< HEAD
                 at 2026-08-04T01:41:57.091Z
+=======
+                at 2026-08-03T05:44:03.747Z
+>>>>>>> feature/LOC-0055-AC3
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -5,6 +5,7 @@ use axum::{
     http::{Request, StatusCode, header},
     response::Response,
 };
+use std::sync::Arc;
 use tower_layer::Layer;
 use tokio::sync::RwLock;
 
@@ -23,27 +24,36 @@ pub struct AuthConfig {
 #[derive(Debug)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
-    valid_tokens: RwLock<std::collections::HashMap<String, String>>,
+    valid_tokens: Arc<RwLock<std::collections::HashMap<String, String>>>,
 }
 
 impl Clone for AuthStore {
     fn clone(&self) -> Self {
         Self {
-            valid_tokens: RwLock::new(self.valid_tokens.blocking_read().clone()),
+            valid_tokens: self.valid_tokens.clone(),
         }
     }
 }
 
+impl AuthStore {
+    fn new() -> Self {
+        Self {
+            valid_tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
+        }
+    }
+}
 
 /// Authentication middleware layer
 #[derive(Clone)]
 pub struct AuthLayer {
+    store: Arc<AuthStore>,
     config: AuthConfig,
 }
 
 impl AuthLayer {
     pub fn new(config: AuthConfig) -> Self {
         Self {
+            store: Arc::new(AuthStore::new()),
             config,
         }
     }
@@ -55,6 +65,7 @@ impl<S> Layer<S> for AuthLayer {
     fn layer(&self, inner: S) -> Self::Service {
         AuthMiddleware {
             inner,
+            store: self.store.clone(),
             config: self.config.clone(),
         }
     }
@@ -63,6 +74,7 @@ impl<S> Layer<S> for AuthLayer {
 /// Authentication middleware service
 pub struct AuthMiddleware<S> {
     inner: S,
+    store: Arc<AuthStore>,
     config: AuthConfig,
 }
 
@@ -82,9 +94,9 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
-        // Extract token from Bearer header before moving into async block
-        let token = req
+    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+        // Extract token before async block to avoid lifetime issues
+        let token: Option<String> = req
             .headers()
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
@@ -92,11 +104,10 @@ where
             .map(|s| s.to_string());
 
         let mut inner = self.inner.clone();
+        let _store = self.store.clone();
         let config = self.config.clone();
 
         Box::pin(async move {
-            // Build request with user ID extension if token was valid
-            let mut req = req;
             if let Some(token_str) = &token {
                 // Verify JWT token
                 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
@@ -104,8 +115,7 @@ where
 
                 #[derive(Debug, Deserialize, Serialize)]
                 struct JwtClaims {
-                    #[serde(rename = "userId")]
-                    user_id: String,
+                    userId: String,
                     email: String,
                 }
 
@@ -120,22 +130,22 @@ where
                     Ok(token_data) => {
                         // Extract user ID from token and add to request extensions
                         req.extensions_mut()
-                            .insert(UserId(token_data.claims.user_id));
+                            .insert(UserId(token_data.claims.userId));
+                        inner.call(req).await
                     }
                     Err(_) => {
                         // Invalid token - return 401
                         let mut response = Response::new(Body::from("Unauthorized: Invalid token"));
                         *response.status_mut() = StatusCode::UNAUTHORIZED;
-                        return Ok(response);
+                        Ok(response)
                     }
                 }
             } else {
                 // No auth header - return 401
                 let mut response = Response::new(Body::from("Unauthorized: No authorization header"));
                 *response.status_mut() = StatusCode::UNAUTHORIZED;
-                return Ok(response);
+                Ok(response)
             }
-            inner.call(req).await
         })
     }
 }
@@ -170,8 +180,8 @@ impl Default for AuthLayerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{http::Method, response::Response};
-    use tower::{Service, ServiceExt};
+    use axum::response::Response;
+    use tower::Service;
 
     /// Simple test service that returns 200 OK
     #[derive(Clone)]
