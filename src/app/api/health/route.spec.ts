@@ -4,32 +4,37 @@
  * Tests for /api/health endpoint
  */
 
-// Mock the database module before importing the route
-const mockQuery = jest.fn();
-const mockRelease = jest.fn();
-const mockPool = {
-  connect: jest.fn(() => ({
-    query: mockQuery,
-    release: mockRelease,
-  })),
-};
+import { NextRequest } from "next/server";
+import { GET, POST, PUT, DELETE } from "./route";
 
+// Mock the database module
 jest.mock("../../../lib/db/user-repository", () => ({
-  getPool: jest.fn(() => mockPool),
+  getPool: jest.fn(),
 }));
 
-import { GET, POST, PUT, DELETE } from "./route";
-import { getPool } from "../../../lib/db/user-repository";
+const { getPool } = require("../../../lib/db/user-repository");
 
 describe("GET /api/health", () => {
+  const mockPool = {
+    connect: jest.fn(),
+  };
+
+  const mockClient = {
+    query: jest.fn(),
+    release: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    getPool.mockReturnValue(mockPool);
   });
 
   it("should return 200 with healthy status when database is reachable", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    // Setup mock to simulate successful database connection
+    mockPool.connect.mockResolvedValue(mockClient);
+    mockClient.query.mockResolvedValue({ rows: [] });
 
-    const request = new Request("http://localhost/api/health", {
+    const request = new NextRequest("http://localhost/api/health", {
       method: "GET",
     });
 
@@ -38,13 +43,14 @@ describe("GET /api/health", () => {
 
     expect(response.status).toBe(200);
     expect(json.status).toBe("healthy");
-    expect(json.database).toBe("connected");
+    expect(json.database.status).toBe("healthy");
   });
 
   it("should return 503 with unhealthy status when database is unreachable", async () => {
-    mockQuery.mockRejectedValueOnce(new Error("Connection refused"));
+    // Setup mock to simulate failed database connection
+    mockPool.connect.mockRejectedValue(new Error("Connection refused"));
 
-    const request = new Request("http://localhost/api/health", {
+    const request = new NextRequest("http://localhost/api/health", {
       method: "GET",
     });
 
@@ -53,13 +59,14 @@ describe("GET /api/health", () => {
 
     expect(response.status).toBe(503);
     expect(json.status).toBe("unhealthy");
-    expect(json.database).toBe("unreachable");
+    expect(json.database.status).toBe("unhealthy");
   });
 
   it("should return JSON Content-Type header", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockPool.connect.mockResolvedValue(mockClient);
+    mockClient.query.mockResolvedValue({ rows: [] });
 
-    const request = new Request("http://localhost/api/health", {
+    const request = new NextRequest("http://localhost/api/health", {
       method: "GET",
     });
 
@@ -69,9 +76,10 @@ describe("GET /api/health", () => {
   });
 
   it("should include timestamp in response", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockPool.connect.mockResolvedValue(mockClient);
+    mockClient.query.mockResolvedValue({ rows: [] });
 
-    const request = new Request("http://localhost/api/health", {
+    const request = new NextRequest("http://localhost/api/health", {
       method: "GET",
     });
 
@@ -80,6 +88,22 @@ describe("GET /api/health", () => {
 
     expect(json.timestamp).toBeDefined();
     expect(() => new Date(json.timestamp)).not.toThrow();
+  });
+
+  it("should include database status object in response", async () => {
+    mockPool.connect.mockResolvedValue(mockClient);
+    mockClient.query.mockResolvedValue({ rows: [] });
+
+    const request = new NextRequest("http://localhost/api/health", {
+      method: "GET",
+    });
+
+    const response = await GET(request);
+    const json = await response.json();
+
+    expect(json.database).toBeDefined();
+    expect(json.database.status).toBeDefined();
+    expect(["healthy", "unhealthy"]).toContain(json.database.status);
   });
 });
 

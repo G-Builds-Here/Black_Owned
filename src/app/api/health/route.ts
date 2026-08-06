@@ -2,41 +2,55 @@
  * Health Check API Route
  *
  * Returns service health status for monitoring and load balancer checks.
- * Checks database connectivity and returns 503 if database is unreachable.
+ * Includes database connectivity status.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "../../../lib/db/user-repository";
 
+interface HealthResponse {
+  status: "healthy" | "unhealthy";
+  timestamp: string;
+  database?: {
+    status: "healthy" | "unhealthy";
+  };
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const timestamp = new Date().toISOString();
+
+  // Check database connectivity
+  let dbStatus: "healthy" | "unhealthy" = "unhealthy";
+  let overallStatus: "healthy" | "unhealthy" = "unhealthy";
+
   try {
-    // Check database connectivity
-    const client = await getPool().connect();
+    const pool = getPool();
+    const client = await pool.connect();
     try {
+      // Run a simple query to verify connectivity
       await client.query("SELECT 1");
-      // Database is reachable
-      return NextResponse.json(
-        {
-          status: "healthy",
-          timestamp: new Date().toISOString(),
-          database: "connected",
-        },
-        { status: 200 }
-      );
+      dbStatus = "healthy";
+      overallStatus = "healthy";
     } finally {
       client.release();
     }
   } catch {
-    // Database is unreachable
-    return NextResponse.json(
-      {
-        status: "unhealthy",
-        timestamp: new Date().toISOString(),
-        database: "unreachable",
-      },
-      { status: 503 }
-    );
+    // Database is unreachable - keep defaults
+    dbStatus = "unhealthy";
+    overallStatus = "unhealthy";
   }
+
+  const response: HealthResponse = {
+    status: overallStatus,
+    timestamp,
+    database: {
+      status: dbStatus,
+    },
+  };
+
+  const statusCode = overallStatus === "healthy" ? 200 : 503;
+
+  return NextResponse.json(response, { status: statusCode });
 }
 
 export async function POST(): Promise<NextResponse> {
