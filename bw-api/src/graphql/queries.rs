@@ -6,15 +6,13 @@
 //! - reviews: List reviews for a business
 //! - categories: List all categories
 //! - search: Search businesses by name
-//! - scrapeJobStats: Get aggregated scrape job statistics
-//! - scrapeJobs: List scrape jobs with optional filtering
 
 use async_graphql::*;
 use bw_types::{Business, Category, Review};
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLCategory, GQLReview, PageInfo, ScrapeJob, ScrapeJobStats, ScrapeJobStatus};
+use super::types::{BusinessConnection, BusinessEdge, GQLBusiness, GQLBusinessWithRatings, GQLCategory, GQLReview, PageInfo};
 
 /// Query root for GraphQL API
 pub struct QueryRoot;
@@ -68,12 +66,6 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
-                    address: None,
-                    phone: None,
-                    website: None,
-                    category: None,
-                    rating: None,
-                    review_count: Some(0),
                 };
                 let cursor = id.to_string();
                 let node = GQLBusiness::from(business);
@@ -95,8 +87,8 @@ impl QueryRoot {
         })
     }
 
-    /// Get a single business by ID
-    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusiness>> {
+    /// Get a single business by ID with rating aggregation
+    async fn business(&self, ctx: &Context<'_>, id: String) -> Result<Option<GQLBusinessWithRatings>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
         })?;
@@ -105,6 +97,7 @@ impl QueryRoot {
             Error::new(format!("Invalid UUID: {:?}", e))
         })?;
 
+        // Get business data
         let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(
             "SELECT id, name, category_id, verified, created_at FROM businesses WHERE id = $1",
         )
@@ -117,6 +110,16 @@ impl QueryRoot {
             return Ok(None);
         };
 
+        // Get rating aggregation
+        let rating_stats = sqlx::query_as::<_, (Option<f64>, i64)>(
+            "SELECT AVG(rating::float), COUNT(*) FROM reviews WHERE business_id = $1",
+        )
+        .bind(business_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?
+        .unwrap_or((None, 0));
+
         let business = Business {
             id: bid,
             name,
@@ -125,15 +128,13 @@ impl QueryRoot {
             owner_id: Uuid::nil(),
             verified,
             created_at,
-            address: None,
-            phone: None,
-            website: None,
-            category: None,
-            rating: None,
-            review_count: Some(0),
         };
 
-        Ok(Some(GQLBusiness::from(business)))
+        Ok(Some(GQLBusinessWithRatings::with_ratings(
+            business,
+            rating_stats.0,
+            rating_stats.1,
+        )))
     }
 
     /// Get reviews for a business
@@ -218,117 +219,7 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
-                    address: None,
-                    phone: None,
-                    website: None,
-                    category: None,
-                    rating: None,
-                    review_count: Some(0),
                 })
-            })
-            .collect())
-    }
-
-    /// Get scrape job statistics for the last N days (default 30)
-    async fn scrape_job_stats(
-        &self,
-        ctx: &Context<'_>,
-        days: Option<i32>,
-    ) -> Result<ScrapeJobStats> {
-        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
-            Error::new(format!("Database connection not available: {:?}", e))
-        })?;
-
-        let period_days = days.unwrap_or(30);
-        let since = Utc::now() - chrono::Duration::days(period_days as i64);
-
-        // Query for aggregated stats from PostgreSQL scrape_jobs table
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64, Option<f64>, Option<i64>, Option<i64>)>(
-            r#"
-            SELECT
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE status = 'success') as successful,
-                COUNT(*) FILTER (WHERE status = 'failed') as failed,
-                COALESCE(SUM(items_scraped), 0) as total_items,
-                AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration,
-                MIN(EXTRACT(EPOCH FROM (completed_at - started_at)))::integer as min_duration,
-                MAX(EXTRACT(EPOCH FROM (completed_at - started_at)))::integer as max_duration
-            FROM scrape_jobs
-            WHERE started_at >= $1 AND completed_at IS NOT NULL
-            "#,
-        )
-        .bind(since)
-        .fetch_one(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
-
-        Ok(ScrapeJobStats {
-            total_jobs: row.0 as i32,
-            successful_jobs: row.1 as i32,
-            failed_jobs: row.2 as i32,
-            total_items_scraped: row.3 as i32,
-            period_days,
-            avg_duration_seconds: row.4,
-            min_duration_seconds: row.5,
-            max_duration_seconds: row.6,
-        })
-    }
-
-    /// Get list of scrape jobs with optional status filter
-    async fn scrape_jobs(
-        &self,
-        ctx: &Context<'_>,
-        status_filter: Option<ScrapeJobStatus>,
-        limit: Option<i32>,
-    ) -> Result<Vec<ScrapeJob>> {
-        let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
-            Error::new(format!("Database connection not available: {:?}", e))
-        })?;
-
-        let limit_val = limit.unwrap_or(50).min(100);
-
-        let query = if let Some(status) = status_filter {
-            format!(
-                "SELECT id, job_name, target_url, status, error_message, items_scraped, started_at, completed_at FROM scrape_jobs WHERE status = '{}' ORDER BY started_at DESC LIMIT {}",
-                match status {
-                    ScrapeJobStatus::Success => "success",
-                    ScrapeJobStatus::Failed => "failed",
-                    ScrapeJobStatus::Running => "running",
-                },
-                limit_val
-            )
-        } else {
-            format!(
-                "SELECT id, job_name, target_url, status, error_message, items_scraped, started_at, completed_at FROM scrape_jobs ORDER BY started_at DESC LIMIT {}",
-                limit_val
-            )
-        };
-
-        let rows = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, i32, chrono::DateTime<Utc>, Option<chrono::DateTime<Utc>>)>(
-            &query
-        )
-        .fetch_all(db)
-        .await
-        .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
-
-        Ok(rows
-            .into_iter()
-            .map(|(id, job_name, target_url, status, error_message, items_scraped, started_at, completed_at)| {
-                let status_enum = match status.as_str() {
-                    "success" => ScrapeJobStatus::Success,
-                    "failed" => ScrapeJobStatus::Failed,
-                    _ => ScrapeJobStatus::Running,
-                };
-                ScrapeJob {
-                    id: id.to_string(),
-                    job_name,
-                    target_url,
-                    status: status_enum,
-                    error_message,
-                    items_scraped: items_scraped as u32,
-                    started_at: started_at.into(),
-                    completed_at: completed_at.map(|dt| dt.into()),
-                }
             })
             .collect())
     }

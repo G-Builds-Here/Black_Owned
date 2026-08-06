@@ -1,54 +1,32 @@
-//! bw-scraper - Web scraping service for Black Owned directory
+//! Black Owned Scraper - Entry Point
 //!
-//! This service scrapes business data from external sources (Google Maps, Yelp, Facebook)
-//! and stores it in the Black Owned database.
+//! This is the main entry point for the scraper binary.
 
-use anyhow::Result;
-use tracing::info;
-use tracing_subscriber::EnvFilter;
-
-mod scraper;
-mod config;
-mod connectors;
+use bw_scraper::scraper::GoogleMapsScraper;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "bw_scraper=info".into()),
         )
+        .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("Starting bw-scraper service...");
+    tracing::info!("Starting Black Owned Scraper");
 
-    // Load configuration
-    dotenvy::dotenv().ok();
-    let config = config::Config::from_env()?;
+    // Create scraper instance
+    let scraper = GoogleMapsScraper::new();
 
-    info!("Connecting to PostgreSQL...");
-    let _pg_pool = sqlx::PgPool::connect(&config.database_url).await?;
-    info!("PostgreSQL connection established");
-
-    info!("Connecting to NATS...");
-    let _nats_conn = async_nats::connect(&config.nats_url).await?;
-    info!("NATS connection established");
-
-    info!("Connecting to Redis...");
-    let redis_client = redis::Client::open(config.redis_url.as_str())?;
-    let _redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
-    info!("Redis connection established");
-
-    info!("Connecting to ClickHouse...");
-    let _clickhouse_client = clickhouse::Client::default()
-        .with_url(&config.clickhouse_url);
-    info!("ClickHouse connection configured");
-
-    info!("All service connections established. bw-scraper is ready.");
-
-    // Keep the service running
-    tokio::signal::ctrl_c().await?;
-    info!("Shutting down bw-scraper...");
+    // Example: scrape with pagination
+    // In production, this would be driven by CLI args or config
+    match scraper.scrape_with_pagination("black owned businesses", 10).await {
+        Ok(results) => tracing::info!("Fetched {} businesses", results.len()),
+        Err(e) => tracing::error!("Scrape failed: {}", e),
+    }
 
     Ok(())
 }

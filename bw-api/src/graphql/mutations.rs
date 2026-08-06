@@ -17,18 +17,7 @@ use crate::middleware::UserId;
 /// Mutation root for GraphQL API
 pub struct MutationRoot;
 
-/// Extract user ID from JWT token in Authorization header
-fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
-    let auth_header = ctx
-        .data::<axum::Extension<axum_extra::headers::Authorization<axum_extra::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string());
 
-    auth_header
-        .ok_or_else(|| Error::new("Authorization header is required"))
-        .and_then(|token| {
-            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
-        })
-}
 
 #[Object]
 impl MutationRoot {
@@ -51,8 +40,8 @@ impl MutationRoot {
 
         // Extract user ID from JWT token
         let user_id = match ctx.data::<UserId>() {
-            Some(uid) => uid.0.clone(),
-            None => return Err(Error::new("Unauthorized: User not authenticated")),
+            Ok(uid) => uid.0.clone(),
+            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
         };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
@@ -108,8 +97,8 @@ impl MutationRoot {
 
         // Extract user ID from JWT token
         let user_id = match ctx.data::<UserId>() {
-            Some(uid) => uid.0.clone(),
-            None => return Err(Error::new("Unauthorized: User not authenticated")),
+            Ok(uid) => uid.0.clone(),
+            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
         };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
@@ -277,10 +266,11 @@ impl MutationRoot {
         let business = Business {
             id: business_row.0,
             name: business_row.1,
+            description: None,
             category_id: business_row.2,
+            owner_id: business_row.5,
             verified: business_row.3,
             created_at: business_row.4,
-            owner_id: business_row.5,
         };
 
         let mut gql_business: GQLBusiness = business.into();

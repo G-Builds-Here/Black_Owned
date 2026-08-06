@@ -1,8 +1,12 @@
-//! bw-scraper - Web scraping service for Black Owned directory
+//! Black Owned Scraper Crate
 //!
-//! This crate provides functionality for scraping business data from external sources
-//! (Google Maps, Yelp, Facebook) and storing it in the Black Owned database.
+//! This crate provides tools for scraping and processing business data from various sources.
 
-pub mod config;
-pub mod connectors;
 pub mod scraper;
+pub mod types;
+
+// Placeholder modules - to be implemented
+pub mod etl;
+pub mod importer;
+pub mod api;
+pub mod models;
