@@ -36,6 +36,13 @@ describe("FacebookScraper", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset mock implementations
+    mockPage.evaluate.mockReset();
+    mockPage.goto.mockReset();
+    mockPage.waitForSelector.mockReset();
+    mockPage.close.mockReset();
+    mockPage.$.mockReset();
+    mockPage.waitForLoadState.mockReset();
     scraper = new FacebookScraper();
   });
 
@@ -112,6 +119,8 @@ describe("FacebookScraper", () => {
           source: "facebook" as const,
           sourceId: "test-business-123",
           category: "Restaurant",
+          phone: undefined,
+          website: undefined,
         },
       ];
 
@@ -181,7 +190,7 @@ describe("FacebookScraper", () => {
       mockPage.waitForSelector.mockResolvedValue(undefined);
       mockPage.evaluate.mockImplementation(() => {
         callCount++;
-        return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const }] : [];
+        return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const, phone: undefined, website: undefined }] : [];
       });
       mockPage.$.mockResolvedValueOnce({ click: jest.fn() });
 
@@ -215,6 +224,58 @@ describe("FacebookScraper", () => {
       await expect(scraper.scrape("restaurants", "New York")).rejects.toThrow(
         "Facebook scraping failed"
       );
+    });
+
+    it("captures phone number when available", async () => {
+      const mockBusinessWithPhone = {
+        name: "Phone Business",
+        phone: "555-9876",
+        website: undefined,
+        category: "Business",
+        source: "facebook" as const,
+        sourceId: "phone-business-123",
+      };
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([mockBusinessWithPhone]);
+
+      const result = await scraper.scrape("businesses", "City");
+
+      expect(result.businesses[0].phone).toBe("555-9876");
+    });
+
+    it("captures website URL when available", async () => {
+      const mockBusinessWithWebsite = {
+        name: "Website Business",
+        address: "789 Web Ave",
+        website: "https://website.com",
+        source: "facebook" as const,
+      };
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([mockBusinessWithWebsite]);
+
+      const result = await scraper.scrape("businesses", "City");
+
+      expect(result.businesses[0].website).toBe("https://website.com");
+    });
+
+    it("handles businesses without phone or website", async () => {
+      const mockBusinessMinimal = {
+        name: "Minimal Business",
+        source: "facebook" as const,
+      };
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([mockBusinessMinimal]);
+
+      const result = await scraper.scrape("businesses", "City");
+
+      expect(result.businesses[0].phone).toBeUndefined();
+      expect(result.businesses[0].website).toBeUndefined();
     });
   });
 
