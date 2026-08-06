@@ -1,503 +1,367 @@
 /**
- * Google Maps Scraper QA Tests
- * Integration tests validating AC1: Search results page loads successfully and businesses are visible
+ * Google Maps Scraper Tests
+ *
+ * Tests for the Google Maps scraper with pagination support.
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import { GoogleMapsScraper, ScrapedBusiness, SearchParams } from './google-maps-scraper';
+import {
+  GoogleMapsScraper,
+  createGoogleMapsScraper,
+} from "./google-maps-scraper";
+import { ScrapedBusiness, ScraperResult } from "../types/google-maps-scraper";
 
-// Mock playwright
-jest.mock('playwright', () => ({
+// Mock Playwright
+const mockPage = {
+  goto: jest.fn(),
+  waitForSelector: jest.fn(),
+  evaluate: jest.fn(),
+  close: jest.fn(),
+  $: jest.fn(),
+  waitForLoadState: jest.fn(),
+};
+
+const mockContext = {
+  newPage: jest.fn().mockReturnValue(mockPage),
+  close: jest.fn(),
+};
+
+const mockBrowser = {
+  newContext: jest.fn().mockReturnValue(mockContext),
+  close: jest.fn(),
+};
+
+jest.mock("playwright", () => ({
   chromium: {
-    launch: jest.fn().mockResolvedValue({
-      newContext: jest.fn().mockResolvedValue({
-        newPage: jest.fn().mockResolvedValue({
-          goto: jest.fn().mockResolvedValue({}),
-          waitForSelector: jest.fn().mockResolvedValue({}),
-          waitForTimeout: jest.fn().mockResolvedValue(undefined),
-          evaluate: jest.fn().mockResolvedValue([
-            {
-              name: 'Test Business',
-              category: 'Test Category',
-              rating: 4.5,
-              reviewCount: 100,
-              location: 'Test City',
-              imageUrl: '',
-              description: 'Test description',
-              tags: ['test'],
-            },
-          ]),
-          close: jest.fn().mockResolvedValue(undefined),
-          $: jest.fn().mockResolvedValue({
-            click: jest.fn().mockResolvedValue(undefined),
-          }),
-        }),
-        close: jest.fn().mockResolvedValue(undefined),
-      }),
-      close: jest.fn().mockResolvedValue(undefined),
-    }),
+    launch: jest.fn().mockResolvedValue(mockBrowser),
   },
 }));
 
-describe('GoogleMapsScraper', () => {
+describe("GoogleMapsScraper", () => {
   let scraper: GoogleMapsScraper;
 
   beforeEach(() => {
-    scraper = new GoogleMapsScraper({ headless: true });
     jest.clearAllMocks();
+    scraper = createGoogleMapsScraper();
   });
 
   afterEach(async () => {
     await scraper.close();
   });
 
-  describe('initialize', () => {
-    it('should initialize the browser', async () => {
-      await scraper.initialize();
-      // Browser should be initialized without error
-      expect(true).toBe(true);
-    });
-  });
-
-  describe('searchBusinesses', () => {
-    it('should search for businesses with a query', async () => {
-      const result = await scraper.searchBusinesses({ query: 'restaurants' });
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
+  describe("constructor", () => {
+    it("creates scraper with default options", () => {
+      const defaultScraper = createGoogleMapsScraper();
+      expect(defaultScraper).toBeInstanceOf(GoogleMapsScraper);
     });
 
-    it('should search with location parameter', async () => {
-      const result = await scraper.searchBusinesses({
-        query: 'restaurants',
-        location: 'New York',
+    it("creates scraper with custom options", () => {
+      const customScraper = createGoogleMapsScraper({
+        maxPages: 5,
+        delayBetweenPagesMs: 2000,
+        includeDuplicates: true,
       });
+      expect(customScraper).toBeInstanceOf(GoogleMapsScraper);
+    });
+  });
 
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
+  describe("scrape with pagination", () => {
+    it("handles single page of results (less than 10)", async () => {
+      const mockBusinesses: ScrapedBusiness[] = [
+        {
+          name: "Business 1",
+          address: "123 Main St",
+          source: "google-maps",
+          rating: 4.5,
+          reviewCount: 100,
+          category: "Restaurant",
+        },
+        {
+          name: "Business 2",
+          address: "456 Oak Ave",
+          source: "google-maps",
+          rating: 4.0,
+          reviewCount: 50,
+          category: "Cafe",
+        },
+      ] as ScrapedBusiness[];
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue(mockBusinesses);
+      mockPage.$.mockResolvedValue(null); // No next button
+      mockPage.close.mockResolvedValue(undefined);
+
+      const result = await scraper.scrape("restaurants", "New York");
+
+      expect(result.businesses.length).toBe(2);
+      expect(result.pagination.totalPages).toBe(1);
+      expect(result.pagination.hasNextPage).toBe(false);
+      expect(result.source).toBe("google-maps");
     });
 
-    it('should respect maxResults configuration', async () => {
-      const scraperWithLimit = new GoogleMapsScraper({
-        headless: true,
-        maxResults: 5,
+    it("handles multiple pages of results (more than 10)", async () => {
+      const page1Businesses: ScrapedBusiness[] = Array.from(
+        { length: 10 },
+        (_, i) => ({
+          name: `Business ${i + 1}`,
+          address: `${i + 1} Street`,
+          source: "google-maps",
+          rating: 4.0 + (i % 2),
+          reviewCount: 10 + i,
+        })
+      );
+
+      const page2Businesses: ScrapedBusiness[] = Array.from(
+        { length: 5 },
+        (_, i) => ({
+          name: `Business ${i + 11}`,
+          address: `${i + 11} Street`,
+          source: "google-maps",
+          rating: 3.5,
+          reviewCount: 20,
+        })
+      );
+
+      let nextCallCount = 0;
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([...page1Businesses, ...page2Businesses]);
+      mockPage.$.mockImplementation(() => {
+        nextCallCount++;
+        // First call returns null (no next button on first page check),
+        // second call returns button (for pagination)
+        if (nextCallCount === 2) {
+          return Promise.resolve({
+            click: jest.fn(),
+            isVisible: jest.fn().mockResolvedValue(true),
+            isDisabled: jest.fn().mockResolvedValue(false),
+          });
+        }
+        return Promise.resolve(null);
       });
+      mockPage.close.mockResolvedValue(undefined);
 
-      const result = await scraperWithLimit.searchBusinesses({ query: 'test' });
+      const result = await scraper.scrape("restaurants", "New York");
 
-      expect(result.length).toBeLessThanOrEqual(5);
-      await scraperWithLimit.close();
+      expect(result.businesses.length).toBeGreaterThanOrEqual(10);
+      expect(result.pagination.totalPages).toBeGreaterThanOrEqual(1);
+      expect(result.pagination.totalResults).toBeGreaterThanOrEqual(10);
+      expect(result.source).toBe("google-maps");
     });
 
-    it('should return businesses with required fields', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
+    it("prevents duplicate businesses across pages", async () => {
+      const page1Businesses: ScrapedBusiness[] = [
+        { name: "Business A", address: "1st St", source: "google-maps", rating: 4.0 },
+        { name: "Business B", address: "2nd St", source: "google-maps", rating: 4.5 },
+      ];
 
-      if (result.length > 0) {
-        const business = result[0];
-        expect(business.name).toBeDefined();
-        expect(business.category).toBeDefined();
-        expect(typeof business.rating).toBe('number');
-        expect(typeof business.reviewCount).toBe('number');
-        expect(business.location).toBeDefined();
-      }
+      const page2Businesses: ScrapedBusiness[] = [
+        { name: "Business A", address: "1st St", source: "google-maps", rating: 4.0 }, // Duplicate
+        { name: "Business C", address: "3rd St", source: "google-maps", rating: 3.5 },
+      ];
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([...page1Businesses, ...page2Businesses]);
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
+
+      const result = await scraper.scrape("restaurants", "New York");
+
+      // Should only have 3 unique businesses, not 4
+      const uniqueNames = new Set(result.businesses.map((b) => b.name));
+      expect(uniqueNames.size).toBe(3);
+      expect(result.businesses.length).toBe(3);
     });
 
-    it('should handle empty query gracefully', async () => {
-      const result = await scraper.searchBusinesses({ query: '' });
+    it("respects maxPages option", async () => {
+      const scraperWithLimit = createGoogleMapsScraper({ maxPages: 2 });
 
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
+      const page1Businesses: ScrapedBusiness[] = Array.from(
+        { length: 10 },
+        (_, i) => ({
+          name: `Business ${i + 1}`,
+          address: `${i + 1} Street`,
+          source: "google-maps",
+        })
+      );
+
+      const page2Businesses: ScrapedBusiness[] = Array.from(
+        { length: 10 },
+        (_, i) => ({
+          name: `Business ${i + 11}`,
+          address: `${i + 11} Street`,
+          source: "google-maps",
+        })
+      );
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([...page1Businesses, ...page2Businesses]);
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
+
+      const result = await scraperWithLimit.scrape("restaurants", "New York");
+
+      // Should have at most 20 businesses (2 pages x 10 results)
+      expect(result.businesses.length).toBeLessThanOrEqual(20);
+      expect(result.pagination.totalPages).toBeLessThanOrEqual(2);
+    });
+
+    it("navigates to correct Google Maps search URL", async () => {
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue([]);
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
+
+      await scraper.scrape("Italian restaurants", "Seattle, WA");
+
+      expect(mockPage.goto).toHaveBeenCalled();
+      const callArgs = mockPage.goto.mock.calls[0];
+      expect(callArgs[0]).toContain("google.com/maps/search");
+      expect(callArgs[0]).toContain("Italian%20restaurants");
+      expect(callArgs[0]).toContain("Seattle%2C%20WA");
+    });
+
+    it("handles empty results gracefully", async () => {
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockRejectedValue(
+        new Error("Selector not found")
+      );
+      mockPage.evaluate.mockResolvedValue([]); // Empty results
+      mockPage.$.mockResolvedValue(null); // No next button
+      mockPage.close.mockResolvedValue(undefined);
+
+      const result = await scraper.scrape(
+        "nonexistentbusiness12345",
+        "Nowhere City"
+      );
+
+      expect(result.businesses.length).toBe(0);
+      expect(result.pagination.totalResults).toBe(0);
+      expect(result.pagination.totalPages).toBe(1);
+      expect(result.source).toBe("google-maps");
+    });
+
+    it("includes phone and website when available", async () => {
+      const mockBusinesses: ScrapedBusiness[] = [
+        {
+          name: "Test Business",
+          address: "123 Test St",
+          phone: "555-1234",
+          website: "https://test.com",
+          source: "google-maps",
+          rating: 4.5,
+          reviewCount: 50,
+        },
+      ];
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue(mockBusinesses);
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
+
+      const result = await scraper.scrape("test", "City");
+
+      expect(result.businesses[0].phone).toBe("555-1234");
+      expect(result.businesses[0].website).toBe("https://test.com");
+    });
+
+    it("extracts business category from Google Maps", async () => {
+      const mockBusinesses: ScrapedBusiness[] = [
+        {
+          name: "Test Business",
+          address: "123 Test St",
+          source: "google-maps",
+          rating: 4.5,
+          reviewCount: 50,
+          category: "Italian Restaurant",
+        },
+      ];
+
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockResolvedValue(mockBusinesses);
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
+
+      const result = await scraper.scrape("test", "City");
+
+      expect(result.businesses[0].category).toBe("Italian Restaurant");
     });
   });
 
-  describe('getBusinessDetails', () => {
-    it('should get details for a specific business', async () => {
-      const result = await scraper.getBusinessDetails('test business');
+  describe("error handling", () => {
+    it("handles browser initialization failure", async () => {
+      // Mock browser launch to fail
+      const { chromium } = await import("playwright");
+      (chromium.launch as jest.Mock).mockRejectedValueOnce(
+        new Error("Browser launch failed")
+      );
 
-      expect(result).toBeDefined();
+      await expect(scraper.scrape("test", "city")).rejects.toThrow(
+        "Failed to initialize browser"
+      );
+
+      // Reset mock for cleanup
+      (chromium.launch as jest.Mock).mockResolvedValue(mockBrowser);
     });
 
-    it('should return null when business not found', async () => {
-      // Mock empty result
-      const scraperWithEmptyResult = new GoogleMapsScraper({ headless: true });
+    it("handles page navigation timeout", async () => {
+      mockPage.goto.mockRejectedValue(
+        new Error("Navigation timeout exceeded")
+      );
+      mockPage.evaluate.mockResolvedValue([]); // Empty results on error
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
 
-      // Override evaluate to return null
-      const mockPage = {
-        goto: jest.fn().mockResolvedValue({}),
-        waitForSelector: jest.fn().mockResolvedValue({}),
-        waitForTimeout: jest.fn().mockResolvedValue(undefined),
-        evaluate: jest.fn().mockResolvedValue(null),
-        close: jest.fn().mockResolvedValue(undefined),
-        $: jest.fn().mockResolvedValue(null),
-      };
+      const result = await scraper.scrape("test", "city");
 
-      const mockContext = {
-        newPage: jest.fn().mockResolvedValue(mockPage),
-        close: jest.fn().mockResolvedValue(undefined),
-      };
+      // Should return partial result with empty businesses
+      expect(result.businesses).toEqual([]);
+      expect(result.pagination.totalResults).toBe(0);
+    });
 
-      const mockBrowser = {
-        newContext: jest.fn().mockResolvedValue(mockContext),
-        close: jest.fn().mockResolvedValue(undefined),
-      };
+    it("handles extraction errors gracefully", async () => {
+      mockPage.goto.mockResolvedValue(undefined);
+      mockPage.waitForSelector.mockResolvedValue(undefined);
+      mockPage.evaluate.mockRejectedValue(
+        new Error("Evaluation failed")
+      );
+      mockPage.$.mockResolvedValue(null);
+      mockPage.close.mockResolvedValue(undefined);
 
-      (mockBrowser.newContext as jest.Mock).mockResolvedValue(mockContext);
+      const result = await scraper.scrape("test", "city");
 
-      await scraperWithEmptyResult.close();
+      // Should return empty businesses but not throw
+      expect(result.businesses).toEqual([]);
+      expect(result.source).toBe("google-maps");
     });
   });
 
-  describe('close', () => {
-    it('should close the browser', async () => {
-      await scraper.initialize();
+  describe("close", () => {
+    it("closes browser and context", async () => {
+      // Initialize first
+      await scraper["initialize"]();
+
       await scraper.close();
 
-      // Should not throw on double close
+      expect(mockContext.close).toHaveBeenCalled();
+      expect(mockBrowser.close).toHaveBeenCalled();
+    });
+
+    it("is safe to call multiple times", async () => {
       await scraper.close();
+      await scraper.close(); // Should not throw
     });
   });
 
-  describe('error handling', () => {
-    it('should handle scraper errors gracefully', async () => {
-      // The scraper has a fallback mechanism, so errors are handled gracefully
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-    });
-  });
-
-  // ============================================================================
-  // QA Integration Tests for AC1: Search for businesses on Google Maps
-  // ============================================================================
-
-  describe('AC1 - Search results page loads successfully', () => {
-    it('should navigate to Google Maps search URL', async () => {
-      // Arrange
-      const searchParams: SearchParams = { query: 'restaurants' };
-
-      // Act
-      const result = await scraper.searchBusinesses(searchParams);
-
-      // Assert - page should load without throwing
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-    });
-
-    it('should handle search with location parameter', async () => {
-      // Arrange
-      const searchParams: SearchParams = {
-        query: 'coffee shops',
-        location: 'Seattle',
-      };
-
-      // Act
-      const result = await scraper.searchBusinesses(searchParams);
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-    });
-
-    it('should build correct search URL with location', async () => {
-      // This test validates the URL construction logic
-      const searchParams: SearchParams = {
-        query: 'pizza',
-        location: 'Chicago',
-      };
-
-      // The scraper should construct: "pizza in Chicago"
-      const result = await scraper.searchBusinesses(searchParams);
-
-      expect(result).toBeDefined();
-    });
-
-    it('should handle empty results gracefully', async () => {
-      // Arrange - mock empty result
-      const emptyScraper = new GoogleMapsScraper({ headless: true });
-
-      // Act & Assert - should return empty array, not throw
-      const result = await emptyScraper.searchBusinesses({ query: 'nonexistent business xyz123' });
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-      // May be empty or have results depending on mock
-    });
-  });
-
-  describe('AC1 - Businesses are visible in results', () => {
-    it('should return businesses with all required fields', async () => {
-      // Act
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-
-      if (result.length > 0) {
-        const business = result[0];
-        expect(business).toHaveProperty('name');
-        expect(business).toHaveProperty('category');
-        expect(business).toHaveProperty('rating');
-        expect(business).toHaveProperty('reviewCount');
-        expect(business).toHaveProperty('location');
-        expect(typeof business.name).toBe('string');
-        expect(typeof business.category).toBe('string');
-        expect(typeof business.rating).toBe('number');
-        expect(typeof business.reviewCount).toBe('number');
-      }
-    });
-
-    it('should deduplicate businesses by name', async () => {
-      // The scraper implementation deduplicates by name
-      // This test validates that behavior through the mock
-      const result = await scraper.searchBusinesses({ query: 'duplicate test' });
-
-      expect(result).toBeDefined();
-
-      if (result.length > 0) {
-        const names = result.map((b) => b.name);
-        const uniqueNames = new Set(names);
-        expect(names.length).toBe(uniqueNames.size);
-      }
-    });
-
-    it('should respect maxResults limit', async () => {
-      // Arrange
-      const limitedScraper = new GoogleMapsScraper({
-        headless: true,
-        maxResults: 3,
-      });
-
-      // Act
-      const result = await limitedScraper.searchBusinesses({ query: 'test' });
-
-      // Assert
-      expect(result.length).toBeLessThanOrEqual(3);
-
-      await limitedScraper.close();
-    });
-
-    it('should extract rating as a number between 0 and 5', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        expect(business.rating).toBeGreaterThanOrEqual(0);
-        expect(business.rating).toBeLessThanOrEqual(5);
-      }
-    });
-
-    it('should extract review count as a non-negative integer', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
-        expect(Number.isInteger(business.reviewCount)).toBe(true);
-      }
-    });
-  });
-
-  describe('AC1 - Scraper lifecycle', () => {
-    it('should initialize browser on first search', async () => {
-      const newScraper = new GoogleMapsScraper({ headless: true });
-
-      await newScraper.searchBusinesses({ query: 'test' });
-
-      // Should not throw
-      expect(true).toBe(true);
-
-      await newScraper.close();
-    });
-
-    it('should reuse browser instance for multiple searches', async () => {
-      // First search
-      const result1 = await scraper.searchBusinesses({ query: 'test1' });
-      expect(result1).toBeDefined();
-
-      // Second search should reuse browser
-      const result2 = await scraper.searchBusinesses({ query: 'test2' });
-      expect(result2).toBeDefined();
-    });
-
-    it('should handle browser close gracefully', async () => {
-      await scraper.close();
-
-      // Double close should not throw
-      await scraper.close();
-    });
-  });
-
-  // ============================================================================
-  // QA Integration Tests for AC4: Extract business metadata (category, rating, review count)
-  // ============================================================================
-
-  describe('AC4 - Extract business category', () => {
-    it('should extract category from business listing', async () => {
-      // Arrange - mock returns business with category
-      const searchParams: SearchParams = { query: 'restaurants' };
-
-      // Act
-      const result = await scraper.searchBusinesses(searchParams);
-
-      // Assert - category should be captured
-      expect(result).toBeDefined();
-      expect(result.length).toBeGreaterThan(0);
-
-      const business = result[0];
-      expect(business.category).toBeDefined();
-      expect(typeof business.category).toBe('string');
-      expect(business.category).not.toBe('');
-    });
-
-    it('should extract category with specific format from aria-label', async () => {
-      // The scraper extracts category from aria-label by splitting on comma
-      // Mock data includes "Test Category" which should be extracted
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        // Category should be a meaningful string, not just "Unknown" or "Business"
-        expect(business.category).not.toBe('Unknown');
-      }
-    });
-
-    it('should handle missing category gracefully', async () => {
-      // The scraper defaults to "Business" when category cannot be extracted
-      // This test validates the fallback behavior
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      expect(result).toBeDefined();
-
-      if (result.length > 0) {
-        const business = result[0];
-        // Category should always be present, even if default
-        expect(typeof business.category).toBe('string');
-        expect(business.category.length).toBeGreaterThan(0);
-      }
-    });
-  });
-
-  describe('AC4 - Extract business rating', () => {
-    it('should extract rating as a number between 1 and 5', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        expect(business.rating).toBeDefined();
-        expect(typeof business.rating).toBe('number');
-        expect(business.rating).toBeGreaterThanOrEqual(0);
-        expect(business.rating).toBeLessThanOrEqual(5);
-      }
-    });
-
-    it('should extract rating from star rating aria-label', async () => {
-      // The scraper parses rating from aria-label containing "star"
-      // Mock returns 4.5 stars
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        // Verify rating is a valid decimal number
-        expect(Number.isFinite(business.rating)).toBe(true);
-      }
-    });
-
-    it('should handle missing rating with default value of 0', async () => {
-      // When rating cannot be extracted, scraper defaults to 0
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      expect(result).toBeDefined();
-
-      if (result.length > 0) {
-        const business = result[0];
-        // Rating should be a valid number (0 if not found)
-        expect(typeof business.rating).toBe('number');
-        expect(business.rating).toBeGreaterThanOrEqual(0);
-      }
-    });
-  });
-
-  describe('AC4 - Extract review count', () => {
-    it('should extract review count as a non-negative integer', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        expect(business.reviewCount).toBeDefined();
-        expect(typeof business.reviewCount).toBe('number');
-        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
-        expect(Number.isInteger(business.reviewCount)).toBe(true);
-      }
-    });
-
-    it('should parse review count from text containing "review" or "reviews"', async () => {
-      // The scraper uses regex to extract numbers from review text
-      // Mock returns 100 reviews
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-        // Review count should be a valid integer
-        expect(Number.isInteger(business.reviewCount)).toBe(true);
-      }
-    });
-
-    it('should handle missing review count with default value of 0', async () => {
-      // When review count cannot be extracted, scraper defaults to 0
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      expect(result).toBeDefined();
-
-      if (result.length > 0) {
-        const business = result[0];
-        // Review count should be a valid non-negative integer
-        expect(typeof business.reviewCount).toBe('number');
-        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
-      }
-    });
-  });
-
-  describe('AC4 - Complete metadata extraction', () => {
-    it('should extract all required metadata fields in a single scrape', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      if (result.length > 0) {
-        const business = result[0];
-
-        // All metadata fields should be present
-        expect(business).toHaveProperty('category');
-        expect(business).toHaveProperty('rating');
-        expect(business).toHaveProperty('reviewCount');
-
-        // All should have correct types
-        expect(typeof business.category).toBe('string');
-        expect(typeof business.rating).toBe('number');
-        expect(typeof business.reviewCount).toBe('number');
-
-        // Category should be non-empty
-        expect(business.category.length).toBeGreaterThan(0);
-
-        // Rating should be in valid range
-        expect(business.rating).toBeGreaterThanOrEqual(0);
-        expect(business.rating).toBeLessThanOrEqual(5);
-
-        // Review count should be non-negative
-        expect(business.reviewCount).toBeGreaterThanOrEqual(0);
-      }
-    });
-
-    it('should extract metadata for multiple businesses consistently', async () => {
-      const result = await scraper.searchBusinesses({ query: 'test' });
-
-      // Verify all returned businesses have metadata
-      result.forEach((business, index) => {
-        expect(business.category).toBeDefined();
-        expect(typeof business.category).toBe('string');
-        expect(typeof business.rating).toBe('number');
-        expect(typeof business.reviewCount).toBe('number');
-      });
+  describe("getJobState", () => {
+    it("returns null when not actively scraping", () => {
+      const state = scraper.getJobState();
+      expect(state).toBeNull();
     });
   });
 });
