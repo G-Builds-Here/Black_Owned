@@ -63,7 +63,7 @@ impl QueryRoot {
                     name,
                     description: None,
                     category_id,
-                    owner_id: Uuid::new_v4(),
+                    owner_id: Uuid::nil(),
                     verified,
                     created_at,
                 };
@@ -125,7 +125,7 @@ impl QueryRoot {
             name,
             description: None,
             category_id,
-            owner_id: Uuid::new_v4(),
+            owner_id: Uuid::nil(),
             verified,
             created_at,
         };
@@ -216,7 +216,7 @@ impl QueryRoot {
                     name,
                     description: None,
                     category_id,
-                    owner_id: Uuid::new_v4(),
+                    owner_id: Uuid::nil(),
                     verified,
                     created_at,
                 })

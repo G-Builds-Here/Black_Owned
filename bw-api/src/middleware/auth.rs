@@ -5,6 +5,7 @@ use axum::{
     http::{Request, StatusCode, header},
     response::Response,
 };
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_layer::Layer;
 use tokio::sync::RwLock;
@@ -21,24 +22,16 @@ pub struct AuthConfig {
 }
 
 /// In-memory store for authenticated user sessions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
-    valid_tokens: Arc<RwLock<std::collections::HashMap<String, String>>>,
-}
-
-impl Clone for AuthStore {
-    fn clone(&self) -> Self {
-        Self {
-            valid_tokens: self.valid_tokens.clone(),
-        }
-    }
+    valid_tokens: RwLock<std::collections::HashMap<String, String>>,
 }
 
 impl AuthStore {
     fn new() -> Self {
         Self {
-            valid_tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            valid_tokens: RwLock::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -95,19 +88,21 @@ where
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        // Extract token before async block to avoid lifetime issues
-        let token: Option<String> = req
+        let auth_header = req
             .headers()
             .get(header::AUTHORIZATION)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|auth| auth.strip_prefix("Bearer "))
-            .map(|s| s.to_string());
+            .and_then(|h| h.to_str().ok());
 
         let mut inner = self.inner.clone();
-        let _store = self.store.clone();
+        let store = self.store.clone();
         let config = self.config.clone();
 
         Box::pin(async move {
+            // Extract token from Bearer header
+            let token = auth_header
+                .and_then(|auth| auth.strip_prefix("Bearer "))
+                .map(|s| s.to_string());
+
             if let Some(token_str) = &token {
                 // Verify JWT token
                 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
@@ -180,8 +175,8 @@ impl Default for AuthLayerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::response::Response;
-    use tower::Service;
+    use axum::{http::Method, response::Response};
+    use tower::{Service, ServiceExt};
 
     /// Simple test service that returns 200 OK
     #[derive(Clone)]
