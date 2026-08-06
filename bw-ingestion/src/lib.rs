@@ -1,5 +1,7 @@
 //! Data ingestion module for Black Owned platform.
 
+pub mod scraper_rate_limiter;
+
 pub mod chat_consumer;
 
 #[cfg(feature = "integration_test")]
@@ -86,6 +88,12 @@ impl BusinessIngestionHandler {
             owner_id: _owner_id,
             verified: false,
             created_at: chrono::Utc::now(),
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         })
     }
 
