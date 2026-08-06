@@ -217,9 +217,15 @@ export class GoogleMapsScraper {
           address: string;
           phone?: string;
           website?: string;
+<<<<<<< HEAD
           rating?: number;
           reviewCount?: number;
           category?: string;
+=======
+          category?: string;
+          rating?: number;
+          reviewCount?: number;
+>>>>>>> feature/LOC-0062-AC3
         }> = [];
 
         // Try multiple selector patterns for Google Maps' DOM structure
@@ -246,9 +252,12 @@ export class GoogleMapsScraper {
           const websiteEl = element.querySelector(
             'a[href*="http"], [class*="website"], [data-testid="place-website"]'
           );
+<<<<<<< HEAD
           const categoryEl = element.querySelector(
             '[class*="category"], [data-testid="place-category"], .section-result-category'
           );
+=======
+>>>>>>> feature/LOC-0062-AC3
 
           if (!nameEl) {
             continue;
@@ -267,7 +276,10 @@ export class GoogleMapsScraper {
           );
           const phone = phoneEl?.textContent?.trim() ?? undefined;
           const website = websiteEl?.getAttribute("href") ?? undefined;
+<<<<<<< HEAD
           const category = categoryEl?.textContent?.trim() ?? undefined;
+=======
+>>>>>>> feature/LOC-0062-AC3
 
           results.push({
             name,
@@ -276,7 +288,10 @@ export class GoogleMapsScraper {
             website,
             rating,
             reviewCount,
+<<<<<<< HEAD
             category,
+=======
+>>>>>>> feature/LOC-0062-AC3
           });
         }
 

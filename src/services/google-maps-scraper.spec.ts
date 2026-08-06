@@ -73,7 +73,10 @@ describe("GoogleMapsScraper", () => {
           source: "google-maps",
           rating: 4.5,
           reviewCount: 100,
+<<<<<<< HEAD
           category: "Restaurant",
+=======
+>>>>>>> feature/LOC-0062-AC3
         },
         {
           name: "Business 2",
@@ -81,7 +84,10 @@ describe("GoogleMapsScraper", () => {
           source: "google-maps",
           rating: 4.0,
           reviewCount: 50,
+<<<<<<< HEAD
           category: "Cafe",
+=======
+>>>>>>> feature/LOC-0062-AC3
         },
       ] as ScrapedBusiness[];
 
@@ -268,6 +274,7 @@ describe("GoogleMapsScraper", () => {
       expect(result.businesses[0].phone).toBe("555-1234");
       expect(result.businesses[0].website).toBe("https://test.com");
     });
+<<<<<<< HEAD
 
     it("extracts business category from Google Maps", async () => {
       const mockBusinesses: ScrapedBusiness[] = [
@@ -291,6 +298,8 @@ describe("GoogleMapsScraper", () => {
 
       expect(result.businesses[0].category).toBe("Italian Restaurant");
     });
+=======
+>>>>>>> feature/LOC-0062-AC3
   });
 
   describe("error handling", () => {

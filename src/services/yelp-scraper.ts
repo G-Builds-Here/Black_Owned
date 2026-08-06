@@ -241,6 +241,7 @@ export class YelpScraper {
         );
         const category = categoryEl?.textContent?.trim();
 
+<<<<<<< HEAD
         // Extract phone number - look for tel: links or phone patterns
         const phoneEl = element.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null;
         const phone = phoneEl?.href?.replace('tel:', '')?.trim() ||
@@ -249,12 +250,30 @@ export class YelpScraper {
         // Extract website - look for website icon or http links
         const websiteEl = element.querySelector('a[href*="yelp.com/biz"]') as HTMLAnchorElement | null;
         const website = websiteEl?.href?.trim();
+=======
+        // Extract phone number - look for phone icon or phone text
+        const phoneEl = element.querySelector(
+          '[class*="phone"], [aria-label*="phone"], [data-testid*="phone"]'
+        );
+        const phone = phoneEl?.textContent?.trim() || undefined;
+
+        // Extract website - look for website link or external link
+        const websiteEl = element.querySelector(
+          'a[href*="http"]:not([href*="yelp.com"]), [class*="website"], [aria-label*="website"]'
+        );
+        const website = websiteEl?.getAttribute("href") || undefined;
+>>>>>>> feature/LOC-0062-AC3
 
         results.push({
           name,
           address,
+<<<<<<< HEAD
           phone: phone || undefined,
           website: website || undefined,
+=======
+          phone,
+          website,
+>>>>>>> feature/LOC-0062-AC3
           category,
           rating,
           reviewCount,

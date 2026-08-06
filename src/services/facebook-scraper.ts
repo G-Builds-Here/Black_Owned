@@ -4,7 +4,11 @@
  * Scrapes Facebook for business page search results.
  */
 
+<<<<<<< HEAD
 import { Browser, Page, BrowserContext } from "playwright";
+=======
+import { Browser, Page } from "playwright";
+>>>>>>> feature/LOC-0062-AC3
 import {
   ScraperOptions,
   ScraperResult,
@@ -174,6 +178,21 @@ export class FacebookScraper {
         const linkEl = unit.querySelector('a[href*="/pages/"]');
         const categoryEl = unit.querySelector('div[role="img"] + div span');
 
+<<<<<<< HEAD
+=======
+        // Extract phone number - look for phone icon or phone text
+        const phoneEl = unit.querySelector(
+          '[aria-label*="phone"], [class*="phone"], [data-testid*="phone"]'
+        );
+        const phone = phoneEl?.textContent?.trim() || undefined;
+
+        // Extract website - look for website link or external link
+        const websiteEl = unit.querySelector(
+          'a[href*="http"]:not([href*="facebook.com"]), [class*="website"], [aria-label*="website"]'
+        );
+        const website = websiteEl?.getAttribute("href") || undefined;
+
+>>>>>>> feature/LOC-0062-AC3
         if (nameEl && linkEl) {
           const name = nameEl.textContent?.trim() || "";
           const href = linkEl.getAttribute("href") || "";
@@ -184,6 +203,11 @@ export class FacebookScraper {
             source: "facebook",
             sourceId,
             category: categoryEl?.textContent?.trim() || undefined,
+<<<<<<< HEAD
+=======
+            phone,
+            website,
+>>>>>>> feature/LOC-0062-AC3
           });
         }
       });

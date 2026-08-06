@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 ﻿/**
+=======
+/**
+>>>>>>> feature/LOC-0062-AC3
  * Google Maps Scraper Types
  *
  * Types for the Google Maps web scraper that extracts business data.
@@ -12,9 +16,15 @@ export interface ScrapedBusiness {
   address: string;
   phone?: string;
   website?: string;
+<<<<<<< HEAD
   rating?: number;
   reviewCount?: number;
   category?: string;
+=======
+  category?: string;
+  rating?: number;
+  reviewCount?: number;
+>>>>>>> feature/LOC-0062-AC3
   source: "google-maps";
   sourceId?: string;
 }
@@ -49,10 +59,13 @@ export interface ScraperOptions {
   maxPages?: number;
   delayBetweenPagesMs?: number;
   includeDuplicates?: boolean;
+<<<<<<< HEAD
   credentials?: {
     email: string;
     password: string;
   };
+=======
+>>>>>>> feature/LOC-0062-AC3
 }
 
 /**
@@ -67,6 +80,7 @@ export interface ScraperJobState {
   isComplete: boolean;
   error?: string;
 }
+<<<<<<< HEAD
 
 /**
  * Detailed place information from Google Maps
@@ -87,3 +101,5 @@ export interface PlaceDetails {
   source: "google-maps";
   scrapedAt: string;
 }
+=======
+>>>>>>> feature/LOC-0062-AC3
