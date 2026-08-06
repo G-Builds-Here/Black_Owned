@@ -275,7 +275,6 @@ describe("YelpScraper", () => {
       mockContext.close.mockResolvedValue(undefined);
       mockBrowser.close.mockResolvedValue(undefined);
 
-<<<<<<< HEAD
       // Initialize the scraper first
       await scraper.initialize();
 
@@ -283,8 +282,6 @@ describe("YelpScraper", () => {
       (scraper as unknown as { browser: Browser; context: BrowserContext }).browser = mockBrowser as unknown as Browser;
       (scraper as unknown as { context: BrowserContext }).context = mockContext as unknown as BrowserContext;
 
-=======
->>>>>>> 2911a3b (LOC-0064-AC1: Add QA tests for Yelp scraper pagination)
       await scraper.close();
 
       expect(mockContext.close).toHaveBeenCalled();
