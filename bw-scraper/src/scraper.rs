@@ -1,8 +1,11 @@
 //! Google Maps scraper implementation with pagination support
 
+use crate::robots::RobotsChecker;
 use crate::types::PlaceResult;
+use crate::user_agent_rotator::UserAgentRotator;
 use bw_types::{Business, BusinessBuilder};
 use chrono::Utc;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -13,6 +16,10 @@ pub struct GoogleMapsScraper {
     _base_url: String,
     /// Results per page
     page_size: usize,
+    /// Robots.txt checker for respecting crawl rules
+    robots_checker: RefCell<RobotsChecker>,
+    /// User-agent rotator for rotating browser user-agents
+    user_agent_rotator: RefCell<UserAgentRotator>,
 }
 
 impl GoogleMapsScraper {
@@ -21,6 +28,8 @@ impl GoogleMapsScraper {
         Self {
             _base_url: "https://www.google.com/maps".to_string(),
             page_size: 10, // Google Maps typically shows 10 results per page
+            robots_checker: RefCell::new(RobotsChecker::new("BlackOwnedBot")),
+            user_agent_rotator: RefCell::new(UserAgentRotator::new()),
         }
     }
 
@@ -28,6 +37,13 @@ impl GoogleMapsScraper {
     pub fn with_page_size(mut self, page_size: usize) -> Self {
         self.page_size = page_size;
         self
+    }
+
+    /// Get the next user-agent from the rotation pool
+    /// Ensures no single user-agent is used more than 5 times consecutively
+    pub fn get_user_agent(&self) -> String {
+        let mut rotator = self.user_agent_rotator.borrow_mut();
+        rotator.get_next_user_agent()
     }
 
     /// Scrape businesses with pagination support

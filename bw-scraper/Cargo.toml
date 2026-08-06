@@ -31,3 +31,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+# Random number generation for user-agent rotation
+fastrand = "2.0"
+
+# Health check dependencies
+anyhow = "1.0"
+redis = "0.24"
+clickhouse = "0.12"

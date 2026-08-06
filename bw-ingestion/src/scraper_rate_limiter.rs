@@ -239,4 +239,70 @@ mod tests {
             "Second request should wait for rate limit"
         );
     }
+
+    #[tokio::test]
+    async fn test_ac_minimum_delay_validation() {
+        // AC requirement: minimum 2-second delay between requests
+        // Test with default configuration (2000ms min delay)
+        let limiter = ScraperRateLimiter::new();
+
+        // First request - no delay expected
+        let start = Instant::now();
+        limiter.wait().await;
+        let first_elapsed = start.elapsed();
+        assert!(
+            first_elapsed < Duration::from_millis(10),
+            "First request should return immediately, got {:?}",
+            first_elapsed
+        );
+
+        // Second request should wait at least 2 seconds
+        let start = Instant::now();
+        limiter.wait().await;
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed >= Duration::from_millis(2000),
+            "AC requirement: minimum 2-second delay. Expected >= 2000ms, got {:?}",
+            elapsed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ac_random_jitter_validation() {
+        // AC requirement: random jitter to prevent pattern detection
+        // Run multiple iterations to verify jitter produces variable delays
+        let mut delays = Vec::new();
+
+        for _ in 0..5 {
+            let limiter = ScraperRateLimiter::with_config(100, 50);
+
+            // First request
+            limiter.wait().await;
+
+            // Second request - should be 100ms + 0-50ms jitter
+            let start = Instant::now();
+            limiter.wait().await;
+            delays.push(start.elapsed().as_millis());
+        }
+
+        // Verify all delays are at least the minimum (100ms)
+        for delay in &delays {
+            assert!(
+                *delay >= 100,
+                "Delay should be at least min_delay (100ms), got {}ms",
+                delay
+            );
+        }
+
+        // Verify jitter produces variation (not all delays are identical)
+        // Note: With 50ms jitter range, there's a small chance all 5 could be the same
+        // but it's extremely unlikely. This validates the jitter is working.
+        let all_same = delays.iter().all(|&d| d == delays[0]);
+        assert!(
+            !all_same,
+            "Jitter should produce variable delays. All delays were identical: {:?}",
+            delays
+        );
+    }
 }
