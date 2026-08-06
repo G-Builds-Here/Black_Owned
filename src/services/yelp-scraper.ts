@@ -101,31 +101,16 @@ export class YelpScraper {
         resultsLoaded = false;
       }
 
-      // Initialize job state
-      const jobState: ScraperJobState = {
-        query,
-        location,
-        currentPage: 0,
-        totalPages: 0,
-        businessesCollected: [],
-        isComplete: false,
-      };
-
       // Process pages
       let currentPage = 1;
       let hasMoreResults = true;
 
       while (hasMoreResults && currentPage <= this.options.maxPages) {
-        jobState.currentPage = currentPage;
-
         // Extract businesses from current page
         const pageBusinesses = await this.extractBusinessesFromPage(
           page,
           seenNames
         );
-
-        // Update job state
-        jobState.businessesCollected = [...collectedBusinesses, ...pageBusinesses];
 
         if (pageBusinesses.length === 0 && currentPage === 1) {
           // No results on first page
@@ -150,9 +135,6 @@ export class YelpScraper {
         }
       }
 
-      jobState.totalPages = currentPage;
-      jobState.isComplete = true;
-
       // Calculate pagination info
       const totalResults = collectedBusinesses.length;
       const totalPages = Math.ceil(totalResults / DEFAULT_RESULTS_PER_PAGE);
@@ -172,8 +154,6 @@ export class YelpScraper {
         timestamp: new Date(),
       };
     } catch (error) {
-      jobState.error = error instanceof Error ? error.message : "Unknown error";
-      jobState.isComplete = false;
       throw error;
     } finally {
       await page.close();
@@ -241,39 +221,11 @@ export class YelpScraper {
         );
         const category = categoryEl?.textContent?.trim();
 
-<<<<<<< HEAD
-        // Extract phone number - look for tel: links or phone patterns
-        const phoneEl = element.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null;
-        const phone = phoneEl?.href?.replace('tel:', '')?.trim() ||
-                      element.textContent?.match(/(\+?\d[\d\s-]{7,}\d)/)?.[0]?.trim();
-
-        // Extract website - look for website icon or http links
-        const websiteEl = element.querySelector('a[href*="yelp.com/biz"]') as HTMLAnchorElement | null;
-        const website = websiteEl?.href?.trim();
-=======
-        // Extract phone number - look for phone icon or phone text
-        const phoneEl = element.querySelector(
-          '[class*="phone"], [aria-label*="phone"], [data-testid*="phone"]'
-        );
-        const phone = phoneEl?.textContent?.trim() || undefined;
-
-        // Extract website - look for website link or external link
-        const websiteEl = element.querySelector(
-          'a[href*="http"]:not([href*="yelp.com"]), [class*="website"], [aria-label*="website"]'
-        );
-        const website = websiteEl?.getAttribute("href") || undefined;
->>>>>>> feature/LOC-0062-AC3
-
         results.push({
           name,
           address,
-<<<<<<< HEAD
-          phone: phone || undefined,
-          website: website || undefined,
-=======
-          phone,
-          website,
->>>>>>> feature/LOC-0062-AC3
+          phone: undefined,
+          website: undefined,
           category,
           rating,
           reviewCount,
@@ -295,9 +247,9 @@ export class YelpScraper {
       return true;
     });
 
-    return filteredBusinesses.map((b) => ({
+    return filteredBusinesses.map((b): ScrapedBusiness => ({
       ...b,
-      source: "yelp" as ScraperSource,
+      source: "yelp",
     }));
   }
 

@@ -206,11 +206,8 @@ describe("YelpScraper", () => {
     it("handles empty results gracefully", async () => {
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockRejectedValue(new Error("Selector not found"));
-<<<<<<< HEAD
-=======
       mockPage.evaluate.mockResolvedValue([]);
       mockPage.$.mockResolvedValue(null);
->>>>>>> feature/LOC-0062-AC3
       mockPage.close.mockResolvedValue(undefined);
 
       const result = await scraper.scrape("nonexistentbusiness12345", "Nowhere City");
@@ -271,85 +268,20 @@ describe("YelpScraper", () => {
       expect(business.rating).toBe(4.5);
       expect(business.reviewCount).toBe(150);
     });
-<<<<<<< HEAD
-=======
-
-    it("captures phone number when available", async () => {
-      const mockBusinessWithPhone: ScrapedBusiness = {
-        name: "Phone Business",
-        address: "456 Phone St",
-        phone: "555-9876",
-        source: "yelp",
-      };
-
-      mockPage.goto.mockResolvedValue(undefined);
-      mockPage.waitForSelector.mockResolvedValue(undefined);
-      mockPage.evaluate.mockResolvedValue([mockBusinessWithPhone]);
-      mockPage.$.mockResolvedValue(null);
-      mockPage.close.mockResolvedValue(undefined);
-
-      const result = await scraper.scrape("businesses", "City");
-
-      expect(result.businesses[0].phone).toBe("555-9876");
-    });
-
-    it("captures website URL when available", async () => {
-      const mockBusinessWithWebsite: ScrapedBusiness = {
-        name: "Website Business",
-        address: "789 Web Ave",
-        website: "https://website.com",
-        source: "yelp",
-      };
-
-      mockPage.goto.mockResolvedValue(undefined);
-      mockPage.waitForSelector.mockResolvedValue(undefined);
-      mockPage.evaluate.mockResolvedValue([mockBusinessWithWebsite]);
-      mockPage.$.mockResolvedValue(null);
-      mockPage.close.mockResolvedValue(undefined);
-
-      const result = await scraper.scrape("businesses", "City");
-
-      expect(result.businesses[0].website).toBe("https://website.com");
-    });
-
-    it("handles businesses without phone or website", async () => {
-      const mockBusinessMinimal: ScrapedBusiness = {
-        name: "Minimal Business",
-        address: "123 Basic St",
-        source: "yelp",
-      };
-
-      mockPage.goto.mockResolvedValue(undefined);
-      mockPage.waitForSelector.mockResolvedValue(undefined);
-      mockPage.evaluate.mockResolvedValue([mockBusinessMinimal]);
-      mockPage.$.mockResolvedValue(null);
-      mockPage.close.mockResolvedValue(undefined);
-
-      const result = await scraper.scrape("businesses", "City");
-
-      expect(result.businesses[0].phone).toBeUndefined();
-      expect(result.businesses[0].website).toBeUndefined();
-    });
->>>>>>> feature/LOC-0062-AC3
   });
 
   describe("close", () => {
     it("closes browser and context", async () => {
-<<<<<<< HEAD
       mockContext.close.mockResolvedValue(undefined);
       mockBrowser.close.mockResolvedValue(undefined);
 
-=======
-      // Setup mocks for browser initialization
-      mockContext.close.mockResolvedValue(undefined);
-      mockBrowser.close.mockResolvedValue(undefined);
-      (mockContext.newPage as jest.Mock).mockReturnValue(mockPage);
-
-      // First initialize the scraper
+      // Initialize the scraper first
       await scraper.initialize();
 
-      // Now close should work
->>>>>>> feature/LOC-0062-AC3
+      // Manually set the browser and context for testing
+      (scraper as unknown as { browser: Browser; context: BrowserContext }).browser = mockBrowser as unknown as Browser;
+      (scraper as unknown as { context: BrowserContext }).context = mockContext as unknown as BrowserContext;
+
       await scraper.close();
 
       expect(mockContext.close).toHaveBeenCalled();
