@@ -5,9 +5,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-# Workspace dependencies
-bw-types = { workspace = true }
-
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
 
@@ -18,7 +15,7 @@ sqlx = { version = "0.7", features = ["runtime-tokio", "postgres"] }
 async-nats = "0.33"
 
 # HTTP API server
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros"], optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -32,10 +29,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-# Random number generation for user-agent rotation
-fastrand = "2.0"
-
-# Health check dependencies
-anyhow = "1.0"
-redis = "0.24"
-clickhouse = "0.12"
+[features]
+default = ["scraper", "api"]
+scraper = []
+api = ["axum"]
