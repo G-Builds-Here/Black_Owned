@@ -45,6 +45,7 @@ export async function initializeScrapeJobSchema(): Promise<void> {
   } finally {
     client.release();
   }
+
 }
 
 /**
@@ -133,6 +134,7 @@ export async function findAllScrapeJobs(
   } finally {
     client.release();
   }
+
 }
 
 /**
@@ -177,4 +179,70 @@ export async function updateScrapeJobBusinessCount(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Scrape job summary statistics for the analytics page
+ */
+export interface ScrapeJobSummary {
+  total_jobs: number;
+  successful_jobs: number;
+  failed_jobs: number;
+  pending_jobs: number;
+  running_jobs: number;
+  last_30_days: {
+    total_jobs: number;
+    successful_jobs: number;
+    failed_jobs: number;
+  };
+}
+
+/**
+ * Get scrape job summary statistics
+ * @param days - Number of days to look back (default: 30)
+ */
+export async function getScrapeJobSummary(days: number = 30): Promise<ScrapeJobSummary> {
+  const client = await getPool().connect();
+  try {
+    // Get overall summary
+    const overallQuery = `
+      SELECT
+        COUNT(*) as total_jobs,
+        COUNT(*) FILTER (WHERE status = 'completed') as successful_jobs,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed_jobs,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_jobs,
+        COUNT(*) FILTER (WHERE status = 'running') as running_jobs
+      FROM scrape_jobs
+    `;
+    const overallResult = await client.query<ScrapeJobSummary>(overallQuery);
+    const overall = overallResult.rows[0];
+
+    // Get last N days summary
+    const lastDaysQuery = `
+      SELECT
+        COUNT(*) as total_jobs,
+        COUNT(*) FILTER (WHERE status = 'completed') as successful_jobs,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed_jobs
+      FROM scrape_jobs
+      WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${days} days'
+    `;
+    const lastDaysResult = await client.query<ScrapeJobSummary>(lastDaysQuery);
+    const lastDays = lastDaysResult.rows[0];
+
+    return {
+      total_jobs: overall.total_jobs || 0,
+      successful_jobs: overall.successful_jobs || 0,
+      failed_jobs: overall.failed_jobs || 0,
+      pending_jobs: overall.pending_jobs || 0,
+      running_jobs: overall.running_jobs || 0,
+      last_30_days: {
+        total_jobs: lastDays.total_jobs || 0,
+        successful_jobs: lastDays.successful_jobs || 0,
+        failed_jobs: lastDays.failed_jobs || 0,
+      },
+    };
+  } finally {
+    client.release();
+  }
+
 }
