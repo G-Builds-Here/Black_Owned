@@ -64,21 +64,22 @@ describe("YelpScraper", () => {
   describe("scrape with pagination", () => {
     it("handles single page of results (less than 10)", async () => {
       const mockBusinesses: ScrapedBusiness[] = [
-        {
-          name: "Business 1",
-          address: "123 Main St",
-          source: "yelp",
-          rating: 4.5,
-          reviewCount: 100,
-        },
-        {
-          name: "Business 2",
-          address: "456 Oak Ave",
-          source: "yelp",
-          rating: 4.0,
-          reviewCount: 50,
-        },
-      ];
+        [
+          {
+            name: "Business 1",
+            address: "123 Main St",
+            source: "yelp",
+            rating: 4.5,
+            reviewCount: 100,
+          },
+          {
+            name: "Business 2",
+            address: "456 Oak Ave",
+            source: "yelp",
+            rating: 4.0,
+            reviewCount: 50,
+          },
+        ] as ScrapedBusiness[];
 
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockResolvedValue(undefined);
@@ -206,8 +207,6 @@ describe("YelpScraper", () => {
     it("handles empty results gracefully", async () => {
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockRejectedValue(new Error("Selector not found"));
-      mockPage.evaluate.mockResolvedValue([]);
-      mockPage.$.mockResolvedValue(null);
       mockPage.close.mockResolvedValue(undefined);
 
       const result = await scraper.scrape("nonexistentbusiness12345", "Nowhere City");
@@ -274,13 +273,6 @@ describe("YelpScraper", () => {
     it("closes browser and context", async () => {
       mockContext.close.mockResolvedValue(undefined);
       mockBrowser.close.mockResolvedValue(undefined);
-
-      // Initialize the scraper first
-      await scraper.initialize();
-
-      // Manually set the browser and context for testing
-      (scraper as unknown as { browser: Browser; context: BrowserContext }).browser = mockBrowser as unknown as Browser;
-      (scraper as unknown as { context: BrowserContext }).context = mockContext as unknown as BrowserContext;
 
       await scraper.close();
 
