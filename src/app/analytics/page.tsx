@@ -218,6 +218,33 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
+            {/* Duration Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card variant="elevated" padding="lg">
+                <div className="text-center">
+                  <p className="text-sm text-neutral-600 mb-2">Avg Duration</p>
+                  <p className="text-4xl font-bold text-blue-600">{formatDuration(stats.avgDurationSeconds)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Completed jobs only</p>
+                </div>
+              </Card>
+
+              <Card variant="elevated" padding="lg">
+                <div className="text-center">
+                  <p className="text-sm text-neutral-600 mb-2">Min Duration</p>
+                  <p className="text-4xl font-bold text-purple-600">{formatDuration(stats.minDurationSeconds)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Fastest job</p>
+                </div>
+              </Card>
+
+              <Card variant="elevated" padding="lg">
+                <div className="text-center">
+                  <p className="text-sm text-neutral-600 mb-2">Max Duration</p>
+                  <p className="text-4xl font-bold text-orange-600">{formatDuration(stats.maxDurationSeconds)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Longest job</p>
+                </div>
+              </Card>
+            </div>
+
             {/* Recent Jobs Table */}
             <Card variant="elevated" padding="lg" className="mb-8">
               <h2 className="text-xl font-semibold mb-4">Recent Jobs</h2>

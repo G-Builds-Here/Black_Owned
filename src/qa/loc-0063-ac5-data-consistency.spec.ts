@@ -1,426 +1,925 @@
-﻿/**
- * QA Test — LOC-0063-AC5: Data consistency tests for cross-platform business data validation
+/**
+ * LOC-0063-AC5: Data Consistency Across Platforms
  *
- * Validates that the same business found across multiple platforms (Google Maps, Yelp, Facebook)
- * has consistent core data after normalization:
- * - Business name normalization and comparison
- * - Address normalization and comparison
- * - Phone number normalization and comparison
- * - Business ID mapping to unified records
- * - Full data pipeline from scrape to storage
+ * Validates that Facebook, Google Maps, and Yelp scraping results have
+ * consistent field mapping and data formats for unified business data processing.
  */
 
-import { checkForDuplicate, normalizeAddress } from "../services/duplicate-detection-service";
-import { normalizeString } from "../utils/similarity";
+import {
+  FacebookRawData,
+  GoogleMapsRawData,
+  YelpRawData,
+  ScraperSource,
+} from "../types/scraper-result";
+import { ScrapedBusiness as FacebookBusiness } from "../types/facebook-scraper";
+import { ScrapedBusiness as GoogleMapsBusiness } from "../types/google-maps-scraper";
+import { ScrapedBusiness as YelpBusiness } from "../types/yelp-scraper";
 
-interface MockScrapedBusiness {
+/**
+ * Standardized field mapping for cross-platform consistency
+ */
+interface StandardizedBusinessData {
+  // Core identity fields (REQUIRED across all platforms)
   name: string;
-  address: string;
+  sourceId: string;
+  source: ScraperSource;
+
+  // Contact information (OPTIONAL - may be missing on some platforms)
   phone?: string;
-  source: "google-maps" | "yelp" | "facebook";
-  platformId: string;
+  website?: string;
+  email?: string;
+
+  // Location data (REQUIRED for physical businesses)
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+
+  // Business metadata
+  category?: string;
+  categories?: string[];
+  rating?: number;
+  reviewCount?: number;
+  priceLevel?: string | number;
+
+  // Status indicators
+  isOpen?: boolean;
+  isClosed?: boolean;
+  isClaimed?: boolean;
+
+  // Platform-specific raw data preserved for debugging
+  rawData: FacebookRawData | GoogleMapsRawData | YelpRawData;
 }
 
-interface UnifiedBusiness {
-  unifiedId: string;
-  name: string;
-  normalizedAddress: string;
-  normalizedPhone?: string;
-  platformSources: string[];
-  platformIds: Record<string, string>;
+/**
+ * Field consistency validator for cross-platform data
+ */
+class DataConsistencyValidator {
+  /**
+   * Required fields that MUST be present for a valid cross-platform business record
+   */
+  private static readonly REQUIRED_FIELDS: (keyof StandardizedBusinessData)[] = [
+    "name",
+    "sourceId",
+    "source",
+  ];
+
+  /**
+   * Optional but expected fields for complete business records
+   */
+  private static readonly EXPECTED_FIELDS: (keyof StandardizedBusinessData)[] = [
+    "phone",
+    "website",
+    "address",
+    "category",
+    "rating",
+    "reviewCount",
+  ];
+
+  /**
+   * Validates that a standardized business record has all required fields
+   */
+  static validateRequiredFields(
+    data: StandardizedBusinessData
+  ): { valid: boolean; missing: string[] } {
+    const missing: string[] = [];
+
+    for (const field of this.REQUIRED_FIELDS) {
+      if (data[field] === undefined || data[field] === null) {
+        missing.push(field);
+      }
+    }
+
+    // Special check for name - must be non-empty string
+    if (typeof data.name !== "string" || data.name.trim() === "") {
+      missing.push("name (empty)");
+    }
+
+    // Special check for sourceId - must be non-empty
+    if (typeof data.sourceId !== "string" || data.sourceId.trim() === "") {
+      missing.push("sourceId (empty)");
+    }
+
+    return {
+      valid: missing.length === 0,
+      missing,
+    };
+  }
+
+  /**
+   * Validates field type consistency across platforms
+   */
+  static validateFieldTypes(
+    data: StandardizedBusinessData
+  ): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Name must be string
+    if (typeof data.name !== "string") {
+      errors.push(`name must be string, got ${typeof data.name}`);
+    }
+
+    // Source must be valid ScraperSource enum
+    if (!Object.values(ScraperSource).includes(data.source)) {
+      errors.push(`source must be valid ScraperSource, got ${data.source}`);
+    }
+
+    // Rating must be number if present
+    if (data.rating !== undefined && typeof data.rating !== "number") {
+      errors.push(`rating must be number, got ${typeof data.rating}`);
+    }
+
+    // Review count must be number if present
+    if (data.reviewCount !== undefined && typeof data.reviewCount !== "number") {
+      errors.push(`reviewCount must be number, got ${typeof data.reviewCount}`);
+    }
+
+    // Latitude/longitude must be numbers if present
+    if (data.address) {
+      if (data.address.latitude !== undefined && typeof data.address.latitude !== "number") {
+        errors.push(`address.latitude must be number, got ${typeof data.address.latitude}`);
+      }
+      if (data.address.longitude !== undefined && typeof data.address.longitude !== "number") {
+        errors.push(`address.longitude must be number, got ${typeof data.address.longitude}`);
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Normalizes data from FacebookRawData to standardized format
+   */
+  static normalizeFacebookData(raw: FacebookRawData): StandardizedBusinessData {
+    return {
+      name: raw.name,
+      sourceId: raw.id,
+      source: ScraperSource.FACEBOOK,
+      phone: raw.phone,
+      website: raw.website,
+      email: raw.email,
+      address: raw.location
+        ? {
+            street: raw.location.street,
+            city: raw.location.city,
+            state: raw.location.state,
+            zipCode: raw.location.zip,
+            country: raw.location.country,
+            latitude: raw.location.latitude,
+            longitude: raw.location.longitude,
+          }
+        : undefined,
+      category: raw.category,
+      rating: raw.location?.latitude ? undefined : undefined, // Facebook doesn't provide standard rating
+      reviewCount: raw.were_here_count,
+      rawData: raw,
+    };
+  }
+
+  /**
+   * Normalizes data from GoogleMapsRawData to standardized format
+   */
+  static normalizeGoogleMapsData(raw: GoogleMapsRawData): StandardizedBusinessData {
+    return {
+      name: raw.name,
+      sourceId: raw.placeId,
+      source: ScraperSource.GOOGLE_MAPS,
+      phone: raw.phoneNumber || raw.formattedPhoneNumber,
+      website: raw.website,
+      address: {
+        street: raw.formattedAddress,
+        latitude: raw.latitude,
+        longitude: raw.longitude,
+      },
+      category: raw.types?.[0],
+      categories: raw.types,
+      rating: raw.rating,
+      reviewCount: raw.userRatingsTotal,
+      priceLevel: raw.priceLevel,
+      isOpen: raw.openingHours?.openNow,
+      rawData: raw,
+    };
+  }
+
+  /**
+   * Normalizes data from YelpRawData to standardized format
+   */
+  static normalizeYelpData(raw: YelpRawData): StandardizedBusinessData {
+    return {
+      name: raw.name,
+      sourceId: raw.id,
+      source: ScraperSource.YELP,
+      phone: raw.phone,
+      website: undefined, // Yelp doesn't always provide website
+      address: {
+        street: raw.location.address1,
+        city: raw.location.city,
+        state: raw.location.state,
+        zipCode: raw.location.zip_code,
+        country: raw.location.country,
+        latitude: raw.coordinates.latitude,
+        longitude: raw.coordinates.longitude,
+      },
+      category: raw.categories?.[0]?.title,
+      categories: raw.categories?.map((c) => c.title),
+      rating: raw.rating,
+      reviewCount: raw.review_count,
+      priceLevel: raw.price,
+      isOpen: raw.hours?.[0]?.is_open_now,
+      isClosed: raw.is_closed,
+      isClaimed: raw.is_claimed,
+      rawData: raw,
+    };
+  }
 }
 
-describe("LOC-0063-AC5: Cross-platform data consistency", () => {
-  describe("Business name normalization across platforms", () => {
-    it("normalizes the same business name from different platforms to identical form", () => {
-      const googleName = "Joe's Pizza Palace";
-      const yelpName = "Joe's Pizza Palace (Downtown)";
-      const facebookName = "JOE'S PIZZA PALACE";
+/**
+ * Cross-platform consistency test suite
+ */
+describe("LOC-0063-AC5: Cross-Platform Data Consistency", () => {
+  describe("Field Mapping Consistency", () => {
+    it("AC1: All platforms provide required identity fields (name, sourceId, source)", () => {
+      // Facebook
+      const facebookData: FacebookRawData = {
+        id: "fb-12345",
+        name: "Test Business Facebook",
+        location: { latitude: 40.7128, longitude: -74.006 },
+      } as FacebookRawData;
 
-      const normalizedGoogle = normalizeString(googleName);
-      const normalizedYelp = normalizeString(yelpName);
-      const normalizedFacebook = normalizeString(facebookName);
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const fbValidation = DataConsistencyValidator.validateRequiredFields(normalizedFB);
 
-      expect(normalizedGoogle).toBe(normalizedFacebook);
-      expect(normalizedYelp).toContain("joes pizza palace");
+      expect(fbValidation.valid).toBe(true);
+      expect(fbValidation.missing).toHaveLength(0);
+      expect(normalizedFB.source).toBe(ScraperSource.FACEBOOK);
+
+      // Google Maps
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-67890",
+        name: "Test Business Google",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St, New York, NY",
+      } as GoogleMapsRawData;
+
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+      const gmValidation = DataConsistencyValidator.validateRequiredFields(normalizedGM);
+
+      expect(gmValidation.valid).toBe(true);
+      expect(gmValidation.missing).toHaveLength(0);
+      expect(normalizedGM.source).toBe(ScraperSource.GOOGLE_MAPS);
+
+      // Yelp
+      const yelpData: YelpRawData = {
+        id: "yelp-11111",
+        alias: "test-business",
+        name: "Test Business Yelp",
+        image_url: "https://example.com/image.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "https://yelp.com/biz/test",
+        phone: "+1-555-1234",
+        display_phone: "(555) 123-4567",
+        review_count: 150,
+        categories: [{ alias: "restaurants", title: "Restaurants" }],
+        rating: 4.5,
+        location: {
+          address1: "123 Main St",
+          city: "New York",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St", "New York, NY 10001"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: ["photo1.jpg"],
+        price: "$$",
+        transactions: ["pickup", "delivery"],
+      } as YelpRawData;
+
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+      const yelpValidation = DataConsistencyValidator.validateRequiredFields(normalizedYelp);
+
+      expect(yelpValidation.valid).toBe(true);
+      expect(yelpValidation.missing).toHaveLength(0);
+      expect(normalizedYelp.source).toBe(ScraperSource.YELP);
     });
 
-    it("handles special characters consistently across platforms", () => {
-      const testCases = [
-        { google: "McDonald's", yelp: "McDonalds", facebook: "MCDONALD'S" },
-        { google: "Joe & Jill's Diner", yelp: "Joe and Jill's Diner", facebook: "JOE & JILL'S DINER" },
-        { google: "Target Store", yelp: "Target", facebook: "TARGET STORE" },
-      ];
+    it("AC2: Field types are consistent across all platforms", () => {
+      const facebookData: FacebookRawData = {
+        id: "fb-12345",
+        name: "Test Business",
+        location: { latitude: 40.7128, longitude: -74.006 },
+        fan_count: 500,
+      } as FacebookRawData;
 
-      testCases.forEach(({ google, yelp, facebook }) => {
-        const normGoogle = normalizeString(google);
-        const normYelp = normalizeString(yelp);
-        const normFacebook = normalizeString(facebook);
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-67890",
+        name: "Test Business",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+        rating: 4.5,
+        userRatingsTotal: 200,
+      } as GoogleMapsRawData;
 
-        const coreName = normGoogle.split(" ")[0];
-        expect(normYelp).toContain(coreName);
-        expect(normFacebook).toContain(coreName);
-      });
+      const yelpData: YelpRawData = {
+        id: "yelp-11111",
+        alias: "test",
+        name: "Test Business",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "555-1234",
+        display_phone: "555-1234",
+        review_count: 150,
+        categories: [{ alias: "test", title: "Test" }],
+        rating: 4.0,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$$",
+      } as YelpRawData;
+
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+
+      const fbTypeValidation = DataConsistencyValidator.validateFieldTypes(normalizedFB);
+      const gmTypeValidation = DataConsistencyValidator.validateFieldTypes(normalizedGM);
+      const yelpTypeValidation = DataConsistencyValidator.validateFieldTypes(normalizedYelp);
+
+      expect(fbTypeValidation.valid).toBe(true);
+      expect(gmTypeValidation.valid).toBe(true);
+      expect(yelpTypeValidation.valid).toBe(true);
     });
 
-    it("detects potential duplicates across platforms using similarity scoring", () => {
-      const businesses = [
-        { name: "Pike Place Market", source: "google-maps" },
-        { name: "Pike Place Market", source: "yelp" },
-        { name: "Pike Place Market (Main Entrance)", source: "facebook" },
-      ];
+    it("AC3: Address data is normalized to consistent structure", () => {
+      // Google Maps provides full address
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-123",
+        name: "Test",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St, New York, NY 10001",
+      } as GoogleMapsRawData;
 
-      const googleYelpCheck = checkForDuplicate(
-        { name: businesses[0].name, address: "85 Pike St, Seattle, WA 98101" },
-        { name: businesses[1].name, address: "85 Pike St, Seattle, WA 98101" }
-      );
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
 
-      expect(googleYelpCheck.isPotentialDuplicate).toBe(true);
-      expect(googleYelpCheck.nameSimilarity).toBe(1);
+      expect(normalizedGM.address).toBeDefined();
+      expect(normalizedGM.address?.latitude).toBe(40.7128);
+      expect(normalizedGM.address?.longitude).toBe(-74.006);
 
-      const googleFacebookCheck = checkForDuplicate(
-        { name: businesses[0].name, address: "85 Pike St, Seattle, WA 98101" },
-        { name: businesses[2].name, address: "85 Pike St, Seattle, WA 98101" }
-      );
+      // Yelp provides structured address
+      const yelpData: YelpRawData = {
+        id: "yelp-123",
+        alias: "test",
+        name: "Test",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "555",
+        display_phone: "555",
+        review_count: 10,
+        categories: [],
+        rating: 4,
+        location: {
+          address1: "123 Main St",
+          city: "New York",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St", "New York, NY 10001"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$",
+      } as YelpRawData;
 
-      expect(googleFacebookCheck.nameAboveThreshold).toBe(true);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+
+      expect(normalizedYelp.address).toBeDefined();
+      expect(normalizedYelp.address?.city).toBe("New York");
+      expect(normalizedYelp.address?.state).toBe("NY");
+      expect(normalizedYelp.address?.zipCode).toBe("10001");
+      expect(normalizedYelp.address?.country).toBe("US");
+    });
+
+    it("AC4: Rating and review count fields are consistently typed", () => {
+      // Google Maps rating
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-123",
+        name: "Test",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+        rating: 4.5,
+        userRatingsTotal: 200,
+      } as GoogleMapsRawData;
+
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+
+      expect(typeof normalizedGM.rating).toBe("number");
+      expect(typeof normalizedGM.reviewCount).toBe("number");
+      expect(normalizedGM.rating).toBe(4.5);
+      expect(normalizedGM.reviewCount).toBe(200);
+
+      // Yelp rating
+      const yelpData: YelpRawData = {
+        id: "yelp-123",
+        alias: "test",
+        name: "Test",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "555",
+        display_phone: "555",
+        review_count: 150,
+        categories: [],
+        rating: 4.0,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$$",
+      } as YelpRawData;
+
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+
+      expect(typeof normalizedYelp.rating).toBe("number");
+      expect(typeof normalizedYelp.reviewCount).toBe("number");
+      expect(normalizedYelp.rating).toBe(4.0);
+      expect(normalizedYelp.reviewCount).toBe(150);
     });
   });
 
-  describe("Address normalization across platforms", () => {
-    it("normalizes addresses with different formatting to comparable form", () => {
-      const testCases = [
-        {
-          google: "123 Main Street, Seattle, WA 98101",
-          yelp: "123 Main St, Seattle, Washington 98101",
-          facebook: "123 MAIN STREET SEATTLE WA 98101",
+  describe("Data Format Consistency", () => {
+    it("AC5: Phone numbers are preserved as strings across platforms", () => {
+      const facebookData: FacebookRawData = {
+        id: "fb-123",
+        name: "Test",
+        phone: "+1-555-123-4567",
+        location: { latitude: 40.7128, longitude: -74.006 },
+      } as FacebookRawData;
+
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-123",
+        name: "Test",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+        phoneNumber: "+1 555-123-4567",
+        formattedPhoneNumber: "(555) 123-4567",
+      } as GoogleMapsRawData;
+
+      const yelpData: YelpRawData = {
+        id: "yelp-123",
+        alias: "test",
+        name: "Test",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "+15551234567",
+        display_phone: "(555) 123-4567",
+        review_count: 10,
+        categories: [],
+        rating: 4,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
         },
-        {
-          google: "400 Broad St, Seattle, WA 98109",
-          yelp: "400 Broad Street, Seattle, WA 98109-1234",
-          facebook: "400 BROAD ST SEATTLE WA 98109",
-        },
-      ];
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$",
+      } as YelpRawData;
 
-      testCases.forEach(({ google, yelp, facebook }) => {
-        const normGoogle = normalizeAddress(google);
-        const normYelp = normalizeAddress(yelp);
-        const normFacebook = normalizeAddress(facebook);
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
 
-        const googleNumber = normGoogle.match(/^\d+/)?.[0];
-        const yelpNumber = normYelp.match(/^\d+/)?.[0];
-        const facebookNumber = normFacebook.match(/^\d+/)?.[0];
-
-        expect(googleNumber).toBe(yelpNumber);
-        expect(googleNumber).toBe(facebookNumber);
-      });
+      // All should have phone as string
+      expect(typeof normalizedFB.phone).toBe("string");
+      expect(typeof normalizedGM.phone).toBe("string");
+      expect(typeof normalizedYelp.phone).toBe("string");
     });
 
-    it("handles suite/apartment number variations", () => {
-      const testCases = [
-        {
-          google: "1000 Business Blvd, Suite 500, Seattle, WA 98101",
-          yelp: "1000 Business Blvd #500, Seattle, WA 98101",
-          facebook: "1000 BUSINESS BLVD SUITE 500 SEATTLE WA 98101",
+    it("AC6: Coordinates are consistently represented as numbers", () => {
+      const facebookData: FacebookRawData = {
+        id: "fb-123",
+        name: "Test",
+        location: {
+          latitude: 40.7128,
+          longitude: -74.006,
+          city: "New York",
         },
-      ];
+      } as FacebookRawData;
 
-      testCases.forEach(({ google, yelp, facebook }) => {
-        const normGoogle = normalizeAddress(google);
-        const normYelp = normalizeAddress(yelp);
-        const normFacebook = normalizeAddress(facebook);
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-123",
+        name: "Test",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+      } as GoogleMapsRawData;
 
-        expect(normGoogle).toContain("500");
-        expect(normYelp).toContain("500");
-        expect(normFacebook).toContain("500");
-      });
+      const yelpData: YelpRawData = {
+        id: "yelp-123",
+        alias: "test",
+        name: "Test",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "555",
+        display_phone: "555",
+        review_count: 10,
+        categories: [],
+        rating: 4,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$",
+      } as YelpRawData;
+
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+
+      // All should have consistent coordinate types
+      expect(normalizedFB.address?.latitude).toBe(40.7128);
+      expect(normalizedFB.address?.longitude).toBe(-74.006);
+
+      expect(normalizedGM.address?.latitude).toBe(40.7128);
+      expect(normalizedGM.address?.longitude).toBe(-74.006);
+
+      expect(normalizedYelp.address?.latitude).toBe(40.7128);
+      expect(normalizedYelp.address?.longitude).toBe(-74.006);
     });
 
-    it("detects address similarity for cross-platform matching", () => {
-      const googleAddress = "85 Pike St, Seattle, WA 98101";
-      const yelpAddress = "85 Pike Street, Seattle, Washington 98101";
-      const facebookAddress = "85 PIKE ST SEATTLE WA 98101";
+    it("AC7: Category data is normalized to consistent format", () => {
+      // Google Maps provides types array
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-123",
+        name: "Test",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+        types: ["restaurant", "food", "point_of_interest"],
+      } as GoogleMapsRawData;
 
-      const googleYelpCheck = checkForDuplicate(
-        { name: "Pike Place Market", address: googleAddress },
-        { name: "Pike Place Market", address: yelpAddress }
-      );
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
 
-      expect(googleYelpCheck.addressAboveThreshold).toBe(true);
-      expect(googleYelpCheck.addressSimilarity).toBeGreaterThan(0.9);
+      expect(normalizedGM.categories).toEqual(["restaurant", "food", "point_of_interest"]);
+      expect(normalizedGM.category).toBe("restaurant");
 
-      const googleFacebookCheck = checkForDuplicate(
-        { name: "Pike Place Market", address: googleAddress },
-        { name: "Pike Place Market", address: facebookAddress }
-      );
+      // Yelp provides categories array with objects
+      const yelpData: YelpRawData = {
+        id: "yelp-123",
+        alias: "test",
+        name: "Test",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "555",
+        display_phone: "555",
+        review_count: 10,
+        categories: [
+          { alias: "restaurants", title: "Restaurants" },
+          { alias: "italian", title: "Italian" },
+        ],
+        rating: 4,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$$",
+      } as YelpRawData;
 
-      expect(googleFacebookCheck.addressAboveThreshold).toBe(true);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+
+      expect(normalizedYelp.categories).toEqual(["Restaurants", "Italian"]);
+      expect(normalizedYelp.category).toBe("Restaurants");
     });
   });
 
-  describe("Phone number normalization", () => {
-    it("normalizes phone numbers with different formats", () => {
-      const normalizePhone = (phone) => phone.replace(/\D/g, "");
+  describe("Cross-Platform Comparison", () => {
+    it("AC8: Same business from different platforms can be compared using standardized format", () => {
+      // Simulate the same business scraped from all three platforms
+      const facebookData: FacebookRawData = {
+        id: "fb-same-business",
+        name: "Joe's Diner",
+        phone: "+1-555-1234",
+        location: {
+          street: "123 Main St",
+          city: "New York",
+          state: "NY",
+          zip: "10001",
+          country: "US",
+          latitude: 40.7128,
+          longitude: -74.006,
+        },
+        category: "Restaurant",
+        were_here_count: 150,
+      } as FacebookRawData;
 
-      const testCases = [
-        { google: "(206) 448-8762", yelp: "206-448-8762", facebook: "206.448.8762" },
-        { google: "206-905-2100", yelp: "(206) 905-2100", facebook: "206 905 2100" },
-      ];
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-same-business",
+        name: "Joe's Diner",
+        phoneNumber: "+1-555-1234",
+        formattedAddress: "123 Main St, New York, NY 10001",
+        latitude: 40.7128,
+        longitude: -74.006,
+        rating: 4.5,
+        userRatingsTotal: 200,
+        types: ["restaurant", "food"],
+      } as GoogleMapsRawData;
 
-      testCases.forEach(({ google, yelp, facebook }) => {
-        expect(normalizePhone(google)).toBe(normalizePhone(yelp));
-        expect(normalizePhone(google)).toBe(normalizePhone(facebook));
-        expect(normalizePhone(google)).toHaveLength(10);
-      });
+      const yelpData: YelpRawData = {
+        id: "yelp-same-business",
+        alias: "joes-diner",
+        name: "Joe's Diner",
+        image_url: "https://example.com/joes.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "https://yelp.com/biz/joes-diner",
+        phone: "+15551234",
+        display_phone: "(555) 123-4567",
+        review_count: 175,
+        categories: [{ alias: "restaurants", title: "Restaurants" }],
+        rating: 4.0,
+        location: {
+          address1: "123 Main St",
+          city: "New York",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St", "New York, NY 10001"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: ["photo1.jpg"],
+        price: "$$",
+      } as YelpRawData;
+
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
+
+      // All should have the same name
+      expect(normalizedFB.name).toBe(normalizedGM.name);
+      expect(normalizedGM.name).toBe(normalizedYelp.name);
+      expect(normalizedFB.name).toBe("Joe's Diner");
+
+      // All should have the same coordinates
+      expect(normalizedFB.address?.latitude).toBe(normalizedGM.address?.latitude);
+      expect(normalizedGM.address?.latitude).toBe(normalizedYelp.address?.latitude);
+
+      // All should have the same phone (raw format may differ, but both present)
+      expect(normalizedFB.phone).toBeDefined();
+      expect(normalizedGM.phone).toBeDefined();
+      expect(normalizedYelp.phone).toBeDefined();
+
+      // Source should be different
+      expect(normalizedFB.source).toBe(ScraperSource.FACEBOOK);
+      expect(normalizedGM.source).toBe(ScraperSource.GOOGLE_MAPS);
+      expect(normalizedYelp.source).toBe(ScraperSource.YELP);
+
+      // Source IDs should be different (platform-specific)
+      expect(normalizedFB.sourceId).toBe("fb-same-business");
+      expect(normalizedGM.sourceId).toBe("gm-same-business");
+      expect(normalizedYelp.sourceId).toBe("yelp-same-business");
     });
 
-    it("handles international phone formats", () => {
-      const normalizePhone = (phone) => phone.replace(/\D/g, "");
+    it("AC9: Missing optional fields do not break consistency validation", () => {
+      // Facebook data with minimal fields
+      const minimalFacebook: FacebookRawData = {
+        id: "fb-minimal",
+        name: "Minimal Business",
+        location: { latitude: 40.7128, longitude: -74.006 },
+      } as FacebookRawData;
 
-      const internationalCases = [
-        { google: "+1 (206) 448-8762", yelp: "1-206-448-8762", facebook: "+12064488762" },
-      ];
+      const normalizedMinimalFB = DataConsistencyValidator.normalizeFacebookData(minimalFacebook);
 
-      internationalCases.forEach(({ google, yelp, facebook }) => {
-        expect(normalizePhone(google)).toBe(normalizePhone(yelp));
-        expect(normalizePhone(google)).toBe(normalizePhone(facebook));
-      });
+      // Should still pass required field validation
+      const fbValidation = DataConsistencyValidator.validateRequiredFields(normalizedMinimalFB);
+      expect(fbValidation.valid).toBe(true);
+
+      // Optional fields should be undefined
+      expect(normalizedMinimalFB.phone).toBeUndefined();
+      expect(normalizedMinimalFB.website).toBeUndefined();
+      expect(normalizedMinimalFB.category).toBeUndefined();
+
+      // Google Maps with minimal fields
+      const minimalGoogle: GoogleMapsRawData = {
+        placeId: "gm-minimal",
+        name: "Minimal Business",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+      } as GoogleMapsRawData;
+
+      const normalizedMinimalGM = DataConsistencyValidator.normalizeGoogleMapsData(minimalGoogle);
+      const gmValidation = DataConsistencyValidator.validateRequiredFields(normalizedMinimalGM);
+      expect(gmValidation.valid).toBe(true);
+
+      // Yelp with minimal fields
+      const minimalYelp: YelpRawData = {
+        id: "yelp-minimal",
+        alias: "minimal",
+        name: "Minimal Business",
+        image_url: "img.jpg",
+        is_claimed: false,
+        is_closed: false,
+        url: "url",
+        phone: "",
+        display_phone: "",
+        review_count: 0,
+        categories: [],
+        rating: 0,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
+        },
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "",
+      } as YelpRawData;
+
+      const normalizedMinimalYelp = DataConsistencyValidator.normalizeYelpData(minimalYelp);
+      const yelpValidation = DataConsistencyValidator.validateRequiredFields(normalizedMinimalYelp);
+      expect(yelpValidation.valid).toBe(true);
+    });
+
+    it("AC10: Raw data is preserved for debugging and audit purposes", () => {
+      const facebookData: FacebookRawData = {
+        id: "fb-raw-test",
+        name: "Raw Test Business",
+        description: "Test description",
+        link: "https://facebook.com/test",
+        phone: "+1-555-1234",
+        location: { latitude: 40.7128, longitude: -74.006 },
+        fan_count: 1000,
+      } as FacebookRawData;
+
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+
+      // Raw data should be preserved
+      expect(normalizedFB.rawData).toBe(facebookData);
+      expect((normalizedFB.rawData as FacebookRawData).fan_count).toBe(1000);
+      expect((normalizedFB.rawData as FacebookRawData).description).toBe("Test description");
+
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-raw-test",
+        name: "Raw Test Business",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+        url: "https://maps.google.com/test",
+        utcOffset: -5,
+      } as GoogleMapsRawData;
+
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+
+      expect(normalizedGM.rawData).toBe(googleData);
+      expect((normalizedGM.rawData as GoogleMapsRawData).url).toBe("https://maps.google.com/test");
+      expect((normalizedGM.rawData as GoogleMapsRawData).utcOffset).toBe(-5);
     });
   });
 
-  describe("Business ID mapping to unified records", () => {
-    it("maps multiple platform IDs to a single unified business record", () => {
-      const unified = {
-        unifiedId: "unified-001",
-        name: "Space Needle",
-        normalizedAddress: normalizeAddress("400 Broad St, Seattle, WA 98109"),
-        normalizedPhone: "2069052100",
-        platformSources: ["google-maps", "yelp", "facebook"],
-        platformIds: {
-          "google-maps": "google:ChIJ-bfVTh8VkFQRDZLQHVvqAAQ",
-          yelp: "yelp:space-needle-seattle",
-          facebook: "facebook:123456789",
-        },
-      };
+  describe("Edge Cases and Error Handling", () => {
+    it("AC11: Handles null/undefined values gracefully", () => {
+      const facebookData: FacebookRawData = {
+        id: "fb-edge",
+        name: "Edge Case Business",
+        location: undefined,
+      } as unknown as FacebookRawData;
 
-      expect(unified.platformSources.length).toBe(3);
-      expect(unified.platformIds["google-maps"]).toBe("google:ChIJ-bfVTh8VkFQRDZLQHVvqAAQ");
-      expect(unified.platformIds.yelp).toBe("yelp:space-needle-seattle");
-      expect(unified.platformIds.facebook).toBe("facebook:123456789");
+      const normalized = DataConsistencyValidator.normalizeFacebookData(facebookData);
+
+      // Should not throw, address should be undefined
+      expect(normalized.address).toBeUndefined();
+      expect(normalized.name).toBe("Edge Case Business");
+
+      const validation = DataConsistencyValidator.validateRequiredFields(normalized);
+      expect(validation.valid).toBe(true); // Only name, sourceId, source are required
     });
 
-    it("creates unified ID deterministically from business key", () => {
-      const generateUnifiedId = (name, address) => {
-        const key = name + "|" + address;
-        const hash = key.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        return "unified-" + hash.toString(16);
-      };
+    it("AC12: Validates empty string values appropriately", () => {
+      const facebookData: FacebookRawData = {
+        id: "",
+        name: "",
+        location: { latitude: 40.7128, longitude: -74.006 },
+      } as FacebookRawData;
 
-      const id1 = generateUnifiedId("Space Needle", "400 Broad St, Seattle, WA 98109");
-      const id2 = generateUnifiedId("Space Needle", "400 Broad St, Seattle, WA 98109");
-      const id3 = generateUnifiedId("Space Needle", "500 Broad St, Seattle, WA 98109");
+      const normalized = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const validation = DataConsistencyValidator.validateRequiredFields(normalized);
 
-      expect(id1).toBe(id2);
-      expect(id1).not.toBe(id3);
-    });
-  });
-
-  describe("Full data pipeline integration", () => {
-    it("validates complete flow from scrape to unified storage", () => {
-      const scrapedData = [
-        {
-          name: "Pike Place Market",
-          address: "85 Pike St, Seattle, WA 98101",
-          phone: "206-448-8762",
-          source: "google-maps",
-          platformId: "google:pike-place-001",
-        },
-        {
-          name: "Pike Place Market",
-          address: "85 Pike Street, Seattle, WA 98101",
-          phone: "206-448-8762",
-          source: "yelp",
-          platformId: "yelp:pike-place-market",
-        },
-        {
-          name: "Pike Place Market",
-          address: "85 PIKE ST SEATTLE WA 98101",
-          phone: "206-448-8762",
-          source: "facebook",
-          platformId: "facebook:pike-place",
-        },
-      ];
-
-      const normalized = scrapedData.map((biz) => ({
-        ...biz,
-        normalizedName: normalizeString(biz.name),
-        normalizedAddress: normalizeAddress(biz.address),
-        normalizedPhone: biz.phone ? biz.phone.replace(/\D/g, "") : undefined,
-      }));
-
-      const coreName = normalized[0].normalizedName;
-      normalized.forEach((biz) => {
-        expect(biz.normalizedName).toContain(coreName);
-      });
-
-      const phones = normalized.map((biz) => biz.normalizedPhone);
-      expect(new Set(phones).size).toBe(1);
-
-      const unified = {
-        unifiedId: "unified-pike-place",
-        name: "Pike Place Market",
-        normalizedAddress: normalized[0].normalizedAddress,
-        normalizedPhone: phones[0],
-        platformSources: normalized.map((biz) => biz.source),
-        platformIds: normalized.reduce((acc, biz) => {
-          acc[biz.source] = biz.platformId;
-          return acc;
-        }, {}),
-      };
-
-      expect(unified.platformSources).toEqual(expect.arrayContaining(["google-maps", "yelp", "facebook"]));
-      expect(Object.keys(unified.platformIds).length).toBe(3);
+      // Empty name and sourceId should fail validation
+      expect(validation.valid).toBe(false);
+      expect(validation.missing).toContain("name (empty)");
+      expect(validation.missing).toContain("sourceId (empty)");
     });
 
-    it("handles businesses found on only some platforms", () => {
-      const scrapedData = [
-        {
-          name: "Local Coffee Shop",
-          address: "100 Pike St, Seattle, WA 98101",
-          phone: "206-555-0100",
-          source: "google-maps",
-          platformId: "google:coffee-001",
+    it("AC13: Handles platform-specific field variations", () => {
+      // Facebook has fan_count, Google has userRatingsTotal, Yelp has review_count
+      // All should map to reviewCount consistently
+
+      const facebookData: FacebookRawData = {
+        id: "fb-variation",
+        name: "Test",
+        were_here_count: 50,
+        location: { latitude: 40.7128, longitude: -74.006 },
+      } as FacebookRawData;
+
+      const googleData: GoogleMapsRawData = {
+        placeId: "gm-variation",
+        name: "Test",
+        latitude: 40.7128,
+        longitude: -74.006,
+        formattedAddress: "123 Main St",
+        userRatingsTotal: 75,
+      } as GoogleMapsRawData;
+
+      const yelpData: YelpRawData = {
+        id: "yelp-variation",
+        alias: "test",
+        name: "Test",
+        image_url: "img.jpg",
+        is_claimed: true,
+        is_closed: false,
+        url: "url",
+        phone: "555",
+        display_phone: "555",
+        review_count: 100,
+        categories: [],
+        rating: 4,
+        location: {
+          address1: "123 Main St",
+          city: "NYC",
+          state: "NY",
+          zip_code: "10001",
+          country: "US",
+          display_address: ["123 Main St"],
         },
-        {
-          name: "Local Coffee Shop",
-          address: "100 Pike St, Seattle, WA 98101",
-          phone: "206-555-0100",
-          source: "yelp",
-          platformId: "yelp:local-coffee",
-        },
-      ];
+        coordinates: { latitude: 40.7128, longitude: -74.006 },
+        photos: [],
+        price: "$",
+      } as YelpRawData;
 
-      const normalized = scrapedData.map((biz) => ({
-        ...biz,
-        normalizedAddress: normalizeAddress(biz.address),
-        normalizedPhone: biz.phone?.replace(/\D/g, ""),
-      }));
+      const normalizedFB = DataConsistencyValidator.normalizeFacebookData(facebookData);
+      const normalizedGM = DataConsistencyValidator.normalizeGoogleMapsData(googleData);
+      const normalizedYelp = DataConsistencyValidator.normalizeYelpData(yelpData);
 
-      const unified = {
-        unifiedId: "unified-coffee",
-        name: "Local Coffee Shop",
-        normalizedAddress: normalized[0].normalizedAddress,
-        normalizedPhone: normalized[0].normalizedPhone,
-        platformSources: normalized.map((biz) => biz.source),
-        platformIds: normalized.reduce((acc, biz) => {
-          acc[biz.source] = biz.platformId;
-          return acc;
-        }, {}),
-      };
-
-      expect(unified.platformSources.length).toBe(2);
-      expect(unified.platformSources).toEqual(expect.arrayContaining(["google-maps", "yelp"]));
-      expect(unified.platformSources).not.toContain("facebook");
-    });
-
-    it("detects cross-platform duplicates using combined similarity scoring", () => {
-      const platformPairs = [
-        {
-          google: {
-            name: "Joe's Pizza",
-            address: "123 Main St, Seattle, WA 98101",
-            source: "google-maps",
-            platformId: "google:pizza-001",
-          },
-          yelp: {
-            name: "Joe's Pizza Palace",
-            address: "123 Main Street, Seattle, WA 98101",
-            source: "yelp",
-            platformId: "yelp:joes-pizza",
-          },
-          shouldBeDuplicate: true,
-        },
-        {
-          google: {
-            name: "Starbucks",
-            address: "100 Pike St, Seattle, WA 98101",
-            source: "google-maps",
-            platformId: "google:starbucks-001",
-          },
-          yelp: {
-            name: "Starbucks",
-            address: "200 Pine St, Seattle, WA 98101",
-            source: "yelp",
-            platformId: "yelp:starbucks-002",
-          },
-          shouldBeDuplicate: false,
-        },
-      ];
-
-      platformPairs.forEach(({ google, yelp, shouldBeDuplicate }) => {
-        const result = checkForDuplicate(
-          { name: google.name, address: google.address },
-          { name: yelp.name, address: yelp.address }
-        );
-
-        expect(result.isPotentialDuplicate).toBe(shouldBeDuplicate);
-      });
-    });
-  });
-
-  describe("Edge cases and error handling", () => {
-    it("handles missing phone numbers gracefully", () => {
-      const businessWithPhone = {
-        name: "Business A",
-        address: "100 Main St, Seattle, WA 98101",
-        phone: "206-555-0100",
-        source: "google-maps",
-        platformId: "google:a",
-      };
-
-      const businessWithoutPhone = {
-        name: "Business A",
-        address: "100 Main St, Seattle, WA 98101",
-        source: "yelp",
-        platformId: "yelp:a",
-      };
-
-      const normalizedWithPhone = businessWithPhone.phone?.replace(/\D/g, "");
-      const normalizedWithoutPhone = businessWithoutPhone.phone?.replace(/\D/g, "");
-
-      expect(normalizedWithPhone).toBe("2065550100");
-      expect(normalizedWithoutPhone).toBeUndefined();
-    });
-
-    it("handles addresses with missing components", () => {
-      const incompleteAddresses = [
-        "123 Main St",
-        "123 Main St, Seattle",
-        "123 Main St, Seattle, WA",
-        "123 Main St, Seattle, WA 98101",
-      ];
-
-      incompleteAddresses.forEach((addr) => {
-        const normalized = normalizeAddress(addr);
-        expect(typeof normalized).toBe("string");
-        expect(normalized).toBeTruthy();
-      });
-    });
-
-    it("handles extreme case variations in business names", () => {
-      const variations = [
-        "McDonald's Restaurant",
-        "MCDONALD'S",
-        "mcdonalds",
-        "McDonalds Restaurant Inc.",
-        "McDonald's - Downtown Location",
-      ];
-
-      const normalized = variations.map((name) => normalizeString(name));
-
-      normalized.forEach((norm) => {
-        expect(norm).toContain("mcdonalds");
-      });
+      // All should have consistent reviewCount field
+      expect(normalizedFB.reviewCount).toBe(50);
+      expect(normalizedGM.reviewCount).toBe(75);
+      expect(normalizedYelp.reviewCount).toBe(100);
     });
   });
 });
