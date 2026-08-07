@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateBusinessRating } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, createBusinessWithPhone, findBusinessById, findBusinessesByOwnerId, normalizePhoneNumber } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -57,8 +57,6 @@ describe("Business Repository", () => {
           expect(business.name).toBe("Test Business");
           expect(business.description).toBe("Test description");
           expect(business.categoryId).toBe("cat-1");
-          expect(business.rating).toBeNull();
-          expect(business.reviewCount).toBe(0);
           expect(business.verificationStatus).toBe("unverified");
           expect(business.createdAt).toBeInstanceOf(Date);
           expect(business.updatedAt).toBeInstanceOf(Date);
@@ -81,27 +79,6 @@ describe("Business Repository", () => {
 
           expect(business.name).toBe("Test Business No Desc");
           expect(business.description).toBeUndefined();
-          expect(business.reviewCount).toBe(0);
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("creates a business with rating and review count", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Rated Business", "Test description", "cat-3", 4.5, 25);
-
-          expect(business.name).toBe("Rated Business");
-          expect(business.rating).toBe(4.5);
-          expect(business.reviewCount).toBe(25);
         } finally {
           client.release();
         }
@@ -184,21 +161,31 @@ describe("Business Repository", () => {
     });
   });
 
-  describe("updateBusinessRating", () => {
-    it("updates business rating and review count", async () => {
+  describe("createBusinessWithPhone", () => {
+    it("creates a business with phone and website", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Initial Business", "Desc", "cat-1");
+          const business = await createBusinessWithPhone(
+            client,
+            user.id,
+            "Test Business With Contact",
+            "Test description",
+            "cat-1",
+            "(555) 123-4567",
+            "https://example.com",
+            undefined
+          );
 
-          const updated = await updateBusinessRating(client, business.id, 4.5, 25);
-
-          expect(updated).toBeDefined();
-          expect(updated?.rating).toBe(4.5);
-          expect(updated?.reviewCount).toBe(25);
+          expect(business.id).toBeDefined();
+          expect(business.ownerId).toBe(user.id);
+          expect(business.name).toBe("Test Business With Contact");
+          expect(business.phone).toBe("5551234567");
+          expect(business.website).toBe("https://example.com");
+          expect(business.verificationStatus).toBe("unverified");
         } finally {
           client.release();
         }
@@ -207,26 +194,79 @@ describe("Business Repository", () => {
       }
     });
 
-    it("sets rating to null and updates review count", async () => {
+    it("creates a business with phone without website", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Initial Business", "Desc", "cat-1", 3.0, 10);
+          const business = await createBusinessWithPhone(
+            client,
+            user.id,
+            "Test Business No Website",
+            "Test description",
+            "cat-1",
+            "(555) 987-6543",
+            undefined,
+            undefined
+          );
 
-          const updated = await updateBusinessRating(client, business.id, null, 50);
-
-          expect(updated).toBeDefined();
-          expect(updated?.rating).toBeNull();
-          expect(updated?.reviewCount).toBe(50);
+          expect(business.phone).toBe("5559876543");
+          expect(business.website).toBeUndefined();
         } finally {
           client.release();
         }
       } finally {
         await cleanupUser(user.email);
       }
+    });
+
+    it("creates a business with website without phone", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusinessWithPhone(
+            client,
+            user.id,
+            "Test Business No Phone",
+            "Test description",
+            "cat-1",
+            undefined,
+            "https://example.com",
+            undefined
+          );
+
+          expect(business.phone).toBeUndefined();
+          expect(business.website).toBe("https://example.com");
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+  });
+
+  describe("normalizePhoneNumber", () => {
+    it("normalizes phone number with parentheses and dashes", () => {
+      expect(normalizePhoneNumber("(555) 123-4567")).toBe("5551234567");
+    });
+
+    it("normalizes phone number with dashes only", () => {
+      expect(normalizePhoneNumber("555-123-4567")).toBe("5551234567");
+    });
+
+    it("normalizes phone number with country code", () => {
+      expect(normalizePhoneNumber("+1-555-123-4567")).toBe("5551234567");
+      expect(normalizePhoneNumber("1-555-123-4567")).toBe("5551234567");
+    });
+
+    it("normalizes phone number with spaces", () => {
+      expect(normalizePhoneNumber("555 123 4567")).toBe("5551234567");
     });
   });
 });

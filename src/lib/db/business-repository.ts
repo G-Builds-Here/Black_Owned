@@ -26,9 +26,10 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       name VARCHAR(255) NOT NULL,
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
-      rating DECIMAL(3,2),
-      review_count INTEGER NOT NULL DEFAULT 0,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
+      phone VARCHAR(50),
+      website VARCHAR(255),
+      potential_duplicate_id UUID,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -46,11 +47,12 @@ function rowToBusiness(row: unknown): Business {
     name: r.name as string,
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
-    rating: r.rating !== null ? parseFloat(r.rating as string) : null,
-    reviewCount: (r.review_count as number) ?? 0,
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
+    phone: r.phone as string | undefined,
+    website: r.website as string | undefined,
+    potentialDuplicateId: r.potential_duplicate_id as string | undefined,
   };
 }
 
@@ -62,16 +64,14 @@ export async function createBusiness(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string,
-  rating: number | null = null,
-  reviewCount: number = 0
+  categoryId: string
 ): Promise<Business> {
   const tableName = getTableName();
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, rating, review_count, verification_status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
+     VALUES ($1, $2, $3, $4, 'unverified')
      RETURNING *`,
-    [ownerId, name, description || null, categoryId, rating ?? null, reviewCount]
+    [ownerId, name, description || null, categoryId]
   );
   return rowToBusiness(result.rows[0]);
 }
@@ -107,21 +107,66 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
- * Update business rating and review count
+ * Normalize phone number to exact match format.
+ * Removes all non-digit characters and strips leading country code "1" for US numbers.
+ * Returns a canonical 10-digit representation.
+ * Examples:
+ *   "(555) 123-4567" -> "5551234567"
+ *   "555-123-4567" -> "5551234567"
+ *   "+1-555-123-4567" -> "5551234567"
+ *   "1-555-123-4567" -> "5551234567"
  */
-export async function updateBusinessRating(
+export function normalizePhoneNumber(phone: string): string {
+  const digits = phone.trim().replace(/\D/g, "");
+  // Strip leading "1" for 11-digit US numbers
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
+/**
+ * Create a new business with phone number, website, and duplicate detection
+ */
+export async function createBusinessWithPhone(
   client: PoolClient,
-  id: string,
-  rating: number | null,
-  reviewCount: number
-): Promise<Business | undefined> {
+  ownerId: string,
+  name: string,
+  description: string | undefined,
+  categoryId: string,
+  phone: string | undefined,
+  website: string | undefined,
+  potentialDuplicateId: string | undefined
+): Promise<Business> {
   const tableName = getTableName();
+  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
+  const result = await client.query<Business>(
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, website, potential_duplicate_id)
+     VALUES ($1, $2, $3, $4, 'unverified', $5, $6, $7)
+     RETURNING *`,
+    [ownerId, name, description || null, categoryId, normalizedPhone || null, website || null, potentialDuplicateId || null]
+  );
+  return rowToBusiness(result.rows[0]);
+}
+
+/**
+ * Update business with duplicate detection result
+ */
+export async function updateBusinessWithDuplicateInfo(
+  client: PoolClient,
+  businessId: string,
+  phone: string,
+  website: string | undefined,
+  potentialDuplicateId: string | undefined
+): Promise<Business> {
+  const tableName = getTableName();
+  const normalizedPhone = normalizePhoneNumber(phone);
   const result = await client.query<Business>(
     `UPDATE ${tableName}
-     SET rating = $1, review_count = $2, updated_at = NOW()
-     WHERE id = $3
+     SET phone = $1, website = $2, potential_duplicate_id = $3, updated_at = NOW()
+     WHERE id = $4
      RETURNING *`,
-    [rating ?? null, reviewCount, id]
+    [normalizedPhone, website || null, potentialDuplicateId || null, businessId]
   );
-  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+  return rowToBusiness(result.rows[0]);
 }

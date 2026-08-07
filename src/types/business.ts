@@ -18,13 +18,11 @@ export interface Business {
   name: string;
   description: string | undefined;
   categoryId: string;
-  rating: number | null;
-  reviewCount: number;
   verificationStatus: VerificationStatus;
-  address: string | undefined;
   createdAt: Date;
   updatedAt: Date;
   phone: string | undefined;
+  website: string | undefined;
   potentialDuplicateId: string | undefined;
 }
 
