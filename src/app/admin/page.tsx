@@ -14,6 +14,36 @@ const METRICS = {
   weeklyGrowth: 12.5,
 };
 
+// Metrics by source
+const METRICS_BY_SOURCE = {
+  all: {
+    totalBusinesses: 1247,
+    googleMaps: 542,
+    yelp: 438,
+    facebook: 267,
+  },
+  google_maps: {
+    totalBusinesses: 542,
+    googleMaps: 542,
+    yelp: 0,
+    facebook: 0,
+  },
+  yelp: {
+    totalBusinesses: 438,
+    googleMaps: 0,
+    yelp: 438,
+    facebook: 0,
+  },
+  facebook: {
+    totalBusinesses: 267,
+    googleMaps: 0,
+    yelp: 0,
+    facebook: 267,
+  },
+};
+
+type SourceFilter = 'all' | 'google_maps' | 'yelp' | 'facebook';
+
 const RECENT_BUSINESSES = [
   { id: '1', name: 'Soul Food Kitchen', status: 'pending', submitted: '2026-07-14' },
   { id: '2', name: 'Black Diamond Consulting', status: 'approved', submitted: '2026-07-13' },
@@ -47,6 +77,7 @@ const VERIFICATION_QUEUE = [
 export default function AdminConsole() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
 
   const handleApproveVerification = (id: string) => {
     console.log('Approve verification:', id);
@@ -104,6 +135,20 @@ export default function AdminConsole() {
                 ]}
                 position="bottom-end"
               />
+              <Dropdown
+                trigger={<span className="text-sm bg-white/10 px-3 py-1.5 rounded-lg">
+                  {selectedSource === 'all' ? 'All Sources' :
+                   selectedSource === 'google_maps' ? 'Google Maps' :
+                   selectedSource === 'yelp' ? 'Yelp' : 'Facebook'}
+                </span>}
+                items={[
+                  { key: 'all', label: 'All Sources', onClick: () => setSelectedSource('all') },
+                  { key: 'google_maps', label: 'Google Maps', onClick: () => setSelectedSource('google_maps') },
+                  { key: 'yelp', label: 'Yelp', onClick: () => setSelectedSource('yelp') },
+                  { key: 'facebook', label: 'Facebook', onClick: () => setSelectedSource('facebook') },
+                ]}
+                position="bottom-end"
+              />
               <Button variant="secondary" size="sm">
                 Export Report
               </Button>
@@ -135,11 +180,51 @@ export default function AdminConsole() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-neutral-500 mb-1">Total Businesses</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses.toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].totalBusinesses.toLocaleString()}</p>
                   <p className="text-sm text-heritage-jade mt-1">+{METRICS.weeklyGrowth}% this week</p>
                 </div>
                 <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
                   <span className="text-2xl">🏪</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Source Breakdown Cards */}
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Google Maps</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].googleMaps.toLocaleString()}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{((METRICS_BY_SOURCE[selectedSource].googleMaps / METRICS_BY_SOURCE[selectedSource].totalBusinesses) * 100).toFixed(1)}% of total</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">🗺️</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Yelp</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].yelp.toLocaleString()}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{((METRICS_BY_SOURCE[selectedSource].yelp / METRICS_BY_SOURCE[selectedSource].totalBusinesses) * 100).toFixed(1)}% of total</p>
+                </div>
+                <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">⭐</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Facebook</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].facebook.toLocaleString()}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{((METRICS_BY_SOURCE[selectedSource].facebook / METRICS_BY_SOURCE[selectedSource].totalBusinesses) * 100).toFixed(1)}% of total</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-600/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📘</span>
                 </div>
               </div>
             </Card>
