@@ -12,6 +12,7 @@ import {
   type BusinessHours,
   type VerificationStatus,
   type BusinessCategory,
+  type Business,
 } from "./business";
 
 describe("Business Types", () => {
