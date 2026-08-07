@@ -39,6 +39,7 @@ impl MutationRoot {
         name: String,
         description: Option<String>,
         category_id: String,
+        address: Option<String>,
     ) -> Result<GQLBusiness> {
         // Validate name is required
         if name.trim().is_empty() {
@@ -65,11 +66,11 @@ impl MutationRoot {
 
         let id = Uuid::new_v4();
 
-        let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Uuid, Uuid, bool, chrono::DateTime<Utc>)>(
+        let result = sqlx::query_as::<_, (Uuid, String, Option<String>, Uuid, Uuid, bool, Option<String>, chrono::DateTime<Utc>)>(
             r#"
-            INSERT INTO businesses (id, name, description, category_id, owner_id, verified, created_at)
-            VALUES ($1, $2, $3, $4, $5, false, $6)
-            RETURNING id, name, description, category_id, owner_id, verified, created_at
+            INSERT INTO businesses (id, name, description, category_id, owner_id, verified, address, created_at)
+            VALUES ($1, $2, $3, $4, $5, false, $6, $7)
+            RETURNING id, name, description, category_id, owner_id, verified, address, created_at
             "#,
         )
         .bind(id)
@@ -77,6 +78,7 @@ impl MutationRoot {
         .bind(&description)
         .bind(category_uuid)
         .bind(user_uuid)
+        .bind(&address)
         .bind(Utc::now())
         .fetch_one(db)
         .await
@@ -89,7 +91,8 @@ impl MutationRoot {
             category_id: result.3,
             owner_id: result.4,
             verified: result.5,
-            created_at: result.6,
+            address: result.6,
+            created_at: result.7,
         }))
     }
 
@@ -101,6 +104,7 @@ impl MutationRoot {
         name: Option<String>,
         category_id: Option<String>,
         verified: Option<bool>,
+        address: Option<String>,
     ) -> Result<Option<GQLBusiness>> {
         let db = ctx.data::<sqlx::PgPool>().map_err(|e| {
             Error::new(format!("Database connection not available: {:?}", e))
@@ -147,25 +151,27 @@ impl MutationRoot {
             }
         }
 
-        let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
+        let row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, Option<String>, chrono::DateTime<Utc>, Uuid)>(
             r#"
             UPDATE businesses
             SET name = COALESCE($2, name),
                 category_id = COALESCE($3, category_id),
-                verified = COALESCE($4, verified)
+                verified = COALESCE($4, verified),
+                address = COALESCE($5, address)
             WHERE id = $1
-            RETURNING id, name, category_id, verified, created_at, owner_id
+            RETURNING id, name, category_id, verified, address, created_at, owner_id
             "#,
         )
         .bind(business_id)
         .bind(name_ref)
         .bind(category_uuid)
         .bind(verified)
+        .bind(&address)
         .fetch_optional(db)
         .await
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
-        Ok(row.map(|(bid, n, cid, v, ca, oid)| {
+        Ok(row.map(|(bid, n, cid, v, addr, ca, oid)| {
             GQLBusiness::from(Business {
                 id: bid,
                 name: n,
@@ -173,6 +179,7 @@ impl MutationRoot {
                 category_id: cid,
                 owner_id: oid,
                 verified: v,
+                address: addr,
                 created_at: ca,
             })
         }))
@@ -266,8 +273,8 @@ impl MutationRoot {
         let review_count = count as i32;
 
         // Fetch business details
-        let business_row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>, Uuid)>(
-            "SELECT id, name, category_id, verified, created_at, owner_id FROM businesses WHERE id = $1",
+        let business_row = sqlx::query_as::<_, (Uuid, String, Uuid, bool, Option<String>, chrono::DateTime<Utc>, Uuid)>(
+            "SELECT id, name, category_id, verified, address, created_at, owner_id FROM businesses WHERE id = $1",
         )
         .bind(business_uuid)
         .fetch_one(db)
@@ -279,8 +286,9 @@ impl MutationRoot {
             name: business_row.1,
             category_id: business_row.2,
             verified: business_row.3,
-            created_at: business_row.4,
-            owner_id: business_row.5,
+            address: business_row.4,
+            created_at: business_row.5,
+            owner_id: business_row.6,
         };
 
         let mut gql_business: GQLBusiness = business.into();

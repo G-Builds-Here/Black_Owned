@@ -73,6 +73,7 @@ impl BusinessApi {
             category_id: *category_id,
             owner_id: *owner_id,
             verified: false,
+            address: None,
             created_at: chrono::Utc::now(),
             address: None,
             phone: None,

@@ -6,7 +6,6 @@ import {
   findByEmail,
   create,
   initializeUserSchema,
-  getPool,
 } from "../db/user-repository";
 import {
   hashPassword,
@@ -29,10 +28,7 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusinessInRepo,
-  findBusinessByPhone,
-  updateBusinessWithDuplicateInfo,
-  normalizePhoneNumber,
+  create as createBusinessRecord,
   Business as BusinessRecord,
 } from "../db/business-repository";
 
@@ -486,20 +482,13 @@ function businessToGraphqlBusiness(business: Business): {
   categoryId: string;
   verified: boolean;
   createdAt: { timestamp: number };
-  phone: string | undefined;
-  potentialDuplicateId: string | undefined;
 } {
-  // Handle both camelCase (Business type) and snake_case (raw DB rows)
-  const createdAtDate = business.createdAt || (business as Record<string, unknown>).created_at as Date;
-  const categoryId = business.categoryId || (business as Record<string, unknown>).category_id as string;
   return {
     id: business.id,
     name: business.name,
-    categoryId: categoryId,
+    categoryId: business.categoryId,
     verified: business.verificationStatus === "verified",
-    createdAt: { timestamp: Math.floor(createdAtDate.getTime() / 1000) },
-    phone: business.phone,
-    potentialDuplicateId: business.potentialDuplicateId,
+    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
   };
 }
 
@@ -514,16 +503,14 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusiness(
+export async function createBusinessMutation(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string; phone?: string } },
+  args: { input: { name: string; description?: string; categoryId: string; address?: string } },
   context: unknown
 ): Promise<{
   success: boolean;
   business?: unknown;
   error?: string;
-  isPotentialDuplicate?: boolean;
-  existingBusinessId?: string;
 }> {
   const { input } = args;
   const userId = getCurrentUserId(context);
@@ -553,33 +540,18 @@ export async function createBusiness(
 
   const client = await getPool().connect();
   try {
-    // Check for duplicate phone number if provided
-    let existingBusinessId: string | undefined;
-    let isPotentialDuplicate = false;
-
-    if (input.phone && input.phone.trim() !== "") {
-      const existingBusiness = await findBusinessByPhone(client, input.phone.trim());
-      if (existingBusiness) {
-        isPotentialDuplicate = true;
-        existingBusinessId = existingBusiness.id;
-      }
-    }
-
-    const business = await createBusinessInDb(
+    const business = await createBusinessRecord(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
       input.categoryId.trim(),
-      input.phone?.trim(),
-      existingBusinessId
+      input.address?.trim()
     );
 
     return {
       success: true,
       business: businessToGraphqlBusiness(business),
-      isPotentialDuplicate,
-      existingBusinessId,
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -593,30 +565,6 @@ export async function createBusiness(
 }
 
 /**
- * Internal function to create a business in the database
- */
-async function createBusinessInDb(
-  client: import("pg").PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
-  categoryId: string,
-  phone?: string,
-  potentialDuplicateId?: string
-): Promise<Business> {
-  const schema = process.env.POSTGRES_SCHEMA;
-  const tableName = schema ? `${schema}.businesses` : "businesses";
-  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, potential_duplicate_id)
-     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId, normalizedPhone || null, potentialDuplicateId || null]
-  );
-  return result.rows[0];
-}
-
-/**
  * Resolvers object
  */
 export const resolvers = {
@@ -626,7 +574,7 @@ export const resolvers = {
   },
   Mutation: {
     register,
-    createBusiness,
+    createBusiness: createBusinessMutation,
     submitVerification,
     updateBusiness,
   },

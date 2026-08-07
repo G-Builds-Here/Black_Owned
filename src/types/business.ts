@@ -19,6 +19,7 @@ export interface Business {
   description: string | undefined;
   categoryId: string;
   verificationStatus: VerificationStatus;
+  address: string | undefined;
   createdAt: Date;
   updatedAt: Date;
   phone: string | undefined;

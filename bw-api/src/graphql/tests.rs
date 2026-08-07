@@ -27,12 +27,11 @@ async fn setup_test_schema(pool: &sqlx::PgPool) {
         CREATE TABLE IF NOT EXISTS businesses (
             id UUID PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
+            category_id UUID NOT NULL,
+            owner_id UUID NOT NULL,
+            verified BOOLEAN DEFAULT false,
             address TEXT,
-            phone TEXT,
-            website TEXT,
-            category TEXT,
-            rating DOUBLE PRECISION,
-            review_count BIGINT
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
 
         CREATE TABLE IF NOT EXISTS reviews (
@@ -83,15 +82,11 @@ async fn test_submit_review_success() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, address, phone, website, category, rating, review_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<f64>>(None)
-        .bind::<Option<i64>>(None)
+        .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
@@ -141,15 +136,11 @@ async fn test_submit_review_duplicate_rejected() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, address, phone, website, category, rating, review_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<f64>>(None)
-        .bind::<Option<i64>>(None)
+        .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
@@ -208,15 +199,11 @@ async fn test_rating_aggregation() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, address, phone, website, category, rating, review_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<f64>>(None)
-        .bind::<Option<i64>>(None)
+        .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
@@ -315,15 +302,11 @@ async fn test_business_rating_avg_none_when_no_reviews() {
         .await
         .unwrap();
 
-    sqlx::query("INSERT INTO businesses (id, name, address, phone, website, category, rating, review_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+    sqlx::query("INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)")
         .bind(business_id)
         .bind("Test Business")
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<&str>>(None)
-        .bind::<Option<f64>>(None)
-        .bind::<Option<i64>>(None)
+        .bind(category_id)
+        .bind(Uuid::new_v4())
         .execute(schema.data::<sqlx::PgPool>().unwrap())
         .await
         .unwrap();
@@ -415,7 +398,7 @@ async fn test_update_business_not_owner_rejected() {
     let business_id = Uuid::new_v4();
     let category_id = Uuid::new_v4();
     let owner_id = Uuid::new_v4();
-    let _non_owner_id = Uuid::new_v4();
+    let non_owner_id = Uuid::new_v4();
 
     sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
         .bind(category_id)

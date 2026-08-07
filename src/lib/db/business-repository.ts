@@ -27,8 +27,7 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
-      phone VARCHAR(50),
-      potential_duplicate_id UUID,
+      address TEXT,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -47,10 +46,9 @@ function rowToBusiness(row: unknown): Business {
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
+    address: r.address as string | undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
-    phone: r.phone as string | undefined,
-    potentialDuplicateId: r.potential_duplicate_id as string | undefined,
   };
 }
 
@@ -62,37 +60,15 @@ export async function createBusiness(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
-): Promise<Business> {
-  const tableName = getTableName();
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId]
-  );
-  return rowToBusiness(result.rows[0]);
-}
-
-/**
- * Create a new business with phone number and duplicate detection
- */
-export async function createBusinessWithPhone(
-  client: PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
   categoryId: string,
-  phone: string | undefined,
-  potentialDuplicateId: string | undefined
+  address: string | undefined
 ): Promise<Business> {
   const tableName = getTableName();
-  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, potential_duplicate_id)
-     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, address)
+     VALUES ($1, $2, $3, $4, 'unverified', $5)
      RETURNING *`,
-    [ownerId, name, description || null, categoryId, normalizedPhone || null, potentialDuplicateId || null]
+    [ownerId, name, description || null, categoryId, address || null]
   );
   return rowToBusiness(result.rows[0]);
 }
@@ -128,54 +104,25 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
- * Normalize phone number to exact match format.
- * Removes all non-digit characters and strips leading country code "1" for US numbers.
- * Returns a canonical 10-digit representation.
- * Examples:
- *   "(555) 123-4567" -> "5551234567"
- *   "555-123-4567" -> "5551234567"
- *   "+1-555-123-4567" -> "5551234567"
- *   "1-555-123-4567" -> "5551234567"
+ * Update business name by ID (only if user is the owner)
  */
-export function normalizePhoneNumber(phone: string): string {
-  const digits = phone.trim().replace(/\D/g, "");
-  // Strip leading "1" for 11-digit US numbers
-  return digits.length === 11 && digits.startsWith("1") ? digits.substring(1) : digits;
-}
-
-/**
- * Find a business by phone number (for duplicate detection).
- * Uses normalized phone comparison for exact match detection.
- */
-export async function findBusinessByPhone(
-  client: PoolClient,
-  phone: string
+export async function updateNameById(
+  id: string,
+  name: string,
+  ownerId: string
 ): Promise<Business | undefined> {
-  const tableName = getTableName();
-  const normalizedPhone = normalizePhoneNumber(phone);
-  const result = await client.query<Business>(
-    `SELECT * FROM ${tableName} WHERE phone = $1 AND id != $2 LIMIT 1`,
-    [normalizedPhone, '00000000-0000-0000-0000-000000000000']
-  );
-  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
-}
-
-/**
- * Update business with duplicate detection result
- */
-export async function updateBusinessWithDuplicateInfo(
-  client: PoolClient,
-  businessId: string,
-  phone: string,
-  potentialDuplicateId: string | undefined
-): Promise<Business> {
-  const tableName = getTableName();
-  const result = await client.query<Business>(
-    `UPDATE ${tableName}
-     SET phone = $1, potential_duplicate_id = $2, updated_at = NOW()
-     WHERE id = $3
-     RETURNING *`,
-    [phone, potentialDuplicateId || null, businessId]
-  );
-  return rowToBusiness(result.rows[0]);
+  const client = await getPool().connect();
+  try {
+    const tableName = getTableName();
+    const result = await client.query<Business>(
+      `UPDATE ${tableName}
+       SET name = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND owner_id = $3
+       RETURNING *`,
+      [name, id, ownerId]
+    );
+    return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+  } finally {
+    client.release();
+  }
 }
