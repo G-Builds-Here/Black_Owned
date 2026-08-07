@@ -10,20 +10,8 @@
 export type ScraperSource = "google-maps" | "yelp" | "facebook";
 
 /**
- * Extracted business metadata from scraper
- */
-export interface ExtractedBusinessMetadata {
-  name: string;
-  category: string;
-  rating: number;
-  review_count: number;
-  address?: string;
-  phone?: string;
-  website?: string;
-}
-
-/**
  * Scrape job status - tracks the lifecycle of a scrape job
+
  */
 export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
 
@@ -32,6 +20,7 @@ export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
  */
 export interface CreateScrapeJobInput {
   source: ScraperSource;
+
   query: string;
   location: string;
 }
@@ -46,7 +35,6 @@ export interface ScrapeJob {
   location: string;
   status: ScrapeJobStatus;
   business_count: number;
-  extracted_metadata: ExtractedBusinessMetadata[];
   created_at: Date;
   updated_at: Date;
 }
@@ -69,4 +57,5 @@ export interface CreateScrapeJobResult {
 export interface ScrapeJobValidationError {
   field: string;
   message: string;
+
 }

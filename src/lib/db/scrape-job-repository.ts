@@ -11,7 +11,6 @@ import {
   ScrapeJob,
   ScraperSource,
   ScrapeJobStatus,
-  ExtractedBusinessMetadata,
 } from "../../types/scrape-job";
 import { getPool } from "./user-repository";
 
@@ -29,7 +28,6 @@ export async function initializeScrapeJobSchema(): Promise<void> {
         location TEXT NOT NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'pending',
         business_count INTEGER NOT NULL DEFAULT 0,
-        extracted_metadata JSONB NOT NULL DEFAULT '[]'::jsonb,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -47,6 +45,7 @@ export async function initializeScrapeJobSchema(): Promise<void> {
   } finally {
     client.release();
   }
+
 }
 
 /**
@@ -58,8 +57,8 @@ export async function createScrapeJob(
   const client = await getPool().connect();
   try {
     const result = await client.query<CreateScrapeJobResult>(
-      `INSERT INTO scrape_jobs (source, query, location, status, business_count, extracted_metadata, created_at, updated_at)
-       VALUES ($1, $2, $3, 'pending', 0, '[]'::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO scrape_jobs (source, query, location, status, business_count, created_at, updated_at)
+       VALUES ($1, $2, $3, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id, source, query, location, status, created_at`,
       [input.source, input.query, input.location]
     );
@@ -70,36 +69,18 @@ export async function createScrapeJob(
 }
 
 /**
- * Convert database row to ScrapeJob entity
- */
-function rowToScrapeJob(row: unknown): ScrapeJob {
-  const r = row as Record<string, unknown>;
-  return {
-    id: r.id as string,
-    source: r.source as ScraperSource,
-    query: r.query as string,
-    location: r.location as string,
-    status: r.status as ScrapeJobStatus,
-    business_count: (r.business_count as number) ?? 0,
-    extracted_metadata: (r.extracted_metadata as ExtractedBusinessMetadata[]) ?? [],
-    created_at: new Date(r.created_at as string),
-    updated_at: new Date(r.updated_at as string),
-  };
-}
-
-/**
  * Get scrape job by ID
  */
 export async function findScrapeJobById(id: string): Promise<ScrapeJob | null> {
   const client = await getPool().connect();
   try {
     const result = await client.query<ScrapeJob>(
-      `SELECT id, source, query, location, status, business_count, extracted_metadata, created_at, updated_at
+      `SELECT id, source, query, location, status, business_count, created_at, updated_at
        FROM scrape_jobs
        WHERE id = $1`,
       [id]
     );
-    return result.rows[0] ? rowToScrapeJob(result.rows[0]) : null;
+    return result.rows[0] || null;
   } finally {
     client.release();
   }
@@ -118,7 +99,7 @@ export async function findAllScrapeJobs(
   try {
     let countQuery = "SELECT COUNT(*) FROM scrape_jobs";
     let mainQuery = `
-      SELECT id, source, query, location, status, business_count, extracted_metadata, created_at, updated_at
+      SELECT id, source, query, location, status, business_count, created_at, updated_at
       FROM scrape_jobs
     `;
     const countParams: unknown[] = [];
@@ -144,7 +125,7 @@ export async function findAllScrapeJobs(
     const totalPages = Math.ceil(total / pageSize);
 
     return {
-      jobs: result.rows.map(rowToScrapeJob),
+      jobs: result.rows,
       total,
       page,
       pageSize,
@@ -153,6 +134,7 @@ export async function findAllScrapeJobs(
   } finally {
     client.release();
   }
+
 }
 
 /**
@@ -168,10 +150,10 @@ export async function updateScrapeJobStatus(
       `UPDATE scrape_jobs
        SET status = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
-       RETURNING id, source, query, location, status, business_count, extracted_metadata, created_at, updated_at`,
+       RETURNING id, source, query, location, status, business_count, created_at, updated_at`,
       [status, id]
     );
-    return result.rows[0] ? rowToScrapeJob(result.rows[0]) : null;
+    return result.rows[0] || null;
   } finally {
     client.release();
   }
@@ -190,33 +172,77 @@ export async function updateScrapeJobBusinessCount(
       `UPDATE scrape_jobs
        SET business_count = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
-       RETURNING id, source, query, location, status, business_count, extracted_metadata, created_at, updated_at`,
+       RETURNING id, source, query, location, status, business_count, created_at, updated_at`,
       [businessCount, id]
     );
-    return result.rows[0] ? rowToScrapeJob(result.rows[0]) : null;
+    return result.rows[0] || null;
   } finally {
     client.release();
   }
 }
 
 /**
- * Save extracted business metadata to a scrape job
+ * Scrape job summary statistics for the analytics page
  */
-export async function saveExtractedMetadata(
-  id: string,
-  metadata: ExtractedBusinessMetadata[]
-): Promise<ScrapeJob | null> {
+export interface ScrapeJobSummary {
+  total_jobs: number;
+  successful_jobs: number;
+  failed_jobs: number;
+  pending_jobs: number;
+  running_jobs: number;
+  last_30_days: {
+    total_jobs: number;
+    successful_jobs: number;
+    failed_jobs: number;
+  };
+}
+
+/**
+ * Get scrape job summary statistics
+ * @param days - Number of days to look back (default: 30)
+ */
+export async function getScrapeJobSummary(days: number = 30): Promise<ScrapeJobSummary> {
   const client = await getPool().connect();
   try {
-    const result = await client.query<ScrapeJob>(
-      `UPDATE scrape_jobs
-       SET extracted_metadata = $1, business_count = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING id, source, query, location, status, business_count, extracted_metadata, created_at, updated_at`,
-      [JSON.stringify(metadata), metadata.length, id]
-    );
-    return result.rows[0] ? rowToScrapeJob(result.rows[0]) : null;
+    // Get overall summary
+    const overallQuery = `
+      SELECT
+        COUNT(*) as total_jobs,
+        COUNT(*) FILTER (WHERE status = 'completed') as successful_jobs,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed_jobs,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_jobs,
+        COUNT(*) FILTER (WHERE status = 'running') as running_jobs
+      FROM scrape_jobs
+    `;
+    const overallResult = await client.query<ScrapeJobSummary>(overallQuery);
+    const overall = overallResult.rows[0];
+
+    // Get last N days summary
+    const lastDaysQuery = `
+      SELECT
+        COUNT(*) as total_jobs,
+        COUNT(*) FILTER (WHERE status = 'completed') as successful_jobs,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed_jobs
+      FROM scrape_jobs
+      WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${days} days'
+    `;
+    const lastDaysResult = await client.query<ScrapeJobSummary>(lastDaysQuery);
+    const lastDays = lastDaysResult.rows[0];
+
+    return {
+      total_jobs: overall.total_jobs || 0,
+      successful_jobs: overall.successful_jobs || 0,
+      failed_jobs: overall.failed_jobs || 0,
+      pending_jobs: overall.pending_jobs || 0,
+      running_jobs: overall.running_jobs || 0,
+      last_30_days: {
+        total_jobs: lastDays.total_jobs || 0,
+        successful_jobs: lastDays.successful_jobs || 0,
+        failed_jobs: lastDays.failed_jobs || 0,
+      },
+    };
   } finally {
     client.release();
   }
+
 }

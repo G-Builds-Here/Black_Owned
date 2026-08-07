@@ -5,9 +5,6 @@ pub mod validation;
 pub mod yelp;
 pub mod google_maps;
 pub mod facebook;
-pub mod pipeline;
-
-pub use transformer::RawBusinessData;
 
 use crate::Business;
 use anyhow::Result;

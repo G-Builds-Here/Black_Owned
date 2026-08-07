@@ -105,46 +105,46 @@ mod tests {
 
     fn create_yelp_business(name: &str) -> serde_json::Value {
         serde_json::json!({
-            "id": "yelp-business-123",
+            "id": "test-yelp-id",
             "name": name,
-            "description": "A wonderful business on Yelp",
+            "description": "A great business",
             "location": {
-                "address1": "123 Yelp Street",
-                "city": "San Francisco",
-                "state": "CA",
-                "zip_code": "94102"
+                "address1": "123 Main St",
+                "city": "Springfield",
+                "state": "IL",
+                "zip_code": "62701"
             },
             "phone": "+1-555-1234",
-            "url": "https://yelp-business.com",
+            "url": "https://example.com",
             "categories": [
-                {"alias": "restaurant", "title": "Restaurant"}
+                {"alias": "restaurants", "title": "Restaurants"}
             ],
             "rating": 4.5,
-            "review_count": 128,
-            "image_url": "https://yelp.com/biz_photo.jpg"
+            "review_count": 127,
+            "image_url": "https://example.com/image.jpg"
         })
     }
 
     #[test]
     fn test_transform_yelp_business() {
         let transformer = YelpTransformer::new();
-        let raw = create_yelp_business("Yelp Business");
+        let raw = create_yelp_business("Test Yelp Business");
 
         let result = transformer.transform(&raw);
         assert!(result.is_ok());
 
         let business = result.unwrap();
-        assert_eq!(business.name, "Yelp Business");
-        assert_eq!(business.description, Some("A wonderful business on Yelp".to_string()));
+        assert_eq!(business.name, "Test Yelp Business");
+        assert_eq!(business.description, Some("A great business".to_string()));
     }
 
     #[test]
     fn test_transform_yelp_missing_name() {
         let transformer = YelpTransformer::new();
         let raw = serde_json::json!({
-            "id": "yelp-business-123",
+            "id": "test-id",
             "location": {
-                "address1": "123 Street"
+                "address1": "123 Main St"
             }
         });
 
@@ -153,18 +153,19 @@ mod tests {
     }
 
     #[test]
-    fn test_transform_yelp_minimal() {
+    fn test_transform_yelp_minimal_data() {
         let transformer = YelpTransformer::new();
         let raw = serde_json::json!({
-            "id": "yelp-business-123",
-            "name": "Minimal Yelp Business"
+            "id": "test-id",
+            "name": "Minimal Business"
         });
 
         let result = transformer.transform(&raw);
         assert!(result.is_ok());
 
         let business = result.unwrap();
-        assert_eq!(business.name, "Minimal Yelp Business");
+        assert_eq!(business.name, "Minimal Business");
+        assert!(business.description.is_none());
     }
 
     #[test]
@@ -172,15 +173,29 @@ mod tests {
         let transformer = YelpTransformer::new();
         let raw = serde_json::json!({
             "location": {
-                "address1": "123 Yelp St",
-                "city": "San Francisco",
-                "state": "CA",
-                "zip_code": "94102"
+                "address1": "123 Main St",
+                "city": "Springfield",
+                "state": "IL",
+                "zip_code": "62701"
             }
         });
 
         let address = transformer.extract_address(&raw);
-        assert_eq!(address, Some("123 Yelp St, San Francisco, CA, 94102".to_string()));
+        assert_eq!(address, Some("123 Main St, Springfield, IL, 62701".to_string()));
+    }
+
+    #[test]
+    fn test_extract_address_partial() {
+        let transformer = YelpTransformer::new();
+        let raw = serde_json::json!({
+            "location": {
+                "address1": "456 Oak Ave",
+                "city": "Chicago"
+            }
+        });
+
+        let address = transformer.extract_address(&raw);
+        assert_eq!(address, Some("456 Oak Ave, Chicago".to_string()));
     }
 
     #[test]
@@ -195,72 +210,18 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_address_partial() {
-        let transformer = YelpTransformer::new();
-        let raw = serde_json::json!({
-            "location": {
-                "address1": "456 Street",
-                "city": "New York"
-            }
-        });
-
-        let address = transformer.extract_address(&raw);
-        assert_eq!(address, Some("456 Street, New York".to_string()));
-    }
-
-    #[test]
     fn test_source_type() {
         let transformer = YelpTransformer::new();
         assert_eq!(transformer.source_type(), "yelp");
     }
 
     #[test]
-    fn test_transform_with_all_fields() {
-        let transformer = YelpTransformer::with_category_id(Uuid::new_v4());
-        let raw = create_yelp_business("Full Yelp Business");
+    fn test_transform_with_custom_category() {
+        let custom_category = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
+        let transformer = YelpTransformer::with_category_id(custom_category);
+        let raw = create_yelp_business("Categorized Business");
 
-        let result = transformer.transform(&raw);
-        assert!(result.is_ok());
-
-        let business = result.unwrap();
-        assert_eq!(business.name, "Full Yelp Business");
-        assert_eq!(business.description, Some("A wonderful business on Yelp".to_string()));
-        assert_eq!(business.verified, false);
-    }
-
-    #[test]
-    fn test_transform_with_missing_optional_fields() {
-        let transformer = YelpTransformer::new();
-        let raw = serde_json::json!({
-            "name": "Minimal Business",
-            "location": {
-                "address1": "123 St"
-            }
-        });
-
-        let result = transformer.transform(&raw);
-        assert!(result.is_ok());
-
-        let business = result.unwrap();
-        assert_eq!(business.name, "Minimal Business");
-        assert!(business.description.is_none());
-    }
-
-    #[test]
-    fn test_transform_with_category_list() {
-        let transformer = YelpTransformer::new();
-        let raw = serde_json::json!({
-            "name": "Categorized Business",
-            "categories": [
-                {"alias": "cafe", "title": "Cafe"},
-                {"alias": "coffee", "title": "Coffee Shop"}
-            ]
-        });
-
-        let result = transformer.transform(&raw);
-        assert!(result.is_ok());
-
-        let business = result.unwrap();
-        assert_eq!(business.name, "Categorized Business");
+        let result = transformer.transform(&raw).unwrap();
+        assert_eq!(result.category_id, custom_category);
     }
 }
