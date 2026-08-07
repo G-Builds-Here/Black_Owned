@@ -28,7 +28,7 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusinessRecord,
+  create as createBusiness,
   Business as BusinessRecord,
 } from "../db/business-repository";
 
@@ -308,11 +308,13 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-function businessRecordToGraphql(business: BusinessRecord) {
+function businessToGraphqlBusiness(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
     categoryId: business.category_id,
+    rating: business.rating,
+    reviewCount: business.review_count,
     verified: business.verified,
     createdAt: {
       timestamp: Math.floor(business.created_at.getTime() / 1000),
@@ -370,7 +372,7 @@ export async function updateBusiness(
 
   return {
     success: true,
-    business: businessRecordToGraphql(updatedBusiness),
+    business: businessToGraphqlBusiness(updatedBusiness),
   };
 }
 
@@ -480,6 +482,8 @@ function businessToGraphqlBusiness(business: Business): {
   id: string;
   name: string;
   categoryId: string;
+  rating: number | null;
+  reviewCount: number;
   verified: boolean;
   createdAt: { timestamp: number };
 } {
@@ -487,6 +491,8 @@ function businessToGraphqlBusiness(business: Business): {
     id: business.id,
     name: business.name,
     categoryId: business.categoryId,
+    rating: business.rating,
+    reviewCount: business.reviewCount,
     verified: business.verificationStatus === "verified",
     createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
   };
@@ -503,9 +509,9 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusinessMutation(
+export async function createBusiness(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string; address?: string } },
+  args: { input: { name: string; description?: string; categoryId: string; rating?: number; reviewCount?: number } },
   context: unknown
 ): Promise<{
   success: boolean;
@@ -540,13 +546,14 @@ export async function createBusinessMutation(
 
   const client = await getPool().connect();
   try {
-    const business = await createBusinessRecord(
+    const business = await createBusinessInDb(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
       input.categoryId.trim(),
-      input.address?.trim()
+      input.rating ?? null,
+      input.reviewCount ?? 0
     );
 
     return {
@@ -565,6 +572,28 @@ export async function createBusinessMutation(
 }
 
 /**
+ * Internal function to create a business in the database
+ */
+async function createBusinessInDb(
+  client: import("pg").PoolClient,
+  ownerId: string,
+  name: string,
+  description: string | undefined,
+  categoryId: string,
+  rating: number | null = null,
+  reviewCount: number = 0
+): Promise<Business> {
+  const tableName = "businesses";
+  const result = await client.query<Business>(
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, rating, review_count, verification_status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'unverified')
+     RETURNING *`,
+    [ownerId, name, description || null, categoryId, rating ?? null, reviewCount]
+  );
+  return result.rows[0];
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
@@ -574,7 +603,7 @@ export const resolvers = {
   },
   Mutation: {
     register,
-    createBusiness: createBusinessMutation,
+    createBusiness,
     submitVerification,
     updateBusiness,
   },

@@ -26,8 +26,9 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       name VARCHAR(255) NOT NULL,
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
+      rating DECIMAL(3,2),
+      review_count INTEGER NOT NULL DEFAULT 0,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
-      address TEXT,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -45,8 +46,9 @@ function rowToBusiness(row: unknown): Business {
     name: r.name as string,
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
+    rating: r.rating !== null ? parseFloat(r.rating as string) : null,
+    reviewCount: (r.review_count as number) ?? 0,
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
-    address: r.address as string | undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -61,14 +63,15 @@ export async function createBusiness(
   name: string,
   description: string | undefined,
   categoryId: string,
-  address: string | undefined
+  rating: number | null = null,
+  reviewCount: number = 0
 ): Promise<Business> {
   const tableName = getTableName();
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, address)
-     VALUES ($1, $2, $3, $4, 'unverified', $5)
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, rating, review_count, verification_status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'unverified')
      RETURNING *`,
-    [ownerId, name, description || null, categoryId, address || null]
+    [ownerId, name, description || null, categoryId, rating ?? null, reviewCount]
   );
   return rowToBusiness(result.rows[0]);
 }
@@ -104,25 +107,21 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
- * Update business name by ID (only if user is the owner)
+ * Update business rating and review count
  */
-export async function updateNameById(
+export async function updateBusinessRating(
+  client: PoolClient,
   id: string,
-  name: string,
-  ownerId: string
+  rating: number | null,
+  reviewCount: number
 ): Promise<Business | undefined> {
-  const client = await getPool().connect();
-  try {
-    const tableName = getTableName();
-    const result = await client.query<Business>(
-      `UPDATE ${tableName}
-       SET name = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2 AND owner_id = $3
-       RETURNING *`,
-      [name, id, ownerId]
-    );
-    return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
-  } finally {
-    client.release();
-  }
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET rating = $1, review_count = $2, updated_at = NOW()
+     WHERE id = $3
+     RETURNING *`,
+    [rating ?? null, reviewCount, id]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }

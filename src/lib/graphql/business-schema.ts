@@ -11,25 +11,24 @@ export const businessTypeDefs = `#graphql
     id: ID!
     name: String!
     categoryId: String!
+    rating: Float
+    reviewCount: Int!
     verified: Boolean!
     createdAt: DateTimeUtc!
-    phone: String
-    potentialDuplicateId: String
   }
 
   type CreateBusinessPayload {
     success: Boolean!
     business: Business
     error: String
-    isPotentialDuplicate: Boolean!
-    existingBusinessId: String
   }
 
   input CreateBusinessInput {
     name: String!
     description: String
     categoryId: String!
-    phone: String
+    rating: Float
+    reviewCount: Int
   }
 
   type Query {

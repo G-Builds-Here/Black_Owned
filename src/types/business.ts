@@ -18,6 +18,8 @@ export interface Business {
   name: string;
   description: string | undefined;
   categoryId: string;
+  rating: number | null;
+  reviewCount: number;
   verificationStatus: VerificationStatus;
   address: string | undefined;
   createdAt: Date;

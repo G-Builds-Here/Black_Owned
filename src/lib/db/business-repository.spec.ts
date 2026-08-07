@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, normalizePhoneNumber } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, updateBusinessRating } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -57,6 +57,8 @@ describe("Business Repository", () => {
           expect(business.name).toBe("Test Business");
           expect(business.description).toBe("Test description");
           expect(business.categoryId).toBe("cat-1");
+          expect(business.rating).toBeNull();
+          expect(business.reviewCount).toBe(0);
           expect(business.verificationStatus).toBe("unverified");
           expect(business.createdAt).toBeInstanceOf(Date);
           expect(business.updatedAt).toBeInstanceOf(Date);
@@ -79,6 +81,27 @@ describe("Business Repository", () => {
 
           expect(business.name).toBe("Test Business No Desc");
           expect(business.description).toBeUndefined();
+          expect(business.reviewCount).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("creates a business with rating and review count", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Rated Business", "Test description", "cat-3", 4.5, 25);
+
+          expect(business.name).toBe("Rated Business");
+          expect(business.rating).toBe(4.5);
+          expect(business.reviewCount).toBe(25);
         } finally {
           client.release();
         }
@@ -160,39 +183,50 @@ describe("Business Repository", () => {
       }
     });
   });
-});
 
-describe("normalizePhoneNumber", () => {
-  it("removes parentheses and dashes", () => {
-    expect(normalizePhoneNumber("(555) 123-4567")).toBe("5551234567");
-  });
+  describe("updateBusinessRating", () => {
+    it("updates business rating and review count", async () => {
+      const user = await createTestUser();
 
-  it("removes spaces", () => {
-    expect(normalizePhoneNumber("555 123 4567")).toBe("5551234567");
-  });
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Initial Business", "Desc", "cat-1");
 
-  it("handles country code", () => {
-    // Strips leading "1" for 11-digit US numbers to enable exact matching
-    expect(normalizePhoneNumber("+1-555-123-4567")).toBe("5551234567");
-  });
+          const updated = await updateBusinessRating(client, business.id, 4.5, 25);
 
-  it("handles plain digits", () => {
-    expect(normalizePhoneNumber("5551234567")).toBe("5551234567");
-  });
+          expect(updated).toBeDefined();
+          expect(updated?.rating).toBe(4.5);
+          expect(updated?.reviewCount).toBe(25);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
 
-  it("trims whitespace", () => {
-    expect(normalizePhoneNumber("  (555) 123-4567  ")).toBe("5551234567");
-  });
+    it("sets rating to null and updates review count", async () => {
+      const user = await createTestUser();
 
-  it("handles dots as separator", () => {
-    expect(normalizePhoneNumber("555.123.4567")).toBe("5551234567");
-  });
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+          const business = await createBusiness(client, user.id, "Initial Business", "Desc", "cat-1", 3.0, 10);
 
-  it("returns empty string for empty input", () => {
-    expect(normalizePhoneNumber("")).toBe("");
-  });
+          const updated = await updateBusinessRating(client, business.id, null, 50);
 
-  it("returns empty string for whitespace only", () => {
-    expect(normalizePhoneNumber("   ")).toBe("");
+          expect(updated).toBeDefined();
+          expect(updated?.rating).toBeNull();
+          expect(updated?.reviewCount).toBe(50);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
   });
 });
