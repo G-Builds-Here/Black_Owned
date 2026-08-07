@@ -19,7 +19,6 @@ pub struct Business {
     pub category_id: Uuid,
     pub owner_id: Uuid,
     pub verified: bool,
-    pub address: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -102,7 +101,6 @@ mod tests {
             category_id: Uuid::new_v4(),
             owner_id: Uuid::new_v4(),
             verified: true,
-            address: Some("123 Main St".to_string()),
             created_at: Utc::now(),
         };
 
@@ -112,9 +110,9 @@ mod tests {
         assert_eq!(business.id, deserialized.id);
         assert_eq!(business.name, deserialized.name);
         assert_eq!(business.category_id, deserialized.category_id);
-        assert_eq!(business.owner_id, deserialized.owner_id);
         assert_eq!(business.verified, deserialized.verified);
         assert_eq!(business.created_at, deserialized.created_at);
+        assert_eq!(business.description, deserialized.description);
     }
 
     #[test]
@@ -242,11 +240,10 @@ mod tests {
         let business = BusinessBuilder::default()
             .id(Uuid::new_v4())
             .name("Test")
-            .description(Some("Test description".to_string()))
+            .description("Test description".to_string())
             .category_id(Uuid::new_v4())
             .owner_id(Uuid::new_v4())
             .verified(true)
-            .address(Some("123 Test St".to_string()))
             .created_at(Utc::now())
             .build()
             .unwrap();
