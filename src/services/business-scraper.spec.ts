@@ -190,5 +190,183 @@ describe("BusinessScraper", () => {
       expect(result.data?.address.street).toBe("200 Park Avenue Suite 500");
       expect(result.data?.address.city).toBe("New York");
     });
+
+    it("should handle address with ZIP+4 format", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Test Business",
+        rawAddress: "500 Main St, Dallas, TX 75201-1234",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.zipCode).toBe("75201-1234");
+    });
+
+    it("should handle address with country code US", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Test Business",
+        rawAddress: "100 First Ave, Seattle, WA 98101, US",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.countryCode).toBe("US");
+    });
+
+    it("should handle address with country code UK", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Test Business",
+        rawAddress: "10 Downing St, London, UK",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.countryCode).toBe("UK");
+    });
+
+    it("should handle address without comma separation", () => {
+      const listing: RawBusinessListing = {
+        source: "yelp",
+        rawName: "Test Business",
+        rawAddress: "123 Oak Street Austin TX 78701",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      // ZIP code is extracted separately, so street contains everything before the ZIP
+      expect(result.data?.address.street).toBe("123 Oak Street Austin TX");
+      expect(result.data?.address.zipCode).toBe("78701");
+    });
+
+    it("should handle empty address string", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Test Business",
+        rawAddress: "",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.fullAddress).toBe("");
+      expect(result.data?.address.street).toBe("");
+      expect(result.data?.address.city).toBe("");
+    });
+
+    it("should handle null address", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Test Business",
+        rawAddress: "",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should clean name with dash metadata pattern", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Joe's Cafe - Downtown (Map data from Google)",
+        rawAddress: "100 Main St, Boston, MA 02101",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.name).toBe("Joe's Cafe - Downtown");
+    });
+
+    it("should handle address with multiple commas", () => {
+      const listing: RawBusinessListing = {
+        source: "facebook",
+        rawName: "Test Business",
+        rawAddress: "1000 Broadway, Suite 200, New York, NY 10001",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.street).toBe("1000 Broadway");
+      expect(result.data?.address.city).toBe("Suite 200");
+    });
+
+    it("should handle address with Drive suffix", () => {
+      const listing: RawBusinessListing = {
+        source: "yelp",
+        rawName: "Test Business",
+        rawAddress: "500 Sunset Drive, Los Angeles, CA 90028",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.street).toBe("500 Sunset Drive");
+      expect(result.data?.address.city).toBe("Los Angeles");
+    });
+
+    it("should handle address with Boulevard suffix", () => {
+      const listing: RawBusinessListing = {
+        source: "facebook",
+        rawName: "Test Business",
+        rawAddress: "750 Wilshire Blvd, Los Angeles, CA 90017",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.street).toBe("750 Wilshire Blvd");
+      expect(result.data?.address.city).toBe("Los Angeles");
+    });
+
+    it("should handle address with only street and city", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "Test Business",
+        rawAddress: "100 Main St, Portland",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.address.street).toBe("100 Main St");
+      expect(result.data?.address.city).toBe("Portland");
+      expect(result.data?.address.state).toBe("");
+      expect(result.data?.address.zipCode).toBe("");
+    });
+
+    it("should handle whitespace-only name", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "   ",
+        rawAddress: "100 Main St, New York, NY 10001",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Could not extract business name");
+    });
+
+    it("should handle name with extra whitespace", () => {
+      const listing: RawBusinessListing = {
+        source: "google-maps",
+        rawName: "   The   Best   Restaurant   ",
+        rawAddress: "100 Main St, New York, NY 10001",
+      };
+
+      const result = extractBusinessData(listing);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.name).toBe("The Best Restaurant");
+    });
   });
 });

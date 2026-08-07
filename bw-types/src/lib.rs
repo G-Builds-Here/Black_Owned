@@ -98,7 +98,9 @@ mod tests {
         let business = Business {
             id: Uuid::new_v4(),
             name: "Test Business".to_string(),
+            description: Some("A test business".to_string()),
             category_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
             verified: true,
             address: Some("123 Main St".to_string()),
             created_at: Utc::now(),
@@ -110,6 +112,7 @@ mod tests {
         assert_eq!(business.id, deserialized.id);
         assert_eq!(business.name, deserialized.name);
         assert_eq!(business.category_id, deserialized.category_id);
+        assert_eq!(business.owner_id, deserialized.owner_id);
         assert_eq!(business.verified, deserialized.verified);
         assert_eq!(business.created_at, deserialized.created_at);
     }
@@ -239,8 +242,11 @@ mod tests {
         let business = BusinessBuilder::default()
             .id(Uuid::new_v4())
             .name("Test")
+            .description(Some("Test description".to_string()))
             .category_id(Uuid::new_v4())
+            .owner_id(Uuid::new_v4())
             .verified(true)
+            .address(Some("123 Test St".to_string()))
             .created_at(Utc::now())
             .build()
             .unwrap();
