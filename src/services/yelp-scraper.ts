@@ -101,16 +101,31 @@ export class YelpScraper {
         resultsLoaded = false;
       }
 
+      // Initialize job state
+      const jobState: ScraperJobState = {
+        query,
+        location,
+        currentPage: 0,
+        totalPages: 0,
+        businessesCollected: [],
+        isComplete: false,
+      };
+
       // Process pages
       let currentPage = 1;
       let hasMoreResults = true;
 
       while (hasMoreResults && currentPage <= this.options.maxPages) {
+        jobState.currentPage = currentPage;
+
         // Extract businesses from current page
         const pageBusinesses = await this.extractBusinessesFromPage(
           page,
           seenNames
         );
+
+        // Update job state
+        jobState.businessesCollected = [...collectedBusinesses, ...pageBusinesses];
 
         if (pageBusinesses.length === 0 && currentPage === 1) {
           // No results on first page
@@ -135,6 +150,9 @@ export class YelpScraper {
         }
       }
 
+      jobState.totalPages = currentPage;
+      jobState.isComplete = true;
+
       // Calculate pagination info
       const totalResults = collectedBusinesses.length;
       const totalPages = Math.ceil(totalResults / DEFAULT_RESULTS_PER_PAGE);
@@ -154,6 +172,8 @@ export class YelpScraper {
         timestamp: new Date(),
       };
     } catch (error) {
+      jobState.error = error instanceof Error ? error.message : "Unknown error";
+      jobState.isComplete = false;
       throw error;
     } finally {
       await page.close();
@@ -247,9 +267,9 @@ export class YelpScraper {
       return true;
     });
 
-    return filteredBusinesses.map((b): ScrapedBusiness => ({
+    return filteredBusinesses.map((b) => ({
       ...b,
-      source: "yelp",
+      source: "yelp" as ScraperSource,
     }));
   }
 
