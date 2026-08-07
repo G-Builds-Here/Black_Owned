@@ -5,7 +5,7 @@
  */
 
 import { PoolClient } from "pg";
-import { Business } from "../../types/business";
+import { Business, ImportSource } from "../../types/business";
 
 /**
  * Get business table name (with schema if configured)
@@ -28,7 +28,9 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       category_id VARCHAR(100) NOT NULL,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      import_source VARCHAR(20),
+      scrape_job_id UUID
     )
   `);
 }
@@ -47,6 +49,8 @@ function rowToBusiness(row: unknown): Business {
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
+    importSource: r.import_source as "google_maps" | "yelp" | "facebook" | undefined,
+    scrapeJobId: r.scrape_job_id as string | undefined,
   };
 }
 
@@ -58,14 +62,16 @@ export async function createBusiness(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
+  categoryId: string,
+  importSource?: ImportSource,
+  scrapeJobId?: string
 ): Promise<Business> {
   const tableName = getTableName();
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, import_source, scrape_job_id)
+     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
      RETURNING *`,
-    [ownerId, name, description || null, categoryId]
+    [ownerId, name, description || null, categoryId, importSource || null, scrapeJobId || null]
   );
   return rowToBusiness(result.rows[0]);
 }
