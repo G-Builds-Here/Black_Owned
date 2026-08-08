@@ -1,20 +1,31 @@
 [package]
 name = "bw_scraper"
 version.workspace = true
-edition.workspace = true
+edition = "2021"
 license.workspace = true
 
+[features]
+default = ["scraper", "api", "importer"]
+scraper = []
+api = ["axum", "tokio/net"]
+importer = ["sqlx"]
+analytics = []
+full = ["scraper", "api", "importer", "analytics"]
+
 [dependencies]
+# Workspace dependencies
+bw-types = { workspace = true }
+
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
 
-# Database (PostgreSQL)
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres"] }
+# Database (PostgreSQL) - optional via importer feature
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres"], optional = true }
 
 # NATS JetStream messaging
 async-nats = "0.33"
 
-# HTTP API server
+# HTTP API server - optional via api feature
 axum = { version = "0.7", features = ["macros"], optional = true }
 
 # Serialization
@@ -29,7 +40,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
-[features]
-default = ["scraper", "api"]
-scraper = []
-api = ["axum"]
+# ClickHouse for analytics
+clickhouse = "0.12"
+
+# Playwright for web scraping (optional)
+# Note: playwright-rs not available on crates.io; placeholder for future integration
+# playwright = { version = "0.0.20", optional = true }
+
+# Additional dependencies for scraper module
+anyhow = "1.0"
+redis = { version = "0.24", features = ["tokio-comp"] }
+fastrand = "2.0"
