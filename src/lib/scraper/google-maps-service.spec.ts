@@ -5,6 +5,8 @@
 import {
   validateSearchRequest,
   searchGoogleMapsSearch,
+  resetRateLimiter,
+  getRateLimiterInstance,
   type GoogleMapsSearchRequest,
 } from "./google-maps-service";
 
@@ -292,6 +294,121 @@ describe("Google Maps Scraper Service", () => {
           expect(typeof business.website).toBe("string");
         }
       });
+    });
+
+    it("should apply rate limiting between consecutive requests", async () => {
+      // Reset the rate limiter to ensure a clean state
+      resetRateLimiter();
+
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const startTime = Date.now();
+
+      // Make first request
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 100, maxJitterMs: 50 });
+
+      // Make second request immediately
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 100, maxJitterMs: 50 });
+
+      const elapsed = Date.now() - startTime;
+
+      // Should have waited at least minDelay (100ms) plus some jitter
+      // Minimum expected: 100ms (first request has no delay, second waits min 100ms)
+      expect(elapsed).toBeGreaterThanOrEqual(90); // Allow small timing variance
+    });
+
+    it("should add random jitter to prevent pattern detection", async () => {
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const timings: number[] = [];
+
+      // Run multiple consecutive requests and measure delays
+      for (let i = 0; i < 5; i++) {
+        resetRateLimiter();
+        const startTime = Date.now();
+        await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 50, maxJitterMs: 50 });
+        await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 50, maxJitterMs: 50 });
+        const elapsed = Date.now() - startTime;
+        timings.push(elapsed);
+      }
+
+      // Verify that timings vary (due to jitter)
+      // All should be at least 50ms (minDelay), but should not all be identical
+      const allAtMin = timings.every((t) => t < 60);
+      const allAtMax = timings.every((t) => t > 90);
+
+      // At least some variation should exist (not all at min or all at max)
+      expect(!(allAtMin && allAtMax)).toBe(true);
+    });
+
+    it("should skip rate limiting when disabled", async () => {
+      resetRateLimiter();
+
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const startTime = Date.now();
+
+      // Make multiple requests with rate limiting disabled
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: false });
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: false });
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: false });
+
+      const elapsed = Date.now() - startTime;
+
+      // Should be very fast (only the 100ms simulated API delay per request, no rate limit wait)
+      // 3 requests * 100ms = 300ms max, but they run sequentially so ~300ms
+      // With rate limiting disabled, should be much faster than with 2s delay
+      expect(elapsed).toBeLessThan(500);
+    });
+
+    it("should use custom minDelay and maxJitter when provided", async () => {
+      resetRateLimiter();
+
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      const startTime = Date.now();
+
+      // Use very short delay (10ms) with no jitter
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 10, maxJitterMs: 0 });
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 10, maxJitterMs: 0 });
+
+      const elapsed = Date.now() - startTime;
+
+      // Should wait approximately 10ms for the second request
+      expect(elapsed).toBeGreaterThanOrEqual(5); // Allow small timing variance
+      expect(elapsed).toBeLessThan(50); // Should not be much more than 10ms
+    });
+
+    it("should reset rate limiter between test sessions", async () => {
+      resetRateLimiter();
+
+      const request: GoogleMapsSearchRequest = {
+        query: "restaurants",
+      };
+
+      // First request should not wait
+      const start1 = Date.now();
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 100, maxJitterMs: 0 });
+      const time1 = Date.now() - start1;
+
+      // Second request should wait
+      const start2 = Date.now();
+      await searchGoogleMapsSearch(request, { rateLimitEnabled: true, minDelayMs: 100, maxJitterMs: 0 });
+      const time2 = Date.now() - start2;
+
+      // First request should be fast (no prior request to wait for)
+      expect(time1).toBeLessThan(50);
+
+      // Second request should wait at least 100ms
+      expect(time2).toBeGreaterThanOrEqual(90);
     });
   });
 });

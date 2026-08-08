@@ -4,7 +4,10 @@
  * Provides search functionality for Google Maps data including:
  * - Business search by query, location, and type
  * - Result parsing and normalization
+ * - Rate limiting between requests
  */
+
+import { RateLimiter } from "../../utils/rate-limiter";
 
 export interface GoogleMapsSearchRequest {
   query: string;
@@ -43,6 +46,19 @@ export interface GoogleMapsSearchResponse {
 export interface SearchOptions {
   maxResults?: number;
   timeout?: number;
+  rateLimitEnabled?: boolean;
+  minDelayMs?: number;
+  maxJitterMs?: number;
+}
+
+// Singleton rate limiter instance for the module
+let rateLimiter: RateLimiter | null = null;
+
+function getRateLimiter(minDelayMs: number = 2000, maxJitterMs: number = 1000): RateLimiter {
+  if (!rateLimiter) {
+    rateLimiter = new RateLimiter({ minDelayMs, maxJitterMs });
+  }
+  return rateLimiter;
 }
 
 /**
@@ -93,10 +109,16 @@ export async function searchGoogleMapsSearch(
   request: GoogleMapsSearchRequest,
   options: SearchOptions = {}
 ): Promise<GoogleMapsSearchResponse> {
-  const { maxResults = 20, timeout = 30000 } = options;
+  const { maxResults = 20, timeout = 30000, rateLimitEnabled = true, minDelayMs = 2000, maxJitterMs = 1000 } = options;
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  // Apply rate limiting before making the request
+  if (rateLimitEnabled) {
+    const limiter = getRateLimiter(minDelayMs, maxJitterMs);
+    await limiter.waitForRateLimit();
+  } else {
+    // Simulate API delay
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 
   // Generate mock results based on search criteria
   const mockResults: GoogleMapsBusinessResult[] = generateMockResults(
@@ -156,4 +178,18 @@ function generateMockResults(
   }
 
   return results;
+}
+
+/**
+ * Resets the rate limiter (useful for testing or starting a new scrape session)
+ */
+export function resetRateLimiter(): void {
+  rateLimiter = null;
+}
+
+/**
+ * Gets the current rate limiter instance (for testing purposes)
+ */
+export function getRateLimiterInstance(): RateLimiter | null {
+  return rateLimiter;
 }

@@ -11,6 +11,8 @@
 
 import { TEST_PREFIX, formatBusinessName } from "./test-data-seeder";
 import { BusinessCategory } from "../types/business";
+import { PoolClient } from "pg";
+import { getTableName } from "../lib/db/business-repository";
 
 /**
  * Sample business template
@@ -179,9 +181,57 @@ function main(): void {
   printCategoryDistribution();
 }
 
-// Run if executed directly
-if (require.main === module) {
-  main();
+/**
+ * Counts test businesses in the database
+ */
+export async function countTestBusinesses(client: PoolClient): Promise<number> {
+  const tableName = getTableName();
+  const result = await client.query<{ count: string }>(
+    `SELECT COUNT(*) as count FROM ${tableName} WHERE name LIKE $1`,
+    [`${TEST_PREFIX}%`]
+  );
+  return parseInt(result.rows[0].count, 10);
+}
+
+/**
+ * Seeds businesses into the database
+ * Returns creation summary
+ */
+export async function seedBusinesses(
+  client: PoolClient,
+  ownerId: string,
+  reset: boolean = false
+): Promise<{ created: number; skipped: number; total: number }> {
+  const tableName = getTableName();
+  const businesses = generateSampleBusinesses();
+
+  if (reset) {
+    await client.query(`DELETE FROM ${tableName} WHERE name LIKE $1`, [`${TEST_PREFIX}%`]);
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const business of businesses) {
+    const existing = await client.query(
+      `SELECT id FROM ${tableName} WHERE name = $1`,
+      [business.name]
+    );
+
+    if (existing.rows.length > 0) {
+      skipped++;
+      continue;
+    }
+
+    await client.query(
+      `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
+       VALUES ($1, $2, $3, $4, 'unverified')`,
+      [ownerId, business.name, business.description, business.categoryId]
+    );
+    created++;
+  }
+
+  return { created, skipped, total: businesses.length };
 }
 
 // Export for testing
