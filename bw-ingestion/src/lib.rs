@@ -86,6 +86,12 @@ impl BusinessIngestionHandler {
             verified: false,
             created_at: chrono::Utc::now(),
             owner_id,
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         })
     }
 

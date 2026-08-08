@@ -20,6 +20,18 @@ pub struct Business {
     pub owner_id: Uuid,
     pub verified: bool,
     pub created_at: DateTime<Utc>,
+    /// Business address (optional - may not be available for all businesses)
+    pub address: Option<String>,
+    /// Phone number (optional)
+    pub phone: Option<String>,
+    /// Website URL (optional)
+    pub website: Option<String>,
+    /// Category name from scraper (optional)
+    pub category: Option<String>,
+    /// Average rating 1-5 (optional)
+    pub rating: Option<f64>,
+    /// Number of reviews (optional)
+    pub review_count: Option<i32>,
 }
 
 /// Review entity for business reviews

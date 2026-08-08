@@ -60,6 +60,12 @@ pub fn transform_to_business(
         owner_id: Uuid::new_v4(), // Placeholder - would come from auth context
         verified: false, // Default to unverified until verified
         created_at: Utc::now(),
+        address: raw.address.clone(),
+        phone: raw.phone.clone(),
+        website: raw.website.clone(),
+        category: raw.category.clone(),
+        rating: raw.rating,
+        review_count: raw.review_count.map(|v| v as i32),
     })
 }
 

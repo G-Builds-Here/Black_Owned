@@ -266,9 +266,6 @@ mod tests {
 
     #[test]
     fn test_transform_unknown_source() {
-        let pipeline = EtlPipeline::new();
-        let raw = serde_json::json!({});
-
         // Unknown source type should fail parsing
         let result = SourceType::from_str("unknown");
         assert!(result.is_err());
@@ -380,5 +377,34 @@ mod tests {
         // Should have 2 successful transformations (invalid ones are skipped)
         let results = results.unwrap();
         assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_handle_missing_optional_fields() {
+        // AC: Handle missing optional fields
+        // Given source data has missing optional fields
+        let pipeline = EtlPipeline::new();
+        let raw = serde_json::json!({
+            "displayName": "Test Business with Missing Fields"
+            // description, address, phone, website, categories, rating, reviewCount are all missing
+        });
+
+        // When the ETL pipeline processes it
+        let result = pipeline.transform(SourceType::GoogleMaps, &raw, "test-id");
+
+        // Then the record is still valid
+        assert!(result.is_ok());
+
+        let transformation = result.unwrap();
+        assert_eq!(transformation.business.name, "Test Business with Missing Fields");
+
+        // And the output has null for missing optional fields
+        assert!(transformation.business.description.is_none());
+        assert!(transformation.business.address.is_none());
+        assert!(transformation.business.phone.is_none());
+        assert!(transformation.business.website.is_none());
+        assert!(transformation.business.category.is_none());
+        assert!(transformation.business.rating.is_none());
+        assert!(transformation.business.review_count.is_none());
     }
 }
