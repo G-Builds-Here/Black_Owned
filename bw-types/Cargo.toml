@@ -10,3 +10,4 @@ serde_json = { workspace = true }
 derive_builder = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+sqlx = { workspace = true }

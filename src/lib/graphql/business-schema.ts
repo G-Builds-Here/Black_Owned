@@ -11,6 +11,8 @@ export const businessTypeDefs = `#graphql
     id: ID!
     name: String!
     categoryId: String!
+    rating: Float
+    reviewCount: Int!
     verified: Boolean!
     createdAt: DateTimeUtc!
   }
@@ -25,6 +27,8 @@ export const businessTypeDefs = `#graphql
     name: String!
     description: String
     categoryId: String!
+    rating: Float
+    reviewCount: Int
   }
 
   type Query {

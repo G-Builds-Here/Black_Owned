@@ -52,6 +52,38 @@ impl From<Business> for GQLBusiness {
     }
 }
 
+/// GraphQL Business type with ratings
+#[derive(SimpleObject, Clone, Debug)]
+pub struct GQLBusinessWithRatings {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub category_id: String,
+    pub owner_id: String,
+    pub status: String,
+    pub verified: bool,
+    pub created_at: DateTimeUtc,
+    pub rating_avg: Option<f64>,
+    pub review_count: i32,
+}
+
+impl GQLBusinessWithRatings {
+    pub fn with_ratings(business: Business, rating_avg: Option<f64>, review_count: i64) -> Self {
+        Self {
+            id: business.id.to_string(),
+            name: business.name,
+            description: business.description,
+            category_id: business.category_id.to_string(),
+            owner_id: business.owner_id.to_string(),
+            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
+            verified: business.verified,
+            created_at: business.created_at.into(),
+            rating_avg,
+            review_count: review_count as i32,
+        }
+    }
+}
+
 /// GraphQL Review type
 #[derive(SimpleObject, Clone, Debug)]
 pub struct GQLReview {
@@ -140,4 +172,38 @@ pub struct PageInfo {
     pub has_previous_page: bool,
     pub start_cursor: Option<String>,
     pub end_cursor: Option<String>,
+}
+
+/// Scrape job status enum
+#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ScrapeJobStatus {
+    Success,
+    Failed,
+    Running,
+}
+
+/// Scrape job type for GraphQL
+#[derive(SimpleObject, Clone, Debug)]
+pub struct ScrapeJob {
+    pub id: String,
+    pub job_name: String,
+    pub target_url: String,
+    pub status: ScrapeJobStatus,
+    pub error_message: Option<String>,
+    pub items_scraped: u32,
+    pub started_at: DateTimeUtc,
+    pub completed_at: Option<DateTimeUtc>,
+}
+
+/// Aggregated scrape job statistics
+#[derive(SimpleObject, Clone, Debug)]
+pub struct ScrapeJobStats {
+    pub total_jobs: i32,
+    pub successful_jobs: i32,
+    pub failed_jobs: i32,
+    pub total_items_scraped: i32,
+    pub period_days: i32,
+    pub avg_duration_seconds: Option<f64>,
+    pub min_duration_seconds: Option<i64>,
+    pub max_duration_seconds: Option<i64>,
 }

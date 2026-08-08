@@ -115,7 +115,7 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
     }
 
     // Handle createBusiness mutation
-    const createMatch = query.match(/createBusiness\s*\(\s*input:\s*\{\s*name:\s*"([^"]+)"\s*,\s*description:\s*"([^"]*)"\s*,\s*categoryId:\s*"([^"]+)"\s*\}\s*\)/);
+    const createMatch = query.match(/createBusiness\s*\(\s*input:\s*\{\s*name:\s*"([^"]+)"\s*,\s*description:\s*"([^"]*)"\s*,\s*categoryId:\s*"([^"]+)"(?:\s*,\s*phone:\s*"([^"]*)")?\s*\}\s*\)/);
     if (createMatch) {
       const result = await resolvers.Mutation.createBusiness(
         undefined,
@@ -124,9 +124,10 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
             name: createMatch[1],
             description: createMatch[2],
             categoryId: createMatch[3],
+            phone: createMatch[4] || undefined,
           },
         },
-        { headers: { authorization: 'Bearer token' } }
+        { user: { id: 'test-user' } }
       );
       return result;
     }

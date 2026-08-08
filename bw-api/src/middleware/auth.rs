@@ -2,11 +2,11 @@
 
 use axum::{
     body::Body,
-    extract::Extension,
     http::{Request, StatusCode, header},
     response::Response,
 };
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tower_layer::Layer;
 use tokio::sync::RwLock;
 
