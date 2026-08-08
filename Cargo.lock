@@ -658,7 +658,7 @@ dependencies = [
  "bw-types",
  "bytes",
  "chrono",
- "clickhouse",
+ "clickhouse 0.13.3",
  "futures",
  "image",
  "lettre",
@@ -692,6 +692,7 @@ dependencies = [
  "axum 0.7.9",
  "bw-types",
  "chrono",
+ "clickhouse 0.12.2",
  "serde",
  "serde_json",
  "sqlx",
@@ -779,6 +780,31 @@ checksum = "93a719913643003b84bd13022b4b7e703c09342cd03b679c4641c7d2e50dc34d"
 
 [[package]]
 name = "clickhouse"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3093f817c4f81c8bd174ed8dd30eac785821a8a7eef27a7dcb7f8cd0d0f6548"
+dependencies = [
+ "bstr",
+ "bytes",
+ "cityhash-rs",
+ "clickhouse-derive",
+ "futures",
+ "futures-channel",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "lz4_flex",
+ "replace_with",
+ "sealed 0.5.0",
+ "serde",
+ "static_assertions",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "clickhouse"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a9a81a1dffadd762ee662635ce409232258ce9beebd7cc0fa227df0b5e7efc0"
@@ -794,7 +820,7 @@ dependencies = [
  "hyper-util",
  "lz4_flex",
  "replace_with",
- "sealed",
+ "sealed 0.6.0",
  "serde",
  "static_assertions",
  "thiserror 1.0.69",
@@ -3463,6 +3489,18 @@ checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "sealed"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4a8caec23b7800fb97971a1c6ae365b6239aaeddfb934d6265f8505e795699d"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
