@@ -3,18 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Card, Badge, Navigation } from '@/components/ui';
 
+export type ScrapeJobSource = 'GoogleMaps' | 'Yelp' | 'Facebook' | 'All';
+
 interface ScrapeJobStats {
   totalJobs: number;
   successfulJobs: number;
   failedJobs: number;
   totalItemsScraped: number;
-  totalBusinessesScraped: number;
-  totalBusinessesImported: number;
-  importRate: number;
   periodDays: number;
-  avgDurationSeconds: number | null;
-  minDurationSeconds: number | null;
-  maxDurationSeconds: number | null;
+  source?: ScrapeJobSource;
 }
 
 interface ScrapeJob {
@@ -26,12 +23,21 @@ interface ScrapeJob {
   itemsScraped: number;
   startedAt: string;
   completedAt: string | null;
+  source?: string;
 }
+
+const SOURCE_OPTIONS: { label: string; value: ScrapeJobSource }[] = [
+  { label: 'All Sources', value: 'All' },
+  { label: 'Google Maps', value: 'GoogleMaps' },
+  { label: 'Yelp', value: 'Yelp' },
+  { label: 'Facebook', value: 'Facebook' },
+];
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState<ScrapeJobStats | null>(null);
   const [recentJobs, setRecentJobs] = useState<ScrapeJob[]>([]);
   const [periodDays, setPeriodDays] = useState(30);
+  const [sourceFilter, setSourceFilter] = useState<ScrapeJobSource>('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +45,11 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/analytics/scrape-jobs?days=${periodDays}`);
+      const params = new URLSearchParams({ days: periodDays.toString() });
+      if (sourceFilter !== 'All') {
+        params.set('source', sourceFilter);
+      }
+      const response = await fetch(`/api/analytics/scrape-jobs?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch stats');
       const data = await response.json();
       setStats(data);
@@ -52,7 +62,11 @@ export default function AnalyticsPage() {
 
   const fetchRecentJobs = async () => {
     try {
-      const response = await fetch('/api/analytics/scrape-jobs/recent?limit=10');
+      const params = new URLSearchParams({ limit: '10' });
+      if (sourceFilter !== 'All') {
+        params.set('source', sourceFilter);
+      }
+      const response = await fetch(`/api/analytics/scrape-jobs/recent?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch recent jobs');
       const data = await response.json();
       setRecentJobs(data);
@@ -62,9 +76,12 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => {
-    fetchStats();
-    fetchRecentJobs();
-  }, [periodDays]);
+    const timer = setTimeout(() => {
+      fetchStats();
+      fetchRecentJobs();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [periodDays, sourceFilter]);
 
   const handlePeriodChange = (days: number) => {
     setPeriodDays(days);
@@ -86,16 +103,6 @@ export default function AnalyticsPage() {
   const successRate = stats && stats.totalJobs > 0
     ? ((stats.successfulJobs / stats.totalJobs) * 100).toFixed(1)
     : '0.0';
-
-  const formatDuration = (seconds: number | null) => {
-    if (seconds === null) return 'N/A';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (mins > 0) {
-      return `${mins}m ${secs}s`;
-    }
-    return `${secs}s`;
-  };
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -124,6 +131,23 @@ export default function AnalyticsPage() {
           ))}
         </div>
 
+        {/* Source Filter */}
+        <div className="mb-6 flex gap-2">
+          {SOURCE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setSourceFilter(option.value)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                sourceFilter === option.value
+                  ? 'bg-heritage-ochre text-white'
+                  : 'bg-white text-neutral-700 hover:bg-neutral-100'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         {/* Error Display */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -141,7 +165,7 @@ export default function AnalyticsPage() {
         {/* Stats Cards */}
         {stats && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <Card variant="elevated" padding="lg">
                 <div className="text-center">
                   <p className="text-sm text-neutral-600 mb-2">Total Jobs</p>
@@ -169,78 +193,8 @@ export default function AnalyticsPage() {
               <Card variant="elevated" padding="lg">
                 <div className="text-center">
                   <p className="text-sm text-neutral-600 mb-2">Items Scraped</p>
-                  <p className="text-4xl font-bold text-heritage-ochre">{stats.totalItemsScraped.toLocaleString()}</p>
+                  <p className="text-4xl font-bold text-heritage-ochre">{(stats.totalItemsScraped ?? 0).toLocaleString()}</p>
                   <p className="text-xs text-neutral-500 mt-1">Total records</p>
-                </div>
-              </Card>
-
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Businesses Scraped</p>
-                  <p className="text-4xl font-bold text-blue-600">{stats.totalBusinessesScraped.toLocaleString()}</p>
-                  <p className="text-xs text-neutral-500 mt-1">From completed jobs</p>
-                </div>
-              </Card>
-
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Businesses Imported</p>
-                  <p className="text-4xl font-bold text-purple-600">{stats.totalBusinessesImported.toLocaleString()}</p>
-                  <p className="text-xs text-neutral-500 mt-1">{stats.importRate.toFixed(1)}% import rate</p>
-                </div>
-              </Card>
-            </div>
-
-            {/* Duration Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Avg Duration</p>
-                  <p className="text-4xl font-bold text-blue-600">{formatDuration(stats.avgDurationSeconds)}</p>
-                  <p className="text-xs text-neutral-500 mt-1">Completed jobs only</p>
-                </div>
-              </Card>
-
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Min Duration</p>
-                  <p className="text-4xl font-bold text-purple-600">{formatDuration(stats.minDurationSeconds)}</p>
-                  <p className="text-xs text-neutral-500 mt-1">Fastest job</p>
-                </div>
-              </Card>
-
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Max Duration</p>
-                  <p className="text-4xl font-bold text-orange-600">{formatDuration(stats.maxDurationSeconds)}</p>
-                  <p className="text-xs text-neutral-500 mt-1">Longest job</p>
-                </div>
-              </Card>
-            </div>
-
-            {/* Duration Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Avg Duration</p>
-                  <p className="text-4xl font-bold text-blue-600">{formatDuration(stats.avgDurationSeconds)}</p>
-                  <p className="text-xs text-neutral-500 mt-1">Completed jobs only</p>
-                </div>
-              </Card>
-
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Min Duration</p>
-                  <p className="text-4xl font-bold text-purple-600">{formatDuration(stats.minDurationSeconds)}</p>
-                  <p className="text-xs text-neutral-500 mt-1">Fastest job</p>
-                </div>
-              </Card>
-
-              <Card variant="elevated" padding="lg">
-                <div className="text-center">
-                  <p className="text-sm text-neutral-600 mb-2">Max Duration</p>
-                  <p className="text-4xl font-bold text-orange-600">{formatDuration(stats.maxDurationSeconds)}</p>
-                  <p className="text-xs text-neutral-500 mt-1">Longest job</p>
                 </div>
               </Card>
             </div>
@@ -248,7 +202,7 @@ export default function AnalyticsPage() {
             {/* Recent Jobs Table */}
             <Card variant="elevated" padding="lg" className="mb-8">
               <h2 className="text-xl font-semibold mb-4">Recent Jobs</h2>
-              {recentJobs.length === 0 ? (
+              {!Array.isArray(recentJobs) || recentJobs.length === 0 ? (
                 <p className="text-neutral-500 text-center py-8">No scrape jobs recorded yet</p>
               ) : (
                 <div className="overflow-x-auto">
@@ -276,7 +230,7 @@ export default function AnalyticsPage() {
                             </Badge>
                           </td>
                           <td className="py-3 px-4 text-neutral-600">{job.itemsScraped}</td>
-                          <td className="py-3 px-4 text-neutral-500 text-sm">{formatDateTime(job.startedAt)}</td>
+                          <td className="py-3 px-4 text-neutral-500 text-sm">{job.startedAt ? formatDateTime(job.startedAt) : 'N/A'}</td>
                         </tr>
                       ))}
                     </tbody>
