@@ -114,6 +114,12 @@ mod tests {
             owner_id: Uuid::new_v4(),
             verified: true,
             created_at: Utc::now(),
+            address: Some("123 Main St".to_string()),
+            phone: Some("+1-555-1234".to_string()),
+            website: Some("https://test.com".to_string()),
+            category: Some("Restaurant".to_string()),
+            rating: Some(4.5),
+            review_count: Some(100),
         };
 
         let json = serde_json::to_string(&business).unwrap();
@@ -257,6 +263,12 @@ mod tests {
             .owner_id(Uuid::new_v4())
             .verified(true)
             .created_at(Utc::now())
+            .address("123 Main St".to_string())
+            .phone("+1-555-1234".to_string())
+            .website("https://test.com".to_string())
+            .category("Restaurant".to_string())
+            .rating(4.5)
+            .review_count(100)
             .build()
             .unwrap();
 
