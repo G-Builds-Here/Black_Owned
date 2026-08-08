@@ -4,12 +4,14 @@
 
 pub mod scraper;
 pub mod types;
-pub mod robots;
-pub mod user_agent_rotator;
-pub mod connectors;
 
 // Placeholder modules - to be implemented
 pub mod etl;
 pub mod importer;
 pub mod api;
 pub mod models;
+
+// Additional modules for scraper functionality
+pub mod robots;
+pub mod user_agent_rotator;
+pub mod connectors;
