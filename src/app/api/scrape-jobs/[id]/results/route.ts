@@ -1,29 +1,21 @@
 /**
  * Scrape Job Results API Route
  *
- * GET /api/scrape-jobs/:id/results - Get scraped businesses for a completed job
+ * GET /api/scrape-jobs/[id]/results - Get scraped businesses for a job
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/db/user-repository";
+import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
-  findScrapeJobById,
-  updateScrapeJobStatus,
-} from "@/lib/db/scrape-job-repository";
-import { findBusinessesByJobId } from "@/lib/db/pending-import-business-repository";
+  findScrapedBusinessesByJobId,
+  initializeScrapedBusinessSchema,
+} from "@/lib/db/scraped-business-repository";
+import { getPool } from "@/lib/db/user-repository";
 import { ScrapeJobStatus } from "@/types/scrape-job";
 
 /**
- * Validates UUID format
- */
-function isValidUuid(id: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(id);
-}
-
-/**
- * GET /api/scrape-jobs/:id/results
- * Get scraped businesses for a specific scrape job
+ * GET /api/scrape-jobs/[id]/results
+ * Get all scraped businesses for a specific scrape job
  */
 export async function GET(
   request: NextRequest,
@@ -44,9 +36,15 @@ export async function GET(
       );
     }
 
-    // Check if job exists
-    const client = await getPool().connect();
+    // Get database connection
+    const pool = getPool();
+    const client = await pool.connect();
+
     try {
+      // Initialize schema if needed
+      await initializeScrapedBusinessSchema(client);
+
+      // Check if scrape job exists
       const job = await findScrapeJobById(client, id);
 
       if (!job) {
@@ -60,29 +58,28 @@ export async function GET(
         );
       }
 
-      // Only return results for completed jobs
+      // Check if job is completed
       if (job.status !== "completed") {
         return NextResponse.json(
           {
             success: false,
-            error: "Job is not completed",
-            code: "NOT_COMPLETED",
+            error: "Job is not completed yet",
+            code: "JOB_NOT_COMPLETED",
             status: job.status,
           },
           { status: 400 }
         );
       }
 
-      // Fetch businesses for this job
-      const businesses = await findBusinessesByJobId(client, id);
+      // Fetch scraped businesses for this job
+      const businesses = await findScrapedBusinessesByJobId(client, id);
 
       return NextResponse.json({
         success: true,
         data: {
           jobId: id,
-          status: job.status,
           businessCount: businesses.length,
-          businesses: businesses,
+          businesses,
         },
       });
     } finally {
@@ -98,4 +95,12 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+/**
+ * Validate UUID format
+ */
+function isValidUuid(id: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
 }

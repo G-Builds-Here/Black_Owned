@@ -1,209 +1,252 @@
 /**
- * Scrape Job Results Route Tests
+ * Scrape Job Results API Tests
+ *
+ * Tests for GET /api/scrape-jobs/[id]/results
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { GET } from "./route";
-import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
-import { findBusinessesByJobId } from "@/lib/db/pending-import-business-repository";
+import { NextRequest } from "next/server";
 
-// Mock database functions
+// Mock dependencies BEFORE importing the route
 jest.mock("@/lib/db/scrape-job-repository", () => ({
   findScrapeJobById: jest.fn(),
 }));
 
-jest.mock("@/lib/db/pending-import-business-repository", () => ({
-  findBusinessesByJobId: jest.fn(),
+jest.mock("@/lib/db/scraped-business-repository", () => ({
+  findScrapedBusinessesByJobId: jest.fn(),
+  initializeScrapedBusinessSchema: jest.fn(),
 }));
 
-// Mock getPool
 jest.mock("@/lib/db/user-repository", () => ({
-  getPool: jest.fn(() => ({
-    connect: jest.fn(() => ({
-      query: jest.fn(),
-      release: jest.fn(),
-    })),
-  })),
+  getPool: jest.fn(),
 }));
 
-describe("GET /api/scrape-jobs/:id/results", () => {
-  const mockJob = {
-    id: "550e8400-e29b-41d4-a716-446655440000",
-    source: "google-maps",
-    query: "restaurants",
-    location: "Los Angeles",
-    status: "completed",
-    resultCount: 5,
-    errorMessage: undefined,
-    createdAt: new Date("2024-01-01T00:00:00Z"),
-    updatedAt: new Date("2024-01-02T00:00:00Z"),
-  };
+import { GET } from "./route";
+import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
+import {
+  findScrapedBusinessesByJobId,
+  initializeScrapedBusinessSchema,
+} from "@/lib/db/scraped-business-repository";
+import { getPool } from "@/lib/db/user-repository";
 
-  const mockBusinesses = [
-    {
-      id: "biz-1",
-      name: "Test Restaurant",
-      job_id: mockJob.id,
-      created_at: "2024-01-01T00:00:00.000Z",
-    },
-  ];
+import { GET } from "./route";
+
+describe("GET /api/scrape-jobs/[id]/results", () => {
+  const mockQuery = jest.fn();
+  const mockClient = {
+    query: mockQuery,
+    release: jest.fn(),
+  };
+  const mockPool = {
+    connect: jest.fn().mockResolvedValue(mockClient),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (getPool as jest.Mock).mockReturnValue(mockPool);
+    // Default: query returns empty result
+    mockQuery.mockResolvedValue({ rows: [] });
   });
 
-  describe("Success cases", () => {
-    it("should return scraped businesses for a completed job", async () => {
-      (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
-      (findBusinessesByJobId as jest.Mock).mockResolvedValue(mockBusinesses);
-
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
-
-      const response = await GET(request, context);
-      const json = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(json.success).toBe(true);
-      expect(json.data.jobId).toBe(mockJob.id);
-      expect(json.data.status).toBe("completed");
-      expect(json.data.businessCount).toBe(1);
-      expect(json.data.businesses).toEqual(mockBusinesses);
-    });
-
-    it("should return empty businesses array when job has no results", async () => {
-      (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
-      (findBusinessesByJobId as jest.Mock).mockResolvedValue([]);
-
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
-
-      const response = await GET(request, context);
-      const json = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(json.success).toBe(true);
-      expect(json.data.businessCount).toBe(0);
-      expect(json.data.businesses).toEqual([]);
-    });
+  afterEach(() => {
+    jest.resetAllMocks();
   });
 
-  describe("Error cases", () => {
-    it("should return 404 when job is not found", async () => {
-      (findScrapeJobById as jest.Mock).mockResolvedValue(null);
+  it("returns 400 for invalid UUID format", async () => {
+    const request = new NextRequest("http://localhost/api/scrape-jobs/invalid-id/results");
+    const context = { params: Promise.resolve({ id: "invalid-id" }) };
 
-      const fakeId = "00000000-0000-0000-0000-000000000000";
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + fakeId + "/results");
-      const context = { params: Promise.resolve({ id: fakeId }) };
+    const response = await GET(request, context);
+    const json = await response.json();
 
-      const response = await GET(request, context);
-      const json = await response.json();
+    expect(response.status).toBe(400);
+    expect(json.success).toBe(false);
+    expect(json.error).toBe("Invalid job ID format");
+    expect(json.code).toBe("INVALID_ID");
+  });
 
-      expect(response.status).toBe(404);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Scrape job not found");
-      expect(json.code).toBe("NOT_FOUND");
-    });
+  it("returns 404 when scrape job does not exist", async () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+    (findScrapeJobById as jest.Mock).mockResolvedValue(undefined);
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([]);
+    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
-    it("should return 400 when job is not completed", async () => {
-      const runningJob = {
-        ...mockJob,
-        status: "running",
-      };
-      (findScrapeJobById as jest.Mock).mockResolvedValue(runningJob);
+    const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
+    const context = { params: Promise.resolve({ id: jobId }) };
 
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
+    const response = await GET(request, context);
+    const json = await response.json();
 
-      const response = await GET(request, context);
-      const json = await response.json();
+    expect(response.status).toBe(404);
+    expect(json.success).toBe(false);
+    expect(json.error).toBe("Scrape job not found");
+    expect(json.code).toBe("NOT_FOUND");
+  });
 
-      expect(response.status).toBe(400);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Job is not completed");
-      expect(json.code).toBe("NOT_COMPLETED");
-      expect(json.status).toBe("running");
-    });
+  it("returns 200 with empty businesses array when job has no results", async () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+    const mockJob = {
+      id: jobId,
+      source: "google_maps",
+      query: "restaurants",
+      location: "New York",
+      status: "completed",
+      business_count: 0,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-    it("should return 400 when job is pending", async () => {
-      const pendingJob = {
-        ...mockJob,
-        status: "pending",
-      };
-      (findScrapeJobById as jest.Mock).mockResolvedValue(pendingJob);
+    (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([]);
+    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
+    const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
+    const context = { params: Promise.resolve({ id: jobId }) };
 
-      const response = await GET(request, context);
-      const json = await response.json();
+    const response = await GET(request, context);
+    const json = await response.json();
 
-      expect(response.status).toBe(400);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Job is not completed");
-    });
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.data.jobId).toBe(jobId);
+    expect(json.data.businessCount).toBe(0);
+    expect(json.data.businesses).toEqual([]);
+  });
 
-    it("should return 400 when job is failed", async () => {
-      const failedJob = {
-        ...mockJob,
-        status: "failed",
-      };
-      (findScrapeJobById as jest.Mock).mockResolvedValue(failedJob);
+  it("returns 200 with scraped businesses when job has results", async () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+    const mockJob = {
+      id: jobId,
+      source: "google_maps",
+      query: "restaurants",
+      location: "New York",
+      status: "completed",
+      business_count: 2,
+      extracted_metadata: [],
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
+    const mockBusinesses = [
+      {
+        id: "660e8400-e29b-41d4-a716-446655440001",
+        scrapeJobId: jobId,
+        source: "google_maps",
+        name: "Test Restaurant 1",
+        address: "123 Main St, New York, NY",
+        phone: "+1-555-0001",
+        website: "https://test1.com",
+        category: "Restaurant",
+        rating: 4.5,
+        reviewCount: 120,
+        status: "approved",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: "660e8400-e29b-41d4-a716-446655440002",
+        scrapeJobId: jobId,
+        source: "google_maps",
+        name: "Test Restaurant 2",
+        address: "456 Oak Ave, New York, NY",
+        phone: "+1-555-0002",
+        website: "https://test2.com",
+        category: "Restaurant",
+        rating: 4.2,
+        reviewCount: 85,
+        status: "pending_review",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
 
-      const response = await GET(request, context);
-      const json = await response.json();
+    (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue(mockBusinesses);
+    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
-      expect(response.status).toBe(400);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Job is not completed");
-    });
+    const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
+    const context = { params: Promise.resolve({ id: jobId }) };
 
-    it("should return 400 when job is cancelled", async () => {
-      const cancelledJob = {
-        ...mockJob,
-        status: "cancelled",
-      };
-      (findScrapeJobById as jest.Mock).mockResolvedValue(cancelledJob);
+    const response = await GET(request, context);
+    const json = await response.json();
 
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.data.jobId).toBe(jobId);
+    expect(json.data.businessCount).toBe(2);
+    expect(json.data.businesses).toHaveLength(2);
+    expect(json.data.businesses[0].name).toBe("Test Restaurant 1");
+    expect(json.data.businesses[1].name).toBe("Test Restaurant 2");
+  });
 
-      const response = await GET(request, context);
-      const json = await response.json();
+  it("initializes schema before fetching businesses", async () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+    const mockJob = {
+      id: jobId,
+      source: "google_maps",
+      query: "restaurants",
+      location: "New York",
+      status: "completed",
+      business_count: 0,
+      extracted_metadata: [],
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-      expect(response.status).toBe(400);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Job is not completed");
-    });
+    (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([]);
+    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
-    it("should return 400 for invalid UUID format", async () => {
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/invalid-uuid/results");
-      const context = { params: Promise.resolve({ id: "invalid-uuid" }) };
+    const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
+    const context = { params: Promise.resolve({ id: jobId }) };
 
-      const response = await GET(request, context);
-      const json = await response.json();
+    await GET(request, context);
 
-      expect(response.status).toBe(400);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Invalid job ID format");
-      expect(json.code).toBe("INVALID_ID");
-    });
+    expect(initializeScrapedBusinessSchema).toHaveBeenCalledWith(mockClient);
+    expect(findScrapedBusinessesByJobId).toHaveBeenCalledWith(mockClient, jobId);
+  });
 
-    it("should return 500 on database error", async () => {
-      (findScrapeJobById as jest.Mock).mockRejectedValue(new Error("Database connection failed"));
+  it("returns 400 when job is not completed", async () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+    const runningJob = {
+      id: jobId,
+      source: "google_maps",
+      query: "restaurants",
+      location: "New York",
+      status: "running",
+      business_count: 0,
+      extracted_metadata: [],
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
 
-      const request = new NextRequest("http://localhost:3000/api/scrape-jobs/" + mockJob.id + "/results");
-      const context = { params: Promise.resolve({ id: mockJob.id }) };
+    (findScrapeJobById as jest.Mock).mockResolvedValue(runningJob);
+    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
-      const response = await GET(request, context);
-      const json = await response.json();
+    const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
+    const context = { params: Promise.resolve({ id: jobId }) };
 
-      expect(response.status).toBe(500);
-      expect(json.success).toBe(false);
-      expect(json.error).toBe("Internal server error");
-    });
+    const response = await GET(request, context);
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.success).toBe(false);
+    expect(json.error).toBe("Job is not completed yet");
+    expect(json.code).toBe("JOB_NOT_COMPLETED");
+    expect(json.status).toBe("running");
+  });
+
+  it("returns 500 on internal error", async () => {
+    const jobId = "550e8400-e29b-41d4-a716-446655440000";
+    (findScrapeJobById as jest.Mock).mockRejectedValue(new Error("Database error"));
+
+    const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
+    const context = { params: Promise.resolve({ id: jobId }) };
+
+    const response = await GET(request, context);
+    const json = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(json.success).toBe(false);
+    expect(json.error).toBe("Internal server error");
   });
 });

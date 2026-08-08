@@ -4,7 +4,7 @@
  * Defines data structures for businesses scraped from external sources.
  */
 
-import { ScraperSource } from "./scrape-job";
+import { ScraperSource } from "./scraper-result";
 
 /**
  * Status for a scraped business
