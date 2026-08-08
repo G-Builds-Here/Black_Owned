@@ -1,75 +1,51 @@
 /**
- * Google Maps Scraper Service
+ * Google Maps Scraper with Pagination Support
  *
- * Web scraper for extracting business data from Google Maps using Playwright.
  * Handles pagination to capture all results when more than 10 exist.
+ * Implements duplicate detection across pages.
  */
 
-import { Browser, Page, BrowserContext } from "playwright";
-import {
-  ScrapedBusiness,
-  ScraperResult,
-  ScraperOptions,
-  ScraperJobState,
-} from "../types/google-maps-scraper";
-import { ScraperSource } from "../types/scrape-job";
+import playwright from "playwright";
+import { ScrapedBusiness, ScraperResult, ScraperOptions, ScraperJobState } from "../types/google-maps-scraper";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
-const DEFAULT_DELAY_BETWEEN_PAGES_MS = 1000;
+const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
 
 /**
  * Google Maps scraper class with pagination support
  */
 export class GoogleMapsScraper {
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
+  private browser: playwright.Browser | null = null;
+  private context: playwright.BrowserContext | null = null;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
       maxPages: options.maxPages ?? DEFAULT_MAX_PAGES,
-      delayBetweenPagesMs:
-        options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
+      delayBetweenPagesMs: options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
+      headless: options.headless ?? true,
+      credentials: options.credentials ?? undefined,
     };
   }
 
   /**
    * Initialize the browser and context
    */
-  private async initialize(): Promise<void> {
-    if (this.context) {
+  async initialize(): Promise<void> {
+    if (this.browser && this.context) {
       return;
     }
 
-    try {
-      const { chromium } = await import("playwright");
-      this.browser = await chromium.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-gpu",
-        ],
-      });
-
-      this.context = await this.browser.newContext({
-        viewport: { width: 1280, height: 720 },
-        userAgent:
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      });
-    } catch (error) {
-      console.error("Failed to initialize browser:", error);
-      throw new Error(
-        `Failed to initialize browser: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+    this.browser = await playwright.chromium.launch({
+      headless: this.options.headless,
+    });
+    this.context = await this.browser.newContext();
   }
 
   /**
-   * Close the browser
+   * Close the browser and context
    */
   async close(): Promise<void> {
     if (this.context) {
@@ -79,6 +55,167 @@ export class GoogleMapsScraper {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
+    }
+  }
+
+  /**
+   * Detect if a login prompt is shown
+   */
+  private async detectLoginPrompt(page: playwright.Page): Promise<boolean> {
+    try {
+      const loginSelectors = [
+        '[data-google-signin]',
+        'button:has-text("Sign in")',
+        '[aria-label*="Sign in"]',
+        '.gb_ee, .gb_ge',
+      ];
+
+      for (const selector of loginSelectors) {
+        const element = await page.$(selector);
+        if (element) {
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Perform login if credentials are configured
+   */
+  private async performLogin(page: playwright.Page): Promise<boolean> {
+    if (!this.options.credentials) {
+      return false;
+    }
+
+    try {
+      // Try to find and click sign in button
+      const signInButton = await page.$('button:has-text("Sign in"), [data-google-signin]');
+      if (signInButton) {
+        await signInButton.click();
+        await page.waitForLoadState("networkidle", { timeout: 10000 });
+      }
+
+      // Enter email
+      const emailInput = await page.$('input[type="email"], #identifierId');
+      if (emailInput) {
+        await emailInput.fill(this.options.credentials.email);
+        await page.keyboard.press("Enter");
+        await page.waitForLoadState("networkidle", { timeout: 10000 });
+      }
+
+      // Enter password
+      const passwordInput = await page.$('input[type="password"], #password');
+      if (passwordInput) {
+        await passwordInput.fill(this.options.credentials.password);
+        await page.keyboard.press("Enter");
+        await page.waitForLoadState("networkidle", { timeout: 10000 });
+      }
+
+      // Check if login was successful
+      const isLoggedIn = await this.detectLoginPrompt(page);
+      return !isLoggedIn;
+    } catch (error) {
+      console.error("Error performing login:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Extract businesses from the current page
+   */
+  private async extractBusinessesFromPage(
+    page: playwright.Page,
+    seenNames: Set<string>
+  ): Promise<ScrapedBusiness[]> {
+    const businesses = await page.evaluate(() => {
+      const results: Array<{
+        name: string;
+        address: string;
+        phone?: string;
+        website?: string;
+        category?: string;
+        rating?: number;
+        reviewCount?: number;
+      }> = [];
+
+      // Try multiple selector patterns for Google Maps business cards
+      const businessElements = document.querySelectorAll(
+        '[data-testid="resultCardButton"], .section-result, [role="article"], [data-place-id]'
+      );
+
+      for (const element of businessElements) {
+        const nameEl = element.querySelector("h3, .section-result-title");
+        const addressEl = element.querySelector('[data-item-id="address"], .section-result-location');
+        const ratingEl = element.querySelector('[data-item-id^="rating"], .section-result-rating');
+        const reviewEl = element.querySelector('[data-item-id^="reviews"], .section-result-reviews');
+
+        if (nameEl) {
+          results.push({
+            name: nameEl.textContent?.trim() ?? "",
+            address: addressEl?.textContent?.trim() ?? "",
+            rating: ratingEl ? parseFloat(ratingEl.textContent ?? "0") : undefined,
+            reviewCount: reviewEl ? parseInt(reviewEl.textContent?.replace(/[^0-9]/g, "") ?? "0", 10) : undefined,
+          });
+        }
+      }
+
+      return results;
+    });
+
+    // Filter out duplicates if not including duplicates
+    const filteredBusinesses: ScrapedBusiness[] = [];
+    for (const b of businesses) {
+      if (this.options.includeDuplicates || !seenNames.has(b.name)) {
+        seenNames.add(b.name);
+        filteredBusinesses.push({
+          ...b,
+          source: "google-maps" as const,
+        });
+      }
+    }
+
+    return filteredBusinesses;
+  }
+
+  /**
+   * Navigate to the next page of results
+   */
+  private async goToNextPage(page: playwright.Page, currentPage: number): Promise<boolean> {
+    try {
+      // Try to find and click the "Next" button
+      const nextButtonSelectors = [
+        'button[aria-label*="Next"], button[aria-label*="Next"], a[aria-label*="Next"], [aria-label*="Next"], .next-button, .pagination-next, [data-testid="pagination-next"]',
+        'button:has-text("Next"), a:has-text("Next")',
+        '[class*="next"], [class*="Next"]',
+      ];
+
+      for (const selector of nextButtonSelectors) {
+        try {
+          const nextButton = await page.$(selector);
+          if (nextButton) {
+            const isVisible = await nextButton.isVisible();
+            const isDisabled = await nextButton.isDisabled();
+
+            if (isVisible && !isDisabled) {
+              await nextButton.click();
+              await page.waitForLoadState("networkidle", { timeout: 10000 });
+              return true;
+            }
+          }
+        } catch {
+          // Try next selector
+          continue;
+        }
+      }
+
+      // No next button found
+      return false;
+    } catch (error) {
+      console.error("Error navigating to next page:", error);
+      return false;
     }
   }
 
@@ -119,6 +256,16 @@ export class GoogleMapsScraper {
         query
       )}/${encodeURIComponent(location)}`;
       await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
+
+      // Check for login prompt and perform login if credentials are configured
+      const loginPromptDetected = await this.detectLoginPrompt(page);
+      if (loginPromptDetected && this.options.credentials) {
+        const loginSuccessful = await this.performLogin(page);
+        if (loginSuccessful) {
+          // Re-navigate to search results after login
+          await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
+        }
+      }
 
       // Wait for results to load
       let resultsLoaded = false;
@@ -198,200 +345,6 @@ export class GoogleMapsScraper {
         location,
         timestamp: new Date(),
       };
-    } finally {
-      await page.close();
-    }
-  }
-
-  /**
-   * Extract businesses from the current page
-   */
-  private async extractBusinessesFromPage(
-    page: Page,
-    seenNames: Set<string>
-  ): Promise<ScrapedBusiness[]> {
-    try {
-      const businesses = await page.evaluate(() => {
-        const results: Array<{
-          name: string;
-          address: string;
-          phone?: string;
-          website?: string;
-<<<<<<< HEAD
-          rating?: number;
-          reviewCount?: number;
-          category?: string;
-=======
-          category?: string;
-          rating?: number;
-          reviewCount?: number;
->>>>>>> feature/LOC-0062-AC3
-        }> = [];
-
-        // Try multiple selector patterns for Google Maps' DOM structure
-        const businessElements = document.querySelectorAll(
-          '[data-place-id], [role="article"], .section-result, [class*="place"], [data-testid="result"]'
-        );
-
-        for (const element of businessElements) {
-          const nameEl = element.querySelector(
-            'h3, .section-result-title, [class*="title"], [data-testid="place-title"]'
-          );
-          const addressEl = element.querySelector(
-            '[class*="address"], [data-testid="place-address"], .section-result-addr'
-          );
-          const ratingEl = element.querySelector(
-            '[class*="rating"], [data-testid="place-rating"]'
-          );
-          const reviewsEl = element.querySelector(
-            '[class*="reviews"], [data-testid="place-review-count"]'
-          );
-          const phoneEl = element.querySelector(
-            '[class*="phone"], [data-testid="place-phone"]'
-          );
-          const websiteEl = element.querySelector(
-            'a[href*="http"], [class*="website"], [data-testid="place-website"]'
-          );
-<<<<<<< HEAD
-          const categoryEl = element.querySelector(
-            '[class*="category"], [data-testid="place-category"], .section-result-category'
-          );
-=======
->>>>>>> feature/LOC-0062-AC3
-
-          if (!nameEl) {
-            continue;
-          }
-
-          const name = nameEl.textContent?.trim();
-          if (!name) {
-            continue;
-          }
-
-          const address = addressEl?.textContent?.trim() ?? "";
-          const ratingText = ratingEl?.textContent?.trim() ?? "";
-          const rating = this.parseRating(ratingText);
-          const reviewCount = this.parseReviewCount(
-            reviewsEl?.textContent?.trim() ?? ""
-          );
-          const phone = phoneEl?.textContent?.trim() ?? undefined;
-          const website = websiteEl?.getAttribute("href") ?? undefined;
-<<<<<<< HEAD
-          const category = categoryEl?.textContent?.trim() ?? undefined;
-=======
->>>>>>> feature/LOC-0062-AC3
-
-          results.push({
-            name,
-            address,
-            phone,
-            website,
-            rating,
-            reviewCount,
-<<<<<<< HEAD
-            category,
-=======
->>>>>>> feature/LOC-0062-AC3
-          });
-        }
-
-        return results;
-      });
-
-      // Filter duplicates in the Node.js context where seenNames is accessible
-      const filteredBusinesses = businesses.filter((b) => {
-        if (this.options.includeDuplicates) {
-          return true;
-        }
-        if (seenNames.has(b.name)) {
-          return false;
-        }
-        seenNames.add(b.name);
-        return true;
-      });
-
-      return filteredBusinesses.map((b) => ({
-        ...b,
-        source: "google-maps" as const,
-      }));
-    } catch (error) {
-      console.error("Error extracting businesses from page:", error);
-      return [];
-    }
-  }
-
-  /**
-   * Parse rating from text (e.g., "4.5" from "4.5 star")
-   */
-  private parseRating(text: string): number | undefined {
-    const match = text.match(/(\d+\.?\d*)/);
-    if (match) {
-      const rating = parseFloat(match[1]);
-      if (!isNaN(rating) && rating > 0 && rating <= 5) {
-        return rating;
-      }
-    }
-    return undefined;
-  }
-
-  /**
-   * Parse review count from text (e.g., "123" from "123 reviews")
-   */
-  private parseReviewCount(text: string): number | undefined {
-    const match = text.match(/(\d+)/);
-    if (match) {
-      const count = parseInt(match[1], 10);
-      if (!isNaN(count) && count > 0) {
-        return count;
-      }
-    }
-    return undefined;
-  }
-
-  /**
-   * Navigate to the next page of results
-   */
-  private async goToNextPage(
-    page: Page,
-    currentPage: number
-  ): Promise<boolean> {
-    try {
-      // Try to find and click the "Next" or "More" button
-      const nextButtonSelectors = [
-        'button[aria-label="Next"]',
-        'button[aria-label="More places"]',
-        'a[aria-label="Next page"]',
-        '[class*="next"], [class*="Next"]',
-        'button:has-text("Next")',
-        'button:has-text("More")',
-        'button:has-text("More places")',
-        '[data-testid="pagination-next"]',
-      ];
-
-      for (const selector of nextButtonSelectors) {
-        try {
-          const nextButton = await page.$(selector);
-          if (nextButton) {
-            const isVisible = await nextButton.isVisible();
-            const isDisabled = await nextButton.isDisabled();
-
-            if (isVisible && !isDisabled) {
-              await nextButton.click();
-              await page.waitForLoadState("networkidle", { timeout: 10000 });
-              return true;
-            }
-          }
-        } catch {
-          // Try next selector
-          continue;
-        }
-      }
-
-      // No next button found
-      return false;
-    } catch (error) {
-      console.error("Error navigating to next page:", error);
-      return false;
     }
   }
 
@@ -406,8 +359,6 @@ export class GoogleMapsScraper {
 /**
  * Factory function to create a Google Maps scraper instance
  */
-export function createGoogleMapsScraper(
-  options: ScraperOptions = {}
-): GoogleMapsScraper {
+export function createGoogleMapsScraper(options: ScraperOptions = {}): GoogleMapsScraper {
   return new GoogleMapsScraper(options);
 }

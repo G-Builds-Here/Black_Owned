@@ -1,58 +1,50 @@
 /**
- * Yelp Scraper Service
+ * Yelp Scraper with Pagination Support
  *
- * Web scraper for extracting business data from Yelp using Playwright.
  * Handles pagination to capture all results when more than 10 exist.
+ * Implements duplicate detection across pages.
  */
 
-import { Browser, Page, BrowserContext } from "playwright";
-import {
-  ScrapedBusiness,
-  ScraperResult,
-  ScraperOptions,
-  ScraperJobState,
-} from "../types/yelp-scraper";
-import { ScraperSource } from "../types/scrape-job";
+import playwright from "playwright";
+import { ScrapedBusiness, ScraperResult, ScraperOptions, ScraperJobState } from "../types/yelp-scraper";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
-const DEFAULT_DELAY_BETWEEN_PAGES_MS = 1000;
+const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
 
 /**
  * Yelp scraper class with pagination support
  */
 export class YelpScraper {
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
+  private browser: playwright.Browser | null = null;
+  private context: playwright.BrowserContext | null = null;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
       maxPages: options.maxPages ?? DEFAULT_MAX_PAGES,
-      delayBetweenPagesMs:
-        options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
+      delayBetweenPagesMs: options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
+      headless: options.headless ?? true,
     };
   }
 
   /**
-   * Initialize the browser
+   * Initialize the browser and context
    */
   async initialize(): Promise<void> {
-    if (!this.browser) {
-      const { chromium } = await import("playwright");
-      this.browser = await chromium.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      this.context = await this.browser.newContext({
-        viewport: { width: 1280, height: 720 },
-      });
+    if (this.browser && this.context) {
+      return;
     }
+
+    this.browser = await playwright.chromium.launch({
+      headless: this.options.headless,
+    });
+    this.context = await this.browser.newContext();
   }
 
   /**
-   * Close the browser
+   * Close the browser and context
    */
   async close(): Promise<void> {
     if (this.context) {
@@ -63,6 +55,63 @@ export class YelpScraper {
       await this.browser.close();
       this.browser = null;
     }
+  }
+
+  /**
+   * Extract businesses from the current page
+   */
+  private async extractBusinessesFromPage(
+    page: playwright.Page,
+    seenNames: Set<string>
+  ): Promise<ScrapedBusiness[]> {
+    const businesses = await page.evaluate(() => {
+      const results: Array<{
+        name: string;
+        address: string;
+        phone?: string;
+        website?: string;
+        category?: string;
+        rating?: number;
+        reviewCount?: number;
+      }> = [];
+
+      // Try multiple selector patterns for Yelp business cards
+      const businessElements = document.querySelectorAll(
+        ".business-name, .css-1c4t2b3, [data-testid='business-card'], .css-19t0mea"
+      );
+
+      for (const element of businessElements) {
+        const nameEl = element.querySelector(".business-name, .css-1c4t2b3, [class*='name']");
+        const addressEl = element.querySelector(".business-address, [class*='address']");
+        const ratingEl = element.querySelector(".rating, [class*='rating'], [class*='stars']");
+        const reviewEl = element.querySelector(".review-count, [class*='reviews']");
+
+        if (nameEl) {
+          results.push({
+            name: nameEl.textContent?.trim() ?? "",
+            address: addressEl?.textContent?.trim() ?? "",
+            rating: ratingEl ? parseFloat(ratingEl.textContent ?? "0") : undefined,
+            reviewCount: reviewEl ? parseInt(reviewEl.textContent ?? "0", 10) : undefined,
+          });
+        }
+      }
+
+      return results;
+    });
+
+    // Filter out duplicates if not including duplicates
+    const filteredBusinesses: ScrapedBusiness[] = [];
+    for (const b of businesses) {
+      if (this.options.includeDuplicates || !seenNames.has(b.name)) {
+        seenNames.add(b.name);
+        filteredBusinesses.push({
+          ...b,
+          source: "yelp" as const,
+        });
+      }
+    }
+
+    return filteredBusinesses;
   }
 
   /**
@@ -161,10 +210,10 @@ export class YelpScraper {
         businesses: collectedBusinesses,
         pagination: {
           currentPage,
-          totalPages,
+          totalPages: totalPages || 0,
           resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
           totalResults,
-          hasNextPage: false,
+          hasNextPage: hasMoreResults,
         },
         source: "yelp",
         query,
@@ -172,111 +221,33 @@ export class YelpScraper {
         timestamp: new Date(),
       };
     } catch (error) {
-      jobState.error = error instanceof Error ? error.message : "Unknown error";
-      jobState.isComplete = false;
-      throw error;
-    } finally {
-      await page.close();
+      jobState.error =
+        error instanceof Error ? error.message : String(error);
+      jobState.isComplete = true;
+
+      console.error("Error scraping Yelp:", error);
+
+      return {
+        businesses: collectedBusinesses,
+        pagination: {
+          currentPage,
+          totalPages: 0,
+          resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
+          totalResults: collectedBusinesses.length,
+          hasNextPage: false,
+        },
+        source: "yelp",
+        query,
+        location,
+        timestamp: new Date(),
+      };
     }
-  }
-
-  /**
-   * Extract business data from the current page
-   */
-  private async extractBusinessesFromPage(
-    page: Page,
-    seenNames: Set<string>
-  ): Promise<ScrapedBusiness[]> {
-    const businesses = await page.evaluate(() => {
-      const results: Array<{
-        name: string;
-        address: string;
-        phone?: string;
-        website?: string;
-        category?: string;
-        rating?: number;
-        reviewCount?: number;
-      }> = [];
-
-      // Try multiple selector patterns for Yelp's DOM structure
-      const businessElements = document.querySelectorAll(
-        '[data-ref-id], .business-name, [class*="business"], .css-1c4t2b3, .css-1b54l8d'
-      );
-
-      for (const element of businessElements) {
-        const nameEl = element.querySelector(
-          '.business-name, [class*="business-name"], h3, a[href*="/biz/"]'
-        );
-        const name = nameEl?.textContent?.trim();
-
-        if (!name) continue;
-
-        // Extract address
-        const addressEl = element.querySelector(
-          '[class*="address"], .css-1xqzgp8, .css-159b55y'
-        );
-        const address = addressEl?.textContent?.trim() || "";
-
-        // Extract rating
-        const ratingEl = element.querySelector(
-          '[class*="rating"], [class*="star"], .css-1m0v5q6'
-        );
-        const ratingText = ratingEl?.textContent || "";
-        const ratingMatch = ratingText.match(/(\d\.?\d*)\s*star/i);
-        const rating = ratingMatch ? parseFloat(ratingMatch[1]) : undefined;
-
-        // Extract review count
-        const reviewEl = element.querySelector(
-          '[class*="review"], [class*="count"]'
-        );
-        const reviewText = reviewEl?.textContent || "";
-        const reviewCountMatch = reviewText.match(/(\d+)\s*review/i);
-        const reviewCount = reviewCountMatch
-          ? parseInt(reviewCountMatch[1], 10)
-          : undefined;
-
-        // Extract category from nearby elements
-        const categoryEl = element.querySelector(
-          '[class*="category"], [class*="snippet"]'
-        );
-        const category = categoryEl?.textContent?.trim();
-
-        results.push({
-          name,
-          address,
-          phone: undefined,
-          website: undefined,
-          category,
-          rating,
-          reviewCount,
-        });
-      }
-
-      return results;
-    });
-
-    // Filter duplicates in the Node.js context where seenNames is accessible
-    const filteredBusinesses = businesses.filter((b) => {
-      if (this.options.includeDuplicates) {
-        return true;
-      }
-      if (seenNames.has(b.name)) {
-        return false;
-      }
-      seenNames.add(b.name);
-      return true;
-    });
-
-    return filteredBusinesses.map((b) => ({
-      ...b,
-      source: "yelp" as ScraperSource,
-    }));
   }
 
   /**
    * Navigate to the next page of results
    */
-  private async goToNextPage(page: Page, currentPage: number): Promise<boolean> {
+  private async goToNextPage(page: playwright.Page, currentPage: number): Promise<boolean> {
     try {
       // Try to find and click the "Next" button
       const nextButtonSelectors = [
