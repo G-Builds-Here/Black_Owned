@@ -6,6 +6,12 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { GoogleMapsScraper, ScrapedBusiness, SearchParams } from './google-maps-scraper';
 
+// Mock fetch for robots.txt checks (allows all paths by default)
+global.fetch = jest.fn().mockResolvedValue({
+  ok: false,
+  status: 404,
+});
+
 // Mock playwright
 jest.mock('playwright', () => ({
   chromium: {

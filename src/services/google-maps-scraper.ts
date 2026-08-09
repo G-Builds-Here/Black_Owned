@@ -4,6 +4,7 @@
  */
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
+import { checkUrlAllowed, type RobotsCheckResult } from '@/lib/scraper/robots-service';
 
 export interface ScrapedBusiness {
   name: string;
@@ -63,6 +64,15 @@ class GoogleMapsScraper {
   }
 
   /**
+   * Check robots.txt before scraping
+   */
+  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
+    const googleBaseUrl = 'https://www.google.com';
+    const searchPath = '/maps/search/';
+    return checkUrlAllowed(`${googleBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
+  }
+
+  /**
    * Search for businesses on Google Maps
    */
   async searchBusinesses(params: SearchParams): Promise<ScrapedBusiness[]> {
@@ -70,6 +80,13 @@ class GoogleMapsScraper {
 
     if (!this.browser) {
       throw new Error('Browser not initialized');
+    }
+
+    // Check robots.txt before proceeding
+    const robotsCheck = await this.checkRobotsBeforeScraping();
+    if (!robotsCheck.allowed) {
+      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
+      return []; // Return empty results if disallowed
     }
 
     const context = await this.browser.newContext({

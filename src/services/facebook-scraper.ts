@@ -12,6 +12,7 @@ import {
   ScraperPagination,
   ScraperJobState,
 } from "../types/facebook-scraper";
+import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
@@ -32,6 +33,15 @@ export class FacebookScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
+  }
+
+  /**
+   * Check robots.txt before scraping
+   */
+  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
+    const facebookBaseUrl = 'https://www.facebook.com';
+    const searchPath = '/search/pages';
+    return checkUrlAllowed(`${facebookBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
   }
 
   /**
@@ -71,6 +81,26 @@ export class FacebookScraper {
     query: string,
     location: string
   ): Promise<ScraperResult> {
+    // Check robots.txt before proceeding
+    const robotsCheck = await this.checkRobotsBeforeScraping();
+    if (!robotsCheck.allowed) {
+      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
+      return {
+        businesses: [],
+        pagination: {
+          currentPage: 0,
+          totalPages: 0,
+          resultsPerPage: 0,
+          totalResults: 0,
+          hasNextPage: false,
+        },
+        source: "facebook",
+        query,
+        location,
+        timestamp: new Date(),
+      };
+    }
+
     await this.initialize();
 
     const page = await this.context!.newPage();
