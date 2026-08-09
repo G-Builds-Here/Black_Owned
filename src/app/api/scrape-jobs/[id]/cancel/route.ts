@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPool } from '@/lib/db/user-repository';
 import { cancelScrapeJob } from '@/lib/db/scrape-job-repository';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const client = await getPool().connect();
   try {
     const { id } = params;
 
@@ -15,7 +17,7 @@ export async function POST(
       );
     }
 
-    const updatedJob = await cancelScrapeJob(id);
+    const updatedJob = await cancelScrapeJob(client, id);
 
     if (!updatedJob) {
       return NextResponse.json(
@@ -34,5 +36,7 @@ export async function POST(
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    client.release();
   }
 }
