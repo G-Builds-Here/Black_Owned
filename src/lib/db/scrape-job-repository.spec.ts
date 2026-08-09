@@ -10,6 +10,7 @@ import {
   updateScrapeJobBusinessCount,
   getScrapeJobSummary,
   initializeScrapeJobSchema,
+  cancelScrapeJob,
 } from "./scrape-job-repository";
 import { CreateScrapeJobInput, ScraperSource, ScrapeJobStatus } from "../../types/scrape-job";
 import { getPool } from "./user-repository";
@@ -409,6 +410,42 @@ describe("ScrapeJobRepository", () => {
       expect(summary7Days.total_jobs).toBe(5);
       expect(summary7Days.last_30_days.total_jobs).toBe(3);
 
+    });
+  });
+
+  describe("cancelScrapeJob", () => {
+    it("should cancel a running scrape job", async () => {
+      const mockCancelledJob = {
+        id: "test-id-cancel",
+        source: "google-maps",
+        query: "cancel test",
+        location: "location",
+        status: "cancelled",
+        business_count: 0,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [mockCancelledJob] });
+
+      const cancelled = await cancelScrapeJob("test-id-cancel");
+
+      expect(cancelled).toBeDefined();
+      expect(cancelled?.status).toBe("cancelled");
+      expect(cancelled?.id).toBe("test-id-cancel");
+    });
+
+    it("should not cancel a job that is not running", async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await cancelScrapeJob("test-id-not-running");
+      expect(result).toBeNull();
+    });
+
+    it("should return null for non-existent job", async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await cancelScrapeJob("00000000-0000-0000-0000-000000000000");
+      expect(result).toBeNull();
     });
   });
 });

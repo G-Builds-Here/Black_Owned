@@ -7,7 +7,7 @@
  *   npx ts-node src/utils/admin-user-seeder.ts
  *
  * Test User Credentials (documented per AC requirements):
- *   Email: admin-test@bws-test@domain.com
+ *   Email: admin-test@bws-test.domain.com
  *   Password: AdminTestPass123!
  *   Role: admin
  *
@@ -18,6 +18,12 @@
 import { Pool } from "pg";
 import { initializeUserSchema } from "../lib/db/user-repository";
 import { formatUserEmail, TEST_EMAIL_DOMAIN } from "./test-data-seeder";
+
+/**
+ * Admin user credentials (documented per AC requirements)
+ */
+export const ADMIN_TEST_EMAIL = formatUserEmail("admin-test");
+export const ADMIN_TEST_PASSWORD = "AdminTestPass123!";
 
 async function createAdminUser(): Promise<void> {
   const pool = new Pool({
@@ -36,20 +42,16 @@ async function createAdminUser(): Promise<void> {
     // Initialize schema if needed
     await initializeUserSchema();
 
-    // Admin test user credentials (documented per AC requirements)
-    const adminEmail = formatUserEmail("admin-test");
-    const adminPassword = "AdminTestPass123!";
-
-    console.log(`Checking for existing admin test user: ${adminEmail}`);
+    console.log(`Checking for existing admin test user: ${ADMIN_TEST_EMAIL}`);
 
     // Check if user already exists
     const existingUser = await client.query(
       "SELECT * FROM users WHERE email = $1",
-      [adminEmail]
+      [ADMIN_TEST_EMAIL]
     );
 
     if (existingUser.rows.length > 0) {
-      console.log(`Admin test user already exists: ${adminEmail}`);
+      console.log(`Admin test user already exists: ${ADMIN_TEST_EMAIL}`);
       console.log("User ID:", existingUser.rows[0].id);
       return;
     }
@@ -58,31 +60,31 @@ async function createAdminUser(): Promise<void> {
     const { hashPassword } = await import("../lib/auth/auth-service");
 
     // Hash the password
-    const passwordHash = await hashPassword(adminPassword);
+    const passwordHash = await hashPassword(ADMIN_TEST_PASSWORD);
 
     // Create admin user
     const result = await client.query(
       `INSERT INTO users (email, password_hash, name, role, status)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [adminEmail, passwordHash, "Admin Test User", "admin", "active"]
+      [ADMIN_TEST_EMAIL, passwordHash, "Admin Test User", "admin", "active"]
     );
 
     const user = result.rows[0];
 
     console.log("\n========== Admin Test User Created ==========");
     console.log(`User ID: ${user.id}`);
-    console.log(`Email: ${adminEmail}`);
+    console.log(`Email: ${ADMIN_TEST_EMAIL}`);
     console.log(`Name: Admin Test User`);
     console.log(`Role: admin`);
     console.log(`Status: active`);
     console.log("\n--- Credentials (for testing only) ---");
-    console.log(`Password: ${adminPassword}`);
+    console.log(`Password: ${ADMIN_TEST_PASSWORD}`);
     console.log("-----------------------------------------");
 
   } catch (error) {
     console.error("Failed to create admin user:", error);
-    process.exit(1);
+    throw error;
   } finally {
     client.release();
     await pool.end();
