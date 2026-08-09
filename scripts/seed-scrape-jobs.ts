@@ -20,7 +20,7 @@ import { CreateScrapeJobInput } from "../src/types/scrape-job";
 /**
  * Test scrape job definitions
  */
-const TEST_JOBS: CreateScrapeJobInput[] = [
+export const TEST_JOBS: CreateScrapeJobInput[] = [
   {
     source: "google-maps",
     query: "black owned restaurants",
@@ -109,8 +109,11 @@ async function seedScrapeJobs(): Promise<void> {
   console.log("\nSeed script completed.");
 }
 
-// Run the seed script
-seedScrapeJobs().catch((error) => {
-  console.error("Fatal error running seed script:", error);
-  process.exit(1);
-});
+// Run the seed script only when executed directly (not when imported for testing)
+const isMainModule = process.argv[1] && process.argv[1].includes("seed-scrape-jobs.ts");
+if (isMainModule) {
+  seedScrapeJobs().catch((error) => {
+    console.error("Fatal error running seed script:", error);
+    process.exit(1);
+  });
+}

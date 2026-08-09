@@ -1,61 +1,99 @@
 /**
  * Scrape Job Types
  *
- * Types for managing web scraping jobs in the Black Owned directory.
+ * Defines data structures for job scraping operations.
  */
 
 /**
- * Scraper source - the external platform to scrape from
+ * Job scraping status
  */
-export type ScraperSource = "google-maps" | "yelp" | "facebook";
+export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
- * Scrape job status - tracks the lifecycle of a scrape job
-
+ * ScrapeJob entity stored in PostgreSQL
  */
-export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
+export interface ScrapeJob {
+  id: string;
+  source: string;
+  query: string;
+  location: string;
+  status: ScrapeJobStatus;
+  resultCount?: number;
+  errorMessage?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 /**
  * Input for creating a new scrape job
  */
 export interface CreateScrapeJobInput {
-  source: ScraperSource;
-
+  source: string;
   query: string;
   location: string;
 }
 
 /**
- * Scrape job entity stored in the database
+ * Validates scrape job input
  */
-export interface ScrapeJob {
-  id: string;
-  source: ScraperSource;
-  query: string;
-  location: string;
-  status: ScrapeJobStatus;
-  business_count: number;
-  created_at: Date;
-  updated_at: Date;
+export function validateScrapeJobInput(input: CreateScrapeJobInput): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!input.source || input.source.trim() === "") {
+    errors.push("Source is required");
+  }
+
+  if (!input.query || input.query.trim() === "") {
+    errors.push("Query is required");
+  }
+
+  if (!input.location || input.location.trim() === "") {
+    errors.push("Location is required");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }
 
 /**
- * Result from creating a scrape job
+ * Valid scrape job status values
  */
-export interface CreateScrapeJobResult {
-  id: string;
-  source: ScraperSource;
-  query: string;
-  location: string;
-  status: "pending";
-  created_at: Date;
+const VALID_STATUSES: ScrapeJobStatus[] = ["pending", "running", "completed", "failed", "cancelled"];
+
+/**
+ * Status transition map - defines allowed transitions from each status
+ */
+const STATUS_TRANSITIONS: Record<ScrapeJobStatus, ScrapeJobStatus[]> = {
+  pending: ["running"],
+  running: ["completed", "failed", "cancelled"],
+  completed: [],
+  failed: [],
+  cancelled: [],
+};
+
+/**
+ * Check if a status value is valid
+ */
+export function isValidScrapeJobStatus(status: string): status is ScrapeJobStatus {
+  return VALID_STATUSES.includes(status as ScrapeJobStatus);
 }
 
 /**
- * Validation error for scrape job creation
+ * Check if a status transition is valid
  */
-export interface ScrapeJobValidationError {
-  field: string;
-  message: string;
+export function isValidStatusTransition(
+  from: ScrapeJobStatus,
+  to: ScrapeJobStatus
+): boolean {
+  const allowedTransitions = STATUS_TRANSITIONS[from];
+  return allowedTransitions.includes(to);
+}
 
+/**
+ * Get allowed transitions for a given status
+ */
+export function getAllowedTransitions(status: ScrapeJobStatus): ScrapeJobStatus[] {
+  return STATUS_TRANSITIONS[status] || [];
 }
