@@ -6,9 +6,13 @@ import {
   findByEmail,
   create,
   initializeUserSchema,
+  getPool,
 } from "../db/user-repository";
 import {
   findScrapedBusinessesByStatus,
+  updateScrapedBusinessStatus,
+  findScrapedBusinessById,
+  rejectScrapedBusiness,
 } from "../db/scraped-business-repository";
 import {
   hashPassword,
@@ -479,9 +483,9 @@ export async function searchBusinesses(
 }
 
 /**
- * Convert Business entity to GraphQL Business type
+ * Convert Business entity (from business-repository) to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: Business): {
+function businessRecordToGraphqlBusiness(business: Business): {
   id: string;
   name: string;
   categoryId: string;
@@ -561,7 +565,7 @@ export async function createBusiness(
 
     return {
       success: true,
-      business: businessToGraphqlBusiness(business),
+      business: businessRecordToGraphqlBusiness(business),
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -594,6 +598,144 @@ async function createBusinessInDb(
     [ownerId, name, description || null, categoryId, rating ?? null, reviewCount]
   );
   return result.rows[0];
+}
+
+/**
+ * Approve business mutation resolver
+ */
+export async function approveBusiness(
+  _parent: unknown,
+  args: { businessId: string }
+): Promise<{
+  success: boolean;
+  business?: unknown;
+  error?: string;
+}> {
+  const { businessId } = args;
+
+  // Validate business ID
+  if (!businessId || businessId.trim() === "") {
+    return {
+      success: false,
+      error: "Business ID is required",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    // Check if business exists
+    const business = await findScrapedBusinessById(client, businessId);
+
+    if (!business) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    // Update status to approved
+    const updatedBusiness = await updateScrapedBusinessStatus(
+      client,
+      businessId,
+      "approved"
+    );
+
+    if (!updatedBusiness) {
+      return {
+        success: false,
+        error: "Failed to update business status",
+      };
+    }
+
+    return {
+      success: true,
+      business: {
+        id: updatedBusiness.id,
+        name: updatedBusiness.name,
+        address: updatedBusiness.address,
+        source: updatedBusiness.source,
+        rating: updatedBusiness.rating ?? null,
+        createdAt: {
+          timestamp: Math.floor(updatedBusiness.createdAt.getTime() / 1000),
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Error approving business:", error);
+    return {
+      success: false,
+      error: "Failed to approve business",
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Reject business mutation resolver
+ */
+export async function rejectBusiness(
+  _parent: unknown,
+  args: { businessId: string; rejectionReason: string }
+): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const { businessId, rejectionReason } = args;
+
+  // Validate business ID
+  if (!businessId || businessId.trim() === "") {
+    return {
+      success: false,
+      error: "Business ID is required",
+    };
+  }
+
+  // Validate rejection reason
+  if (!rejectionReason || rejectionReason.trim() === "") {
+    return {
+      success: false,
+      error: "Rejection reason is required",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    // Check if business exists
+    const business = await findScrapedBusinessById(client, businessId);
+
+    if (!business) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    // Reject the business with reason
+    const updatedBusiness = await rejectScrapedBusiness(client, {
+      businessId,
+      rejectionReason: rejectionReason.trim(),
+    });
+
+    if (!updatedBusiness) {
+      return {
+        success: false,
+        error: "Failed to reject business",
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error rejecting business:", error);
+    return {
+      success: false,
+      error: "Failed to reject business",
+    };
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -635,5 +777,7 @@ export const resolvers = {
     createBusiness,
     submitVerification,
     updateBusiness,
+    approveBusiness,
+    rejectBusiness,
   },
 };
