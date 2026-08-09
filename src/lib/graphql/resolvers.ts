@@ -8,6 +8,9 @@ import {
   initializeUserSchema,
 } from "../db/user-repository";
 import {
+  findScrapedBusinessesByStatus,
+} from "../db/scraped-business-repository";
+import {
   hashPassword,
   generateTokenPair,
   verifyToken,
@@ -594,12 +597,38 @@ async function createBusinessInDb(
 }
 
 /**
+ * Pending businesses query resolver
+ */
+export async function pendingBusinesses(): Promise<unknown[]> {
+  const client = await getPool().connect();
+  try {
+    const businesses = await findScrapedBusinessesByStatus(client, "pending_review");
+    return businesses.map((b) => ({
+      id: b.id,
+      name: b.name,
+      address: b.address,
+      source: b.source,
+      rating: b.rating ?? null,
+      createdAt: {
+        timestamp: Math.floor(b.createdAt.getTime() / 1000),
+      },
+    }));
+  } catch (error) {
+    console.error("Error fetching pending businesses:", error);
+    return [];
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
   Query: {
     health,
     searchBusinesses,
+    pendingBusinesses,
   },
   Mutation: {
     register,

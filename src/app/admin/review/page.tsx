@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
 import { Card, Badge, Button, Tabs, TabPanel } from '@/components/ui';
 
-interface Business {
+interface PendingBusiness {
   id: string;
   name: string;
-  category_id: string;
-  verification_status: string;
-  created_at: {
+  address: string;
+  source: string;
+  rating: number | null;
+  createdAt: {
     timestamp: number;
   };
 }
@@ -30,7 +31,7 @@ const PENDING_BUSINESSES_QUERY = `
 
 export default function AdminReviewPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'flagged'>('pending');
-  const [pendingBusinesses, setPendingBusinesses] = useState<Business[]>([]);
+  const [pendingBusinesses, setPendingBusinesses] = useState<PendingBusiness[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -176,17 +177,30 @@ export default function AdminReviewPage() {
                         <h3 className="font-semibold text-neutral-800">{business.name}</h3>
                         <Badge variant="warning" size="sm">Pending Review</Badge>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-neutral-500">
-                        <span>
-                          <span className="font-medium">Source:</span> Business Submission
-                        </span>
-                        <span>
-                          <span className="font-medium">Submitted:</span> {formatDate(business.created_at.timestamp)}
-                        </span>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-neutral-600">Address:</span>
+                          <p className="text-neutral-800 mt-1">{business.address}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-neutral-600">Source:</span>
+                          <p className="text-neutral-800 mt-1">{business.source.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-neutral-600">Rating:</span>
+                          <p className="text-neutral-800 mt-1">
+                            {business.rating !== null ? (
+                              <span className="text-heritage-ochre">{'★'.repeat(Math.round(business.rating))}{'☆'.repeat(5 - Math.round(business.rating))} ({business.rating.toFixed(1)})</span>
+                            ) : (
+                              'Not yet rated'
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-neutral-600">Submitted:</span>
+                          <p className="text-neutral-800 mt-1">{formatDate(business.createdAt.timestamp)}</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-neutral-600 mt-2">
-                        <span className="font-medium">Address:</span> Address not yet provided
-                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button

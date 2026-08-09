@@ -7,6 +7,7 @@
 
 import playwright from "playwright";
 import { ScrapedBusiness, ScraperResult, ScraperOptions, ScraperJobState } from "../types/yelp-scraper";
+import { UserAgentRotator } from "../lib/user-agent-rotator";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -19,6 +20,7 @@ export class YelpScraper {
   private options: Required<ScraperOptions>;
   private browser: playwright.Browser | null = null;
   private context: playwright.BrowserContext | null = null;
+  private userAgentRotator: UserAgentRotator;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -27,6 +29,7 @@ export class YelpScraper {
       includeDuplicates: options.includeDuplicates ?? false,
       headless: options.headless ?? true,
     };
+    this.userAgentRotator = new UserAgentRotator();
   }
 
   /**
@@ -40,7 +43,8 @@ export class YelpScraper {
     this.browser = await playwright.chromium.launch({
       headless: this.options.headless,
     });
-    this.context = await this.browser.newContext();
+    const userAgent = this.userAgentRotator.getNextUserAgent();
+    this.context = await this.browser.newContext({ userAgent });
   }
 
   /**

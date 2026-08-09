@@ -7,6 +7,7 @@
 
 import playwright from "playwright";
 import { ScrapedBusiness, ScraperResult, ScraperOptions, ScraperJobState } from "../types/google-maps-scraper";
+import { UserAgentRotator } from "../lib/user-agent-rotator";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -19,6 +20,7 @@ export class GoogleMapsScraper {
   private options: Required<ScraperOptions>;
   private browser: playwright.Browser | null = null;
   private context: playwright.BrowserContext | null = null;
+  private userAgentRotator: UserAgentRotator;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -28,6 +30,7 @@ export class GoogleMapsScraper {
       headless: options.headless ?? true,
       credentials: options.credentials ?? undefined,
     };
+    this.userAgentRotator = new UserAgentRotator();
   }
 
   /**
@@ -41,7 +44,8 @@ export class GoogleMapsScraper {
     this.browser = await playwright.chromium.launch({
       headless: this.options.headless,
     });
-    this.context = await this.browser.newContext();
+    const userAgent = this.userAgentRotator.getNextUserAgent();
+    this.context = await this.browser.newContext({ userAgent });
   }
 
   /**

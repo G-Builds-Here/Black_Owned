@@ -192,3 +192,18 @@ export async function countScrapedBusinessesByJobId(
   );
   return parseInt(result.rows[0].count, 10);
 }
+
+/**
+ * Find all scraped businesses with a specific status
+ */
+export async function findScrapedBusinessesByStatus(
+  client: PoolClient,
+  status: ScrapedBusinessStatus
+): Promise<ScrapedBusiness[]> {
+  const tableName = getTableName();
+  const result = await client.query<ScrapedBusiness>(
+    `SELECT * FROM ${tableName} WHERE status = $1 ORDER BY created_at DESC`,
+    [status]
+  );
+  return result.rows.map(rowToScrapedBusiness);
+}

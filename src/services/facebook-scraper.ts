@@ -4,11 +4,7 @@
  * Scrapes Facebook for business page search results.
  */
 
-<<<<<<< HEAD
 import { Browser, Page, BrowserContext } from "playwright";
-=======
-import { Browser, Page } from "playwright";
->>>>>>> feature/LOC-0062-AC3
 import {
   ScraperOptions,
   ScraperResult,
@@ -16,6 +12,7 @@ import {
   ScraperPagination,
   ScraperJobState,
 } from "../types/facebook-scraper";
+import { UserAgentRotator } from "../lib/user-agent-rotator";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
@@ -28,6 +25,7 @@ export class FacebookScraper {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
+  private userAgentRotator: UserAgentRotator;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -36,6 +34,7 @@ export class FacebookScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
+    this.userAgentRotator = new UserAgentRotator();
   }
 
   /**
@@ -48,7 +47,9 @@ export class FacebookScraper {
         headless: true,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
+      const userAgent = this.userAgentRotator.getNextUserAgent();
       this.context = await this.browser.newContext({
+        userAgent,
         viewport: { width: 1280, height: 720 },
       });
     }
@@ -178,8 +179,6 @@ export class FacebookScraper {
         const linkEl = unit.querySelector('a[href*="/pages/"]');
         const categoryEl = unit.querySelector('div[role="img"] + div span');
 
-<<<<<<< HEAD
-=======
         // Extract phone number - look for phone icon or phone text
         const phoneEl = unit.querySelector(
           '[aria-label*="phone"], [class*="phone"], [data-testid*="phone"]'
@@ -192,7 +191,6 @@ export class FacebookScraper {
         );
         const website = websiteEl?.getAttribute("href") || undefined;
 
->>>>>>> feature/LOC-0062-AC3
         if (nameEl && linkEl) {
           const name = nameEl.textContent?.trim() || "";
           const href = linkEl.getAttribute("href") || "";
@@ -203,11 +201,8 @@ export class FacebookScraper {
             source: "facebook",
             sourceId,
             category: categoryEl?.textContent?.trim() || undefined,
-<<<<<<< HEAD
-=======
             phone,
             website,
->>>>>>> feature/LOC-0062-AC3
           });
         }
       });

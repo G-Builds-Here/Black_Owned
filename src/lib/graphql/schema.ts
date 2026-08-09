@@ -64,10 +64,20 @@ export const typeDefs = `#graphql
     createdAt: DateTimeUtc!
   }
 
+  type PendingBusiness {
+    id: ID!
+    name: String!
+    address: String!
+    source: String!
+    rating: Float
+    createdAt: DateTimeUtc!
+  }
+
   type Query {
     health: String!
     searchBusinesses(query: String!, page: Int, pageSize: Int): SearchResults!
     business(id: String!): GQLBusiness
+    pendingBusinesses: [PendingBusiness!]!
   }
 
   type PresignedUrl {

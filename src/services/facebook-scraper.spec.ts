@@ -36,8 +36,6 @@ describe("FacebookScraper", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-<<<<<<< HEAD
-=======
     // Reset mock implementations
     mockPage.evaluate.mockReset();
     mockPage.goto.mockReset();
@@ -45,7 +43,6 @@ describe("FacebookScraper", () => {
     mockPage.close.mockReset();
     mockPage.$.mockReset();
     mockPage.waitForLoadState.mockReset();
->>>>>>> feature/LOC-0062-AC3
     scraper = new FacebookScraper();
   });
 
@@ -122,11 +119,8 @@ describe("FacebookScraper", () => {
           source: "facebook" as const,
           sourceId: "test-business-123",
           category: "Restaurant",
-<<<<<<< HEAD
-=======
           phone: undefined,
           website: undefined,
->>>>>>> feature/LOC-0062-AC3
         },
       ];
 
@@ -196,11 +190,7 @@ describe("FacebookScraper", () => {
       mockPage.waitForSelector.mockResolvedValue(undefined);
       mockPage.evaluate.mockImplementation(() => {
         callCount++;
-<<<<<<< HEAD
-        return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const }] : [];
-=======
         return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const, phone: undefined, website: undefined }] : [];
->>>>>>> feature/LOC-0062-AC3
       });
       mockPage.$.mockResolvedValueOnce({ click: jest.fn() });
 
@@ -235,8 +225,6 @@ describe("FacebookScraper", () => {
         "Facebook scraping failed"
       );
     });
-<<<<<<< HEAD
-=======
 
     it("captures phone number when available", async () => {
       const mockBusinessWithPhone = {
@@ -289,7 +277,6 @@ describe("FacebookScraper", () => {
       expect(result.businesses[0].phone).toBeUndefined();
       expect(result.businesses[0].website).toBeUndefined();
     });
->>>>>>> feature/LOC-0062-AC3
   });
 
   describe("getJobState", () => {
@@ -306,6 +293,34 @@ describe("FacebookScraper", () => {
           isComplete: false,
         })
       );
+    });
+
+    it("uses user-agent from rotator", async () => {
+      let capturedUserAgent: string | undefined;
+
+      const mockContextWithUA = {
+        newPage: jest.fn().mockReturnValue(mockPage),
+        close: jest.fn(),
+      };
+
+      const mockBrowserWithUA = {
+        newContext: jest.fn().mockImplementation((options: any) => {
+          capturedUserAgent = options?.userAgent;
+          return mockContextWithUA;
+        }),
+        close: jest.fn(),
+      };
+
+      (await import("playwright")).chromium.launch.mockResolvedValue(mockBrowserWithUA);
+
+      const scraper = new FacebookScraper();
+      await scraper.initialize();
+
+      expect(capturedUserAgent).toBeDefined();
+      expect(typeof capturedUserAgent).toBe("string");
+      expect(capturedUserAgent).toContain("Mozilla/5.0");
+
+      await scraper.close();
     });
   });
 
