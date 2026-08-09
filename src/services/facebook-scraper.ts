@@ -12,7 +12,7 @@ import {
   ScraperPagination,
   ScraperJobState,
 } from "../types/facebook-scraper";
-import { UserAgentRotator } from "../lib/user-agent-rotator";
+import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
@@ -25,7 +25,6 @@ export class FacebookScraper {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
-  private userAgentRotator: UserAgentRotator;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -34,7 +33,15 @@ export class FacebookScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
-    this.userAgentRotator = new UserAgentRotator();
+  }
+
+  /**
+   * Check robots.txt before scraping
+   */
+  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
+    const facebookBaseUrl = 'https://www.facebook.com';
+    const searchPath = '/search/pages';
+    return checkUrlAllowed(`${facebookBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
   }
 
   /**
@@ -47,9 +54,7 @@ export class FacebookScraper {
         headless: true,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
-      const userAgent = this.userAgentRotator.getNextUserAgent();
       this.context = await this.browser.newContext({
-        userAgent,
         viewport: { width: 1280, height: 720 },
       });
     }
@@ -76,6 +81,26 @@ export class FacebookScraper {
     query: string,
     location: string
   ): Promise<ScraperResult> {
+    // Check robots.txt before proceeding
+    const robotsCheck = await this.checkRobotsBeforeScraping();
+    if (!robotsCheck.allowed) {
+      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
+      return {
+        businesses: [],
+        pagination: {
+          currentPage: 0,
+          totalPages: 0,
+          resultsPerPage: 0,
+          totalResults: 0,
+          hasNextPage: false,
+        },
+        source: "facebook",
+        query,
+        location,
+        timestamp: new Date(),
+      };
+    }
+
     await this.initialize();
 
     const page = await this.context!.newPage();
@@ -179,18 +204,6 @@ export class FacebookScraper {
         const linkEl = unit.querySelector('a[href*="/pages/"]');
         const categoryEl = unit.querySelector('div[role="img"] + div span');
 
-        // Extract phone number - look for phone icon or phone text
-        const phoneEl = unit.querySelector(
-          '[aria-label*="phone"], [class*="phone"], [data-testid*="phone"]'
-        );
-        const phone = phoneEl?.textContent?.trim() || undefined;
-
-        // Extract website - look for website link or external link
-        const websiteEl = unit.querySelector(
-          'a[href*="http"]:not([href*="facebook.com"]), [class*="website"], [aria-label*="website"]'
-        );
-        const website = websiteEl?.getAttribute("href") || undefined;
-
         if (nameEl && linkEl) {
           const name = nameEl.textContent?.trim() || "";
           const href = linkEl.getAttribute("href") || "";
@@ -201,8 +214,6 @@ export class FacebookScraper {
             source: "facebook",
             sourceId,
             category: categoryEl?.textContent?.trim() || undefined,
-            phone,
-            website,
           });
         }
       });

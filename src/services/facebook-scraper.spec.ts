@@ -4,6 +4,7 @@
 
 import { FacebookScraper } from "./facebook-scraper";
 import { Browser, BrowserContext, Page } from "playwright";
+import { checkUrlAllowed } from "@/lib/scraper/robots-service";
 
 // Mock playwright
 const mockPage = {
@@ -36,13 +37,8 @@ describe("FacebookScraper", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset mock implementations
-    mockPage.evaluate.mockReset();
-    mockPage.goto.mockReset();
-    mockPage.waitForSelector.mockReset();
-    mockPage.close.mockReset();
-    mockPage.$.mockReset();
-    mockPage.waitForLoadState.mockReset();
+    // Mock checkUrlAllowed to allow scraping by default
+    jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue({ allowed: true });
     scraper = new FacebookScraper();
   });
 
@@ -62,6 +58,31 @@ describe("FacebookScraper", () => {
         delayBetweenPagesMs: 5000,
       });
       expect(customScraper).toBeDefined();
+    });
+  });
+
+  describe("checkRobotsBeforeScraping", () => {
+    it("should check robots.txt for Facebook search path", async () => {
+      const mockRobotsCheck = { allowed: true };
+      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
+
+      const result = await scraper.checkRobotsBeforeScraping();
+
+      expect(result).toEqual(mockRobotsCheck);
+      expect(checkUrlAllowed).toHaveBeenCalledWith(
+        "https://www.facebook.com/search/pages",
+        "BlackOwnedScraper/1.0"
+      );
+    });
+
+    it("should return disallowed when robots.txt blocks scraping", async () => {
+      const mockRobotsCheck = { allowed: false, reason: "Path /search/pages is disallowed by robots.txt" };
+      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
+
+      const result = await scraper.checkRobotsBeforeScraping();
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain("disallowed by robots.txt");
     });
   });
 
@@ -119,8 +140,6 @@ describe("FacebookScraper", () => {
           source: "facebook" as const,
           sourceId: "test-business-123",
           category: "Restaurant",
-          phone: undefined,
-          website: undefined,
         },
       ];
 
@@ -190,7 +209,7 @@ describe("FacebookScraper", () => {
       mockPage.waitForSelector.mockResolvedValue(undefined);
       mockPage.evaluate.mockImplementation(() => {
         callCount++;
-        return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const, phone: undefined, website: undefined }] : [];
+        return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const }] : [];
       });
       mockPage.$.mockResolvedValueOnce({ click: jest.fn() });
 
@@ -226,56 +245,15 @@ describe("FacebookScraper", () => {
       );
     });
 
-    it("captures phone number when available", async () => {
-      const mockBusinessWithPhone = {
-        name: "Phone Business",
-        phone: "555-9876",
-        website: undefined,
-        category: "Business",
-        source: "facebook" as const,
-        sourceId: "phone-business-123",
-      };
+    it("should return empty results when robots.txt blocks scraping", async () => {
+      const mockRobotsCheck = { allowed: false, reason: "Path /search/pages is disallowed by robots.txt" };
+      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
 
-      mockPage.goto.mockResolvedValue(undefined);
-      mockPage.waitForSelector.mockResolvedValue(undefined);
-      mockPage.evaluate.mockResolvedValue([mockBusinessWithPhone]);
+      const result = await scraper.scrape("restaurants", "New York");
 
-      const result = await scraper.scrape("businesses", "City");
-
-      expect(result.businesses[0].phone).toBe("555-9876");
-    });
-
-    it("captures website URL when available", async () => {
-      const mockBusinessWithWebsite = {
-        name: "Website Business",
-        address: "789 Web Ave",
-        website: "https://website.com",
-        source: "facebook" as const,
-      };
-
-      mockPage.goto.mockResolvedValue(undefined);
-      mockPage.waitForSelector.mockResolvedValue(undefined);
-      mockPage.evaluate.mockResolvedValue([mockBusinessWithWebsite]);
-
-      const result = await scraper.scrape("businesses", "City");
-
-      expect(result.businesses[0].website).toBe("https://website.com");
-    });
-
-    it("handles businesses without phone or website", async () => {
-      const mockBusinessMinimal = {
-        name: "Minimal Business",
-        source: "facebook" as const,
-      };
-
-      mockPage.goto.mockResolvedValue(undefined);
-      mockPage.waitForSelector.mockResolvedValue(undefined);
-      mockPage.evaluate.mockResolvedValue([mockBusinessMinimal]);
-
-      const result = await scraper.scrape("businesses", "City");
-
-      expect(result.businesses[0].phone).toBeUndefined();
-      expect(result.businesses[0].website).toBeUndefined();
+      expect(result.businesses).toHaveLength(0);
+      expect(result.pagination.currentPage).toBe(0);
+      expect(result.pagination.totalPages).toBe(0);
     });
   });
 
@@ -293,34 +271,6 @@ describe("FacebookScraper", () => {
           isComplete: false,
         })
       );
-    });
-
-    it("uses user-agent from rotator", async () => {
-      let capturedUserAgent: string | undefined;
-
-      const mockContextWithUA = {
-        newPage: jest.fn().mockReturnValue(mockPage),
-        close: jest.fn(),
-      };
-
-      const mockBrowserWithUA = {
-        newContext: jest.fn().mockImplementation((options: any) => {
-          capturedUserAgent = options?.userAgent;
-          return mockContextWithUA;
-        }),
-        close: jest.fn(),
-      };
-
-      (await import("playwright")).chromium.launch.mockResolvedValue(mockBrowserWithUA);
-
-      const scraper = new FacebookScraper();
-      await scraper.initialize();
-
-      expect(capturedUserAgent).toBeDefined();
-      expect(typeof capturedUserAgent).toBe("string");
-      expect(capturedUserAgent).toContain("Mozilla/5.0");
-
-      await scraper.close();
     });
   });
 
