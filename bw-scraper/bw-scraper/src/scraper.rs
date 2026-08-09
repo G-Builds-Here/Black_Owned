@@ -1,5 +1,6 @@
 //! Web scraping logic for bw-scraper
 
+use crate::bot_detection::{BotChallenge, BotDetector};
 use anyhow::Result;
 use scraper::{Html, Selector};
 use tracing::{info, warn};
@@ -36,12 +37,32 @@ pub struct BusinessData {
 /// Scraper service for extracting business data
 pub struct ScraperService {
     source: ScraperSource,
+    bot_detector: BotDetector,
 }
 
 impl ScraperService {
     /// Create a new scraper for the given source
     pub fn new(source: ScraperSource) -> Self {
-        Self { source }
+        Self {
+            source,
+            bot_detector: BotDetector::new(),
+        }
+    }
+
+    /// Check if the response indicates a bot challenge
+    ///
+    /// Returns true if a bot challenge is detected, false otherwise
+    pub fn check_for_bot_challenge(&self, html_content: &str, url: &str) -> bool {
+        self.bot_detector.is_bot_challenge(html_content)
+            || self.bot_detector.is_challenge_status(0) // Status check would be passed in real usage
+    }
+
+    /// Handle a detected bot challenge
+    ///
+    /// Logs the event and pauses for 60 seconds before retry
+    pub async fn handle_bot_challenge(&self, source: &str, url: &str) {
+        let challenge = BotChallenge::new(source, url);
+        self.bot_detector.handle_challenge(&challenge).await;
     }
 
     /// Scrape businesses from the source
@@ -116,6 +137,21 @@ mod tests {
         let _google = ScraperService::new(ScraperSource::GoogleMaps);
         let _yelp = ScraperService::new(ScraperSource::Yelp);
         let _facebook = ScraperService::new(ScraperSource::Facebook);
+    }
+
+    #[test]
+    fn test_scraper_has_bot_detector() {
+        let scraper = ScraperService::new(ScraperSource::GoogleMaps);
+        // Verify bot detector is initialized
+        let html = r#"<html><body><div class="g-recaptcha">Verify you are human</div></body></html>"#;
+        assert!(scraper.check_for_bot_challenge(html, "https://example.com"));
+    }
+
+    #[test]
+    fn test_scraper_normal_page_no_challenge() {
+        let scraper = ScraperService::new(ScraperSource::GoogleMaps);
+        let html = r#"<html><body><h1>Normal page content</h1></body></html>"#;
+        assert!(!scraper.check_for_bot_challenge(html, "https://example.com"));
     }
 
     #[test]

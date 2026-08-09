@@ -3,6 +3,7 @@
 //! This crate provides functionality for scraping business data from external sources
 //! (Google Maps, Yelp, Facebook) and storing it in the Black Owned database.
 
+pub mod bot_detection;
 pub mod config;
 pub mod connectors;
 pub mod scraper;

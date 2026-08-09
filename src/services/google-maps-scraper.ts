@@ -1,9 +1,11 @@
 /**
  * Google Maps Scraper Service
  * Scrapes business data from Google Maps search results
+ * Includes bot detection and retry handling.
  */
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
+import { BotDetectionService, createBotDetectionService } from './bot-detection-service';
 
 export interface ScrapedBusiness {
   name: string;
@@ -27,9 +29,12 @@ export interface SearchParams {
   location?: string;
 }
 
+const DEFAULT_BOT_RETRY_DELAY_MS = 60000; // 60 seconds
+
 class GoogleMapsScraper {
   private browser: Browser | null = null;
   private config: Required<ScraperConfig>;
+  private botDetection: BotDetectionService;
 
   constructor(config?: ScraperConfig) {
     this.config = {
@@ -37,6 +42,10 @@ class GoogleMapsScraper {
       timeoutMs: config?.timeoutMs ?? 60000,
       maxResults: config?.maxResults ?? 20,
     };
+    this.botDetection = createBotDetectionService({
+      retryDelayMs: DEFAULT_BOT_RETRY_DELAY_MS,
+      maxRetries: 3,
+    });
   }
 
   /**
@@ -96,6 +105,35 @@ class GoogleMapsScraper {
       await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
         // Continue even if selector not found - results may still load
       });
+
+      // Check for bot detection challenge
+      const pageContent = await page.content();
+      const botResult = this.botDetection.detectBotChallenge(pageContent, "google-maps");
+
+      if (botResult.isBotDetected) {
+        console.log(
+          `[GoogleMapsScraper] Bot detected: ${botResult.challengeType}, retry attempt ${botResult.retryCount + 1}/3`
+        );
+
+        if (botResult.shouldRetry) {
+          // Pause for 60 seconds before retry
+          await this.botDetection.pauseForRetry("google-maps");
+          this.botDetection.incrementRetryCount("google-maps");
+
+          // Retry the page load
+          await page.goto(searchUrl, {
+            waitUntil: 'networkidle',
+            timeout: this.config.timeoutMs,
+          });
+          await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
+            // Continue even if selector not found - results may still load
+          });
+        } else {
+          throw new Error(
+            `Bot detection triggered: ${botResult.challengeType}. Max retries exceeded.`
+          );
+        }
+      }
 
       // Wait a moment for dynamic content
       await page.waitForTimeout(2000);

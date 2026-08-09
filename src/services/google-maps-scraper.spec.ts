@@ -15,6 +15,7 @@ jest.mock('playwright', () => ({
           goto: jest.fn().mockResolvedValue({}),
           waitForSelector: jest.fn().mockResolvedValue({}),
           waitForTimeout: jest.fn().mockResolvedValue(undefined),
+          content: jest.fn().mockResolvedValue('<html><body>Normal page content</body></html>'),
           evaluate: jest.fn().mockResolvedValue([
             {
               name: 'Test Business',
