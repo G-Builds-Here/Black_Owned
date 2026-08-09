@@ -1,6 +1,7 @@
 //! Data ingestion module for Black Owned platform.
 
-pub mod scraper_rate_limiter;
+pub mod etl;
+
 pub mod chat_consumer;
 
 #[cfg(feature = "integration_test")]
@@ -24,14 +25,10 @@ pub mod image_worker;
 pub mod stream_config;
 
 pub mod cache_invalidator;
-
-#[cfg(not(feature = "integration_test"))]
 pub mod cache_service;
 
 #[cfg(feature = "integration_test")]
 pub mod cache_service;
-
-pub mod etl;
 
 use bw_types::Business;
 use serde::{Deserialize, Serialize};
@@ -85,10 +82,9 @@ impl BusinessIngestionHandler {
             id: uuid::Uuid::new_v4(),
             name: input.name.clone(),
             description: Some(input.category_name.clone()),
-            category_id: _category_id.to_owned(),
+            category_id: *_category_id,
             owner_id: _owner_id,
             verified: false,
-            address: None,
             created_at: chrono::Utc::now(),
             address: None,
             phone: None,
