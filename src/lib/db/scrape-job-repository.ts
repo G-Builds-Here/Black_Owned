@@ -6,6 +6,7 @@
 
 import { PoolClient } from "pg";
 import { ScrapeJob, ScrapeJobStatus, CreateScrapeJobInput } from "../../types/scrape-job";
+import { getPool } from "./user-repository";
 
 /**
  * Get the scrape_jobs table name
@@ -18,30 +19,35 @@ function getTableName(): string {
 /**
  * Initialize the scrape_jobs table schema
  */
-export async function initializeScrapeJobSchema(client: PoolClient): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${getTableName()} (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      source VARCHAR(255) NOT NULL,
-      query TEXT NOT NULL,
-      location VARCHAR(255) NOT NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'pending',
-      result_count INTEGER,
-      error_message TEXT,
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    )
-  `);
+export async function initializeScrapeJobSchema(): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${getTableName()} (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source VARCHAR(255) NOT NULL,
+        query TEXT NOT NULL,
+        location VARCHAR(255) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        result_count INTEGER,
+        error_message TEXT,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
 
-  // Create index on status for filtering
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_status ON ${getTableName()}(status)
-  `);
+    // Create index on status for filtering
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_scrape_jobs_status ON ${getTableName()}(status)
+    `);
 
-  // Create index on created_at for sorting
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_created_at ON ${getTableName()}(created_at DESC)
-  `);
+    // Create index on created_at for sorting
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_scrape_jobs_created_at ON ${getTableName()}(created_at DESC)
+    `);
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -65,18 +71,20 @@ function rowToScrapeJob(row: unknown): ScrapeJob {
 /**
  * Create a new scrape job
  */
-export async function createScrapeJob(
-  client: PoolClient,
-  input: CreateScrapeJobInput
-): Promise<ScrapeJob> {
-  const tableName = getTableName();
-  const result = await client.query<ScrapeJob>(
-    `INSERT INTO ${tableName} (source, query, location, status)
-     VALUES ($1, $2, $3, 'pending')
-     RETURNING *`,
-    [input.source, input.query, input.location]
-  );
-  return rowToScrapeJob(result.rows[0]);
+export async function createScrapeJob(input: CreateScrapeJobInput): Promise<ScrapeJob> {
+  const client = await getPool().connect();
+  try {
+    const tableName = getTableName();
+    const result = await client.query<ScrapeJob>(
+      `INSERT INTO ${tableName} (source, query, location, status)
+       VALUES ($1, $2, $3, 'pending')
+       RETURNING *`,
+      [input.source, input.query, input.location]
+    );
+    return rowToScrapeJob(result.rows[0]);
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -147,21 +155,6 @@ export async function findScrapeJobs(
     limit ? [limit] : []
   );
   return result.rows.map(rowToScrapeJob);
-}
-
-/**
- * Delete a scrape job by ID
- */
-export async function deleteScrapeJob(
-  client: PoolClient,
-  id: string
-): Promise<ScrapeJob | undefined> {
-  const tableName = getTableName();
-  const result = await client.query<ScrapeJob>(
-    `DELETE FROM ${tableName} WHERE id = $1 RETURNING *`,
-    [id]
-  );
-  return result.rows[0] ? rowToScrapeJob(result.rows[0]) : undefined;
 }
 
 /**

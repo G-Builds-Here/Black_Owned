@@ -58,14 +58,6 @@ export function validateScrapeJobInput(input: CreateScrapeJobInput): { valid: bo
 }
 
 /**
- * Validates scrape job status
- */
-export function isValidScrapeJobStatus(status: string): status is ScrapeJobStatus {
-  const validStatuses: ScrapeJobStatus[] = ["pending", "running", "completed", "failed"];
-  return validStatuses.includes(status as ScrapeJobStatus);
-}
-
-/**
  * Valid scrape job status values
  */
 const VALID_STATUSES: ScrapeJobStatus[] = ["pending", "running", "completed", "failed", "cancelled"];
