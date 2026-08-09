@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, insertBusinessesBatch } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -152,6 +152,112 @@ describe("Business Repository", () => {
         try {
           const businesses = await findBusinessesByOwnerId(client, user.id);
           expect(businesses.length).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+  });
+
+  describe("insertBusinessesBatch", () => {
+    it("inserts multiple businesses in a single transaction", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+
+          const businesses = [
+            { ownerId: user.id, name: "Batch Business 1", description: "Desc 1", categoryId: "cat-1" },
+            { ownerId: user.id, name: "Batch Business 2", description: "Desc 2", categoryId: "cat-2" },
+            { ownerId: user.id, name: "Batch Business 3", description: "Desc 3", categoryId: "cat-3" },
+          ];
+
+          const count = await insertBusinessesBatch(client, businesses);
+
+          expect(count).toBe(3);
+
+          const allBusinesses = await findBusinessesByOwnerId(client, user.id);
+          expect(allBusinesses.length).toBe(3);
+          expect(allBusinesses.map((b) => b.name)).toEqual(
+            expect.arrayContaining(["Batch Business 1", "Batch Business 2", "Batch Business 3"])
+          );
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("handles empty batch gracefully", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+
+          const count = await insertBusinessesBatch(client, []);
+
+          expect(count).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("handles businesses without descriptions", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+
+          const businesses = [
+            { ownerId: user.id, name: "No Desc 1", categoryId: "cat-1" },
+            { ownerId: user.id, name: "No Desc 2", categoryId: "cat-2" },
+          ];
+
+          const count = await insertBusinessesBatch(client, businesses);
+
+          expect(count).toBe(2);
+
+          const allBusinesses = await findBusinessesByOwnerId(client, user.id);
+          expect(allBusinesses.every((b) => b.description === undefined)).toBe(true);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("rolls back on error", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
+
+          // Try to insert with invalid data (should fail)
+          const businesses = [
+            { ownerId: user.id, name: "Test Business", categoryId: "cat-1" },
+            { ownerId: "00000000-0000-0000-0000-000000000000", name: "Invalid Owner", categoryId: "cat-2" },
+          ];
+
+          await expect(insertBusinessesBatch(client, businesses)).rejects.toThrow();
+
+          // Verify no businesses were inserted due to rollback
+          const allBusinesses = await findBusinessesByOwnerId(client, user.id);
+          expect(allBusinesses.length).toBe(0);
         } finally {
           client.release();
         }

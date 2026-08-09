@@ -99,3 +99,55 @@ export async function findBusinessesByOwnerId(
   );
   return result.rows.map(rowToBusiness);
 }
+
+/**
+ * Input type for batch business import
+ */
+export interface BatchBusinessInput {
+  ownerId: string;
+  name: string;
+  description?: string;
+  categoryId: string;
+}
+
+/**
+ * Insert multiple businesses in a single transaction
+ * Returns the count of inserted businesses
+ */
+export async function insertBusinessesBatch(
+  client: PoolClient,
+  businesses: BatchBusinessInput[]
+): Promise<number> {
+  if (businesses.length === 0) {
+    return 0;
+  }
+
+  const tableName = getTableName();
+
+  // Build parameterized query for batch insert
+  const values: unknown[] = [];
+  const paramSets: string[] = [];
+  let paramIndex = 1;
+
+  for (const business of businesses) {
+    paramSets.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, 'unverified')`);
+    values.push(business.ownerId, business.name, business.description || null, business.categoryId);
+    paramIndex += 4;
+  }
+
+  await client.query(`BEGIN`);
+
+  try {
+    await client.query(
+      `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
+       VALUES ${paramSets.join(", ")}`,
+      values
+    );
+
+    await client.query(`COMMIT`);
+    return businesses.length;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  }
+}
