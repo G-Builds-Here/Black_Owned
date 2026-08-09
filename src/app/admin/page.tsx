@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@/components/ui';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -44,6 +44,16 @@ const METRICS_BY_SOURCE = {
 
 type SourceFilter = 'all' | 'google_maps' | 'yelp' | 'facebook';
 
+interface PendingBusiness {
+  id: string;
+  name: string;
+  address: string;
+  source: string;
+  rating: number | null;
+  status: string;
+  createdAt: string;
+}
+
 const RECENT_BUSINESSES = [
   { id: '1', name: 'Soul Food Kitchen', status: 'pending', submitted: '2026-07-14' },
   { id: '2', name: 'Black Diamond Consulting', status: 'approved', submitted: '2026-07-13' },
@@ -75,9 +85,30 @@ const VERIFICATION_QUEUE = [
 ];
 
 export default function AdminConsole() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'verifications' | 'reviews' | 'pending' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
+  const [pendingBusinesses, setPendingBusinesses] = useState<PendingBusiness[]>([]);
+  const [pendingBusinessesLoading, setPendingBusinessesLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'pending') {
+      fetchPendingBusinesses();
+    }
+  }, [activeTab]);
+
+  const fetchPendingBusinesses = async () => {
+    setPendingBusinessesLoading(true);
+    try {
+      const response = await fetch('/api/pending-businesses');
+      const data = await response.json();
+      setPendingBusinesses(data);
+    } catch (error) {
+      console.error('Failed to fetch pending businesses:', error);
+    } finally {
+      setPendingBusinessesLoading(false);
+    }
+  };
 
   const handleApproveVerification = (id: string) => {
     console.log('Approve verification:', id);
@@ -166,6 +197,7 @@ export default function AdminConsole() {
             { key: 'users', label: 'User Management' },
             { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
             { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
+            { key: 'pending', label: `Pending Businesses (${pendingBusinesses.length})` },
             { key: 'settings', label: 'Settings' },
           ]}
           selectedKey={activeTab}
@@ -443,6 +475,57 @@ export default function AdminConsole() {
                 </Card>
               ))}
             </div>
+          </Card>
+        </TabPanel>
+
+        {/* Pending Businesses Tab */}
+        <TabPanel value="pending" className="mt-6">
+          <Card variant="elevated" padding="lg">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-neutral-800">Pending Businesses for Review</h2>
+                <p className="text-sm text-neutral-500 mt-1">Businesses awaiting approval before going live</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={fetchPendingBusinesses}>
+                Refresh
+              </Button>
+            </div>
+            {pendingBusinessesLoading ? (
+              <div className="text-center py-8 text-neutral-500">Loading...</div>
+            ) : pendingBusinesses.length === 0 ? (
+              <div className="text-center py-8 text-neutral-500">No pending businesses found</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableColumn>Name</TableColumn>
+                    <TableColumn>Address</TableColumn>
+                    <TableColumn>Source</TableColumn>
+                    <TableColumn>Rating</TableColumn>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingBusinesses.map((business) => (
+                    <TableRow key={business.id}>
+                      <TableCell>{business.name}</TableCell>
+                      <TableCell>{business.address}</TableCell>
+                      <TableCell>
+                        <Badge variant="default" size="sm">
+                          {business.source.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {business.rating !== null ? (
+                          <span className="text-heritage-ochre">{'★'.repeat(business.rating)}{'☆'.repeat(5 - business.rating)}</span>
+                        ) : (
+                          <span className="text-neutral-400">N/A</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         </TabPanel>
 

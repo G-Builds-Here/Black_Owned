@@ -4,10 +4,31 @@
  * Tests for /api/health endpoint
  */
 
+// Mock the database module before importing the route
+const mockQuery = jest.fn();
+const mockRelease = jest.fn();
+const mockPool = {
+  connect: jest.fn(() => ({
+    query: mockQuery,
+    release: mockRelease,
+  })),
+};
+
+jest.mock("../../../lib/db/user-repository", () => ({
+  getPool: jest.fn(() => mockPool),
+}));
+
 import { GET, POST, PUT, DELETE } from "./route";
+import { getPool } from "../../../lib/db/user-repository";
 
 describe("GET /api/health", () => {
-  it("should return 200 with healthy status", async () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should return 200 with healthy status when database is reachable", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
     const request = new Request("http://localhost/api/health", {
       method: "GET",
     });
@@ -17,9 +38,27 @@ describe("GET /api/health", () => {
 
     expect(response.status).toBe(200);
     expect(json.status).toBe("healthy");
+    expect(json.database).toBe("connected");
+  });
+
+  it("should return 503 with unhealthy status when database is unreachable", async () => {
+    mockQuery.mockRejectedValueOnce(new Error("Connection refused"));
+
+    const request = new Request("http://localhost/api/health", {
+      method: "GET",
+    });
+
+    const response = await GET(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(json.status).toBe("unhealthy");
+    expect(json.database).toBe("unreachable");
   });
 
   it("should return JSON Content-Type header", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
     const request = new Request("http://localhost/api/health", {
       method: "GET",
     });
@@ -30,6 +69,8 @@ describe("GET /api/health", () => {
   });
 
   it("should include timestamp in response", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
     const request = new Request("http://localhost/api/health", {
       method: "GET",
     });

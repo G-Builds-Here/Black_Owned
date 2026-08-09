@@ -5,6 +5,32 @@ import { TextEncoder, TextDecoder } from 'util';
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+// Polyfill for Request (required by Next.js API routes in jsdom environment)
+// Define a minimal mock Request class for testing API routes
+class MockRequest {
+  url: string;
+  method: string;
+  headers: Headers;
+  body: string | null;
+
+  constructor(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) {
+    this.url = url;
+    this.method = init?.method ?? 'GET';
+    this.headers = new Headers(init?.headers);
+    this.body = init?.body ?? null;
+  }
+
+  async json() {
+    return this.body ? JSON.parse(this.body) : {};
+  }
+
+  async text() {
+    return this.body ?? '';
+  }
+}
+
+global.Request = MockRequest as unknown as typeof Request;
+
 // Polyfill for Response (required by Next.js API routes in jsdom environment)
 // Define a minimal mock Response class for testing API routes
 class MockResponse {
