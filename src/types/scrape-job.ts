@@ -7,7 +7,7 @@
 /**
  * Job scraping status
  */
-export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
+export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
  * ScrapeJob entity stored in PostgreSQL

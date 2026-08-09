@@ -148,3 +148,26 @@ export async function findScrapeJobs(
   );
   return result.rows.map(rowToScrapeJob);
 }
+
+/**
+ * Cancel a running scrape job
+ * Returns the updated job if successful, null if job not found or not in running status
+ */
+export async function cancelScrapeJob(
+  client: PoolClient,
+  id: string
+): Promise<ScrapeJob | null> {
+  const tableName = getTableName();
+
+  // Only allow cancellation of jobs in "running" status
+  const result = await client.query<ScrapeJob>(
+    `UPDATE ${tableName}
+     SET status = 'cancelled',
+         updated_at = NOW()
+     WHERE id = $1 AND status = 'running'
+     RETURNING *`,
+    [id]
+  );
+
+  return result.rows[0] ? rowToScrapeJob(result.rows[0]) : null;
+}

@@ -1,13 +1,22 @@
 import { NextRequest } from 'next/server';
 import { POST } from './route';
 import { cancelScrapeJob } from '@/lib/db/scrape-job-repository';
+import { getPool } from '@/lib/db/user-repository';
 
-// Mock the repository
+// Mock the repository and pool
 jest.mock('@/lib/db/scrape-job-repository');
+jest.mock('@/lib/db/user-repository');
 
 describe('POST /api/scrape-jobs/:id/cancel', () => {
+  const mockClient = {
+    release: jest.fn()
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    (getPool as jest.Mock).mockReturnValue({
+      connect: jest.fn().mockResolvedValue(mockClient)
+    });
   });
 
   it('returns 400 when job ID is missing', async () => {
@@ -76,7 +85,7 @@ describe('POST /api/scrape-jobs/:id/cancel', () => {
     expect(json.job.id).toBe('789');
     expect(json.job.status).toBe('cancelled');
     expect(json.job.source).toBe('google-maps');
-    expect(cancelScrapeJob).toHaveBeenCalledWith('789');
+    expect(cancelScrapeJob).toHaveBeenCalledWith(mockClient, '789');
   });
 
   it('returns 500 on internal error', async () => {

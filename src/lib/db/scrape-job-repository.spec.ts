@@ -9,6 +9,7 @@ import {
   findScrapeJobById,
   updateScrapeJobStatus,
   findScrapeJobs,
+  cancelScrapeJob,
 } from "./scrape-job-repository";
 import { ScrapeJobStatus } from "../../types/scrape-job";
 
@@ -282,6 +283,91 @@ describe("Scrape Job Repository", () => {
 
         // Most recent should be first
         expect(jobs[0].id).toBe(job2.id);
+      } finally {
+        client.release();
+      }
+    });
+  });
+
+  describe("cancelScrapeJob", () => {
+    it("cancels a running job successfully", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        // Create a job and set it to running status
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel`,
+          query: "cancel test",
+          location: "Dallas, TX",
+        });
+
+        const runningJob = await updateScrapeJobStatus(client, job.id, "running");
+        expect(runningJob?.status).toBe("running");
+
+        // Cancel the job
+        const cancelled = await cancelScrapeJob(client, job.id);
+
+        expect(cancelled).toBeDefined();
+        expect(cancelled?.status).toBe("cancelled");
+        expect(cancelled?.id).toBe(job.id);
+      } finally {
+        client.release();
+      }
+    });
+
+    it("returns null when job is not in running status", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        // Create a job with pending status
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel-pending`,
+          query: "cancel pending test",
+          location: "Houston, TX",
+        });
+
+        // Try to cancel a pending job (should fail)
+        const cancelled = await cancelScrapeJob(client, job.id);
+
+        expect(cancelled).toBeNull();
+      } finally {
+        client.release();
+      }
+    });
+
+    it("returns null for non-existent job", async () => {
+      const client = await getPool().connect();
+      try {
+        const result = await cancelScrapeJob(client, "00000000-0000-0000-0000-000000000000");
+        expect(result).toBeNull();
+      } finally {
+        client.release();
+      }
+    });
+
+    it("only allows cancellation of jobs in running status", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        // Create and complete a job
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel-completed`,
+          query: "cancel completed test",
+          location: "San Antonio, TX",
+        });
+
+        await updateScrapeJobStatus(client, job.id, "completed", 5);
+
+        // Try to cancel a completed job (should fail)
+        const cancelled = await cancelScrapeJob(client, job.id);
+        expect(cancelled).toBeNull();
+
+        // Verify job is still completed
+        const updated = await findScrapeJobById(client, job.id);
+        expect(updated?.status).toBe("completed");
       } finally {
         client.release();
       }
