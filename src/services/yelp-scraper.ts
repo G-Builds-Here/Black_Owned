@@ -3,7 +3,6 @@
  *
  * Web scraper for extracting business data from Yelp using Playwright.
  * Handles pagination to capture all results when more than 10 exist.
- * Includes bot detection and retry handling.
  */
 
 import { Browser, Page, BrowserContext } from "playwright";
@@ -14,12 +13,11 @@ import {
   ScraperJobState,
 } from "../types/yelp-scraper";
 import { ScraperSource } from "../types/scrape-job";
-import { BotDetectionService, createBotDetectionService } from "./bot-detection-service";
+import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 1000;
-const DEFAULT_BOT_RETRY_DELAY_MS = 60000; // 60 seconds
 
 /**
  * Yelp scraper class with pagination support
@@ -28,7 +26,6 @@ export class YelpScraper {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
-  private botDetection: BotDetectionService;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -37,10 +34,15 @@ export class YelpScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
-    this.botDetection = createBotDetectionService({
-      retryDelayMs: DEFAULT_BOT_RETRY_DELAY_MS,
-      maxRetries: 3,
-    });
+  }
+
+  /**
+   * Check robots.txt before scraping
+   */
+  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
+    const yelpBaseUrl = 'https://www.yelp.com';
+    const searchPath = '/search';
+    return checkUrlAllowed(`${yelpBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
   }
 
   /**
@@ -80,6 +82,26 @@ export class YelpScraper {
     query: string,
     location: string
   ): Promise<ScraperResult> {
+    // Check robots.txt before proceeding
+    const robotsCheck = await this.checkRobotsBeforeScraping();
+    if (!robotsCheck.allowed) {
+      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
+      return {
+        businesses: [],
+        pagination: {
+          currentPage: 0,
+          totalPages: 0,
+          resultsPerPage: 0,
+          totalResults: 0,
+          hasNextPage: false,
+        },
+        source: "yelp",
+        query,
+        location,
+        timestamp: new Date(),
+      };
+    }
+
     await this.initialize();
 
     if (!this.context) {
@@ -107,38 +129,6 @@ export class YelpScraper {
       } catch {
         // Continue even if selector not found - may have different structure
         resultsLoaded = false;
-      }
-
-      // Check for bot detection challenge
-      const pageContent = await page.content();
-      const botResult = this.botDetection.detectBotChallenge(pageContent, "yelp");
-
-      if (botResult.isBotDetected) {
-        console.log(
-          `[YelpScraper] Bot detected: ${botResult.challengeType}, retry attempt ${botResult.retryCount + 1}/3`
-        );
-
-        if (botResult.shouldRetry) {
-          // Pause for 60 seconds before retry
-          await this.botDetection.pauseForRetry("yelp");
-          this.botDetection.incrementRetryCount("yelp");
-
-          // Retry the page load
-          await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
-          resultsLoaded = false;
-          try {
-            await page.waitForSelector(".business-name, .css-1c4t2b3", {
-              timeout: 10000,
-            });
-            resultsLoaded = true;
-          } catch {
-            resultsLoaded = false;
-          }
-        } else {
-          throw new Error(
-            `Bot detection triggered: ${botResult.challengeType}. Max retries exceeded.`
-          );
-        }
       }
 
       // Initialize job state
