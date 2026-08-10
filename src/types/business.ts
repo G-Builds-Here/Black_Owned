@@ -7,12 +7,7 @@
 /**
  * Verification status for a business
  */
-export type VerificationStatus = "unverified" | "pending" | "pending_review" | "verified";
-
-/**
- * Import source for a business
- */
-export type ImportSource = "google_maps" | "yelp" | "facebook";
+export type VerificationStatus = "unverified" | "pending" | "verified" | "approved" | "rejected";
 
 /**
  * Business entity stored in PostgreSQL
@@ -26,8 +21,6 @@ export interface Business {
   verificationStatus: VerificationStatus;
   createdAt: Date;
   updatedAt: Date;
-  importSource: ImportSource | undefined;
-  scrapeJobId: string | undefined;
 }
 
 /**

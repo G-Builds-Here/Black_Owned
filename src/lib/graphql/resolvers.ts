@@ -9,12 +9,6 @@ import {
   getPool,
 } from "../db/user-repository";
 import {
-  findScrapedBusinessesByStatus,
-  updateScrapedBusinessStatus,
-  findScrapedBusinessById,
-  rejectScrapedBusiness,
-} from "../db/scraped-business-repository";
-import {
   hashPassword,
   generateTokenPair,
   verifyToken,
@@ -35,9 +29,14 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusiness,
+  create as createBusinessInDb,
+  approveBusinessById,
   Business as BusinessRecord,
 } from "../db/business-repository";
+import {
+  findScrapedBusinessesByStatus,
+} from "../db/scraped-business-repository";
+import { PoolClient } from "pg";
 
 /**
  * Mock business data for search
@@ -319,12 +318,10 @@ function businessToGraphqlBusiness(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.category_id,
-    rating: business.rating,
-    reviewCount: business.review_count,
-    verified: business.verified,
+    categoryId: business.categoryId,
+    verified: business.verificationStatus === "approved" || business.verificationStatus === "verified",
     createdAt: {
-      timestamp: Math.floor(business.created_at.getTime() / 1000),
+      timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },
   };
 }
@@ -381,6 +378,52 @@ export async function updateBusiness(
     success: true,
     business: businessToGraphqlBusiness(updatedBusiness),
   };
+}
+
+/**
+ * Approve business mutation resolver - updates verification status to "approved"
+ */
+export async function approveBusiness(
+  _parent: unknown,
+  args: { id: string }
+): Promise<{
+  success: boolean;
+  business?: unknown;
+  error?: string;
+}> {
+  const { id } = args;
+
+  const dbClient = (global as unknown as { dbClient?: unknown }).dbClient;
+  if (!dbClient) {
+    return {
+      success: false,
+      error: "Database connection not available",
+    };
+  }
+
+  const client = dbClient as PoolClient;
+
+  try {
+    const approvedBusiness = await approveBusinessById(client, id);
+
+    if (!approvedBusiness) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    return {
+      success: true,
+      business: businessToGraphqlBusinessEntity(approvedBusiness),
+    };
+  } catch (error) {
+    console.error("Error approving business:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 }
 
 /**
@@ -483,14 +526,12 @@ export async function searchBusinesses(
 }
 
 /**
- * Convert Business entity (from business-repository) to GraphQL Business type
+ * Convert Business entity to GraphQL Business type
  */
-function businessRecordToGraphqlBusiness(business: Business): {
+function businessToGraphqlBusinessEntity(business: Business): {
   id: string;
   name: string;
   categoryId: string;
-  rating: number | null;
-  reviewCount: number;
   verified: boolean;
   createdAt: { timestamp: number };
 } {
@@ -498,9 +539,7 @@ function businessRecordToGraphqlBusiness(business: Business): {
     id: business.id,
     name: business.name,
     categoryId: business.categoryId,
-    rating: business.rating,
-    reviewCount: business.reviewCount,
-    verified: business.verificationStatus === "verified",
+    verified: business.verificationStatus === "verified" || business.verificationStatus === "approved",
     createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
   };
 }
@@ -516,9 +555,9 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusiness(
+export async function createBusinessResolver(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string; rating?: number; reviewCount?: number } },
+  args: { input: { name: string; description?: string; categoryId: string } },
   context: unknown
 ): Promise<{
   success: boolean;
@@ -553,46 +592,20 @@ export async function createBusiness(
 
   const client = await getPool().connect();
   try {
-    // Begin transaction
-    await client.query("BEGIN");
-
     const business = await createBusinessInDb(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
-      input.categoryId.trim(),
-      input.rating ?? null,
-      input.reviewCount ?? 0
+      input.categoryId.trim()
     );
-
-    // Commit transaction
-    await client.query("COMMIT");
 
     return {
       success: true,
-      business: businessRecordToGraphqlBusiness(business),
+      business: businessToGraphqlBusiness(business),
     };
   } catch (error) {
-    // Rollback transaction on error
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackError) {
-      console.error("Rollback failed:", rollbackError);
-    }
-
-    // Log error with business details
-    const errorDetails = {
-      action: "createBusiness",
-      userId,
-      businessName: input.name,
-      description: input.description,
-      categoryId: input.categoryId,
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-    };
-    console.error("Business creation failed - transaction rolled back:", JSON.stringify(errorDetails));
-
+    console.error("Error creating business:", error);
     return {
       success: false,
       error: "Failed to create business",
@@ -603,187 +616,81 @@ export async function createBusiness(
 }
 
 /**
- * Internal function to create a business in the database
+ * Convert scraped business to GraphQL ScrapedBusiness type
  */
-async function createBusinessInDb(
-  client: import("pg").PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
-  categoryId: string,
-  rating: number | null = null,
-  reviewCount: number = 0
-): Promise<Business> {
-  const tableName = "businesses";
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, rating, review_count, verification_status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'unverified')
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId, rating ?? null, reviewCount]
-  );
-  return result.rows[0];
+function scrapedBusinessToGraphql(scrapedBiz: {
+  id: string;
+  name: string;
+  address: string;
+  source: string;
+  rating?: number;
+  category?: string;
+  phone?: string;
+  website?: string;
+  status: string;
+  createdAt: Date;
+}): {
+  id: string;
+  name: string;
+  address: string;
+  source: string;
+  rating: number | null;
+  category: string | null;
+  phone: string | null;
+  website: string | null;
+  status: string;
+  createdAt: { timestamp: number };
+} {
+  return {
+    id: scrapedBiz.id,
+    name: scrapedBiz.name,
+    address: scrapedBiz.address,
+    source: scrapedBiz.source,
+    rating: scrapedBiz.rating ?? null,
+    category: scrapedBiz.category ?? null,
+    phone: scrapedBiz.phone ?? null,
+    website: scrapedBiz.website ?? null,
+    status: scrapedBiz.status,
+    createdAt: {
+      timestamp: Math.floor(scrapedBiz.createdAt.getTime() / 1000),
+    },
+  };
 }
 
 /**
- * Approve business mutation resolver
+ * Pending businesses query resolver - returns businesses with pending_review status
  */
-export async function approveBusiness(
+export async function pendingBusinesses(
   _parent: unknown,
-  args: { businessId: string }
-): Promise<{
-  success: boolean;
-  business?: unknown;
-  error?: string;
-}> {
-  const { businessId } = args;
+  _args: unknown,
+  context: unknown
+): Promise<unknown[]> {
+  const ctx = context as { user?: { id: string } };
+  const userId = ctx?.user?.id ?? null;
 
-  // Validate business ID
-  if (!businessId || businessId.trim() === "") {
-    return {
-      success: false,
-      error: "Business ID is required",
-    };
+  if (!userId) {
+    console.warn("pendingBusinesses: admin access required");
+    return [];
   }
 
-  const client = await getPool().connect();
+  const client = (global as unknown as { dbClient?: unknown }).dbClient;
+  if (!client) {
+    console.error("pendingBusinesses: database connection not available");
+    return [];
+  }
+
+  const dbClient = client as PoolClient;
+
   try {
-    // Check if business exists
-    const business = await findScrapedBusinessById(client, businessId);
-
-    if (!business) {
-      return {
-        success: false,
-        error: "Business not found",
-      };
-    }
-
-    // Update status to approved
-    const updatedBusiness = await updateScrapedBusinessStatus(
-      client,
-      businessId,
-      "approved"
+    const pendingBusinesses = await findScrapedBusinessesByStatus(
+      dbClient,
+      "pending_review"
     );
 
-    if (!updatedBusiness) {
-      return {
-        success: false,
-        error: "Failed to update business status",
-      };
-    }
-
-    return {
-      success: true,
-      business: {
-        id: updatedBusiness.id,
-        name: updatedBusiness.name,
-        address: updatedBusiness.address,
-        source: updatedBusiness.source,
-        rating: updatedBusiness.rating ?? null,
-        createdAt: {
-          timestamp: Math.floor(updatedBusiness.createdAt.getTime() / 1000),
-        },
-      },
-    };
-  } catch (error) {
-    console.error("Error approving business:", error);
-    return {
-      success: false,
-      error: "Failed to approve business",
-    };
-  } finally {
-    client.release();
-  }
-}
-
-/**
- * Reject business mutation resolver
- */
-export async function rejectBusiness(
-  _parent: unknown,
-  args: { businessId: string; rejectionReason: string }
-): Promise<{
-  success: boolean;
-  error?: string;
-}> {
-  const { businessId, rejectionReason } = args;
-
-  // Validate business ID
-  if (!businessId || businessId.trim() === "") {
-    return {
-      success: false,
-      error: "Business ID is required",
-    };
-  }
-
-  // Validate rejection reason
-  if (!rejectionReason || rejectionReason.trim() === "") {
-    return {
-      success: false,
-      error: "Rejection reason is required",
-    };
-  }
-
-  const client = await getPool().connect();
-  try {
-    // Check if business exists
-    const business = await findScrapedBusinessById(client, businessId);
-
-    if (!business) {
-      return {
-        success: false,
-        error: "Business not found",
-      };
-    }
-
-    // Reject the business with reason
-    const updatedBusiness = await rejectScrapedBusiness(client, {
-      businessId,
-      rejectionReason: rejectionReason.trim(),
-    });
-
-    if (!updatedBusiness) {
-      return {
-        success: false,
-        error: "Failed to reject business",
-      };
-    }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    console.error("Error rejecting business:", error);
-    return {
-      success: false,
-      error: "Failed to reject business",
-    };
-  } finally {
-    client.release();
-  }
-}
-
-/**
- * Pending businesses query resolver
- */
-export async function pendingBusinesses(): Promise<unknown[]> {
-  const client = await getPool().connect();
-  try {
-    const businesses = await findScrapedBusinessesByStatus(client, "pending_review");
-    return businesses.map((b) => ({
-      id: b.id,
-      name: b.name,
-      address: b.address,
-      source: b.source,
-      rating: b.rating ?? null,
-      createdAt: {
-        timestamp: Math.floor(b.createdAt.getTime() / 1000),
-      },
-    }));
+    return pendingBusinesses.map(scrapedBusinessToGraphql);
   } catch (error) {
     console.error("Error fetching pending businesses:", error);
     return [];
-  } finally {
-    client.release();
   }
 }
 
@@ -798,10 +705,9 @@ export const resolvers = {
   },
   Mutation: {
     register,
-    createBusiness,
+    createBusiness: createBusinessResolver,
     submitVerification,
     updateBusiness,
     approveBusiness,
-    rejectBusiness,
   },
 };

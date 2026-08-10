@@ -4,12 +4,16 @@ import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
 import { Card, Badge, Button, Tabs, TabPanel } from '@/components/ui';
 
-interface PendingBusiness {
+interface ScrapedBusiness {
   id: string;
   name: string;
   address: string;
   source: string;
   rating: number | null;
+  category: string | null;
+  phone: string | null;
+  website: string | null;
+  status: string;
   createdAt: {
     timestamp: number;
   };
@@ -20,8 +24,13 @@ const PENDING_BUSINESSES_QUERY = `
     pendingBusinesses {
       id
       name
-      categoryId
-      verificationStatus
+      address
+      source
+      rating
+      category
+      phone
+      website
+      status
       createdAt {
         timestamp
       }
@@ -29,11 +38,30 @@ const PENDING_BUSINESSES_QUERY = `
   }
 `;
 
+const APPROVE_BUSINESS_MUTATION = `
+  mutation ApproveBusiness($id: String!) {
+    approveBusiness(id: $id) {
+      success
+      error
+      business {
+        id
+        name
+        categoryId
+        verified
+        createdAt {
+          timestamp
+        }
+      }
+    }
+  }
+`;
+
 export default function AdminReviewPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'flagged'>('pending');
-  const [pendingBusinesses, setPendingBusinesses] = useState<PendingBusiness[]>([]);
+  const [pendingBusinesses, setPendingBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPendingBusinesses = async () => {
@@ -78,9 +106,44 @@ export default function AdminReviewPage() {
     });
   };
 
-  const handleApprove = (businessId: string) => {
-    console.log('Approve business:', businessId);
-    // TODO: Implement approval mutation
+  const handleApprove = async (businessId: string) => {
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: APPROVE_BUSINESS_MUTATION,
+          variables: { id: businessId },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      const approveResult = result.data?.approveBusiness;
+      if (approveResult?.success) {
+        setSuccessMessage('Business approved successfully');
+        // Remove the approved business from pending list
+        setPendingBusinesses(prev => prev.filter(b => b.id !== businessId));
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        throw new Error(approveResult?.error || 'Failed to approve business');
+      }
+    } catch (err) {
+      console.error('Failed to approve business:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setTimeout(() => setError(null), 5000);
+    }
   };
 
   const handleReject = (businessId: string) => {
@@ -140,6 +203,25 @@ export default function AdminReviewPage() {
         </div>
       </section>
 
+      {/* Success Message */}
+      {successMessage && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
+            <p className="font-semibold">{successMessage}</p>
+          </div>
+        </section>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+            <p className="font-semibold">Error</p>
+            <p className="text-sm mt-1">{error}</p>
+          </div>
+        </section>
+      )}
+
       {/* Main Content */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
@@ -177,30 +259,22 @@ export default function AdminReviewPage() {
                         <h3 className="font-semibold text-neutral-800">{business.name}</h3>
                         <Badge variant="warning" size="sm">Pending Review</Badge>
                       </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-neutral-600">Address:</span>
-                          <p className="text-neutral-800 mt-1">{business.address}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-neutral-600">Source:</span>
-                          <p className="text-neutral-800 mt-1">{business.source.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-neutral-600">Rating:</span>
-                          <p className="text-neutral-800 mt-1">
-                            {business.rating !== null ? (
-                              <span className="text-heritage-ochre">{'★'.repeat(Math.round(business.rating))}{'☆'.repeat(5 - Math.round(business.rating))} ({business.rating.toFixed(1)})</span>
-                            ) : (
-                              'Not yet rated'
-                            )}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-neutral-600">Submitted:</span>
-                          <p className="text-neutral-800 mt-1">{formatDate(business.createdAt.timestamp)}</p>
-                        </div>
+                      <div className="flex items-center gap-4 text-sm text-neutral-500">
+                        <span>
+                          <span className="font-medium">Source:</span> {business.source}
+                        </span>
+                        {business.rating !== null && (
+                          <span>
+                            <span className="font-medium">Rating:</span> {business.rating.toFixed(1)}
+                          </span>
+                        )}
+                        <span>
+                          <span className="font-medium">Submitted:</span> {formatDate(business.createdAt.timestamp)}
+                        </span>
                       </div>
+                      <p className="text-sm text-neutral-600 mt-2">
+                        <span className="font-medium">Address:</span> {business.address}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button

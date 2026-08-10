@@ -26,7 +26,6 @@ export interface ScrapedBusiness {
   rating?: number;
   reviewCount?: number;
   status: ScrapedBusinessStatus;
-  rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -2,7 +2,8 @@
  * Business Resolvers Tests - createBusiness mutation
  */
 
-import { createBusiness } from "./resolvers";
+import { createBusinessResolver, approveBusiness } from "./resolvers";
+import * as businessRepo from "../db/business-repository";
 
 // Mock the database functions
 const mockQuery = jest.fn();
@@ -11,10 +12,23 @@ const mockClient = {
   release: jest.fn(),
 };
 
-jest.mock("../db/user-repository", () => ({
-  getPool: jest.fn(() => ({
+jest.mock("../db/user-repository", () => {
+  const mockPool = {
     connect: jest.fn(() => mockClient),
-  })),
+  };
+  return {
+    getPool: jest.fn(() => mockPool),
+    findByEmail: jest.fn(),
+    create: jest.fn(),
+    initializeUserSchema: jest.fn(),
+  };
+});
+
+jest.mock("../db/business-repository", () => ({
+  create: jest.fn(),
+  findById: jest.fn(),
+  updateNameById: jest.fn(),
+  approveBusinessById: jest.fn(),
 }));
 
 beforeEach(() => {
@@ -46,6 +60,7 @@ describe("createBusiness mutation", () => {
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -62,7 +77,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
@@ -92,7 +107,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Name is required");
@@ -116,7 +131,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Name is required");
@@ -138,7 +153,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Category ID is required");
@@ -161,7 +176,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Category ID is required");
@@ -175,7 +190,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, {});
+    const result = await createBusinessResolver(null, args, {});
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Authentication required");
@@ -189,7 +204,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, undefined);
+    const result = await createBusinessResolver(null, args, undefined);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Authentication required");
@@ -214,6 +229,7 @@ describe("createBusiness mutation", () => {
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -230,7 +246,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Business With Description");
@@ -256,6 +272,7 @@ describe("createBusiness mutation", () => {
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -271,7 +288,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Business Without Description");
@@ -296,6 +313,7 @@ describe("createBusiness mutation", () => {
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -311,7 +329,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusiness(null, args, context);
+    const result = await createBusinessResolver(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Trimmed Business Name");
@@ -361,5 +379,74 @@ describe("createBusiness mutation", () => {
     expect(result.business?.name).toBe("Rated Business");
     expect(result.business?.rating).toBe(4.5);
     expect(result.business?.reviewCount).toBe(25);
+  });
+});
+
+describe("approveBusiness mutation", () => {
+  let mockDbClient: any;
+  let mockQuery: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQuery = jest.fn();
+    mockDbClient = {
+      query: mockQuery,
+      release: jest.fn(),
+    };
+    (global as unknown as { dbClient?: unknown }).dbClient = mockDbClient;
+  });
+
+  afterEach(() => {
+    (global as unknown as { dbClient?: unknown }).dbClient = undefined;
+    jest.restoreAllMocks();
+  });
+
+  it("approves a business and updates verification status", async () => {
+    const mockBusinessId = "business-id-approve-123";
+    const mockDate = new Date("2026-08-07T10:00:00Z");
+
+    // Mock returns Business type (camelCase with Date objects)
+    const mockBusinessResult = {
+      id: mockBusinessId,
+      ownerId: "owner-id-123",
+      name: "Approved Business",
+      description: "A business ready for import",
+      categoryId: "cat-1",
+      verificationStatus: "approved" as const,
+      createdAt: mockDate,
+      updatedAt: mockDate,
+    };
+    jest.spyOn(businessRepo, "approveBusinessById").mockResolvedValue(mockBusinessResult);
+
+    const args = { id: mockBusinessId };
+    const result = await approveBusiness(null, args, {});
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.business).toBeDefined();
+    expect(result.business?.id).toBe(mockBusinessId);
+    expect(result.business?.name).toBe("Approved Business");
+    expect(result.business?.verified).toBe(true);
+  });
+
+  it("returns error when business not found", async () => {
+    jest.spyOn(businessRepo, "approveBusinessById").mockResolvedValue(undefined);
+
+    const args = { id: "non-existent-id" };
+    const result = await approveBusiness(null, args, {});
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Business not found");
+    expect(result.business).toBeUndefined();
+  });
+
+  it("handles database errors gracefully", async () => {
+    jest.spyOn(businessRepo, "approveBusinessById").mockRejectedValue(new Error("Database connection failed"));
+
+    const args = { id: "business-id-123" };
+    const result = await approveBusiness(null, args, {});
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Database connection failed");
   });
 });

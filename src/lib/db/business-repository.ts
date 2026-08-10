@@ -5,7 +5,7 @@
  */
 
 import { PoolClient } from "pg";
-import { Business, ImportSource } from "../../types/business";
+import { Business } from "../../types/business";
 
 /**
  * Get business table name (with schema if configured)
@@ -28,9 +28,7 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       category_id VARCHAR(100) NOT NULL,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      import_source VARCHAR(20),
-      scrape_job_id UUID
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
   `);
 }
@@ -46,11 +44,9 @@ function rowToBusiness(row: unknown): Business {
     name: r.name as string,
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
-    verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
+    verificationStatus: r.verification_status as "unverified" | "pending" | "verified" | "approved" | "rejected",
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
-    importSource: r.import_source as "google_maps" | "yelp" | "facebook" | undefined,
-    scrapeJobId: r.scrape_job_id as string | undefined,
   };
 }
 
@@ -62,16 +58,14 @@ export async function createBusiness(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string,
-  importSource?: ImportSource,
-  scrapeJobId?: string
+  categoryId: string
 ): Promise<Business> {
   const tableName = getTableName();
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, import_source, scrape_job_id)
-     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
+     VALUES ($1, $2, $3, $4, 'unverified')
      RETURNING *`,
-    [ownerId, name, description || null, categoryId, importSource || null, scrapeJobId || null]
+    [ownerId, name, description || null, categoryId]
   );
   return rowToBusiness(result.rows[0]);
 }
@@ -107,53 +101,19 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
- * Input type for batch business import
+ * Update business verification status to "approved"
  */
-export interface BatchBusinessInput {
-  ownerId: string;
-  name: string;
-  description?: string;
-  categoryId: string;
-}
-
-/**
- * Insert multiple businesses in a single transaction
- * Returns the count of inserted businesses
- */
-export async function insertBusinessesBatch(
+export async function approveBusinessById(
   client: PoolClient,
-  businesses: BatchBusinessInput[]
-): Promise<number> {
-  if (businesses.length === 0) {
-    return 0;
-  }
-
+  id: string
+): Promise<Business | undefined> {
   const tableName = getTableName();
-
-  // Build parameterized query for batch insert
-  const values: unknown[] = [];
-  const paramSets: string[] = [];
-  let paramIndex = 1;
-
-  for (const business of businesses) {
-    paramSets.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, 'unverified')`);
-    values.push(business.ownerId, business.name, business.description || null, business.categoryId);
-    paramIndex += 4;
-  }
-
-  await client.query(`BEGIN`);
-
-  try {
-    await client.query(
-      `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-       VALUES ${paramSets.join(", ")}`,
-      values
-    );
-
-    await client.query(`COMMIT`);
-    return businesses.length;
-  } catch (error) {
-    await client.query(`ROLLBACK`);
-    throw error;
-  }
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET verification_status = 'approved', updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [id]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }
