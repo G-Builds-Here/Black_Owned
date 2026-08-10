@@ -2,7 +2,7 @@
  * Business Review Page Tests
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import BusinessReviewPage from './page';
 
 describe('BusinessReviewPage', () => {
@@ -42,5 +42,64 @@ describe('BusinessReviewPage', () => {
   it('shows count of businesses pending review', () => {
     render(<BusinessReviewPage />);
     expect(screen.getByText(/businesses pending review/i)).toBeInTheDocument();
+  });
+
+  it('filters businesses when search query is entered', () => {
+    render(<BusinessReviewPage />);
+    const searchInput = screen.getByPlaceholderText(/Search by name, address, or source/i);
+    fireEvent.change(searchInput, { target: { value: 'Soul Food' } });
+    expect(screen.getByText('Soul Food Kitchen')).toBeInTheDocument();
+    expect(screen.queryByText('Afro Threads')).not.toBeInTheDocument();
+  });
+
+  it('shows empty state when no businesses match search', () => {
+    render(<BusinessReviewPage />);
+    const searchInput = screen.getByPlaceholderText(/Search by name, address, or source/i);
+    fireEvent.change(searchInput, { target: { value: 'nonexistentbusiness12345' } });
+    expect(screen.getByText(/No businesses found/i)).toBeInTheDocument();
+  });
+
+  it('displays source badges for each business', () => {
+    render(<BusinessReviewPage />);
+    const directSubmissionBadges = screen.getAllByText('Direct Submission');
+    expect(directSubmissionBadges.length).toBeGreaterThan(0);
+    expect(screen.getByText('Partner Referral')).toBeInTheDocument();
+    expect(screen.getByText('Community Nomination')).toBeInTheDocument();
+  });
+
+  it('displays business ID in each row', () => {
+    render(<BusinessReviewPage />);
+    expect(screen.getByText('ID: 1')).toBeInTheDocument();
+    expect(screen.getByText('ID: 2')).toBeInTheDocument();
+  });
+
+  it('shows review button for each business', () => {
+    render(<BusinessReviewPage />);
+    const reviewButtons = screen.getAllByText('Review');
+    expect(reviewButtons.length).toBeGreaterThan(0);
+  });
+
+  it('displays submitted date for each business', () => {
+    render(<BusinessReviewPage />);
+    const july14Dates = screen.getAllByText('2026-07-14');
+    expect(july14Dates.length).toBeGreaterThan(0);
+    expect(screen.getByText('2026-07-13')).toBeInTheDocument();
+    expect(screen.getByText('2026-07-11')).toBeInTheDocument();
+  });
+
+  it('displays period filter dropdown', () => {
+    render(<BusinessReviewPage />);
+    expect(screen.getByText(/This Week/i)).toBeInTheDocument();
+  });
+
+  it('displays export button', () => {
+    render(<BusinessReviewPage />);
+    expect(screen.getByText('Export List')).toBeInTheDocument();
+  });
+
+  it('shows address column data for each business', () => {
+    render(<BusinessReviewPage />);
+    expect(screen.getByText('123 Main St, Atlanta GA')).toBeInTheDocument();
+    expect(screen.getByText('456 Oak Ave, Houston TX')).toBeInTheDocument();
   });
 });
