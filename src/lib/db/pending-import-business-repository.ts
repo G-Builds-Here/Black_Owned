@@ -6,7 +6,7 @@
  */
 
 import { getPool } from "./user-repository";
-import { ScraperResult, ScraperSource } from "../../types/scraper-result";
+import { ScraperSource } from "../../types/scraper-result";
 
 /**
  * Pending import business record
@@ -411,4 +411,28 @@ export async function importNormalizedBusinesses(
       errors: transactionErrors,
     };
   }
+}
+
+/**
+ * Insert a single pending import business (wrapper for BusinessImporter service)
+ *
+ * @param client - Database client
+ * @param input - Business input data
+ * @returns The inserted business ID
+ */
+export async function insertPendingImportBusiness(
+  client: any,
+  input: {
+    name: string;
+    description: string | undefined;
+    categoryId: string;
+    sourceData?: Record<string, unknown>;
+  }
+): Promise<string> {
+  return insertPendingBusiness(client, {
+    name: input.name,
+    description: input.description,
+    category_id: input.categoryId,
+    source_data: input.sourceData || {},
+  });
 }
