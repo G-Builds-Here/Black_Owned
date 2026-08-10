@@ -56,12 +56,23 @@ const APPROVE_BUSINESS_MUTATION = `
   }
 `;
 
+const BULK_UPDATE_VERIFICATION_STATUS_MUTATION = `
+  mutation BulkUpdateVerificationStatus($businessIds: [String!]!, $status: String!) {
+    bulkUpdateVerificationStatus(businessIds: $businessIds, status: $status) {
+      success
+      updatedCount
+      error
+    }
+  }
+`;
+
 export default function AdminReviewPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'flagged'>('pending');
   const [pendingBusinesses, setPendingBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [selectedBusinessIds, setSelectedBusinessIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchPendingBusinesses = async () => {
@@ -151,6 +162,77 @@ export default function AdminReviewPage() {
     // TODO: Implement rejection mutation
   };
 
+  const handleSelectAll = () => {
+    if (selectedBusinessIds.size === pendingBusinesses.length) {
+      setSelectedBusinessIds(new Set());
+    } else {
+      setSelectedBusinessIds(new Set(pendingBusinesses.map(b => b.id)));
+    }
+  };
+
+  const handleSelectBusiness = (businessId: string) => {
+    const newSelected = new Set(selectedBusinessIds);
+    if (newSelected.has(businessId)) {
+      newSelected.delete(businessId);
+    } else {
+      newSelected.add(businessId);
+    }
+    setSelectedBusinessIds(newSelected);
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedBusinessIds.size === 0) {
+      setError('No businesses selected');
+      setTimeout(() => setError(null), 5000);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: BULK_UPDATE_VERIFICATION_STATUS_MUTATION,
+          variables: {
+            businessIds: Array.from(selectedBusinessIds),
+            status: 'approved',
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      const bulkResult = result.data?.bulkUpdateVerificationStatus;
+      if (bulkResult?.success) {
+        setSuccessMessage(`Successfully approved ${bulkResult.updatedCount} businesses`);
+        // Remove approved businesses from pending list
+        setPendingBusinesses(prev =>
+          prev.filter(b => !selectedBusinessIds.has(b.id))
+        );
+        // Clear selection
+        setSelectedBusinessIds(new Set());
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        throw new Error(bulkResult?.error || 'Failed to approve businesses');
+      }
+    } catch (err) {
+      console.error('Failed to bulk approve businesses:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-neutral-50">
@@ -196,10 +278,33 @@ export default function AdminReviewPage() {
               <h1 className="text-3xl font-bold mb-2">Business Review Queue</h1>
               <p className="text-neutral-100">Review and moderate pending business submissions</p>
             </div>
-            <Badge variant="warning" size="lg">
-              {pendingBusinesses.length} Pending
-            </Badge>
+            <div className="flex items-center gap-4">
+              {selectedBusinessIds.size > 0 && (
+                <Badge variant="success" size="lg">
+                  {selectedBusinessIds.size} Selected
+                </Badge>
+              )}
+              <Badge variant="warning" size="lg">
+                {pendingBusinesses.length} Pending
+              </Badge>
+            </div>
           </div>
+          {selectedBusinessIds.size > 0 && (
+            <div className="mt-4 flex items-center gap-3">
+              <Button
+                variant="primary"
+                onClick={handleBulkApprove}
+              >
+                Approve Selected ({selectedBusinessIds.size})
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setSelectedBusinessIds(new Set())}
+              >
+                Clear Selection
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -225,15 +330,26 @@ export default function AdminReviewPage() {
       {/* Main Content */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
-        <Tabs
-          tabs={[
-            { key: 'pending', label: `Pending (${pendingBusinesses.length})` },
-            { key: 'approved', label: 'Approved' },
-            { key: 'flagged', label: 'Flagged' },
-          ]}
-          selectedKey={activeTab}
-          onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
-        />
+        <div className="flex items-center justify-between">
+          <Tabs
+            tabs={[
+              { key: 'pending', label: `Pending (${pendingBusinesses.length})` },
+              { key: 'approved', label: 'Approved' },
+              { key: 'flagged', label: 'Flagged' },
+            ]}
+            selectedKey={activeTab}
+            onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
+          />
+          {activeTab === 'pending' && pendingBusinesses.length > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleSelectAll}
+            >
+              {selectedBusinessIds.size === pendingBusinesses.length ? 'Deselect All' : 'Select All'}
+            </Button>
+          )}
+        </div>
 
         {/* Pending Tab */}
         <TabPanel value="pending" className="mt-6">
@@ -253,7 +369,13 @@ export default function AdminReviewPage() {
             <div className="space-y-4">
               {pendingBusinesses.map((business) => (
                 <Card key={business.id} variant="outlined" padding="md">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedBusinessIds.has(business.id)}
+                      onChange={() => handleSelectBusiness(business.id)}
+                      className="mt-1 h-5 w-5 rounded border-gray-300 text-heritage-royal focus:ring-heritage-royal"
+                    />
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-neutral-800">{business.name}</h3>

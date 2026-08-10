@@ -52,6 +52,7 @@
     "LOC-0061-AC1",
     "LOC-0061-AC2",
     "LOC-0061-AC3",
+    "LOC-0061-AC4",
     "LOC-0062-AC1",
     "LOC-0062-AC2",
     "LOC-0062-AC3",
@@ -67,6 +68,7 @@
     "LOC-0064-AC3",
     "LOC-0064-AC4",
     "LOC-0064-AC5",
+    "LOC-0065-AC2",
     "LOC-0065-AC3",
     "LOC-0065-AC4",
     "LOC-0066-AC1",
@@ -77,6 +79,9 @@
     "LOC-0067-AC3",
     "LOC-0067-AC4",
     "LOC-0067-AC5",
+    "LOC-0068-AC1",
+    "LOC-0068-AC2",
+    "LOC-0068-AC3",
     "LOC-0068-AC4",
     "LOC-0069-AC1",
     "LOC-0069-AC2",
@@ -119,6 +124,7 @@
     "LOC-0061-AC1",
     "LOC-0061-AC2",
     "LOC-0061-AC3",
+    "LOC-0061-AC4",
     "LOC-0062-AC1",
     "LOC-0062-AC2",
     "LOC-0062-AC3",
@@ -134,6 +140,7 @@
     "LOC-0064-AC3",
     "LOC-0064-AC4",
     "LOC-0064-AC5",
+    "LOC-0065-AC2",
     "LOC-0065-AC3",
     "LOC-0065-AC4",
     "LOC-0066-AC1",
@@ -144,6 +151,9 @@
     "LOC-0067-AC3",
     "LOC-0067-AC4",
     "LOC-0067-AC5",
+    "LOC-0068-AC1",
+    "LOC-0068-AC2",
+    "LOC-0068-AC3",
     "LOC-0068-AC4",
     "LOC-0069-AC1",
     "LOC-0069-AC2",
@@ -186,6 +196,7 @@
     "LOC-0061-AC1",
     "LOC-0061-AC2",
     "LOC-0061-AC3",
+    "LOC-0061-AC4",
     "LOC-0062-AC1",
     "LOC-0062-AC2",
     "LOC-0062-AC3",
@@ -201,6 +212,7 @@
     "LOC-0064-AC3",
     "LOC-0064-AC4",
     "LOC-0064-AC5",
+    "LOC-0065-AC2",
     "LOC-0065-AC3",
     "LOC-0065-AC4",
     "LOC-0066-AC1",
@@ -211,6 +223,9 @@
     "LOC-0067-AC3",
     "LOC-0067-AC4",
     "LOC-0067-AC5",
+    "LOC-0068-AC1",
+    "LOC-0068-AC2",
+    "LOC-0068-AC3",
     "LOC-0068-AC4",
     "LOC-0069-AC1",
     "LOC-0069-AC2",
@@ -253,6 +268,7 @@
     "LOC-0061-AC1",
     "LOC-0061-AC2",
     "LOC-0061-AC3",
+    "LOC-0061-AC4",
     "LOC-0062-AC1",
     "LOC-0062-AC2",
     "LOC-0062-AC3",
@@ -268,6 +284,7 @@
     "LOC-0064-AC3",
     "LOC-0064-AC4",
     "LOC-0064-AC5",
+    "LOC-0065-AC2",
     "LOC-0065-AC3",
     "LOC-0065-AC4",
     "LOC-0066-AC1",
@@ -278,6 +295,9 @@
     "LOC-0067-AC3",
     "LOC-0067-AC4",
     "LOC-0067-AC5",
+    "LOC-0068-AC1",
+    "LOC-0068-AC2",
+    "LOC-0068-AC3",
     "LOC-0068-AC4",
     "LOC-0069-AC1",
     "LOC-0069-AC2",
@@ -1356,7 +1376,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 1117.7
+        "age_minutes": 1217.3
       },
       "verification": {
         "verified": false,
@@ -4325,7 +4345,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 67.4
+        "age_minutes": 167.0
       },
       "verification": {
         "verified": true,
@@ -4976,7 +4996,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 1211.9
+        "age_minutes": 1311.5
       },
       "verification": {
         "verified": true,
@@ -7447,7 +7467,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 1226.1
+        "age_minutes": 1325.7
       },
       "verification": {
         "verified": false,
@@ -7555,7 +7575,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 1117.8
+        "age_minutes": 1217.4
       },
       "verification": {
         "verified": false,
@@ -7750,48 +7770,76 @@
     },
     "LOC-0058-AC4": {
       "ac_id": "LOC-0058-AC4",
-      "claim_exists": true,
-      "claim_owner": "dup-ac-commit-6bdc",
+      "status": "needs_verification",
       "handoff_exists": true,
       "handoff_complete": true,
+      "handoff_type": "impl",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0058/impl-LOC-0058-AC4.md",
+      "claim_exists": false,
       "findings_file_exists": false,
-      "findings_sections": null,
       "task": {
-        "task_id": "a260f4e4802a3d589",
-        "exists": true,
+        "task_id": null,
+        "exists": false,
         "complete": false,
-        "alive": true,
-        "age_minutes": 9.2
+        "alive": false
       },
-      "status": "starting",
-      "story_key": "LOC-0058",
-      "deps_met": true,
-      "dep_details": [
-        {
-          "dep_ac": "LOC-0058-AC1",
-          "met": true,
-          "method": "complete"
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 252,
+            "branch": "feature/LOC-0058-AC4",
+            "details": "252 commits found on feature/LOC-0058-AC4"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "src/qa/loc-0058-ac2-business-seeder.spec.ts",
+              "src/utils/business-seeder.ts",
+              "src/utils/test-data-seeder.ts",
+              "src/lib/db/business-repository.ts",
+              "scripts/seed-businesses.ts",
+              "src/utils/business-seeder.spec.ts"
+            ],
+            "details": "6 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/1 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [],
+              "files": [
+                "src/lib/db/business-repository.ts",
+                "src/utils/business-seeder.ts",
+                "scripts/seed-businesses.ts",
+                "src/utils/business-seeder.spec.ts"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": false,
+            "result": "absent",
+            "details": "no QA handoff found"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 344,
+            "branch": "feature/LOC-0058-AC4",
+            "details": "344 lines changed on feature/LOC-0058-AC4"
+          }
         },
-        {
-          "dep_ac": "LOC-0058-AC2",
-          "met": true,
-          "method": "complete"
-        },
-        {
-          "dep_ac": "LOC-0058-AC3",
-          "met": true,
-          "method": "complete"
-        }
-      ],
-      "blocked_by": [],
-      "normalized_deps": [
-        "LOC-0058-AC1",
-        "LOC-0058-AC2",
-        "LOC-0058-AC3"
-      ],
-      "dispatch_status": "unverified_garbage",
-      "blocked_reason": "CODE MERGED WITHOUT PROOF: missing: commit-impl, qa, commit-qa. This is unverified garbage \u2014 MUST BE REDONE FROM SCRATCH.",
-      "can_salvage": false,
+        "failures": [
+          "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned",
+          "qa_result: absent (need pass or partial)"
+        ]
+      },
       "handoff_chain": {
         "valid": false,
         "chain": {
@@ -7823,6 +7871,35 @@
         ],
         "incomplete_stages": []
       },
+      "needs_verification_reason": "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned; qa_result: absent (need pass or partial); handoff chain missing: commit-impl, qa, commit-qa",
+      "story_key": "LOC-0058",
+      "deps_met": true,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0058-AC1",
+          "met": true,
+          "method": "complete"
+        },
+        {
+          "dep_ac": "LOC-0058-AC2",
+          "met": true,
+          "method": "complete"
+        },
+        {
+          "dep_ac": "LOC-0058-AC3",
+          "met": true,
+          "method": "complete"
+        }
+      ],
+      "blocked_by": [],
+      "normalized_deps": [
+        "LOC-0058-AC1",
+        "LOC-0058-AC2",
+        "LOC-0058-AC3"
+      ],
+      "dispatch_status": "unverified_garbage",
+      "blocked_reason": "CODE MERGED WITHOUT PROOF: missing: commit-impl, qa, commit-qa. This is unverified garbage \u2014 MUST BE REDONE FROM SCRATCH.",
+      "can_salvage": false,
       "verification_failures": [
         "missing: commit-impl, qa, commit-qa"
       ],
@@ -8066,7 +8143,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 147.6
+        "age_minutes": 247.2
       },
       "verification": {
         "verified": false,
@@ -8187,7 +8264,7 @@
     },
     "LOC-0061-AC4": {
       "ac_id": "LOC-0061-AC4",
-      "status": "complete",
+      "status": "needs_verification",
       "handoff_exists": true,
       "handoff_complete": true,
       "handoff_type": "commit-qa",
@@ -8199,7 +8276,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 743.7
+        "age_minutes": 843.3
       },
       "verification": {
         "verified": false,
@@ -8308,119 +8385,38 @@
       "dep_details": [],
       "blocked_by": [],
       "normalized_deps": [],
-      "dispatch_status": "needs_merge_verify",
+      "dispatch_status": "needs_verification",
+      "blocked_reason": "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned",
       "phase": 2
     },
     "LOC-0065-AC1": {
       "ac_id": "LOC-0065-AC1",
-      "status": "complete",
-      "handoff_exists": true,
-      "handoff_type": "commit-qa",
-      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/commit-qa-LOC-0065-AC1.md",
       "claim_exists": true,
+      "claim_owner": "dup-ac-impl-5f89",
+      "handoff_exists": true,
+      "handoff_complete": true,
       "findings_file_exists": false,
-      "task": {
-        "task_id": "a1bf9a221509d8005",
-        "exists": true,
-        "complete": false,
-        "alive": false,
-        "age_minutes": 83.8
-      },
-      "verification": {
-        "verified": true,
-        "checks": {
-          "git_commits": {
-            "pass": true,
-            "commit_count": 172,
-            "branch": "feature/LOC-0065-AC1",
-            "details": "172 commits found on feature/LOC-0065-AC1"
-          },
-          "files_exist": {
-            "pass": true,
-            "missing": [],
-            "checked": [
-              "migrations/postgresql/003_create_pending_import_businesses.sql",
-              "src/lib/db/pending-import-business-repository.spec.ts",
-              "src/lib/db/pending-import-business-repository.ts",
-              "src/services/business-importer.spec.ts",
-              "src/services/business-importer.ts",
-              "src/types/pending-import-business.ts",
-              "src/app/api/pending-businesses/import/route.ts",
-              "src/app/api/pending-businesses/import/route.spec.ts"
-            ],
-            "details": "8 checked, 0 missing"
-          },
-          "artifact_integration": {
-            "pass": true,
-            "details": "skipped \u2014 no importable artifacts",
-            "matched": []
-          },
-          "delivery_data": {
-            "pass": true,
-            "details": "no delivery data found",
-            "delivery": {
-              "components": [
-                "POST /api/pending-businesses/import endpoint"
-              ],
-              "files": [
-                "src/app/api/pending-businesses/import/route.ts",
-                "src/app/api/pending-businesses/import/route.spec.ts"
-              ]
-            }
-          },
-          "qa_result": {
-            "pass": true,
-            "result": "pass",
-            "details": "QA result: pass"
-          },
-          "meaningful_diff": {
-            "pass": true,
-            "total_lines": 830,
-            "branch": "feature/LOC-0065-AC1",
-            "details": "830 lines changed on feature/LOC-0065-AC1"
-          }
-        },
-        "failures": []
-      },
-      "handoff_chain": {
-        "valid": true,
-        "chain": {
-          "impl": {
-            "exists": true,
-            "complete": true,
-            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/impl-LOC-0065-AC1.md"
-          },
-          "commit-impl": {
-            "exists": true,
-            "complete": true,
-            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/commit-impl-LOC-0065-AC1.md"
-          },
-          "qa": {
-            "exists": true,
-            "complete": true,
-            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/qa-LOC-0065-AC1.md"
-          },
-          "commit-qa": {
-            "exists": true,
-            "complete": true,
-            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/commit-qa-LOC-0065-AC1.md"
-          }
-        },
-        "missing_stages": [],
-        "incomplete_stages": []
-      },
+      "findings_sections": null,
+      "step": "complete",
+      "step_status": "done",
+      "work": "Implementer returned",
+      "last_progress": "2026-08-10T15:06:20Z",
+      "age_minutes": 13.0,
+      "timeout_minutes": 15,
+      "status": "active",
       "story_key": "LOC-0065",
       "deps_met": true,
       "dep_details": [],
       "blocked_by": [],
       "normalized_deps": [],
-      "dispatch_status": "needs_merge_verify",
+      "dispatch_status": "in_progress",
       "phase": 2
     },
     "LOC-0065-AC2": {
       "ac_id": "LOC-0065-AC2",
-      "status": "complete",
+      "status": "needs_verification",
       "handoff_exists": true,
+      "handoff_complete": true,
       "handoff_type": "commit-qa",
       "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/commit-qa-LOC-0065-AC2.md",
       "claim_exists": true,
@@ -8430,10 +8426,10 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 358.6
+        "age_minutes": 458.2
       },
       "verification": {
-        "verified": true,
+        "verified": false,
         "checks": {
           "git_commits": {
             "pass": true,
@@ -8442,14 +8438,41 @@
             "details": "172 commits found on feature/LOC-0065-AC2"
           },
           "files_exist": {
-            "pass": true,
-            "missing": [],
-            "checked": [
-              "src/lib/db/business-repository.ts",
-              "src/lib/db/business-repository.spec.ts",
-              "src/types/business.ts"
+            "pass": false,
+            "missing": [
+              "\"C\\357\\200\\272tempscan2.json\""
             ],
-            "details": "3 checked, 0 missing"
+            "checked": [
+              "\"C\\357\\200\\272tempscan2.json\"",
+              "__mocks__/navigation.tsx",
+              "__mocks__/ui-components.tsx",
+              "acs.json",
+              "handoffs/dupin/LOC-0068/commit-qa-LOC-0068-AC4.md",
+              "jest.config.js",
+              "scan-data.json",
+              "scan-global.json",
+              "scan-new.json",
+              "scan-output.json",
+              "scan-output2.json",
+              "scan-output3.json",
+              "scan-phase1.json",
+              "scan-phase2.json",
+              "scan-rescan.json",
+              "scan-results.json",
+              "scan2.json",
+              "src/app/admin/review/page.spec.tsx",
+              "src/app/admin/review/page.tsx",
+              "src/lib/db/business-repository.ts",
+              "src/lib/db/scraped-business-repository.ts",
+              "src/lib/graphql/business-resolvers.spec.ts",
+              "src/lib/graphql/business-schema.ts",
+              "src/lib/graphql/resolvers.ts",
+              "src/types/business.ts",
+              "src/types/scraped-business.ts",
+              "src/types/scraper-result.ts",
+              "src/lib/db/business-repository.spec.ts"
+            ],
+            "details": "28 checked, 1 missing"
           },
           "artifact_integration": {
             "pass": true,
@@ -8480,7 +8503,9 @@
             "details": "127 lines changed on feature/LOC-0065-AC2"
           }
         },
-        "failures": []
+        "failures": [
+          "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\""
+        ]
       },
       "handoff_chain": {
         "valid": true,
@@ -8509,6 +8534,7 @@
         "missing_stages": [],
         "incomplete_stages": []
       },
+      "needs_verification_reason": "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\"",
       "story_key": "LOC-0065",
       "deps_met": false,
       "dep_details": [
@@ -8525,13 +8551,15 @@
       "normalized_deps": [
         "LOC-0065-AC1"
       ],
-      "dispatch_status": "needs_merge_verify",
+      "dispatch_status": "needs_verification",
+      "blocked_reason": "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\"",
       "phase": 2
     },
     "LOC-0065-AC3": {
       "ac_id": "LOC-0065-AC3",
-      "status": "complete",
+      "status": "needs_verification",
       "handoff_exists": true,
+      "handoff_complete": true,
       "handoff_type": "commit-qa",
       "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/commit-qa-LOC-0065-AC3.md",
       "claim_exists": true,
@@ -8541,10 +8569,10 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 189.8
+        "age_minutes": 289.4
       },
       "verification": {
-        "verified": true,
+        "verified": false,
         "checks": {
           "git_commits": {
             "pass": true,
@@ -8553,15 +8581,43 @@
             "details": "172 commits found on feature/LOC-0065-AC3"
           },
           "files_exist": {
-            "pass": true,
-            "missing": [],
+            "pass": false,
+            "missing": [
+              "\"C\\357\\200\\272tempscan2.json\""
+            ],
             "checked": [
+              "\"C\\357\\200\\272tempscan2.json\"",
+              "__mocks__/navigation.tsx",
+              "__mocks__/ui-components.tsx",
+              "acs.json",
+              "handoffs/dupin/LOC-0068/commit-qa-LOC-0068-AC4.md",
+              "jest.config.js",
+              "scan-data.json",
+              "scan-global.json",
+              "scan-new.json",
+              "scan-output.json",
+              "scan-output2.json",
+              "scan-output3.json",
+              "scan-phase1.json",
+              "scan-phase2.json",
+              "scan-rescan.json",
+              "scan-results.json",
+              "scan2.json",
+              "src/app/admin/review/page.spec.tsx",
+              "src/app/admin/review/page.tsx",
               "src/lib/db/business-repository.ts",
+              "src/lib/db/scraped-business-repository.ts",
+              "src/lib/graphql/business-resolvers.spec.ts",
+              "src/lib/graphql/business-schema.ts",
+              "src/lib/graphql/resolvers.ts",
+              "src/types/business.ts",
+              "src/types/scraped-business.ts",
+              "src/types/scraper-result.ts",
               "src/lib/db/business-repository.spec.ts",
               "src/app/api/pending-businesses/import/route.ts",
               "src/app/api/pending-businesses/import/route.spec.ts"
             ],
-            "details": "4 checked, 0 missing"
+            "details": "30 checked, 1 missing"
           },
           "artifact_integration": {
             "pass": true,
@@ -8591,7 +8647,9 @@
             "details": "160 lines changed on feature/LOC-0065-AC3"
           }
         },
-        "failures": []
+        "failures": [
+          "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\""
+        ]
       },
       "handoff_chain": {
         "valid": true,
@@ -8620,6 +8678,7 @@
         "missing_stages": [],
         "incomplete_stages": []
       },
+      "needs_verification_reason": "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\"",
       "story_key": "LOC-0065",
       "deps_met": false,
       "dep_details": [
@@ -8636,43 +8695,105 @@
       "normalized_deps": [
         "LOC-0065-AC1"
       ],
-      "dispatch_status": "completed",
+      "dispatch_status": "needs_verification",
+      "blocked_reason": "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\"",
       "phase": 2
     },
     "LOC-0065-AC4": {
       "ac_id": "LOC-0065-AC4",
-      "claim_exists": true,
-      "claim_owner": "dup-ac-commit-7e3f",
+      "status": "needs_verification",
       "handoff_exists": true,
       "handoff_complete": true,
+      "handoff_type": "commit-impl",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0065/commit-impl-LOC-0065-AC4.md",
+      "claim_exists": false,
       "findings_file_exists": false,
-      "findings_sections": null,
-      "step": "complete",
-      "step_status": "done",
-      "work": "Validator returned",
-      "last_progress": "2026-08-10T13:34:14Z",
-      "age_minutes": 5.5,
-      "timeout_minutes": 15,
-      "status": "active",
-      "story_key": "LOC-0065",
-      "deps_met": false,
-      "dep_details": [
-        {
-          "dep_ac": "LOC-0065-AC1",
-          "met": false,
-          "method": "not_merged",
-          "reason": "handoff complete + commit exists but not in acs_merged"
-        }
-      ],
-      "blocked_by": [
-        "LOC-0065-AC1"
-      ],
-      "normalized_deps": [
-        "LOC-0065-AC1"
-      ],
-      "dispatch_status": "unverified_garbage",
-      "blocked_reason": "CODE MERGED WITHOUT PROOF: missing: qa, commit-qa. This is unverified garbage \u2014 MUST BE REDONE FROM SCRATCH.",
-      "can_salvage": false,
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 172,
+            "branch": "feature/LOC-0065-AC4",
+            "details": "172 commits found on feature/LOC-0065-AC4"
+          },
+          "files_exist": {
+            "pass": false,
+            "missing": [
+              "\"C\\357\\200\\272tempscan2.json\""
+            ],
+            "checked": [
+              "\"C\\357\\200\\272tempscan2.json\"",
+              "__mocks__/navigation.tsx",
+              "__mocks__/ui-components.tsx",
+              "acs.json",
+              "handoffs/dupin/LOC-0068/commit-qa-LOC-0068-AC4.md",
+              "jest.config.js",
+              "scan-data.json",
+              "scan-global.json",
+              "scan-new.json",
+              "scan-output.json",
+              "scan-output2.json",
+              "scan-output3.json",
+              "scan-phase1.json",
+              "scan-phase2.json",
+              "scan-rescan.json",
+              "scan-results.json",
+              "scan2.json",
+              "src/app/admin/review/page.spec.tsx",
+              "src/app/admin/review/page.tsx",
+              "src/lib/db/business-repository.ts",
+              "src/lib/db/scraped-business-repository.ts",
+              "src/lib/graphql/business-resolvers.spec.ts",
+              "src/lib/graphql/business-schema.ts",
+              "src/lib/graphql/resolvers.ts",
+              "src/types/business.ts",
+              "src/types/scraped-business.ts",
+              "src/types/scraper-result.ts",
+              "src/app/api/pending-businesses/import/route.ts"
+            ],
+            "details": "28 checked, 1 missing"
+          },
+          "artifact_integration": {
+            "pass": true,
+            "details": "skipped \u2014 no importable artifacts",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [
+                "POST /api/pending-businesses/import endpoint"
+              ],
+              "files": [
+                "src/app/api/pending-businesses/import/route.ts"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": false,
+            "result": "absent",
+            "details": "no QA handoff found"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 272,
+            "branch": "feature/LOC-0065-AC4",
+            "details": "272 lines changed on feature/LOC-0065-AC4"
+          }
+        },
+        "failures": [
+          "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\"",
+          "qa_result: absent (need pass or partial)"
+        ]
+      },
       "handoff_chain": {
         "valid": false,
         "chain": {
@@ -8703,6 +8824,26 @@
         ],
         "incomplete_stages": []
       },
+      "needs_verification_reason": "files_exist: missing 1 files: \"C\\357\\200\\272tempscan2.json\"; qa_result: absent (need pass or partial); handoff chain missing: qa, commit-qa",
+      "story_key": "LOC-0065",
+      "deps_met": false,
+      "dep_details": [
+        {
+          "dep_ac": "LOC-0065-AC1",
+          "met": false,
+          "method": "not_merged",
+          "reason": "handoff complete + commit exists but not in acs_merged"
+        }
+      ],
+      "blocked_by": [
+        "LOC-0065-AC1"
+      ],
+      "normalized_deps": [
+        "LOC-0065-AC1"
+      ],
+      "dispatch_status": "unverified_garbage",
+      "blocked_reason": "CODE MERGED WITHOUT PROOF: missing: qa, commit-qa. This is unverified garbage \u2014 MUST BE REDONE FROM SCRATCH.",
+      "can_salvage": false,
       "verification_failures": [
         "missing: qa, commit-qa"
       ],
@@ -8721,7 +8862,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 165.9
+        "age_minutes": 265.5
       },
       "verification": {
         "verified": true,
@@ -8821,35 +8962,131 @@
       "dep_details": [],
       "blocked_by": [],
       "normalized_deps": [],
-      "dispatch_status": "needs_merge_verify",
+      "dispatch_status": "completed",
       "phase": 2
     },
     "LOC-0068-AC2": {
       "ac_id": "LOC-0068-AC2",
+      "status": "needs_verification",
+      "handoff_exists": true,
+      "handoff_complete": true,
+      "handoff_type": "impl",
+      "handoff_path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0068/impl-LOC-0068-AC2.md",
       "claim_exists": false,
-      "claim_owner": null,
-      "handoff_exists": false,
-      "handoff_complete": false,
       "findings_file_exists": false,
-      "findings_sections": null,
-      "status": "unknown",
+      "task": {
+        "task_id": null,
+        "exists": false,
+        "complete": false,
+        "alive": false
+      },
+      "verification": {
+        "verified": false,
+        "checks": {
+          "git_commits": {
+            "pass": true,
+            "commit_count": 172,
+            "branch": "feature/LOC-0068-AC2",
+            "details": "172 commits found on feature/LOC-0068-AC2"
+          },
+          "files_exist": {
+            "pass": true,
+            "missing": [],
+            "checked": [
+              "src/lib/graphql/business-resolvers.spec.ts",
+              "src/components/BusinessDetail.tsx",
+              "src/components/BusinessDetail.spec.tsx",
+              "src/app/directory/page.tsx",
+              "jest.config.js"
+            ],
+            "details": "5 checked, 0 missing"
+          },
+          "artifact_integration": {
+            "pass": false,
+            "details": "0/1 artifacts found in imports \u2014 may be orphaned",
+            "matched": []
+          },
+          "delivery_data": {
+            "pass": true,
+            "details": "no delivery data found",
+            "delivery": {
+              "components": [],
+              "files": [
+                "src/components/BusinessDetail.tsx",
+                "src/components/BusinessDetail.spec.tsx",
+                "src/app/directory/page.tsx",
+                "jest.config.js"
+              ]
+            }
+          },
+          "qa_result": {
+            "pass": false,
+            "result": "absent",
+            "details": "no QA handoff found"
+          },
+          "meaningful_diff": {
+            "pass": true,
+            "total_lines": 440,
+            "branch": "feature/LOC-0068-AC2",
+            "details": "440 lines changed on feature/LOC-0068-AC2"
+          }
+        },
+        "failures": [
+          "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned",
+          "qa_result: absent (need pass or partial)"
+        ]
+      },
+      "handoff_chain": {
+        "valid": false,
+        "chain": {
+          "impl": {
+            "exists": true,
+            "complete": true,
+            "path": "C:/Users/Merlin/.claude/handoffs/dupin/LOC-0068/impl-LOC-0068-AC2.md"
+          },
+          "commit-impl": {
+            "exists": false,
+            "complete": false,
+            "path": null
+          },
+          "qa": {
+            "exists": false,
+            "complete": false,
+            "path": null
+          },
+          "commit-qa": {
+            "exists": false,
+            "complete": false,
+            "path": null
+          }
+        },
+        "missing_stages": [
+          "commit-impl",
+          "qa",
+          "commit-qa"
+        ],
+        "incomplete_stages": []
+      },
+      "needs_verification_reason": "artifact_integration: 0/1 artifacts found in imports \u2014 may be orphaned; qa_result: absent (need pass or partial); handoff chain missing: commit-impl, qa, commit-qa",
       "story_key": "LOC-0068",
-      "deps_met": false,
+      "deps_met": true,
       "dep_details": [
         {
           "dep_ac": "LOC-0068-AC1",
-          "met": false,
-          "method": "not_merged",
-          "reason": "handoff complete + commit exists but not in acs_merged"
+          "met": true,
+          "method": "complete"
         }
       ],
-      "blocked_by": [
-        "LOC-0068-AC1"
-      ],
+      "blocked_by": [],
       "normalized_deps": [
         "LOC-0068-AC1"
       ],
-      "dispatch_status": "blocked",
+      "dispatch_status": "unverified_garbage",
+      "blocked_reason": "CODE MERGED WITHOUT PROOF: missing: commit-impl, qa, commit-qa. This is unverified garbage \u2014 MUST BE REDONE FROM SCRATCH.",
+      "can_salvage": false,
+      "verification_failures": [
+        "missing: commit-impl, qa, commit-qa"
+      ],
       "phase": 2
     },
     "LOC-0068-AC3": {
@@ -8865,7 +9102,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 48.2
+        "age_minutes": 147.8
       },
       "verification": {
         "verified": true,
@@ -8953,22 +9190,19 @@
         "incomplete_stages": []
       },
       "story_key": "LOC-0068",
-      "deps_met": false,
+      "deps_met": true,
       "dep_details": [
         {
           "dep_ac": "LOC-0068-AC1",
-          "met": false,
-          "method": "not_merged",
-          "reason": "handoff complete + commit exists but not in acs_merged"
+          "met": true,
+          "method": "complete"
         }
       ],
-      "blocked_by": [
-        "LOC-0068-AC1"
-      ],
+      "blocked_by": [],
       "normalized_deps": [
         "LOC-0068-AC1"
       ],
-      "dispatch_status": "needs_merge_verify",
+      "dispatch_status": "completed",
       "phase": 2
     },
     "LOC-0068-AC4": {
@@ -8984,7 +9218,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 92.7
+        "age_minutes": 192.3
       },
       "verification": {
         "verified": true,
@@ -9062,18 +9296,15 @@
         "incomplete_stages": []
       },
       "story_key": "LOC-0068",
-      "deps_met": false,
+      "deps_met": true,
       "dep_details": [
         {
           "dep_ac": "LOC-0068-AC1",
-          "met": false,
-          "method": "not_merged",
-          "reason": "handoff complete + commit exists but not in acs_merged"
+          "met": true,
+          "method": "complete"
         }
       ],
-      "blocked_by": [
-        "LOC-0068-AC1"
-      ],
+      "blocked_by": [],
       "normalized_deps": [
         "LOC-0068-AC1"
       ],
@@ -9082,30 +9313,33 @@
     },
     "LOC-0068-AC5": {
       "ac_id": "LOC-0068-AC5",
-      "claim_exists": false,
-      "claim_owner": null,
+      "claim_exists": true,
+      "claim_owner": "dup-ac-commit-4085",
       "handoff_exists": true,
-      "handoff_complete": false,
+      "handoff_complete": true,
       "findings_file_exists": false,
       "findings_sections": null,
-      "status": "unknown",
+      "step": "pre-flight",
+      "step_status": "done",
+      "work": "invoking Validator",
+      "last_progress": "2026-08-10T15:12:28Z",
+      "age_minutes": 6.9,
+      "timeout_minutes": 15,
+      "status": "active",
       "story_key": "LOC-0068",
-      "deps_met": false,
+      "deps_met": true,
       "dep_details": [
         {
           "dep_ac": "LOC-0068-AC1",
-          "met": false,
-          "method": "not_merged",
-          "reason": "handoff complete + commit exists but not in acs_merged"
+          "met": true,
+          "method": "complete"
         }
       ],
-      "blocked_by": [
-        "LOC-0068-AC1"
-      ],
+      "blocked_by": [],
       "normalized_deps": [
         "LOC-0068-AC1"
       ],
-      "dispatch_status": "blocked",
+      "dispatch_status": "in_progress",
       "phase": 2
     },
     "LOC-0057-AC1": {
@@ -9221,7 +9455,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 1063.4
+        "age_minutes": 1163.1
       },
       "verification": {
         "verified": false,
@@ -9318,7 +9552,7 @@
       ],
       "dispatch_status": "blocked",
       "prior_phase_gate": true,
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "phase": 3
     },
     "LOC-0057-AC3": {
@@ -9345,7 +9579,7 @@
       ],
       "dispatch_status": "blocked",
       "prior_phase_gate": true,
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "phase": 3
     },
     "LOC-0057-AC4": {
@@ -9467,7 +9701,7 @@
       ],
       "dispatch_status": "blocked",
       "prior_phase_gate": true,
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "phase": 3
     },
     "LOC-0066-AC1": {
@@ -9594,7 +9828,7 @@
         "exists": true,
         "complete": false,
         "alive": false,
-        "age_minutes": 67.5
+        "age_minutes": 167.1
       },
       "verification": {
         "verified": false,
@@ -9701,7 +9935,7 @@
       "blocked_by": [],
       "normalized_deps": [],
       "dispatch_status": "blocked",
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "can_salvage": false,
       "verification_failures": [
         "missing: commit-impl, qa, commit-qa"
@@ -9846,7 +10080,7 @@
         "LOC-0066-AC2"
       ],
       "dispatch_status": "blocked",
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "can_salvage": false,
       "verification_failures": [
         "missing: commit-impl, qa, commit-qa"
@@ -10040,7 +10274,7 @@
       "blocked_by": [],
       "normalized_deps": [],
       "dispatch_status": "blocked",
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "can_salvage": false,
       "verification_failures": [
         "missing: qa, commit-qa",
@@ -10268,7 +10502,7 @@
       "blocked_by": [],
       "normalized_deps": [],
       "dispatch_status": "blocked",
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "can_salvage": false,
       "verification_failures": [
         "missing: qa, commit-qa",
@@ -10525,7 +10759,7 @@
       "normalized_deps": [],
       "dispatch_status": "blocked",
       "prior_phase_gate": true,
-      "blocked_reason": "prior phases incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2...",
+      "blocked_reason": "prior phases incomplete: LOC-0065-AC1, LOC-0068-AC5",
       "phase": 3
     },
     "LOC-0074-AC2": {
@@ -10726,7 +10960,7 @@
       "blocked_by": [],
       "normalized_deps": [],
       "dispatch_status": "blocked",
-      "blocked_reason": "prior phases incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0061-AC4, LOC-0065-AC1...",
+      "blocked_reason": "prior phases incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0065-AC1, LOC-0066-AC4...",
       "can_salvage": false,
       "verification_failures": [
         "missing: commit-impl, qa, commit-qa"
@@ -10859,7 +11093,7 @@
       "normalized_deps": [],
       "dispatch_status": "blocked",
       "prior_phase_gate": true,
-      "blocked_reason": "prior phases incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0061-AC4, LOC-0065-AC1...",
+      "blocked_reason": "prior phases incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0065-AC1, LOC-0066-AC4...",
       "phase": 4
     },
     "LOC-0075-AC3": {
@@ -10981,7 +11215,7 @@
       "normalized_deps": [],
       "dispatch_status": "blocked",
       "prior_phase_gate": true,
-      "blocked_reason": "prior phases incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0061-AC4, LOC-0065-AC1...",
+      "blocked_reason": "prior phases incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0065-AC1, LOC-0066-AC4...",
       "phase": 4
     },
     "LOC-0075-AC4": {
@@ -11024,8 +11258,6 @@
   "to_dispatch": [],
   "recovered": [],
   "blocked": [
-    "LOC-0068-AC2",
-    "LOC-0068-AC5",
     "LOC-0057-AC2",
     "LOC-0057-AC3",
     "LOC-0057-AC4",
@@ -11054,41 +11286,29 @@
   ],
   "blocked_details": [
     {
-      "ac_id": "LOC-0068-AC2",
-      "unmet_deps": [
-        "LOC-0068-AC1"
-      ]
-    },
-    {
-      "ac_id": "LOC-0068-AC5",
-      "unmet_deps": [
-        "LOC-0068-AC1"
-      ]
-    },
-    {
       "ac_id": "LOC-0057-AC2",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0057-AC3",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0057-AC4",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0066-AC2",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0066-AC3",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0066-AC4",
@@ -11105,7 +11325,7 @@
     {
       "ac_id": "LOC-0072-AC1",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0072-AC2",
@@ -11134,7 +11354,7 @@
     {
       "ac_id": "LOC-0073-AC1",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0073-AC2",
@@ -11165,7 +11385,7 @@
     {
       "ac_id": "LOC-0074-AC1",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0061-AC4, LOC-0065-AC1, LOC-0065-AC2, LOC-0068-AC1, LOC-0068-AC2"
+      "reason": "prior_phase_incomplete: LOC-0065-AC1, LOC-0068-AC5"
     },
     {
       "ac_id": "LOC-0074-AC2",
@@ -11188,17 +11408,17 @@
     {
       "ac_id": "LOC-0075-AC1",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0061-AC4, LOC-0065-AC1"
+      "reason": "prior_phase_incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0065-AC1, LOC-0066-AC4"
     },
     {
       "ac_id": "LOC-0075-AC2",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0061-AC4, LOC-0065-AC1"
+      "reason": "prior_phase_incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0065-AC1, LOC-0066-AC4"
     },
     {
       "ac_id": "LOC-0075-AC3",
       "unmet_deps": [],
-      "reason": "prior_phase_incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0061-AC4, LOC-0065-AC1"
+      "reason": "prior_phase_incomplete: LOC-0057-AC2, LOC-0057-AC3, LOC-0057-AC4, LOC-0065-AC1, LOC-0066-AC4"
     },
     {
       "ac_id": "LOC-0075-AC4",
@@ -11208,19 +11428,17 @@
       ]
     }
   ],
-  "in_progress": [],
-  "ready_to_merge": [],
-  "needs_merge_verify": [
-    "LOC-0061-AC4",
+  "in_progress": [
     "LOC-0065-AC1",
-    "LOC-0065-AC2",
-    "LOC-0068-AC1",
-    "LOC-0068-AC3"
+    "LOC-0068-AC5"
   ],
+  "ready_to_merge": [],
+  "needs_merge_verify": [],
   "needs_salvage": [],
   "unverified_garbage": [
     "LOC-0058-AC4",
-    "LOC-0065-AC4"
+    "LOC-0065-AC4",
+    "LOC-0068-AC2"
   ],
   "unverified_garbage_details": [
     {
@@ -11238,17 +11456,20 @@
       "verification_failures": [
         "missing: qa, commit-qa"
       ]
+    },
+    {
+      "ac_id": "LOC-0068-AC2",
+      "reason": "CODE MERGED WITHOUT PROOF: missing: commit-impl, qa, commit-qa",
+      "action": "REDO FROM SCRATCH \u2014 do not trust this code",
+      "verification_failures": [
+        "missing: commit-impl, qa, commit-qa"
+      ]
     }
   ],
   "concurrency_capped": [],
   "dead_claims_released": [],
   "current_phase_unfinished": [
-    "LOC-0061-AC4",
     "LOC-0065-AC1",
-    "LOC-0065-AC2",
-    "LOC-0068-AC1",
-    "LOC-0068-AC2",
-    "LOC-0068-AC3",
     "LOC-0068-AC5"
   ],
   "concurrency": {
@@ -11258,24 +11479,24 @@
     "slots_remaining": 3,
     "running_slots": [
       {
-        "ac_id": "LOC-0058-AC4",
-        "story_key": "LOC-0058",
-        "status": "starting",
-        "task_id": "a260f4e4802a3d589",
-        "agent_id": "dup-ac-commit-6bdc",
-        "last_progress": null,
-        "age_minutes": null,
-        "step": null
-      },
-      {
-        "ac_id": "LOC-0065-AC4",
+        "ac_id": "LOC-0065-AC1",
         "story_key": "LOC-0065",
         "status": "active",
-        "task_id": "a96f5019ae190f827",
-        "agent_id": "dup-ac-commit-7e3f",
-        "last_progress": "2026-08-10T13:34:14Z",
-        "age_minutes": 5.5,
+        "task_id": "ab3428177816b9be1",
+        "agent_id": "dup-ac-impl-5f89",
+        "last_progress": "2026-08-10T15:06:20Z",
+        "age_minutes": 13.0,
         "step": "complete"
+      },
+      {
+        "ac_id": "LOC-0068-AC5",
+        "story_key": "LOC-0068",
+        "status": "active",
+        "task_id": "abb5c4321fa93cf41",
+        "agent_id": "dup-ac-commit-4085",
+        "last_progress": "2026-08-10T15:12:28Z",
+        "age_minutes": 6.9,
+        "step": "pre-flight"
       }
     ],
     "confirm_hint": ""
@@ -11286,24 +11507,24 @@
     "slots_remaining": 3,
     "running_slots": [
       {
-        "ac_id": "LOC-0058-AC4",
-        "story_key": "LOC-0058",
-        "status": "starting",
-        "task_id": "a260f4e4802a3d589",
-        "agent_id": "dup-ac-commit-6bdc",
-        "last_progress": null,
-        "age_minutes": null,
-        "step": null
-      },
-      {
-        "ac_id": "LOC-0065-AC4",
+        "ac_id": "LOC-0065-AC1",
         "story_key": "LOC-0065",
         "status": "active",
-        "task_id": "a96f5019ae190f827",
-        "agent_id": "dup-ac-commit-7e3f",
-        "last_progress": "2026-08-10T13:34:14Z",
-        "age_minutes": 5.5,
+        "task_id": "ab3428177816b9be1",
+        "agent_id": "dup-ac-impl-5f89",
+        "last_progress": "2026-08-10T15:06:20Z",
+        "age_minutes": 13.0,
         "step": "complete"
+      },
+      {
+        "ac_id": "LOC-0068-AC5",
+        "story_key": "LOC-0068",
+        "status": "active",
+        "task_id": "abb5c4321fa93cf41",
+        "agent_id": "dup-ac-commit-4085",
+        "last_progress": "2026-08-10T15:12:28Z",
+        "age_minutes": 6.9,
+        "step": "pre-flight"
       }
     ],
     "confirm_hint": "",
@@ -11314,12 +11535,12 @@
     "phases": 4,
     "to_dispatch": 0,
     "recovered": 0,
-    "blocked": 27,
-    "in_progress": 0,
+    "blocked": 25,
+    "in_progress": 2,
     "ready_to_merge": 0,
-    "needs_merge_verify": 5,
+    "needs_merge_verify": 0,
     "needs_salvage": 0,
-    "unverified_garbage": 2,
+    "unverified_garbage": 3,
     "concurrency_capped": 0,
     "dead_claims_released": 0
   }

@@ -99,6 +99,12 @@ export const typeDefs = `#graphql
     error: String
   }
 
+  type BulkUpdateVerificationResponse {
+    success: Boolean!
+    updatedCount: Int!
+    error: String
+  }
+
   input RejectBusinessInput {
     businessId: String!
     rejectionReason: String!
@@ -111,6 +117,7 @@ export const typeDefs = `#graphql
     createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
     rejectBusiness(businessId: String!, rejectionReason: String!): SubmitVerificationResponse!
     approveBusiness(businessId: String!): SubmitVerificationResponse!
+    bulkUpdateVerificationStatus(businessIds: [String!]!, status: String!): BulkUpdateVerificationResponse!
   }
 `;
 

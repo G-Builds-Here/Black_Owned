@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, BusinessDetailPanel } from '@/components/ui';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -52,6 +52,9 @@ interface PendingBusiness {
   rating: number | null;
   status: string;
   createdAt: string;
+  description?: string;
+  categoryId?: string;
+  sourceData?: Record<string, unknown>;
 }
 
 const RECENT_BUSINESSES = [
@@ -90,6 +93,8 @@ export default function AdminConsole() {
   const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
   const [pendingBusinesses, setPendingBusinesses] = useState<PendingBusiness[]>([]);
   const [pendingBusinessesLoading, setPendingBusinessesLoading] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<PendingBusiness | null>(null);
+  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'pending') {
@@ -124,6 +129,16 @@ export default function AdminConsole() {
 
   const handleFlagReview = (id: string) => {
     console.log('Flag review:', id);
+  };
+
+  const handleRowClick = (business: PendingBusiness) => {
+    setSelectedBusiness(business);
+    setIsDetailPanelOpen(true);
+  };
+
+  const handleCloseDetailPanel = () => {
+    setIsDetailPanelOpen(false);
+    setSelectedBusiness(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -506,7 +521,11 @@ export default function AdminConsole() {
                 </TableHeader>
                 <TableBody>
                   {pendingBusinesses.map((business) => (
-                    <TableRow key={business.id}>
+                    <TableRow
+                      key={business.id}
+                      className="cursor-pointer"
+                      onClick={() => handleRowClick(business)}
+                    >
                       <TableCell>{business.name}</TableCell>
                       <TableCell>{business.address}</TableCell>
                       <TableCell>
@@ -526,6 +545,13 @@ export default function AdminConsole() {
                 </TableBody>
               </Table>
             )}
+
+            {/* Detail Panel */}
+            <BusinessDetailPanel
+              business={selectedBusiness}
+              isOpen={isDetailPanelOpen}
+              onClose={handleCloseDetailPanel}
+            />
           </Card>
         </TabPanel>
 

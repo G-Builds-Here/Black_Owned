@@ -2,16 +2,20 @@
  * Health Check API Route
  *
  * Returns service health status for monitoring and load balancer checks.
- * Includes database connectivity status.
+ * Includes database and NATS connectivity status.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "../../../lib/db/user-repository";
+import { checkNatsHealth } from "../../../lib/nats/nats-client";
 
 interface HealthResponse {
   status: "healthy" | "unhealthy";
   timestamp: string;
   database?: {
+    status: "healthy" | "unhealthy";
+  };
+  nats?: {
     status: "healthy" | "unhealthy";
   };
 }
@@ -21,6 +25,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Check database connectivity
   let dbStatus: "healthy" | "unhealthy" = "unhealthy";
+  let natsStatus: "healthy" | "unhealthy" = "unhealthy";
   let overallStatus: "healthy" | "unhealthy" = "unhealthy";
 
   try {
@@ -30,21 +35,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // Run a simple query to verify connectivity
       await client.query("SELECT 1");
       dbStatus = "healthy";
-      overallStatus = "healthy";
     } finally {
       client.release();
     }
   } catch {
     // Database is unreachable - keep defaults
     dbStatus = "unhealthy";
-    overallStatus = "unhealthy";
   }
+
+  // Check NATS connectivity
+  try {
+    const natsHealthy = await checkNatsHealth();
+    natsStatus = natsHealthy ? "healthy" : "unhealthy";
+  } catch {
+    // NATS is unreachable - keep default
+    natsStatus = "unhealthy";
+  }
+
+  // Overall status is healthy only if both database and NATS are healthy
+  overallStatus = dbStatus === "healthy" && natsStatus === "healthy" ? "healthy" : "unhealthy";
 
   const response: HealthResponse = {
     status: overallStatus,
     timestamp,
     database: {
       status: dbStatus,
+    },
+    nats: {
+      status: natsStatus,
     },
   };
 

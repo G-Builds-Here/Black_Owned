@@ -117,3 +117,28 @@ export async function approveBusinessById(
   );
   return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }
+
+/**
+ * Bulk update verification status for multiple businesses
+ */
+export async function bulkUpdateVerificationStatus(
+  client: PoolClient,
+  businessIds: string[],
+  status: 'pending' | 'approved' | 'flagged'
+): Promise<Business[]> {
+  const tableName = getTableName();
+
+  if (!businessIds || businessIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = businessIds.map((_, i) => `$${i + 1}`).join(', ');
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET verification_status = $${businessIds.length + 1}, updated_at = NOW()
+     WHERE id IN (${placeholders})
+     RETURNING *`,
+    [...businessIds, status]
+  );
+  return result.rows.map(rowToBusiness);
+}

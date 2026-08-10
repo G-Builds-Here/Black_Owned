@@ -17,6 +17,9 @@ export interface PendingBusinessResponse {
   rating: number | null;
   status: string;
   createdAt: string;
+  description?: string;
+  categoryId?: string;
+  sourceData?: Record<string, unknown>;
 }
 
 export async function GET() {
@@ -26,15 +29,18 @@ export async function GET() {
     const businesses = await findPendingByStatus(client, "pending_review");
 
     const result: PendingBusinessResponse[] = businesses.map((b) => {
-      const sourceData = b.source_data as { source?: string };
+      const sourceData = b.source_data as { source?: string; address?: string; rating?: number };
       return {
         id: b.id,
         name: b.name,
-        address: (b.source_data as { address?: string })?.address || "N/A",
+        address: sourceData?.address || "N/A",
         source: sourceData?.source || "unknown",
-        rating: (b.source_data as { rating?: number })?.rating ?? null,
+        rating: sourceData?.rating ?? null,
         status: b.status,
         createdAt: b.created_at.toISOString(),
+        description: b.description,
+        categoryId: b.category_id,
+        sourceData: b.source_data as Record<string, unknown>,
       };
     });
 

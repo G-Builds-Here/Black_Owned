@@ -9,6 +9,9 @@ import {
   getPool,
 } from "../db/user-repository";
 import {
+  findByEmail as findUserByEmail,
+} from "../db/user-repository";
+import {
   hashPassword,
   generateTokenPair,
   verifyToken,
@@ -31,6 +34,7 @@ import {
   updateNameById,
   create as createBusinessInDb,
   approveBusinessById,
+  bulkUpdateVerificationStatus as bulkUpdateBusinessStatus,
   Business as BusinessRecord,
 } from "../db/business-repository";
 import {
@@ -427,6 +431,99 @@ export async function approveBusiness(
 }
 
 /**
+ * Bulk update verification status resolver
+ */
+export async function bulkUpdateVerificationStatus(
+  _parent: unknown,
+  args: { businessIds: string[], status: string },
+  context: { headers: { authorization?: string } }
+): Promise<{
+  success: boolean;
+  updatedCount: number;
+  error?: string;
+}> {
+  const { businessIds, status } = args;
+  const authHeader = context.headers.authorization;
+
+  // Validate input
+  if (!businessIds || businessIds.length === 0) {
+    return {
+      success: false,
+      updatedCount: 0,
+      error: "Business IDs required",
+    };
+  }
+
+  // Validate status
+  const validStatuses = ['pending', 'approved', 'flagged'];
+  if (!validStatuses.includes(status)) {
+    return {
+      success: false,
+      updatedCount: 0,
+      error: "Invalid status. Must be 'pending', 'approved', or 'flagged'",
+    };
+  }
+
+  // Extract JWT token from Authorization header
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return {
+      success: false,
+      updatedCount: 0,
+      error: "Authorization required",
+    };
+  }
+
+  const token = authHeader.substring(7);
+
+  // Verify token
+  let payload: JwtPayload;
+  try {
+    payload = verifyToken(token);
+  } catch (error) {
+    return {
+      success: false,
+      updatedCount: 0,
+      error: "Invalid or expired token",
+    };
+  }
+
+  // Check admin role
+  if (payload.role !== 'admin') {
+    return {
+      success: false,
+      updatedCount: 0,
+      error: "Admin access required",
+    };
+  }
+
+  // Get database client and perform bulk update
+  const dbClient = (global as unknown as { dbClient?: unknown }).dbClient;
+  if (!dbClient) {
+    return {
+      success: false,
+      updatedCount: 0,
+      error: "Database connection not available",
+    };
+  }
+
+  const client = dbClient as PoolClient;
+  try {
+    const updatedBusinesses = await bulkUpdateBusinessStatus(client, businessIds, status as 'pending' | 'approved' | 'flagged');
+    return {
+      success: true,
+      updatedCount: updatedBusinesses.length,
+    };
+  } catch (error) {
+    console.error("Error in bulk update:", error);
+    return {
+      success: false,
+      updatedCount: 0,
+      error: error instanceof Error ? error.message : "Update failed",
+    };
+  }
+}
+
+/**
  * Search businesses resolver with pagination, relevance ranking, and caching
  */
 export async function searchBusinesses(
@@ -709,5 +806,6 @@ export const resolvers = {
     submitVerification,
     updateBusiness,
     approveBusiness,
+    bulkUpdateVerificationStatus,
   },
 };
