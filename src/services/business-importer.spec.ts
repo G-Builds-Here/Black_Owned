@@ -51,7 +51,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "",
         description: "Test",
         categoryId: "food-dining",
-        source: ScraperSource.GoogleMaps,
+        source: ScraperSource.GOOGLE_MAPS,
       };
 
       await expect(importer.importBusiness(mockClient, invalidInput)).rejects.toThrow(
@@ -76,7 +76,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "Test Business",
         description: "Test",
         categoryId: "",
-        source: ScraperSource.GoogleMaps,
+        source: ScraperSource.GOOGLE_MAPS,
       };
 
       await expect(importer.importBusiness(mockClient, invalidInput)).rejects.toThrow(
@@ -101,7 +101,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "Test Business",
         description: undefined,
         categoryId: "food-dining",
-        source: ScraperSource.GoogleMaps,
+        source: ScraperSource.GOOGLE_MAPS,
       };
 
       insertPendingImportBusiness.mockResolvedValue(undefined);
@@ -135,21 +135,21 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "Business 1",
         description: "First business",
         categoryId: "food-dining",
-        source: ScraperSource.GoogleMaps,
+        source: ScraperSource.GOOGLE_MAPS,
         sourceData: { source: "google-maps" },
       },
       {
         name: "Business 2",
         description: "Second business",
         categoryId: "retail-fashion",
-        source: ScraperSource.Yelp,
+        source: ScraperSource.YELP,
         sourceData: { source: "yelp" },
       },
       {
         name: "Business 3",
         description: "Third business",
         categoryId: "professional-services",
-        source: ScraperSource.Facebook,
+        source: ScraperSource.FACEBOOK,
         sourceData: { source: "facebook" },
       },
     ];
@@ -235,7 +235,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: `Business ${i}`,
         description: `Description ${i}`,
         categoryId: "food-dining",
-        source: ScraperSource.GoogleMaps,
+        source: ScraperSource.GOOGLE_MAPS,
         sourceData: { source: "google-maps" },
       }));
 

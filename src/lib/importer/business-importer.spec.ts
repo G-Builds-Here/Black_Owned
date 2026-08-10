@@ -213,12 +213,18 @@ describe("Business Importer", () => {
         });
       }
 
-      // Mock successful import for all
-      mockClient.query
-        .mockResolvedValue({ rows: [] })
-        .mockResolvedValue({
-          rows: [{ id: "mock-id", owner_id: "owner-123", name: "Mock", description: null, category_id: "food-dining", verification_status: "unverified", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
+      // Mock successful import for all - each business needs 2 queries (check + insert)
+      let queryCount = 0;
+      mockClient.query.mockImplementation(() => {
+        queryCount++;
+        // Odd calls are existence checks (return empty), even calls are inserts (return mock business)
+        if (queryCount % 2 === 1) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({
+          rows: [{ id: `mock-id-${queryCount}`, owner_id: "owner-123", name: "Mock", description: null, category_id: "food-dining", verification_status: "unverified", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
         });
+      });
 
       const result = await importBusinessBatch(mockClient, largeBatch, "owner-123", 50);
 
