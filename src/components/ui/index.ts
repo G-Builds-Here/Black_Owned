@@ -52,19 +52,5 @@ export type { Review, ReviewListProps } from './Review';
 export { UserTable } from './UserTable';
 export type { UserTableRow } from './UserTable';
 
-export {
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
-} from './Table';
-export type {
-  TableProps,
-  TableHeaderProps,
-  TableColumnProps,
-  TableBodyProps,
-  TableRowProps,
-  TableCellProps,
-} from './Table';
+export { Table, TableHeader, TableBody, TableColumn, TableRow, TableCell } from './Table';
+export type { TableProps, TableHeaderProps, TableBodyProps, TableColumnProps, TableRowProps, TableCellProps } from './Table';
