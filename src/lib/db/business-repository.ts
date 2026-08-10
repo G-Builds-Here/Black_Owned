@@ -10,7 +10,7 @@ import { Business } from "../../types/business";
 /**
  * Get business table name (with schema if configured)
  */
-export function getTableName(): string {
+function getTableName(): string {
   const schema = process.env.POSTGRES_SCHEMA;
   return schema ? `${schema}.businesses` : "businesses";
 }
@@ -27,9 +27,6 @@ export async function initializeBusinessSchema(client: PoolClient): Promise<void
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
       verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
-      phone VARCHAR(50),
-      website VARCHAR(255),
-      potential_duplicate_id UUID,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -50,9 +47,6 @@ function rowToBusiness(row: unknown): Business {
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
-    phone: r.phone as string | undefined,
-    website: r.website as string | undefined,
-    potentialDuplicateId: r.potential_duplicate_id as string | undefined,
   };
 }
 
@@ -107,66 +101,53 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
- * Normalize phone number to exact match format.
- * Removes all non-digit characters and strips leading country code "1" for US numbers.
- * Returns a canonical 10-digit representation.
- * Examples:
- *   "(555) 123-4567" -> "5551234567"
- *   "555-123-4567" -> "5551234567"
- *   "+1-555-123-4567" -> "5551234567"
- *   "1-555-123-4567" -> "5551234567"
+ * Input type for batch business import
  */
-export function normalizePhoneNumber(phone: string): string {
-  const digits = phone.trim().replace(/\D/g, "");
-  // Strip leading "1" for 11-digit US numbers
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return digits.slice(1);
+export interface BatchBusinessInput {
+  ownerId: string;
+  name: string;
+  description?: string;
+  categoryId: string;
+}
+
+/**
+ * Insert multiple businesses in a single transaction
+ * Returns the count of inserted businesses
+ */
+export async function insertBusinessesBatch(
+  client: PoolClient,
+  businesses: BatchBusinessInput[]
+): Promise<number> {
+  if (businesses.length === 0) {
+    return 0;
   }
-  return digits;
-}
 
-/**
- * Create a new business with phone number, website, and duplicate detection
- */
-export async function createBusinessWithPhone(
-  client: PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
-  categoryId: string,
-  phone: string | undefined,
-  website: string | undefined,
-  potentialDuplicateId: string | undefined
-): Promise<Business> {
   const tableName = getTableName();
-  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, website, potential_duplicate_id)
-     VALUES ($1, $2, $3, $4, 'unverified', $5, $6, $7)
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId, normalizedPhone || null, website || null, potentialDuplicateId || null]
-  );
-  return rowToBusiness(result.rows[0]);
-}
 
-/**
- * Update business with duplicate detection result
- */
-export async function updateBusinessWithDuplicateInfo(
-  client: PoolClient,
-  businessId: string,
-  phone: string,
-  website: string | undefined,
-  potentialDuplicateId: string | undefined
-): Promise<Business> {
-  const tableName = getTableName();
-  const normalizedPhone = normalizePhoneNumber(phone);
-  const result = await client.query<Business>(
-    `UPDATE ${tableName}
-     SET phone = $1, website = $2, potential_duplicate_id = $3, updated_at = NOW()
-     WHERE id = $4
-     RETURNING *`,
-    [normalizedPhone, website || null, potentialDuplicateId || null, businessId]
-  );
-  return rowToBusiness(result.rows[0]);
+  // Build parameterized query for batch insert
+  const values: unknown[] = [];
+  const paramSets: string[] = [];
+  let paramIndex = 1;
+
+  for (const business of businesses) {
+    paramSets.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, 'unverified')`);
+    values.push(business.ownerId, business.name, business.description || null, business.categoryId);
+    paramIndex += 4;
+  }
+
+  await client.query(`BEGIN`);
+
+  try {
+    await client.query(
+      `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
+       VALUES ${paramSets.join(", ")}`,
+      values
+    );
+
+    await client.query(`COMMIT`);
+    return businesses.length;
+  } catch (error) {
+    await client.query(`ROLLBACK`);
+    throw error;
+  }
 }

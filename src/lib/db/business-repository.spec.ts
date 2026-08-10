@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, createBusinessWithPhone, findBusinessById, findBusinessesByOwnerId, normalizePhoneNumber } from "./business-repository";
+import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId, insertBusinessesBatch } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -161,31 +161,30 @@ describe("Business Repository", () => {
     });
   });
 
-  describe("createBusinessWithPhone", () => {
-    it("creates a business with phone and website", async () => {
+  describe("insertBusinessesBatch", () => {
+    it("inserts multiple businesses in a single transaction", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusinessWithPhone(
-            client,
-            user.id,
-            "Test Business With Contact",
-            "Test description",
-            "cat-1",
-            "(555) 123-4567",
-            "https://example.com",
-            undefined
-          );
 
-          expect(business.id).toBeDefined();
-          expect(business.ownerId).toBe(user.id);
-          expect(business.name).toBe("Test Business With Contact");
-          expect(business.phone).toBe("5551234567");
-          expect(business.website).toBe("https://example.com");
-          expect(business.verificationStatus).toBe("unverified");
+          const businesses = [
+            { ownerId: user.id, name: "Batch Business 1", description: "Desc 1", categoryId: "cat-1" },
+            { ownerId: user.id, name: "Batch Business 2", description: "Desc 2", categoryId: "cat-2" },
+            { ownerId: user.id, name: "Batch Business 3", description: "Desc 3", categoryId: "cat-3" },
+          ];
+
+          const count = await insertBusinessesBatch(client, businesses);
+
+          expect(count).toBe(3);
+
+          const allBusinesses = await findBusinessesByOwnerId(client, user.id);
+          expect(allBusinesses.length).toBe(3);
+          expect(allBusinesses.map((b) => b.name)).toEqual(
+            expect.arrayContaining(["Batch Business 1", "Batch Business 2", "Batch Business 3"])
+          );
         } finally {
           client.release();
         }
@@ -194,26 +193,17 @@ describe("Business Repository", () => {
       }
     });
 
-    it("creates a business with phone without website", async () => {
+    it("handles empty batch gracefully", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusinessWithPhone(
-            client,
-            user.id,
-            "Test Business No Website",
-            "Test description",
-            "cat-1",
-            "(555) 987-6543",
-            undefined,
-            undefined
-          );
 
-          expect(business.phone).toBe("5559876543");
-          expect(business.website).toBeUndefined();
+          const count = await insertBusinessesBatch(client, []);
+
+          expect(count).toBe(0);
         } finally {
           client.release();
         }
@@ -222,26 +212,25 @@ describe("Business Repository", () => {
       }
     });
 
-    it("creates a business with website without phone", async () => {
+    it("handles businesses without descriptions", async () => {
       const user = await createTestUser();
 
       try {
         const client = await getPool().connect();
         try {
           await initializeBusinessSchema(client);
-          const business = await createBusinessWithPhone(
-            client,
-            user.id,
-            "Test Business No Phone",
-            "Test description",
-            "cat-1",
-            undefined,
-            "https://example.com",
-            undefined
-          );
 
-          expect(business.phone).toBeUndefined();
-          expect(business.website).toBe("https://example.com");
+          const businesses = [
+            { ownerId: user.id, name: "No Desc 1", categoryId: "cat-1" },
+            { ownerId: user.id, name: "No Desc 2", categoryId: "cat-2" },
+          ];
+
+          const count = await insertBusinessesBatch(client, businesses);
+
+          expect(count).toBe(2);
+
+          const allBusinesses = await findBusinessesByOwnerId(client, user.id);
+          expect(allBusinesses.every((b) => b.description === undefined)).toBe(true);
         } finally {
           client.release();
         }
@@ -249,24 +238,32 @@ describe("Business Repository", () => {
         await cleanupUser(user.email);
       }
     });
-  });
 
-  describe("normalizePhoneNumber", () => {
-    it("normalizes phone number with parentheses and dashes", () => {
-      expect(normalizePhoneNumber("(555) 123-4567")).toBe("5551234567");
-    });
+    it("rolls back on error", async () => {
+      const user = await createTestUser();
 
-    it("normalizes phone number with dashes only", () => {
-      expect(normalizePhoneNumber("555-123-4567")).toBe("5551234567");
-    });
+      try {
+        const client = await getPool().connect();
+        try {
+          await initializeBusinessSchema(client);
 
-    it("normalizes phone number with country code", () => {
-      expect(normalizePhoneNumber("+1-555-123-4567")).toBe("5551234567");
-      expect(normalizePhoneNumber("1-555-123-4567")).toBe("5551234567");
-    });
+          // Try to insert with invalid data (should fail)
+          const businesses = [
+            { ownerId: user.id, name: "Test Business", categoryId: "cat-1" },
+            { ownerId: "00000000-0000-0000-0000-000000000000", name: "Invalid Owner", categoryId: "cat-2" },
+          ];
 
-    it("normalizes phone number with spaces", () => {
-      expect(normalizePhoneNumber("555 123 4567")).toBe("5551234567");
+          await expect(insertBusinessesBatch(client, businesses)).rejects.toThrow();
+
+          // Verify no businesses were inserted due to rollback
+          const allBusinesses = await findBusinessesByOwnerId(client, user.id);
+          expect(allBusinesses.length).toBe(0);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
     });
   });
 });
