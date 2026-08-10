@@ -2,6 +2,7 @@
  * Facebook Scraper
  *
  * Scrapes Facebook for business page search results.
+ * Includes bot detection and retry handling.
  */
 
 import { Browser, Page, BrowserContext } from "playwright";
@@ -12,10 +13,11 @@ import {
   ScraperPagination,
   ScraperJobState,
 } from "../types/facebook-scraper";
-import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
+import { BotDetectionService, createBotDetectionService } from "./bot-detection-service";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
+const DEFAULT_BOT_RETRY_DELAY_MS = 60000; // 60 seconds
 const FACEBOOK_SEARCH_URL = "https://www.facebook.com/search/pages";
 
 /**
@@ -25,6 +27,7 @@ export class FacebookScraper {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
+  private botDetection: BotDetectionService;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {
@@ -33,15 +36,10 @@ export class FacebookScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
-  }
-
-  /**
-   * Check robots.txt before scraping
-   */
-  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
-    const facebookBaseUrl = 'https://www.facebook.com';
-    const searchPath = '/search/pages';
-    return checkUrlAllowed(`${facebookBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
+    this.botDetection = createBotDetectionService({
+      retryDelayMs: DEFAULT_BOT_RETRY_DELAY_MS,
+      maxRetries: 3,
+    });
   }
 
   /**
@@ -81,26 +79,6 @@ export class FacebookScraper {
     query: string,
     location: string
   ): Promise<ScraperResult> {
-    // Check robots.txt before proceeding
-    const robotsCheck = await this.checkRobotsBeforeScraping();
-    if (!robotsCheck.allowed) {
-      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
-      return {
-        businesses: [],
-        pagination: {
-          currentPage: 0,
-          totalPages: 0,
-          resultsPerPage: 0,
-          totalResults: 0,
-          hasNextPage: false,
-        },
-        source: "facebook",
-        query,
-        location,
-        timestamp: new Date(),
-      };
-    }
-
     await this.initialize();
 
     const page = await this.context!.newPage();
@@ -113,6 +91,30 @@ export class FacebookScraper {
 
       await page.goto(searchUrl, { waitUntil: "networkidle" });
       await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
+
+      // Check for bot detection challenge
+      const pageContent = await page.content();
+      const botResult = this.botDetection.detectBotChallenge(pageContent, "facebook");
+
+      if (botResult.isBotDetected) {
+        console.log(
+          `[FacebookScraper] Bot detected: ${botResult.challengeType}, retry attempt ${botResult.retryCount + 1}/3`
+        );
+
+        if (botResult.shouldRetry) {
+          // Pause for 60 seconds before retry
+          await this.botDetection.pauseForRetry("facebook");
+          this.botDetection.incrementRetryCount("facebook");
+
+          // Retry the page load
+          await page.goto(searchUrl, { waitUntil: "networkidle" });
+          await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
+        } else {
+          throw new Error(
+            `Bot detection triggered: ${botResult.challengeType}. Max retries exceeded.`
+          );
+        }
+      }
 
       // Extract business pages from search results
       const extractedBusinesses = await this.extractBusinessesFromPage(page);

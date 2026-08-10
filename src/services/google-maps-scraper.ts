@@ -1,10 +1,11 @@
 /**
  * Google Maps Scraper Service
  * Scrapes business data from Google Maps search results
+ * Includes bot detection and retry handling.
  */
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { checkUrlAllowed, type RobotsCheckResult } from '@/lib/scraper/robots-service';
+import { BotDetectionService, createBotDetectionService } from './bot-detection-service';
 
 export interface ScrapedBusiness {
   name: string;
@@ -28,9 +29,12 @@ export interface SearchParams {
   location?: string;
 }
 
+const DEFAULT_BOT_RETRY_DELAY_MS = 60000; // 60 seconds
+
 class GoogleMapsScraper {
   private browser: Browser | null = null;
   private config: Required<ScraperConfig>;
+  private botDetection: BotDetectionService;
 
   constructor(config?: ScraperConfig) {
     this.config = {
@@ -38,6 +42,10 @@ class GoogleMapsScraper {
       timeoutMs: config?.timeoutMs ?? 60000,
       maxResults: config?.maxResults ?? 20,
     };
+    this.botDetection = createBotDetectionService({
+      retryDelayMs: DEFAULT_BOT_RETRY_DELAY_MS,
+      maxRetries: 3,
+    });
   }
 
   /**
@@ -64,15 +72,6 @@ class GoogleMapsScraper {
   }
 
   /**
-   * Check robots.txt before scraping
-   */
-  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
-    const googleBaseUrl = 'https://www.google.com';
-    const searchPath = '/maps/search/';
-    return checkUrlAllowed(`${googleBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
-  }
-
-  /**
    * Search for businesses on Google Maps
    */
   async searchBusinesses(params: SearchParams): Promise<ScrapedBusiness[]> {
@@ -80,13 +79,6 @@ class GoogleMapsScraper {
 
     if (!this.browser) {
       throw new Error('Browser not initialized');
-    }
-
-    // Check robots.txt before proceeding
-    const robotsCheck = await this.checkRobotsBeforeScraping();
-    if (!robotsCheck.allowed) {
-      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
-      return []; // Return empty results if disallowed
     }
 
     const context = await this.browser.newContext({
@@ -113,6 +105,35 @@ class GoogleMapsScraper {
       await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
         // Continue even if selector not found - results may still load
       });
+
+      // Check for bot detection challenge
+      const pageContent = await page.content();
+      const botResult = this.botDetection.detectBotChallenge(pageContent, "google-maps");
+
+      if (botResult.isBotDetected) {
+        console.log(
+          `[GoogleMapsScraper] Bot detected: ${botResult.challengeType}, retry attempt ${botResult.retryCount + 1}/3`
+        );
+
+        if (botResult.shouldRetry) {
+          // Pause for 60 seconds before retry
+          await this.botDetection.pauseForRetry("google-maps");
+          this.botDetection.incrementRetryCount("google-maps");
+
+          // Retry the page load
+          await page.goto(searchUrl, {
+            waitUntil: 'networkidle',
+            timeout: this.config.timeoutMs,
+          });
+          await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
+            // Continue even if selector not found - results may still load
+          });
+        } else {
+          throw new Error(
+            `Bot detection triggered: ${botResult.challengeType}. Max retries exceeded.`
+          );
+        }
+      }
 
       // Wait a moment for dynamic content
       await page.waitForTimeout(2000);
