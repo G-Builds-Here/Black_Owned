@@ -299,7 +299,7 @@ export class BotDetectionService {
 
     // Check specific patterns first (order matters!)
     if (selectorLower.includes('g-recaptcha') || selectorLower.includes('recaptcha')) return 'recaptcha';
-    if (selectorLower.includes('hcaptcha')) return 'hcaptcha';
+    if (selectorLower.includes('h-captcha') || selectorLower.includes('hcaptcha')) return 'hcaptcha';
     if (selectorLower.includes('captcha')) return 'captcha';
     if (selectorLower.includes('challenge')) return 'challenge_page';
     if (selectorLower.includes('bot')) return 'rate_limit';
