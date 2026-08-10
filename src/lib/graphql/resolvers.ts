@@ -553,6 +553,9 @@ export async function createBusiness(
 
   const client = await getPool().connect();
   try {
+    // Begin transaction
+    await client.query("BEGIN");
+
     const business = await createBusinessInDb(
       client,
       userId,
@@ -563,12 +566,33 @@ export async function createBusiness(
       input.reviewCount ?? 0
     );
 
+    // Commit transaction
+    await client.query("COMMIT");
+
     return {
       success: true,
       business: businessRecordToGraphqlBusiness(business),
     };
   } catch (error) {
-    console.error("Error creating business:", error);
+    // Rollback transaction on error
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      console.error("Rollback failed:", rollbackError);
+    }
+
+    // Log error with business details
+    const errorDetails = {
+      action: "createBusiness",
+      userId,
+      businessName: input.name,
+      description: input.description,
+      categoryId: input.categoryId,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+    console.error("Business creation failed - transaction rolled back:", JSON.stringify(errorDetails));
+
     return {
       success: false,
       error: "Failed to create business",
