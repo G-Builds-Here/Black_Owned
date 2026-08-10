@@ -54,3 +54,6 @@ export type { UserTableRow } from './UserTable';
 
 export { Table, TableHeader, TableBody, TableColumn, TableRow, TableCell } from './Table';
 export type { TableProps, TableHeaderProps, TableBodyProps, TableColumnProps, TableRowProps, TableCellProps } from './Table';
+
+export { BusinessDetailPanel } from './BusinessDetailPanel';
+export type { BusinessDetailPanelProps, BusinessDetail } from './BusinessDetailPanel';

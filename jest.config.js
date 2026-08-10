@@ -14,5 +14,7 @@ module.exports = {
     "^@minio/client$": "<rootDir>/__mocks__/@minio/index.ts",
     "^@/components/ui/Navigation$": "<rootDir>/__mocks__/navigation.tsx",
     "^@/components/ui$": "<rootDir>/__mocks__/ui-components.tsx",
+    "^@/(.*)$": "<rootDir>/src/$1",
   },
+  modulePathIgnorePatterns: ["<rootDir>/.worktrees"],
 };
