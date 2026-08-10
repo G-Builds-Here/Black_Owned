@@ -25,8 +25,10 @@ export interface ImageCategoryConfig {
 
 /**
  * Category-specific image configurations for realistic alt text generation
+ * Supports both legacy category names and new business-seeder category names
  */
 export const IMAGE_CATEGORY_CONFIGS: Record<string, ImageCategoryConfig> = {
+  // Legacy category names
   restaurants: {
     category: "restaurants",
     altTextTemplates: [
@@ -143,6 +145,79 @@ export const IMAGE_CATEGORY_CONFIGS: Record<string, ImageCategoryConfig> = {
       "Clean waiting area with amenities",
       "Modern diagnostic equipment",
       "Completed vehicle ready for pickup",
+    ],
+    imageCountMin: 2,
+    imageCountMax: 4,
+  },
+  // New category names from business-seeder
+  "food-dining": {
+    category: "food-dining",
+    altTextTemplates: [
+      "Interior dining room with warm lighting and wooden tables",
+      "Signature dish presentation on ceramic plate",
+      "Chef preparing fresh ingredients in open kitchen",
+      "Outdoor patio seating with string lights",
+      "Bar area with craft cocktails and wine selection",
+    ],
+    imageCountMin: 2,
+    imageCountMax: 4,
+  },
+  "retail-fashion": {
+    category: "retail-fashion",
+    altTextTemplates: [
+      "Storefront with welcoming entrance and display windows",
+      "Product display shelves with organized merchandise",
+      "Checkout counter with friendly staff",
+      "Interior shopping area with bright lighting",
+      "Seasonal promotion display near entrance",
+    ],
+    imageCountMin: 2,
+    imageCountMax: 4,
+  },
+  "professional-services": {
+    category: "professional-services",
+    altTextTemplates: [
+      "Professional office reception area",
+      "Conference room with modern furnishings",
+      "Team members in business attire collaborating",
+      "Office building exterior with signage",
+      "Client consultation space with comfortable seating",
+    ],
+    imageCountMin: 2,
+    imageCountMax: 4,
+  },
+  "health-wellness": {
+    category: "health-wellness",
+    altTextTemplates: [
+      "Clean and calming treatment room",
+      "Reception area with soothing decor",
+      "Professional equipment in sterile environment",
+      "Wellness consultation space",
+      "Relaxing waiting area with natural light",
+    ],
+    imageCountMin: 2,
+    imageCountMax: 4,
+  },
+  "financial-services": {
+    category: "financial-services",
+    altTextTemplates: [
+      "Professional financial advisory office",
+      "Modern banking facility with secure environment",
+      "Client consultation meeting in progress",
+      "Financial planning workspace with charts and data",
+      "Professional reception area with business attire",
+    ],
+    imageCountMin: 2,
+    imageCountMax: 4,
+  },
+  "home-services": {
+    category: "home-services",
+    altTextTemplates: [
+      "Professional service vehicle with company branding",
+      "Technician working on residential system",
+      "Before and after service comparison",
+      "Professional tools and equipment",
+      "Satisfied homeowner with completed work",
     ],
     imageCountMin: 2,
     imageCountMax: 4,

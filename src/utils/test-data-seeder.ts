@@ -132,6 +132,16 @@ export function generateBusinessesWithImages(count: number = 20): TestBusinessWi
     { category: "entertainment", name: "Community Arts Center", description: "Cultural events and workshops" },
     { category: "education", name: "Bright Futures Tutoring", description: "Academic support services" },
     { category: "financial-services", name: "Community Credit Union", description: "Member-owned financial services" },
+    { category: "food-dining", name: "Gospel Soul Food", description: "Comfort food with a spiritual touch" },
+    { category: "food-dining", name: "Caribbean Spice House", description: "Authentic island flavors and jerk specialties" },
+    { category: "retail-fashion", name: "Heritage Fashion", description: "Culturally inspired clothing and accessories" },
+    { category: "retail-fashion", name: "Community Bookstore", description: "Local literature and educational resources" },
+    { category: "professional-services", name: "Community Insurance Agency", description: "Family and business coverage solutions" },
+    { category: "health-wellness", name: "Holistic Health Center", description: "Integrative wellness and preventive care" },
+    { category: "health-wellness", name: "Community Eye Care", description: "Affordable vision services and eyewear" },
+    { category: "automotive", name: "Family Auto Care", description: "Trusted maintenance and repair services" },
+    { category: "home-services", name: "Neighborhood HVAC", description: "Heating and cooling solutions" },
+    { category: "entertainment", name: "Jazz Lounge & Cafe", description: "Live music and community gathering space" },
   ];
 
   return Array.from({ length: count }, (_, i) => {
