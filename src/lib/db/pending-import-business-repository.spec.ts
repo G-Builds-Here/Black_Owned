@@ -38,6 +38,7 @@ describe("Pending Import Business Repository", () => {
           name: "Test Business",
           description: "A test business",
           category_id: "food-dining",
+          source: ScraperSource.GoogleMaps,
           source_data: { source: "google-maps", originalId: "test-123" },
         });
 
@@ -70,6 +71,7 @@ describe("Pending Import Business Repository", () => {
           name: "Test Business No Description",
           description: undefined,
           category_id: "retail-fashion",
+          source: ScraperSource.Yelp,
           source_data: { source: "yelp", originalId: "test-456" },
         });
 
@@ -276,6 +278,7 @@ describe("Pending Import Business Repository", () => {
           name: "Pending Business 1",
           description: "Test 1",
           category_id: "food-dining",
+          source: ScraperSource.GoogleMaps,
           source_data: {},
         });
 
@@ -325,6 +328,7 @@ describe("Pending Import Business Repository", () => {
           name: "Count Test 1",
           description: "Test",
           category_id: "food-dining",
+          source: ScraperSource.GoogleMaps,
           source_data: {},
         });
 

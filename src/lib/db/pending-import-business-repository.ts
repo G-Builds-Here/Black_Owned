@@ -17,6 +17,7 @@ export interface PendingImportBusiness {
   description: string | undefined;
   category_id: string;
   status: string;
+  source: ScraperSource;
   source_data: Record<string, unknown>;
   job_id: string | undefined;
   created_at: Date;
@@ -56,6 +57,7 @@ export async function initializePendingImportSchema(client: any): Promise<void> 
       description TEXT,
       category_id VARCHAR(100) NOT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'pending_review',
+      source VARCHAR(50) NOT NULL,
       source_data JSONB,
       job_id UUID,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -90,19 +92,21 @@ export async function insertPendingBusiness(
     name: string;
     description: string | undefined;
     category_id: string;
+    source: ScraperSource;
     source_data: Record<string, unknown>;
     job_id?: string;
   }
 ): Promise<string> {
   const result = await client.query(
-    `INSERT INTO pending_import_businesses (name, description, category_id, status, source_data, job_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO pending_import_businesses (name, description, category_id, status, source, source_data, job_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
     [
       businessData.name,
       businessData.description,
       businessData.category_id,
       "pending_review",
+      businessData.source,
       businessData.source_data,
       businessData.job_id || null,
     ]
@@ -148,6 +152,7 @@ export async function batchImportBusinesses(
           name: business.name,
           description: business.description,
           category_id: business.category_id,
+          source: business.source,
           source_data: business.source_data,
           job_id: jobId,
         });
@@ -313,6 +318,7 @@ export async function importNormalizedBusinesses(
           name: business.name,
           description: business.description,
           category_id: business.category_id,
+          source: business.source,
           source_data: business.source_data,
           job_id: jobId,
         });
@@ -426,6 +432,7 @@ export async function insertPendingImportBusiness(
     name: string;
     description: string | undefined;
     categoryId: string;
+    source: ScraperSource;
     sourceData?: Record<string, unknown>;
   }
 ): Promise<string> {
@@ -433,6 +440,7 @@ export async function insertPendingImportBusiness(
     name: input.name,
     description: input.description,
     category_id: input.categoryId,
+    source: input.source,
     source_data: input.sourceData || {},
   });
 }

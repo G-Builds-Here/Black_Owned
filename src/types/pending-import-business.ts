@@ -4,6 +4,8 @@
  * Defines data structures for businesses in the import workflow.
  */
 
+import { ScraperSource } from "./scraper-result";
+
 /**
  * Status for a pending import business record
  */
@@ -18,6 +20,7 @@ export interface PendingImportBusiness {
   description: string | undefined;
   categoryId: string;
   status: PendingImportStatus;
+  source: ScraperSource;
   sourceData: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
@@ -30,5 +33,6 @@ export interface PendingImportBusinessInput {
   name: string;
   description: string | undefined;
   categoryId: string;
+  source: ScraperSource;
   sourceData?: Record<string, unknown>;
 }

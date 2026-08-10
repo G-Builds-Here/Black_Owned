@@ -8,6 +8,7 @@
 import { PoolClient } from "pg";
 import { BusinessImporter, businessImporter, ImportResult } from "./business-importer";
 import { PendingImportBusinessInput } from "../types/pending-import-business";
+import { ScraperSource } from "../types/scraper-result";
 
 // Mock the repository module
 jest.mock("../lib/db/pending-import-business-repository", () => ({
@@ -34,6 +35,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
       name: "Test Business",
       description: "A test business description",
       categoryId: "food-dining",
+      source: ScraperSource.GoogleMaps,
       sourceData: { source: "google-maps", address: "123 Main St" },
     };
 
@@ -49,6 +51,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "",
         description: "Test",
         categoryId: "food-dining",
+        source: ScraperSource.GoogleMaps,
       };
 
       await expect(importer.importBusiness(mockClient, invalidInput)).rejects.toThrow(
@@ -73,6 +76,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "Test Business",
         description: "Test",
         categoryId: "",
+        source: ScraperSource.GoogleMaps,
       };
 
       await expect(importer.importBusiness(mockClient, invalidInput)).rejects.toThrow(
@@ -97,6 +101,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "Test Business",
         description: undefined,
         categoryId: "food-dining",
+        source: ScraperSource.GoogleMaps,
       };
 
       insertPendingImportBusiness.mockResolvedValue(undefined);
@@ -130,18 +135,21 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: "Business 1",
         description: "First business",
         categoryId: "food-dining",
+        source: ScraperSource.GoogleMaps,
         sourceData: { source: "google-maps" },
       },
       {
         name: "Business 2",
         description: "Second business",
         categoryId: "retail-fashion",
+        source: ScraperSource.Yelp,
         sourceData: { source: "yelp" },
       },
       {
         name: "Business 3",
         description: "Third business",
         categoryId: "professional-services",
+        source: ScraperSource.Facebook,
         sourceData: { source: "facebook" },
       },
     ];
@@ -227,6 +235,7 @@ describe("Business Importer Service - LOC-0058-AC4", () => {
         name: `Business ${i}`,
         description: `Description ${i}`,
         categoryId: "food-dining",
+        source: ScraperSource.GoogleMaps,
         sourceData: { source: "google-maps" },
       }));
 

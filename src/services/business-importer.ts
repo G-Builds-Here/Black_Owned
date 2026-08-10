@@ -7,6 +7,7 @@
 import { PoolClient } from "pg";
 import { PendingImportBusinessInput } from "../types/pending-import-business";
 import { insertPendingImportBusiness } from "../lib/db/pending-import-business-repository";
+import { ScraperSource } from "../types/scraper-result";
 
 /**
  * Import result for a batch of business records
@@ -42,7 +43,10 @@ export class BusinessImporter {
       throw new Error("Category ID is required");
     }
 
-    await insertPendingImportBusiness(client, input);
+    await insertPendingImportBusiness(client, {
+      ...input,
+      source: input.source,
+    });
   }
 
   /**
