@@ -10,7 +10,7 @@ import { Business } from "../../types/business";
 /**
  * Get business table name (with schema if configured)
  */
-function getTableName(): string {
+export function getTableName(): string {
   const schema = process.env.POSTGRES_SCHEMA;
   return schema ? `${schema}.businesses` : "businesses";
 }

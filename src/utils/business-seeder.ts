@@ -7,12 +7,16 @@
  * - Multiple categories (restaurant, retail, service)
  * - All required fields populated
  * - BWS-TEST prefix for test identification
+ *
+ * Foreign Key Constraints:
+ * - All businesses require a valid owner_id referencing users(id)
+ * - The seed script ensures a test user exists before creating businesses
  */
 
+import { PoolClient } from "pg";
 import { TEST_PREFIX, formatBusinessName } from "./test-data-seeder";
 import { BusinessCategory } from "../types/business";
-import { PoolClient } from "pg";
-import { getTableName } from "../lib/db/business-repository";
+import { getTableName, createBusiness } from "../lib/db/business-repository";
 
 /**
  * Sample business template
@@ -181,57 +185,92 @@ function main(): void {
   printCategoryDistribution();
 }
 
-/**
- * Counts test businesses in the database
- */
-export async function countTestBusinesses(client: PoolClient): Promise<number> {
-  const tableName = getTableName();
-  const result = await client.query<{ count: string }>(
-    `SELECT COUNT(*) as count FROM ${tableName} WHERE name LIKE $1`,
-    [`${TEST_PREFIX}%`]
-  );
-  return parseInt(result.rows[0].count, 10);
+// Run if executed directly
+if (require.main === module) {
+  main();
 }
 
 /**
- * Seeds businesses into the database
- * Returns creation summary
+ * Seed result from database operation
+ */
+export interface SeedResult {
+  created: number;
+  skipped: number;
+  total: number;
+}
+
+/**
+ * Seed businesses into the database with foreign key constraint compliance.
+ *
+ * This function:
+ * 1. Generates 20 sample businesses
+ * 2. Checks which ones already exist (by name)
+ * 3. Creates only the missing ones with the provided ownerId
+ * 4. Returns a summary of the operation
+ *
+ * @param client - PostgreSQL client for database operations
+ * @param ownerId - UUID of the user who owns these businesses (satisfies FK constraint)
+ * @param reset - If true, clears existing test data before seeding
+ * @returns SeedResult with counts of created/skipped/total businesses
  */
 export async function seedBusinesses(
   client: PoolClient,
   ownerId: string,
   reset: boolean = false
-): Promise<{ created: number; skipped: number; total: number }> {
+): Promise<SeedResult> {
   const tableName = getTableName();
   const businesses = generateSampleBusinesses();
-
-  if (reset) {
-    await client.query(`DELETE FROM ${tableName} WHERE name LIKE $1`, [`${TEST_PREFIX}%`]);
-  }
-
   let created = 0;
   let skipped = 0;
 
+  // If reset is requested, clear existing test data first
+  if (reset) {
+    console.log("Clearing existing test businesses...");
+    await client.query(`DELETE FROM ${tableName} WHERE name LIKE '${TEST_PREFIX}%'`);
+    console.log("Existing test businesses cleared.");
+  }
+
+  // Seed each business
   for (const business of businesses) {
+    // Check if business already exists
     const existing = await client.query(
       `SELECT id FROM ${tableName} WHERE name = $1`,
       [business.name]
     );
 
     if (existing.rows.length > 0) {
+      console.log(`[SKIP] Business already exists: ${business.name}`);
       skipped++;
-      continue;
+    } else {
+      // Create business with valid owner_id (foreign key constraint satisfied)
+      await createBusiness(
+        client,
+        ownerId,
+        business.name,
+        business.description,
+        business.categoryId
+      );
+      console.log(`[CREATE] Business created: ${business.name}`);
+      created++;
     }
-
-    await client.query(
-      `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-       VALUES ($1, $2, $3, $4, 'unverified')`,
-      [ownerId, business.name, business.description, business.categoryId]
-    );
-    created++;
   }
 
-  return { created, skipped, total: businesses.length };
+  return {
+    created,
+    skipped,
+    total: businesses.length,
+  };
+}
+
+/**
+ * Count existing test businesses in the database
+ */
+export async function countTestBusinesses(client: PoolClient): Promise<number> {
+  const tableName = getTableName();
+  const result = await client.query(
+    `SELECT COUNT(*) FROM ${tableName} WHERE name LIKE '${TEST_PREFIX}%'`
+  );
+  return parseInt((result.rows[0] as { count: string }).count, 10);
 }
 
 // Export for testing
