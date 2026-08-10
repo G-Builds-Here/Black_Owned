@@ -63,10 +63,18 @@ export const typeDefs = `#graphql
     createdAt: DateTimeUtc!
   }
 
+  type BulkApprovalResult {
+    success: Boolean!
+    approvedCount: Int!
+    failedIds: [String!]
+    error: String
+  }
+
   type Query {
     health: String!
     searchBusinesses(query: String!, page: Int, pageSize: Int): SearchResults!
     business(id: String!): GQLBusiness
+    pendingBusinesses: [GQLBusiness!]!
   }
 
   type PresignedUrl {
@@ -93,6 +101,7 @@ export const typeDefs = `#graphql
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
     updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
     createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
+    approveBusinesses(businessIds: [String!]!): BulkApprovalResult!
   }
 `;
 

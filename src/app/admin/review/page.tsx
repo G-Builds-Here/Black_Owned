@@ -33,6 +33,8 @@ export default function AdminReviewPage() {
   const [pendingBusinesses, setPendingBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedBusinesses, setSelectedBusinesses] = useState<Set<string>>(new Set());
+  const [approving, setApproving] = useState(false);
 
   useEffect(() => {
     const fetchPendingBusinesses = async () => {
@@ -77,14 +79,100 @@ export default function AdminReviewPage() {
     });
   };
 
-  const handleApprove = (businessId: string) => {
-    console.log('Approve business:', businessId);
-    // TODO: Implement approval mutation
+  const toggleSelection = (businessId: string) => {
+    const newSelected = new Set(selectedBusinesses);
+    if (newSelected.has(businessId)) {
+      newSelected.delete(businessId);
+    } else {
+      newSelected.add(businessId);
+    }
+    setSelectedBusinesses(newSelected);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedBusinesses.size === pendingBusinesses.length) {
+      setSelectedBusinesses(new Set());
+    } else {
+      setSelectedBusinesses(new Set(pendingBusinesses.map(b => b.id)));
+    }
+  };
+
+  const handleApprove = async (businessId: string) => {
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation ApproveBusinesses($businessIds: [String!]!) {
+            approveBusinesses(businessIds: $businessIds) {
+              success approvedCount failedIds error
+            }
+          }`,
+          variables: { businessIds: [businessId] },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+      if (result.data?.approveBusinesses.success) {
+        setPendingBusinesses(prev => prev.filter(b => b.id !== businessId));
+        setSelectedBusinesses(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(businessId);
+          return newSet;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to approve business:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedBusinesses.size === 0) return;
+
+    setApproving(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation ApproveBusinesses($businessIds: [String!]!) {
+            approveBusinesses(businessIds: $businessIds) {
+              success approvedCount failedIds error
+            }
+          }`,
+          variables: { businessIds: Array.from(selectedBusinesses) },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+      const approvalResult = result.data?.approveBusinesses;
+      if (approvalResult?.success) {
+        setPendingBusinesses(prev =>
+          prev.filter(b => !selectedBusinesses.has(b.id))
+        );
+        setSelectedBusinesses(new Set());
+      } else if (approvalResult?.error) {
+        setError(approvalResult.error);
+      }
+    } catch (err) {
+      console.error('Failed to bulk approve:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setApproving(false);
+    }
   };
 
   const handleReject = (businessId: string) => {
     console.log('Reject business:', businessId);
-    // TODO: Implement rejection mutation
   };
 
   if (loading) {
@@ -132,10 +220,37 @@ export default function AdminReviewPage() {
               <h1 className="text-3xl font-bold mb-2">Business Review Queue</h1>
               <p className="text-neutral-100">Review and moderate pending business submissions</p>
             </div>
-            <Badge variant="warning" size="lg">
-              {pendingBusinesses.length} Pending
-            </Badge>
+            <div className="flex items-center gap-4">
+              {selectedBusinesses.size > 0 && (
+                <Badge variant="success" size="lg">
+                  {selectedBusinesses.size} Selected
+                </Badge>
+              )}
+              <Badge variant="warning" size="lg">
+                {pendingBusinesses.length} Pending
+              </Badge>
+            </div>
           </div>
+          {selectedBusinesses.size > 0 && (
+            <div className="mt-4 flex items-center gap-3">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleBulkApprove}
+                disabled={approving}
+              >
+                {approving ? 'Approving...' : `Approve Selected (${selectedBusinesses.size})`}
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setSelectedBusinesses(new Set())}
+                disabled={approving}
+              >
+                Clear Selection
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -168,9 +283,31 @@ export default function AdminReviewPage() {
             </Card>
           ) : (
             <div className="space-y-4">
+              <Card variant="outlined" padding="md">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select All"
+                      checked={selectedBusinesses.size === pendingBusinesses.length}
+                      onChange={toggleAllSelection}
+                      className="h-5 w-5 rounded border-neutral-300 text-heritage-royal focus:ring-heritage-royal"
+                    />
+                    <span className="text-neutral-700 font-medium">Select All ({pendingBusinesses.length})</span>
+                  </div>
+                </div>
+              </Card>
               {pendingBusinesses.map((business) => (
                 <Card key={business.id} variant="outlined" padding="md">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start">
+                    <div className="flex items-start pt-1 mr-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedBusinesses.has(business.id)}
+                        onChange={() => toggleSelection(business.id)}
+                        className="h-5 w-5 rounded border-neutral-300 text-heritage-royal focus:ring-heritage-royal"
+                      />
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-neutral-800">{business.name}</h3>

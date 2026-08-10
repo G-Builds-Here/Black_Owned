@@ -617,17 +617,106 @@ async function createBusinessInDb(
 }
 
 /**
+ * Get pending businesses query resolver
+ */
+export async function pendingBusinesses(): Promise<unknown[]> {
+  const client = await getPool().connect();
+  try {
+    const schema = process.env.POSTGRES_SCHEMA;
+    const tableName = schema ? `${schema}.businesses` : "businesses";
+    const result = await client.query(
+      `SELECT * FROM ${tableName} WHERE verification_status = 'unverified' ORDER BY created_at DESC`
+    );
+    return result.rows.map(businessToGraphqlBusiness);
+  } catch (error) {
+    console.error("Error fetching pending businesses:", error);
+    return [];
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Bulk approve businesses mutation resolver
+ */
+export async function approveBusinesses(
+  _parent: unknown,
+  args: { businessIds: string[] }
+): Promise<{
+  success: boolean;
+  approvedCount: number;
+  failedIds: string[];
+  error?: string;
+}> {
+  const { businessIds } = args;
+
+  if (!businessIds || businessIds.length === 0) {
+    return {
+      success: false,
+      approvedCount: 0,
+      failedIds: [],
+      error: "No business IDs provided",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    const schema = process.env.POSTGRES_SCHEMA;
+    const tableName = schema ? `${schema}.businesses` : "businesses";
+
+    const approvedIds: string[] = [];
+    const failedIds: string[] = [];
+
+    for (const businessId of businessIds) {
+      try {
+        const result = await client.query(
+          `UPDATE ${tableName} SET verification_status = 'verified', updated_at = NOW() WHERE id = $1 RETURNING id`,
+          [businessId]
+        );
+
+        if (result.rows.length > 0) {
+          approvedIds.push(businessId);
+        } else {
+          failedIds.push(businessId);
+        }
+      } catch (error) {
+        console.error(`Error approving business ${businessId}:`, error);
+        failedIds.push(businessId);
+      }
+    }
+
+    return {
+      success: approvedIds.length > 0,
+      approvedCount: approvedIds.length,
+      failedIds,
+    };
+  } catch (error) {
+    console.error("Bulk approval error:", error);
+    return {
+      success: false,
+      approvedCount: 0,
+      failedIds: businessIds,
+      error: error instanceof Error ? error.message : "Failed to approve businesses",
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
   Query: {
     health,
     searchBusinesses,
+    pendingBusinesses,
   },
   Mutation: {
     register,
     createBusiness,
     submitVerification,
     updateBusiness,
+    approveBusinesses,
   },
 };
