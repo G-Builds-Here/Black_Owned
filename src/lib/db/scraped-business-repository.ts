@@ -34,6 +34,7 @@ export async function initializeScrapedBusinessSchema(client: PoolClient): Promi
       rating DECIMAL(3,2),
       review_count INTEGER,
       status VARCHAR(20) NOT NULL DEFAULT 'pending_review',
+      rejection_reason TEXT,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
@@ -67,6 +68,7 @@ function rowToScrapedBusiness(row: unknown): ScrapedBusiness {
     rating: (r.rating as number | null) ?? undefined,
     reviewCount: (r.review_count as number | null) ?? undefined,
     status: r.status as ScrapedBusinessStatus,
+    rejectionReason: (r.rejection_reason as string | null) ?? undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -206,4 +208,32 @@ export async function findScrapedBusinessesByStatus(
     [status]
   );
   return result.rows.map(rowToScrapedBusiness);
+}
+
+/**
+ * Input for rejecting a scraped business
+ */
+export interface RejectScrapedBusinessInput {
+  businessId: string;
+  rejectionReason: string;
+}
+
+/**
+ * Reject a scraped business with a reason
+ */
+export async function rejectScrapedBusiness(
+  client: PoolClient,
+  input: RejectScrapedBusinessInput
+): Promise<ScrapedBusiness | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<ScrapedBusiness>(
+    `UPDATE ${tableName}
+     SET status = 'rejected',
+         rejection_reason = $2,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [input.businessId, input.rejectionReason]
+  );
+  return result.rows[0] ? rowToScrapedBusiness(result.rows[0]) : undefined;
 }
