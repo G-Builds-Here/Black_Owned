@@ -6,7 +6,7 @@
  */
 
 import { PoolClient } from "pg";
-import { ScraperResult, ScraperSource, RawScraperData } from "../../types/scraper-result";
+import { ScraperResult, ScraperSource, RawScraperData, GoogleMapsRawData, YelpRawData, FacebookRawData } from "../../types/scraper-result";
 import { Business } from "../../types/business";
 import { createBusiness, initializeBusinessSchema } from "../db/business-repository";
 
