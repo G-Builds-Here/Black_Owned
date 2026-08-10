@@ -1,4 +1,13 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+// Provide jest global for jest.fn() compatibility
+(global as any).jest = {
+  fn: vi.fn.bind(vi),
+  mock: vi.mock.bind(vi),
+  clearAllMocks: vi.clearAllMocks.bind(vi),
+  resetAllMocks: vi.resetAllMocks.bind(vi),
+};
 
 // Mock PerformanceObserver for vitest tests
 global.PerformanceObserver = class {

@@ -5,6 +5,7 @@ import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import { BusinessDetail } from '@/components/BusinessDetail';
 
 // Mock data - in production this would come from an API
 const MOCK_BUSINESSES: Business[] = [
@@ -107,6 +108,7 @@ export default function DirectoryPage() {
   const [filters, setFilters] = useState<FilterOption>({});
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
+  const [expandedBusinessId, setExpandedBusinessId] = useState<string | null>(null);
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
@@ -117,8 +119,12 @@ export default function DirectoryPage() {
   };
 
   const handleViewDetails = (businessId: string) => {
-    console.log('View details:', businessId);
-    // Navigate to business detail page
+    // Toggle expansion - click again to collapse
+    setExpandedBusinessId((prev) => (prev === businessId ? null : businessId));
+  };
+
+  const handleCollapseDetail = () => {
+    setExpandedBusinessId(null);
   };
 
   const handleSave = (businessId: string) => {
@@ -256,9 +262,37 @@ export default function DirectoryPage() {
                 onViewDetails={handleViewDetails}
                 onSave={handleSave}
                 onShare={handleShare}
-                enableLink={true}
+                enableLink={expandedBusinessId !== business.id}
               />
             ))}
+            {expandedBusinessId && (
+              <div className="md:col-span-2 lg:col-span-3">
+                {(() => {
+                  const expandedBusiness = displayBusinesses.find((b) => b.id === expandedBusinessId);
+                  if (!expandedBusiness) return null;
+                  return (
+                    <BusinessDetail
+                      business={{
+                        id: expandedBusiness.id,
+                        name: expandedBusiness.name,
+                        categoryId: expandedBusiness.category,
+                        verified: expandedBusiness.isVerified,
+                        createdAt: { timestamp: Date.now() / 1000 },
+                        description: expandedBusiness.description,
+                        location: expandedBusiness.location,
+                        imageUrl: expandedBusiness.imageUrl,
+                        tags: expandedBusiness.tags,
+                        scrapedData: expandedBusiness.scrapedData,
+                      }}
+                      loading={false}
+                      error={null}
+                      expanded={true}
+                      onCollapse={handleCollapseDetail}
+                    />
+                  );
+                })()}
+              </div>
+            )}
           </div>
         ) : (
           /* Empty State */
