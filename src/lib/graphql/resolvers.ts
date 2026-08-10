@@ -6,6 +6,7 @@ import {
   findByEmail,
   create,
   initializeUserSchema,
+  getPool,
 } from "../db/user-repository";
 import {
   hashPassword,
@@ -28,9 +29,14 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusiness,
+  create as createBusinessInDb,
+  approveBusinessById,
   Business as BusinessRecord,
 } from "../db/business-repository";
+import {
+  findScrapedBusinessesByStatus,
+} from "../db/scraped-business-repository";
+import { PoolClient } from "pg";
 
 /**
  * Mock business data for search
@@ -312,10 +318,10 @@ function businessToGraphqlBusiness(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.category_id,
-    verified: business.verified,
+    categoryId: business.categoryId,
+    verified: business.verificationStatus === "approved" || business.verificationStatus === "verified",
     createdAt: {
-      timestamp: Math.floor(business.created_at.getTime() / 1000),
+      timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },
   };
 }
@@ -372,6 +378,52 @@ export async function updateBusiness(
     success: true,
     business: businessToGraphqlBusiness(updatedBusiness),
   };
+}
+
+/**
+ * Approve business mutation resolver - updates verification status to "approved"
+ */
+export async function approveBusiness(
+  _parent: unknown,
+  args: { id: string }
+): Promise<{
+  success: boolean;
+  business?: unknown;
+  error?: string;
+}> {
+  const { id } = args;
+
+  const dbClient = (global as unknown as { dbClient?: unknown }).dbClient;
+  if (!dbClient) {
+    return {
+      success: false,
+      error: "Database connection not available",
+    };
+  }
+
+  const client = dbClient as PoolClient;
+
+  try {
+    const approvedBusiness = await approveBusinessById(client, id);
+
+    if (!approvedBusiness) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    return {
+      success: true,
+      business: businessToGraphqlBusinessEntity(approvedBusiness),
+    };
+  } catch (error) {
+    console.error("Error approving business:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 }
 
 /**
@@ -476,7 +528,7 @@ export async function searchBusinesses(
 /**
  * Convert Business entity to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: Business): {
+function businessToGraphqlBusinessEntity(business: Business): {
   id: string;
   name: string;
   categoryId: string;
@@ -487,7 +539,7 @@ function businessToGraphqlBusiness(business: Business): {
     id: business.id,
     name: business.name,
     categoryId: business.categoryId,
-    verified: business.verificationStatus === "verified",
+    verified: business.verificationStatus === "verified" || business.verificationStatus === "approved",
     createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
   };
 }
@@ -503,7 +555,7 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusiness(
+export async function createBusinessResolver(
   _parent: unknown,
   args: { input: { name: string; description?: string; categoryId: string } },
   context: unknown
@@ -564,23 +616,82 @@ export async function createBusiness(
 }
 
 /**
- * Internal function to create a business in the database
+ * Convert scraped business to GraphQL ScrapedBusiness type
  */
-async function createBusinessInDb(
-  client: import("pg").PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
-  categoryId: string
-): Promise<Business> {
-  const tableName = "businesses";
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId]
-  );
-  return result.rows[0];
+function scrapedBusinessToGraphql(scrapedBiz: {
+  id: string;
+  name: string;
+  address: string;
+  source: string;
+  rating?: number;
+  category?: string;
+  phone?: string;
+  website?: string;
+  status: string;
+  createdAt: Date;
+}): {
+  id: string;
+  name: string;
+  address: string;
+  source: string;
+  rating: number | null;
+  category: string | null;
+  phone: string | null;
+  website: string | null;
+  status: string;
+  createdAt: { timestamp: number };
+} {
+  return {
+    id: scrapedBiz.id,
+    name: scrapedBiz.name,
+    address: scrapedBiz.address,
+    source: scrapedBiz.source,
+    rating: scrapedBiz.rating ?? null,
+    category: scrapedBiz.category ?? null,
+    phone: scrapedBiz.phone ?? null,
+    website: scrapedBiz.website ?? null,
+    status: scrapedBiz.status,
+    createdAt: {
+      timestamp: Math.floor(scrapedBiz.createdAt.getTime() / 1000),
+    },
+  };
+}
+
+/**
+ * Pending businesses query resolver - returns businesses with pending_review status
+ */
+export async function pendingBusinesses(
+  _parent: unknown,
+  _args: unknown,
+  context: unknown
+): Promise<unknown[]> {
+  const ctx = context as { user?: { id: string } };
+  const userId = ctx?.user?.id ?? null;
+
+  if (!userId) {
+    console.warn("pendingBusinesses: admin access required");
+    return [];
+  }
+
+  const client = (global as unknown as { dbClient?: unknown }).dbClient;
+  if (!client) {
+    console.error("pendingBusinesses: database connection not available");
+    return [];
+  }
+
+  const dbClient = client as PoolClient;
+
+  try {
+    const pendingBusinesses = await findScrapedBusinessesByStatus(
+      dbClient,
+      "pending_review"
+    );
+
+    return pendingBusinesses.map(scrapedBusinessToGraphql);
+  } catch (error) {
+    console.error("Error fetching pending businesses:", error);
+    return [];
+  }
 }
 
 /**
@@ -590,11 +701,13 @@ export const resolvers = {
   Query: {
     health,
     searchBusinesses,
+    pendingBusinesses,
   },
   Mutation: {
     register,
-    createBusiness,
+    createBusiness: createBusinessResolver,
     submitVerification,
     updateBusiness,
+    approveBusiness,
   },
 };

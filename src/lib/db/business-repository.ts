@@ -44,7 +44,7 @@ function rowToBusiness(row: unknown): Business {
     name: r.name as string,
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
-    verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
+    verificationStatus: r.verification_status as "unverified" | "pending" | "verified" | "approved" | "rejected",
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -98,4 +98,22 @@ export async function findBusinessesByOwnerId(
     [ownerId]
   );
   return result.rows.map(rowToBusiness);
+}
+
+/**
+ * Update business verification status to "approved"
+ */
+export async function approveBusinessById(
+  client: PoolClient,
+  id: string
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName}
+     SET verification_status = 'approved', updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [id]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }
