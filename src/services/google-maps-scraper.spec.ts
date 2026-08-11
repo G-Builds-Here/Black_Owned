@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import { GoogleMapsScraper, ScrapedBusiness, SearchParams } from './google-maps-scraper';
+import { GoogleMapsScraper, ScrapedBusiness, SearchParams, ScraperResult } from './google-maps-scraper';
 
 // Mock playwright - newPage will return mockPage from beforeEach
 let mockPageInstance: any;
@@ -32,6 +32,7 @@ describe('GoogleMapsScraper', () => {
       goto: jest.fn().mockResolvedValue({}),
       waitForSelector: jest.fn().mockResolvedValue({}),
       waitForTimeout: jest.fn().mockResolvedValue(undefined),
+      waitForLoadState: jest.fn().mockResolvedValue(undefined),
       evaluate: jest.fn().mockResolvedValue([
         {
           name: 'Test Business',
@@ -47,7 +48,9 @@ describe('GoogleMapsScraper', () => {
       close: jest.fn().mockResolvedValue(undefined),
       $: jest.fn().mockResolvedValue({
         click: jest.fn().mockResolvedValue(undefined),
+        isDisabled: jest.fn().mockResolvedValue(false),
       }),
+      isDisabled: jest.fn().mockResolvedValue(false),
     };
   });
 
@@ -77,10 +80,114 @@ describe('GoogleMapsScraper', () => {
         maxPages: 2,
       });
 
+      // Mock page results - should only fetch 2 pages
+      let evaluateCallCount = 0;
+      mockPageInstance.evaluate.mockImplementation(() => {
+        evaluateCallCount++;
+        if (evaluateCallCount === 1) {
+          // Page 1: 10 businesses
+          return Array.from({ length: 10 }, (_, i) => ({
+            name: `Business ${i + 1}`,
+            category: 'Test Category',
+            rating: 4.0,
+            reviewCount: 10,
+            location: 'Test City',
+            imageUrl: '',
+            description: '',
+            tags: [],
+          }));
+        } else if (evaluateCallCount === 2) {
+          // Page 2: 10 businesses
+          return Array.from({ length: 10 }, (_, i) => ({
+            name: `Business ${i + 11}`,
+            category: 'Test Category',
+            rating: 4.0,
+            reviewCount: 10,
+            location: 'Test City',
+            imageUrl: '',
+            description: '',
+            tags: [],
+          }));
+        }
+        // After 2 pages, return empty (no more results)
+        return [];
+      });
+
+      // Mock next button - return twice to allow 2 page transitions
+      let nextButtonCallCount = 0;
+      mockPageInstance.$.mockImplementation((selector: string) => {
+        if (selector.toLowerCase().includes('next')) {
+          nextButtonCallCount++;
+          if (nextButtonCallCount <= 2) {
+            return Promise.resolve({
+              click: jest.fn(),
+              isDisabled: jest.fn().mockResolvedValue(false),
+            });
+          }
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      });
+
       const result = await scraperWithLimit.scrape('test', 'location');
 
       expect(result.pagination.totalPages).toBeLessThanOrEqual(2);
       await scraperWithLimit.close();
+    });
+
+    it('should handle pagination when more results available', async () => {
+      // Mock multiple pages of results
+      let evaluateCallCount = 0;
+      mockPageInstance.evaluate.mockImplementation(() => {
+        evaluateCallCount++;
+        if (evaluateCallCount === 1) {
+          // Page 1: 10 businesses
+          return Array.from({ length: 10 }, (_, i) => ({
+            name: `Business ${i + 1}`,
+            category: 'Test Category',
+            rating: 4.0,
+            reviewCount: 10,
+            location: 'Test City',
+            imageUrl: '',
+            description: '',
+            tags: [],
+          }));
+        } else if (evaluateCallCount === 2) {
+          // Page 2: 5 businesses
+          return [
+            { name: 'Business 11', category: 'Test Category', rating: 4.5, reviewCount: 25, location: 'Test City', imageUrl: '', description: '', tags: [] },
+            { name: 'Business 12', category: 'Test Category', rating: 3.5, reviewCount: 15, location: 'Test City', imageUrl: '', description: '', tags: [] },
+            { name: 'Business 13', category: 'Test Category', rating: 4.0, reviewCount: 20, location: 'Test City', imageUrl: '', description: '', tags: [] },
+            { name: 'Business 14', category: 'Test Category', rating: 4.5, reviewCount: 30, location: 'Test City', imageUrl: '', description: '', tags: [] },
+            { name: 'Business 15', category: 'Test Category', rating: 3.0, reviewCount: 5, location: 'Test City', imageUrl: '', description: '', tags: [] },
+          ];
+        }
+        return [];
+      });
+
+      // Mock next button - return once to go from page 1 to page 2
+      let nextButtonCallCount = 0;
+      mockPageInstance.$.mockImplementation((selector: string) => {
+        if (selector.toLowerCase().includes('next')) {
+          nextButtonCallCount++;
+          if (nextButtonCallCount === 1) {
+            return Promise.resolve({
+              click: jest.fn(),
+              isDisabled: jest.fn().mockResolvedValue(false),
+            });
+          }
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await scraper.scrape('test query', 'test location');
+
+      // Should have fetched 15 businesses across 2 pages
+      expect(result.businesses.length).toBe(15);
+      expect(result.pagination.currentPage).toBe(2);
+      expect(result.pagination.totalResults).toBe(15);
+      expect(result.source).toBe('google-maps');
     });
 
     it('should return businesses with required fields', async () => {
@@ -192,7 +299,7 @@ describe('GoogleMapsScraper', () => {
       expect(Array.isArray(result.businesses)).toBe(true);
 
       if (result.businesses.length > 0) {
-        const business = result[0];
+        const business = result.businesses[0];
         expect(business).toHaveProperty('name');
         expect(business).toHaveProperty('category');
         expect(business).toHaveProperty('rating');
@@ -484,6 +591,52 @@ describe('GoogleMapsScraper', () => {
       // Arrange - scraper configured for max 2 pages
       const limitedScraper = new GoogleMapsScraper({
         maxPages: 2,
+      });
+
+      // Mock page results - should only fetch 2 pages
+      let evaluateCallCount = 0;
+      mockPageInstance.evaluate.mockImplementation(() => {
+        evaluateCallCount++;
+        if (evaluateCallCount === 1) {
+          return Array.from({ length: 10 }, (_, i) => ({
+            name: `Business ${i + 1}`,
+            category: 'Test Category',
+            rating: 4.0,
+            reviewCount: 10,
+            location: 'Test City',
+            imageUrl: '',
+            description: '',
+            tags: [],
+          }));
+        } else if (evaluateCallCount === 2) {
+          return Array.from({ length: 10 }, (_, i) => ({
+            name: `Business ${i + 11}`,
+            category: 'Test Category',
+            rating: 4.0,
+            reviewCount: 10,
+            location: 'Test City',
+            imageUrl: '',
+            description: '',
+            tags: [],
+          }));
+        }
+        return [];
+      });
+
+      // Mock next button - return twice to allow 2 page transitions
+      let nextButtonCallCount = 0;
+      mockPageInstance.$.mockImplementation((selector: string) => {
+        if (selector.toLowerCase().includes('next')) {
+          nextButtonCallCount++;
+          if (nextButtonCallCount <= 2) {
+            return Promise.resolve({
+              click: jest.fn(),
+              isDisabled: jest.fn().mockResolvedValue(false),
+            });
+          }
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
       });
 
       const result = await limitedScraper.scrape('test query', 'test location');

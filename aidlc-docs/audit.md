@@ -113,3 +113,8 @@ HANDOFF OK: ac=AC4 stage=commit-qa file=C:/Users/Merlin/.claude/handoffs/dupin/L
 **Source:** dup-ac-commit-qa
 **Ticket:** LOC-0056
 step: complete | status: done | work: Validator returned
+
+## [2026-08-11T10:26:58Z] progress
+**Source:** dupin-wrapper
+**Ticket:** LOC-0073
+step: pre-flight | status: done | work: invoking Validator

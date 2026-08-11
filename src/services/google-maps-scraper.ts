@@ -1,6 +1,6 @@
 /**
  * Google Maps Scraper Service
- * Scrapes business data from Google Maps search results
+ * Scrapes business data from Google Maps search results with pagination support
  */
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
@@ -15,17 +15,36 @@ export interface ScrapedBusiness {
   imageUrl: string;
   description: string;
   tags: string[];
+  phone?: string;
+  website?: string;
 }
 
 export interface ScraperConfig {
   headless?: boolean;
   timeoutMs?: number;
   maxResults?: number;
+  maxPages?: number;
 }
 
 export interface SearchParams {
   query: string;
   location?: string;
+}
+
+export interface PaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalResults: number;
+  hasNextPage: boolean;
+}
+
+export interface ScraperResult {
+  businesses: ScrapedBusiness[];
+  pagination: PaginationInfo;
+  source: 'google-maps';
+  query: string;
+  location?: string;
+  timestamp: Date;
 }
 
 class GoogleMapsScraper {
@@ -37,6 +56,7 @@ class GoogleMapsScraper {
       headless: config?.headless ?? true,
       timeoutMs: config?.timeoutMs ?? 60000,
       maxResults: config?.maxResults ?? 20,
+      maxPages: config?.maxPages ?? 5,
     };
   }
 
@@ -74,8 +94,21 @@ class GoogleMapsScraper {
 
   /**
    * Search for businesses on Google Maps
+   * @deprecated Use scrape() instead for pagination support
    */
   async searchBusinesses(params: SearchParams): Promise<ScrapedBusiness[]> {
+    const result = await this.scrape(params.query, params.location);
+    return result.businesses;
+  }
+
+  /**
+   * Scrape businesses from Google Maps with pagination support
+   * Handles multiple pages to capture all results when more than 10 exist
+   */
+  async scrape(
+    query: string,
+    location?: string,
+  ): Promise<ScraperResult> {
     await this.initialize();
 
     if (!this.browser) {
@@ -86,7 +119,19 @@ class GoogleMapsScraper {
     const robotsCheck = await this.checkRobotsBeforeScraping();
     if (!robotsCheck.allowed) {
       console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
-      return []; // Return empty results if disallowed
+      return {
+        businesses: [],
+        pagination: {
+          currentPage: 0,
+          totalPages: 0,
+          totalResults: 0,
+          hasNextPage: false,
+        },
+        source: 'google-maps',
+        query,
+        location,
+        timestamp: new Date(),
+      };
     }
 
     const context = await this.browser.newContext({
@@ -97,10 +142,7 @@ class GoogleMapsScraper {
 
     try {
       // Build search URL
-      const searchQuery = params.location
-        ? `${params.query} in ${params.location}`
-        : params.query;
-
+      const searchQuery = location ? `${query} in ${location}` : query;
       const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
 
       // Navigate to Google Maps search
@@ -117,10 +159,9 @@ class GoogleMapsScraper {
       // Wait a moment for dynamic content
       await page.waitForTimeout(2000);
 
-      // Extract business cards from the results
-      const businesses = await this.extractBusinesses(page);
-
-      return businesses.slice(0, this.config.maxResults);
+      // Scrape with pagination
+      const result = await this.scrapeWithPagination(page, query, location);
+      return result;
     } catch (error) {
       console.error('Error scraping Google Maps:', error);
       throw error;
@@ -128,6 +169,81 @@ class GoogleMapsScraper {
       await page.close();
       await context.close();
     }
+  }
+
+  /**
+   * Scrape businesses with pagination support
+   * Handles multiple pages to capture all results when more than 10 exist
+   */
+  private async scrapeWithPagination(
+    page: Page,
+    query: string,
+    location?: string,
+  ): Promise<ScraperResult> {
+    const allBusinesses: ScrapedBusiness[] = [];
+    const seenNames: Set<string> = new Set();
+    let currentPage = 0;
+    const maxPages = this.config.maxPages;
+
+    while (currentPage < maxPages) {
+      // Extract businesses from current page
+      const pageBusinesses = await this.extractBusinesses(page);
+
+      // Add unique businesses
+      for (const business of pageBusinesses) {
+        if (!seenNames.has(business.name)) {
+          seenNames.add(business.name);
+          allBusinesses.push(business);
+        }
+      }
+
+      // Check if we've reached the max results limit
+      if (allBusinesses.length >= this.config.maxResults) {
+        break;
+      }
+
+      // Try to find and click the "Next" button
+      const nextButton = await page.$('button[aria-label*="Next"], button:has-text("Next"), button:has-text("next")');
+
+      if (!nextButton) {
+        // No more pages available
+        break;
+      }
+
+      // Check if the next button is disabled
+      const isDisabled = await nextButton.isDisabled();
+      if (isDisabled) {
+        // No more pages available
+        break;
+      }
+
+      // Click the next button to go to the next page
+      await nextButton.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(2000);
+
+      currentPage++;
+    }
+
+    // Apply maxResults limit
+    const limitedBusinesses = allBusinesses.slice(0, this.config.maxResults);
+
+    // Calculate pagination info
+    const hasNextPage = currentPage >= maxPages && limitedBusinesses.length >= this.config.maxResults;
+
+    return {
+      businesses: limitedBusinesses,
+      pagination: {
+        currentPage: currentPage + 1, // 1-indexed
+        totalPages: currentPage + 1,
+        totalResults: limitedBusinesses.length,
+        hasNextPage,
+      },
+      source: 'google-maps',
+      query,
+      location,
+      timestamp: new Date(),
+    };
   }
 
   /**
@@ -308,6 +424,11 @@ class GoogleMapsScraper {
       };
     });
   }
+}
+
+// Factory function for creating scraper instances (for testing)
+export function createGoogleMapsScraper(config?: ScraperConfig): GoogleMapsScraper {
+  return new GoogleMapsScraper(config);
 }
 
 // Singleton instance
