@@ -2,17 +2,22 @@
  * Health Check API Route
  *
  * Returns service health status for monitoring and load balancer checks.
- * Includes database connectivity status.
+ * Includes database and NATS connectivity status.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "../../../lib/db/user-repository";
+import { checkNatsHealth } from "../../../lib/nats/nats-client";
 
 interface HealthResponse {
   status: "healthy" | "unhealthy";
   timestamp: string;
   database?: {
     status: "healthy" | "unhealthy";
+  };
+  nats?: {
+    status: "healthy" | "unhealthy";
+    latency_ms?: number;
   };
 }
 
@@ -40,11 +45,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     overallStatus = "unhealthy";
   }
 
+  // Check NATS connectivity
+  let natsStatus: "healthy" | "unhealthy" = "unhealthy";
+  let natsLatencyMs: number | undefined = undefined;
+  try {
+    const natsResult = await checkNatsHealth();
+    natsStatus = natsResult.healthy ? "healthy" : "unhealthy";
+    natsLatencyMs = natsResult.latencyMs;
+  } catch {
+    natsStatus = "unhealthy";
+  }
+
+  // Overall status is unhealthy if either DB or NATS is unhealthy
+  if (natsStatus === "unhealthy") {
+    overallStatus = "unhealthy";
+  }
+
   const response: HealthResponse = {
     status: overallStatus,
     timestamp,
     database: {
       status: dbStatus,
+    },
+    nats: {
+      status: natsStatus,
+      ...(natsLatencyMs !== undefined && { latency_ms: natsLatencyMs }),
     },
   };
 

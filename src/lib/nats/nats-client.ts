@@ -81,17 +81,19 @@ export async function subscribe(
 }
 
 /**
- * Check NATS connection health
+ * Check NATS connection health and return detailed status
  */
-export async function checkNatsHealth(): Promise<boolean> {
+export async function checkNatsHealth(): Promise<{ healthy: boolean; latencyMs?: number }> {
   try {
     const client = await getNatsClient();
+    const startTime = Date.now();
     // Send a ping to verify connection
     await client.request("$SYS.REQ.SERVER.PING", Buffer.from(""), {
       timeout: 5000,
     });
-    return true;
+    const latencyMs = Date.now() - startTime;
+    return { healthy: true, latencyMs };
   } catch {
-    return false;
+    return { healthy: false };
   }
 }
