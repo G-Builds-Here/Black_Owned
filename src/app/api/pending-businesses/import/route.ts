@@ -3,12 +3,14 @@
  *
  * Batch import endpoint for normalized businesses.
  * Handles import failures with proper transaction rollback and error logging.
+ * Includes business data validation before import.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
 import { importNormalizedBusinesses } from "@/lib/db/pending-import-business-repository";
 import { ScraperSource } from "@/types/scraper-result";
+import { validateBusinessData, BusinessValidationInput } from "@/lib/utils/business-data-validator";
 
 /**
  * Request body schema for batch import
@@ -31,6 +33,69 @@ interface ImportBusinessRequest {
 interface ValidationError {
   field: string;
   error: string;
+}
+
+/**
+ * Business validation error with additional context
+ */
+interface BusinessValidationError {
+  index: number;
+  businessName: string;
+  errors: Array<{ field: string; message: string }>;
+  warnings: string[];
+}
+
+/**
+ * Validate business data using the business-data-validator
+ */
+function validateBusinessDataForImport(
+  businesses: Array<Record<string, unknown>>
+): { valid: boolean; errors: BusinessValidationError[] } {
+  const allErrors: BusinessValidationError[] = [];
+
+  for (let i = 0; i < businesses.length; i++) {
+    const business = businesses[i];
+    const castBusiness = business as Record<string, unknown>;
+
+    // Convert to validation input format
+    const validationInput: BusinessValidationInput = {
+      name: typeof castBusiness.name === "string" ? castBusiness.name : "",
+      description: typeof castBusiness.description === "string" ? castBusiness.description : undefined,
+      categoryId: typeof castBusiness.category_id === "string" ? castBusiness.category_id : "",
+      phone: typeof castBusiness.phone === "string" ? castBusiness.phone : undefined,
+      email: typeof castBusiness.email === "string" ? castBusiness.email : undefined,
+      website: typeof castBusiness.website === "string" ? castBusiness.website : undefined,
+      address: typeof castBusiness.address === "string" ? castBusiness.address : undefined,
+      rating: castBusiness.rating as number | string | undefined,
+      reviewCount: castBusiness.reviewCount as number | string | undefined,
+      source: castBusiness.source as ScraperSource,
+      sourceData: typeof castBusiness.source_data === "object" ? castBusiness.source_data : undefined,
+    };
+
+    const result = validateBusinessData(validationInput);
+
+    if (!result.isValid) {
+      allErrors.push({
+        index: i,
+        businessName: castBusiness.name as string || "unknown",
+        errors: result.errors.map((e) => ({ field: e.field, message: e.message })),
+        warnings: result.warnings,
+      });
+    } else if (result.warnings.length > 0) {
+      // Even if valid, record warnings for visibility
+      allErrors.push({
+        index: i,
+        businessName: castBusiness.name as string || "unknown",
+        errors: [],
+        warnings: result.warnings,
+      });
+    }
+  }
+
+  return {
+    valid: allErrors.every((e) => e.errors.length === 0),
+    errors: allErrors,
+  };
 }
 
 /**
@@ -129,6 +194,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         errors: validation.errors,
       },
       { status: 400 }
+    );
+  }
+
+  // Validate business data using the business-data-validator
+  const businessValidation = validateBusinessDataForImport(body.businesses);
+  if (!businessValidation.valid) {
+    client.release();
+    const errorDetails = businessValidation.errors
+      .filter((e) => e.errors.length > 0)
+      .map((e) => `${e.businessName}: ${e.errors.map((err) => err.message).join(", ")}`);
+    return NextResponse.json(
+      {
+        success: false,
+        errors: [
+          {
+            field: "business_data",
+            error: `Business data validation failed: ${errorDetails.join("; ")}`,
+          },
+        ],
+      },
+      { status: 400 }
+    );
+  }
+
+  // Log warnings for visibility (non-blocking)
+  const warnings = businessValidation.errors.filter((e) => e.errors.length === 0 && e.warnings.length > 0);
+  if (warnings.length > 0) {
+    console.warn(
+      `[Import API] Business data warnings: ${warnings
+        .map((w) => `${w.businessName}: ${w.warnings.join(", ")}`)
+        .join("; ")}`
     );
   }
 

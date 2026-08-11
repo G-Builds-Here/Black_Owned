@@ -16,8 +16,14 @@ jest.mock("@/lib/db/pending-import-business-repository", () => ({
   importNormalizedBusinesses: jest.fn(),
 }));
 
+// Mock the business-data-validator
+jest.mock("@/lib/utils/business-data-validator", () => ({
+  validateBusinessData: jest.fn(),
+}));
+
 const { getPool } = require("@/lib/db/user-repository");
 const { importNormalizedBusinesses } = require("@/lib/db/pending-import-business-repository");
+const { validateBusinessData } = require("@/lib/utils/business-data-validator");
 
 describe("POST /api/pending-businesses/import", () => {
   const mockPool = {
@@ -115,6 +121,14 @@ describe("POST /api/pending-businesses/import", () => {
   });
 
   it("should successfully import a single normalized business", async () => {
+    // Mock validation to pass
+    validateBusinessData.mockReturnValue({
+      isValid: true,
+      errors: [],
+      warnings: [],
+      sanitized: undefined,
+    });
+
     const mockImportResult = {
       total: 1,
       succeeded: 1,
@@ -166,6 +180,27 @@ describe("POST /api/pending-businesses/import", () => {
   });
 
   it("should successfully import multiple businesses in a single transaction", async () => {
+    // Mock validation to pass for all 3 businesses
+    validateBusinessData
+      .mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        sanitized: undefined,
+      })
+      .mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        sanitized: undefined,
+      })
+      .mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        sanitized: undefined,
+      });
+
     const mockImportResult = {
       total: 3,
       succeeded: 3,
@@ -260,6 +295,14 @@ describe("POST /api/pending-businesses/import", () => {
   });
 
   it("should handle undefined description", async () => {
+    // Mock validation to pass
+    validateBusinessData.mockReturnValue({
+      isValid: true,
+      errors: [],
+      warnings: [],
+      sanitized: undefined,
+    });
+
     const mockImportResult = {
       total: 1,
       succeeded: 1,
@@ -306,6 +349,21 @@ describe("POST /api/pending-businesses/import", () => {
   });
 
   it("should record import count when jobId is provided", async () => {
+    // Mock validation to pass for both businesses
+    validateBusinessData
+      .mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        sanitized: undefined,
+      })
+      .mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        sanitized: undefined,
+      });
+
     const mockImportResult = {
       total: 2,
       succeeded: 2,
@@ -367,6 +425,14 @@ describe("POST /api/pending-businesses/import", () => {
   });
 
   it("should rollback and return error when database transaction fails", async () => {
+    // Mock validation to pass
+    validateBusinessData.mockReturnValue({
+      isValid: true,
+      errors: [],
+      warnings: [],
+      sanitized: undefined,
+    });
+
     mockClient.query.mockRejectedValueOnce(new Error("Transaction failed"));
 
     const request = new NextRequest("http://localhost/api/pending-businesses/import", {
@@ -400,6 +466,14 @@ describe("POST /api/pending-businesses/import", () => {
       source: "google-maps",
       originalId: `large-${i}`,
     }));
+
+    // Mock validation to pass for all 50 businesses
+    validateBusinessData.mockReturnValue({
+      isValid: true,
+      errors: [],
+      warnings: [],
+      sanitized: undefined,
+    });
 
     const mockImportResult = {
       total: 50,
@@ -452,5 +526,272 @@ describe("POST /api/pending-businesses/import", () => {
 
     expect(response.status).toBe(400);
     expect(json.success).toBe(false);
+  });
+
+  describe("business data validation", () => {
+    beforeEach(() => {
+      // Reset mock before each test to avoid state pollution
+      validateBusinessData.mockReset();
+    });
+
+    it("should reject import when business data fails validation", async () => {
+      // Mock validation failure for the first business
+      validateBusinessData.mockReturnValueOnce({
+        isValid: false,
+        errors: [
+          { field: "phone", message: "Invalid phone format: abc-def-ghij", value: "abc-def-ghij" },
+        ],
+        warnings: [],
+        sanitized: undefined,
+      });
+
+      const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+        method: "POST",
+        body: JSON.stringify({
+          businesses: [
+            {
+              name: "Invalid Business",
+              category_id: "food-dining",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-1",
+              phone: "abc-def-ghij",
+            },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.success).toBe(false);
+      expect(json.errors[0].error).toContain("Business data validation failed");
+      expect(json.errors[0].error).toContain("Invalid phone format");
+    });
+
+    it("should reject import when rating is out of range", async () => {
+      validateBusinessData.mockReturnValueOnce({
+        isValid: false,
+        errors: [
+          { field: "rating", message: "Rating must be between 1 and 5, got: 6", value: 6 },
+        ],
+        warnings: [],
+        sanitized: undefined,
+      });
+
+      const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+        method: "POST",
+        body: JSON.stringify({
+          businesses: [
+            {
+              name: "Bad Rating Business",
+              category_id: "food-dining",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-1",
+              rating: 6,
+            },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.success).toBe(false);
+      expect(json.errors[0].error).toContain("Rating must be between 1 and 5");
+    });
+
+    it("should reject import when category is invalid", async () => {
+      validateBusinessData.mockReturnValueOnce({
+        isValid: false,
+        errors: [
+          { field: "categoryId", message: "Category ID is required", value: "" },
+        ],
+        warnings: [],
+        sanitized: undefined,
+      });
+
+      const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+        method: "POST",
+        body: JSON.stringify({
+          businesses: [
+            {
+              name: "No Category Business",
+              category_id: "",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-1",
+            },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.success).toBe(false);
+      expect(json.errors[0].error).toContain("Category ID is required");
+    });
+
+    it("should allow import when business data passes validation", async () => {
+      // Mock validation to pass for the one business being imported
+      validateBusinessData.mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        sanitized: {
+          name: "Valid Business",
+          categoryId: "food-dining",
+          source: "google-maps",
+        },
+      });
+
+      importNormalizedBusinesses.mockResolvedValue({
+        total: 1,
+        succeeded: 1,
+        failed: 0,
+        results: [{ success: true, businessId: "valid-id", source: "google-maps", originalId: "test-1" }],
+        errors: [],
+      });
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+        method: "POST",
+        body: JSON.stringify({
+          businesses: [
+            {
+              name: "Valid Business",
+              category_id: "restaurant",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-1",
+              phone: "555-123-4567",
+              email: "test@example.com",
+              rating: 4.5,
+            },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.succeeded).toBe(1);
+    });
+
+    it("should log warnings when business data has warnings but passes validation", async () => {
+      const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+
+      validateBusinessData.mockReturnValueOnce({
+        isValid: true,
+        errors: [],
+        warnings: ['Unknown category "unknown-category" - will use "other" as fallback'],
+        sanitized: {
+          name: "Warning Business",
+          categoryId: "other",
+          source: "google-maps",
+        },
+      });
+
+      importNormalizedBusinesses.mockResolvedValue({
+        total: 1,
+        succeeded: 1,
+        failed: 0,
+        results: [{ success: true, businessId: "warning-id", source: "google-maps", originalId: "test-1" }],
+        errors: [],
+      });
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+        method: "POST",
+        body: JSON.stringify({
+          businesses: [
+            {
+              name: "Warning Business",
+              category_id: "unknown-category",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-1",
+            },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Business data warnings")
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it("should validate multiple businesses and reject if any fail", async () => {
+      // First business passes, second fails
+      validateBusinessData
+        .mockReturnValueOnce({
+          isValid: true,
+          errors: [],
+          warnings: [],
+          sanitized: undefined,
+        })
+        .mockReturnValueOnce({
+          isValid: false,
+          errors: [{ field: "email", message: "Invalid email format: invalid-email", value: "invalid-email" }],
+          warnings: [],
+          sanitized: undefined,
+        });
+
+      const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+        method: "POST",
+        body: JSON.stringify({
+          businesses: [
+            {
+              name: "Valid Business",
+              category_id: "food-dining",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-1",
+            },
+            {
+              name: "Invalid Business",
+              category_id: "food-dining",
+              source_data: {},
+              source: "google-maps",
+              originalId: "test-2",
+              email: "invalid-email",
+            },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.success).toBe(false);
+      expect(json.errors[0].error).toContain("Invalid email format");
+    });
   });
 });
