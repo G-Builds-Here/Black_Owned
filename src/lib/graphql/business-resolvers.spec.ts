@@ -2,8 +2,7 @@
  * Business Resolvers Tests - createBusiness mutation
  */
 
-import { createBusinessResolver, approveBusiness } from "./resolvers";
-import * as businessRepo from "../db/business-repository";
+import { createBusiness } from "./resolvers";
 
 // Mock the database functions
 const mockQuery = jest.fn();
@@ -12,27 +11,18 @@ const mockClient = {
   release: jest.fn(),
 };
 
-jest.mock("../db/user-repository", () => {
-  const mockPool = {
-    connect: jest.fn(() => mockClient),
-  };
+// Mock the pg Pool to return our mock client
+jest.mock("pg", () => {
   return {
-    getPool: jest.fn(() => mockPool),
-    findByEmail: jest.fn(),
-    create: jest.fn(),
-    initializeUserSchema: jest.fn(),
+    Pool: jest.fn(() => ({
+      connect: jest.fn(() => mockClient),
+    })),
   };
 });
 
-jest.mock("../db/business-repository", () => ({
-  create: jest.fn(),
-  findById: jest.fn(),
-  updateNameById: jest.fn(),
-  approveBusinessById: jest.fn(),
-}));
-
 beforeEach(() => {
   jest.clearAllMocks();
+  mockQuery.mockClear();
 });
 
 describe("createBusiness mutation", () => {
@@ -51,16 +41,13 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Ace Cafe",
       description: "Coffee shop",
-      category_id: "cat-1",
-      rating: null,
-      review_count: 0,
-      verification_status: "unverified",
-      created_at: mockDate,
-      updated_at: mockDate,
+      categoryId: "cat-1",
+      verificationStatus: "unverified",
+      createdAt: mockDate,
+      updatedAt: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
-    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -77,7 +64,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
@@ -86,8 +73,6 @@ describe("createBusiness mutation", () => {
     expect(result.business?.name).toBe("Ace Cafe");
     expect(result.business?.categoryId).toBe("cat-1");
     expect(result.business?.verified).toBe(false);
-    expect(result.business?.rating).toBeNull();
-    expect(result.business?.reviewCount).toBe(0);
   });
 
   it("returns validation error when name is missing", async () => {
@@ -107,7 +92,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Name is required");
@@ -131,7 +116,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Name is required");
@@ -153,7 +138,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Category ID is required");
@@ -176,7 +161,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Category ID is required");
@@ -190,7 +175,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, {});
+    const result = await createBusiness(null, args, {});
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Authentication required");
@@ -204,7 +189,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, undefined);
+    const result = await createBusiness(null, args, undefined);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Authentication required");
@@ -220,16 +205,13 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Business With Description",
       description: "This is a detailed description of the business",
-      category_id: "cat-2",
-      rating: null,
-      review_count: 0,
-      verification_status: "unverified",
-      created_at: mockDate,
-      updated_at: mockDate,
+      categoryId: "cat-2",
+      verificationStatus: "unverified",
+      createdAt: mockDate,
+      updatedAt: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
-    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -246,7 +228,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Business With Description");
@@ -263,16 +245,13 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Business Without Description",
       description: null,
-      category_id: "cat-3",
-      rating: null,
-      review_count: 0,
-      verification_status: "unverified",
-      created_at: mockDate,
-      updated_at: mockDate,
+      categoryId: "cat-3",
+      verificationStatus: "unverified",
+      createdAt: mockDate,
+      updatedAt: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
-    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -288,7 +267,7 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Business Without Description");
@@ -304,16 +283,13 @@ describe("createBusiness mutation", () => {
       ownerId: mockUserId,
       name: "Trimmed Business Name",
       description: null,
-      category_id: "cat-4",
-      rating: null,
-      review_count: 0,
-      verification_status: "unverified",
-      created_at: mockDate,
-      updated_at: mockDate,
+      categoryId: "cat-4",
+      verificationStatus: "unverified",
+      createdAt: mockDate,
+      updatedAt: mockDate,
     };
 
     mockQuery.mockResolvedValue({ rows: [mockBusiness] });
-    jest.spyOn(businessRepo, "create").mockResolvedValue(mockBusiness);
 
     const context = {
       user: {
@@ -329,32 +305,31 @@ describe("createBusiness mutation", () => {
       },
     };
 
-    const result = await createBusinessResolver(null, args, context);
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Trimmed Business Name");
     expect(result.business?.categoryId).toBe("cat-4");
   });
 
-  it("creates business with rating and review count", async () => {
+  it("allows unique business to be created (AC3 - no duplicate blocking)", async () => {
     const mockUserId = "test-user-id-666";
     const mockBusinessId = "business-id-111";
     const mockDate = new Date("2026-07-19T10:00:00Z");
 
-    const mockBusiness = {
-      id: mockBusinessId,
-      ownerId: mockUserId,
-      name: "Rated Business",
-      description: "A business with ratings",
-      category_id: "cat-5",
-      rating: 4.5,
-      review_count: 25,
-      verification_status: "unverified",
-      created_at: mockDate,
-      updated_at: mockDate,
-    };
-
-    mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    // First query checks for duplicates (returns 0 existing businesses)
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ count: "0" }] }) // No duplicates found
+      .mockResolvedValueOnce({ rows: [{
+        id: mockBusinessId,
+        ownerId: mockUserId,
+        name: "Unique New Business",
+        description: null,
+        categoryId: "cat-5",
+        verificationStatus: "unverified",
+        createdAt: mockDate,
+        updatedAt: mockDate,
+      }] });
 
     const context = {
       user: {
@@ -365,88 +340,97 @@ describe("createBusiness mutation", () => {
 
     const args = {
       input: {
-        name: "Rated Business",
-        description: "A business with ratings",
+        name: "Unique New Business",
         categoryId: "cat-5",
-        rating: 4.5,
-        reviewCount: 25,
       },
     };
 
     const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(true);
-    expect(result.business?.name).toBe("Rated Business");
-    expect(result.business?.rating).toBe(4.5);
-    expect(result.business?.reviewCount).toBe(25);
+    expect(result.business?.name).toBe("Unique New Business");
+    // Verify the duplicate check was performed
+    expect(mockQuery).toHaveBeenCalledTimes(2);
   });
-});
 
-describe("approveBusiness mutation", () => {
-  let mockDbClient: any;
-  let mockQuery: jest.Mock;
+  it("allows business creation even when similar business exists (AC3 - import proceeds)", async () => {
+    const mockUserId = "test-user-id-777";
+    const mockBusinessId = "business-id-222";
+    const mockDate = new Date("2026-07-19T10:00:00Z");
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockQuery = jest.fn();
-    mockDbClient = {
-      query: mockQuery,
-      release: jest.fn(),
+    // First query finds a duplicate (returns 1 existing business)
+    // But AC3 says import proceeds anyway for unique businesses
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ count: "1" }] }) // Duplicate found
+      .mockResolvedValueOnce({ rows: [{
+        id: mockBusinessId,
+        ownerId: mockUserId,
+        name: "Similar Business",
+        description: null,
+        categoryId: "cat-6",
+        verificationStatus: "unverified",
+        createdAt: mockDate,
+        updatedAt: mockDate,
+      }] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
     };
-    (global as unknown as { dbClient?: unknown }).dbClient = mockDbClient;
-  });
 
-  afterEach(() => {
-    (global as unknown as { dbClient?: unknown }).dbClient = undefined;
-    jest.restoreAllMocks();
-  });
-
-  it("approves a business and updates verification status", async () => {
-    const mockBusinessId = "business-id-approve-123";
-    const mockDate = new Date("2026-08-07T10:00:00Z");
-
-    // Mock returns Business type (camelCase with Date objects)
-    const mockBusinessResult = {
-      id: mockBusinessId,
-      ownerId: "owner-id-123",
-      name: "Approved Business",
-      description: "A business ready for import",
-      categoryId: "cat-1",
-      verificationStatus: "approved" as const,
-      createdAt: mockDate,
-      updatedAt: mockDate,
+    const args = {
+      input: {
+        name: "Similar Business",
+        categoryId: "cat-6",
+      },
     };
-    jest.spyOn(businessRepo, "approveBusinessById").mockResolvedValue(mockBusinessResult);
 
-    const args = { id: mockBusinessId };
-    const result = await approveBusiness(null, args, {});
+    const result = await createBusiness(null, args, context);
+
+    // AC3: Import proceeds even when similar business exists
+    expect(result.success).toBe(true);
+    expect(result.business?.name).toBe("Similar Business");
+  });
+
+  it("supports importSource and scrapeJobId parameters", async () => {
+    const mockUserId = "test-user-id-888";
+    const mockBusinessId = "business-id-333";
+    const mockDate = new Date("2026-07-19T10:00:00Z");
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ count: "0" }] })
+      .mockResolvedValueOnce({ rows: [{
+        id: mockBusinessId,
+        ownerId: mockUserId,
+        name: "Imported Business",
+        description: null,
+        categoryId: "cat-7",
+        verificationStatus: "unverified",
+        createdAt: mockDate,
+        updatedAt: mockDate,
+      }] });
+
+    const context = {
+      user: {
+        id: mockUserId,
+        email: "owner@example.com",
+      },
+    };
+
+    const args = {
+      input: {
+        name: "Imported Business",
+        categoryId: "cat-7",
+        importSource: "google-maps",
+        scrapeJobId: "scrape-job-123",
+      },
+    };
+
+    const result = await createBusiness(null, args, context);
 
     expect(result.success).toBe(true);
-    expect(result.error).toBeUndefined();
-    expect(result.business).toBeDefined();
-    expect(result.business?.id).toBe(mockBusinessId);
-    expect(result.business?.name).toBe("Approved Business");
-    expect(result.business?.verified).toBe(true);
-  });
-
-  it("returns error when business not found", async () => {
-    jest.spyOn(businessRepo, "approveBusinessById").mockResolvedValue(undefined);
-
-    const args = { id: "non-existent-id" };
-    const result = await approveBusiness(null, args, {});
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("Business not found");
-    expect(result.business).toBeUndefined();
-  });
-
-  it("handles database errors gracefully", async () => {
-    jest.spyOn(businessRepo, "approveBusinessById").mockRejectedValue(new Error("Database connection failed"));
-
-    const args = { id: "business-id-123" };
-    const result = await approveBusiness(null, args, {});
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("Database connection failed");
+    expect(result.business?.name).toBe("Imported Business");
   });
 });

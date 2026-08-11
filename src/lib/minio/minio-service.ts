@@ -6,6 +6,7 @@
  */
 
 import * as Minio from "minio";
+const MinioClient = Minio.Client;
 
 /**
  * Configuration for MinIO connection
@@ -43,12 +44,12 @@ export interface PresignedUrlResult {
  * MinIO service class for handling presigned URL operations
  */
 export class MinioService {
-  private client: Minio.Client;
+  private client: MinioClient;
   private config: MinioConfig;
 
   constructor(config: MinioConfig) {
     this.config = config;
-    this.client = new Minio.Client({
+    this.client = new MinioClient({
       endPoint: config.endpoint,
       port: config.port,
       useSSL: config.useSSL,
@@ -142,4 +143,4 @@ export function createMinioServiceFromEnv(): MinioService {
   });
 }
 
-export { Minio };
+export { MinioClient };
