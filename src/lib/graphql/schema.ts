@@ -99,11 +99,24 @@ export const typeDefs = `#graphql
     error: String
   }
 
+  type BusinessActionResponse {
+    success: Boolean!
+    message: String
+    data: {
+      id: ID!
+      name: String!
+      status: String!
+    }
+    error: String
+  }
+
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
     updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
     createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
+    approveBusiness(businessId: String!): BusinessActionResponse!
+    rejectBusiness(businessId: String!): BusinessActionResponse!
   }
 `;
 

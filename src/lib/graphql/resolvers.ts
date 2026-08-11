@@ -622,6 +622,158 @@ export async function pendingBusinesses(): Promise<unknown[]> {
 }
 
 /**
+ * Approve business mutation resolver
+ */
+export async function approveBusiness(
+  _parent: unknown,
+  args: { businessId: string }
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: { id: string; name: string; status: string };
+  error?: string;
+}> {
+  const { businessId } = args;
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(businessId)) {
+    return {
+      success: false,
+      error: "Invalid business ID format",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    // Check if business exists and is in pending_review status
+    const existingResult = await client.query(
+      "SELECT id, name, status FROM pending_import_businesses WHERE id = $1",
+      [businessId]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    const business = existingResult.rows[0];
+
+    if (business.status !== "pending_review") {
+      return {
+        success: false,
+        error: `Business is not in pending_review status (current status: ${business.status})`,
+      };
+    }
+
+    // Update status to approved
+    const result = await client.query(
+      `UPDATE pending_import_businesses
+       SET status = 'approved', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [businessId]
+    );
+
+    return {
+      success: true,
+      message: "Business approved successfully",
+      data: {
+        id: result.rows[0].id,
+        name: result.rows[0].name,
+        status: result.rows[0].status,
+      },
+    };
+  } catch (error) {
+    console.error("Error approving business:", error);
+    return {
+      success: false,
+      error: "Internal server error",
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Reject business mutation resolver
+ */
+export async function rejectBusiness(
+  _parent: unknown,
+  args: { businessId: string }
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: { id: string; name: string; status: string };
+  error?: string;
+}> {
+  const { businessId } = args;
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(businessId)) {
+    return {
+      success: false,
+      error: "Invalid business ID format",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    // Check if business exists and is in pending_review status
+    const existingResult = await client.query(
+      "SELECT id, name, status FROM pending_import_businesses WHERE id = $1",
+      [businessId]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return {
+        success: false,
+        error: "Business not found",
+      };
+    }
+
+    const business = existingResult.rows[0];
+
+    if (business.status !== "pending_review") {
+      return {
+        success: false,
+        error: `Business is not in pending_review status (current status: ${business.status})`,
+      };
+    }
+
+    // Update status to rejected
+    const result = await client.query(
+      `UPDATE pending_import_businesses
+       SET status = 'rejected', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [businessId]
+    );
+
+    return {
+      success: true,
+      message: "Business rejected successfully",
+      data: {
+        id: result.rows[0].id,
+        name: result.rows[0].name,
+        status: result.rows[0].status,
+      },
+    };
+  } catch (error) {
+    console.error("Error rejecting business:", error);
+    return {
+      success: false,
+      error: "Internal server error",
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Resolvers object
  */
 export const resolvers = {
@@ -635,5 +787,7 @@ export const resolvers = {
     createBusiness,
     submitVerification,
     updateBusiness,
+    approveBusiness,
+    rejectBusiness,
   },
 };

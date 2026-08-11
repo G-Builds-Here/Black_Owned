@@ -13,6 +13,10 @@ interface PendingBusiness {
   createdAt: {
     timestamp: number;
   };
+  categoryId?: string;
+  verificationStatus?: string;
+  phone?: string;
+  website?: string;
 }
 
 const PENDING_BUSINESSES_QUERY = `
@@ -34,6 +38,8 @@ export default function AdminReviewPage() {
   const [pendingBusinesses, setPendingBusinesses] = useState<PendingBusiness[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedBusiness, setSelectedBusiness] = useState<PendingBusiness | null>(null);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
 
   useEffect(() => {
     const fetchPendingBusinesses = async () => {
@@ -86,6 +92,16 @@ export default function AdminReviewPage() {
   const handleReject = (businessId: string) => {
     console.log('Reject business:', businessId);
     // TODO: Implement rejection mutation
+  };
+
+  const handleRowClick = (business: PendingBusiness) => {
+    setSelectedBusiness(business);
+    setShowDetailPanel(true);
+  };
+
+  const handleCloseDetailPanel = () => {
+    setShowDetailPanel(false);
+    setSelectedBusiness(null);
   };
 
   if (loading) {
@@ -170,7 +186,13 @@ export default function AdminReviewPage() {
           ) : (
             <div className="space-y-4">
               {pendingBusinesses.map((business) => (
-                <Card key={business.id} variant="outlined" padding="md">
+                <Card
+                  key={business.id}
+                  variant="outlined"
+                  padding="md"
+                  clickable
+                  onClick={() => handleRowClick(business)}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -264,6 +286,146 @@ export default function AdminReviewPage() {
           </div>
         </div>
       </footer>
+
+      {/* Detail Panel */}
+      {showDetailPanel && selectedBusiness && (
+        <div
+          role="presentation"
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={handleCloseDetailPanel}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-neutral-900 text-white p-6 rounded-t-lg flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">{selectedBusiness.name}</h2>
+                <Badge variant="warning" size="sm" className="mt-2">
+                  Pending Review
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCloseDetailPanel}
+              >
+                Close
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <Tabs
+                tabs={[
+                  { key: 'basic', label: 'Basic Information' },
+                  { key: 'source', label: 'Source Information' },
+                  { key: 'data', label: 'Original Scraped Data' },
+                ]}
+                selectedKey="basic"
+              >
+                <TabPanel value="basic">
+                  <div className="space-y-4">
+                    <div>
+                      <span className="font-medium text-neutral-600">ID:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.id}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Name:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.name}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Address:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.address}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Category:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.categoryId}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Phone:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.phone}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Website:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.website}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Rating:</span>
+                      <p className="text-neutral-800 mt-1">
+                        {selectedBusiness.rating !== null ? (
+                          <span className="text-heritage-ochre">
+                            {'★'.repeat(Math.round(selectedBusiness.rating))}
+                            {'☆'.repeat(5 - Math.round(selectedBusiness.rating))}
+                            ({selectedBusiness.rating.toFixed(1)})
+                          </span>
+                        ) : (
+                          'Not yet rated'
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Status:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.verificationStatus}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Submitted:</span>
+                      <p className="text-neutral-800 mt-1">{formatDate(selectedBusiness.createdAt.timestamp)}</p>
+                    </div>
+                  </div>
+                </TabPanel>
+
+                <TabPanel value="source">
+                  <div className="space-y-4">
+                    <div>
+                      <span className="font-medium text-neutral-600">Source:</span>
+                      <p className="text-neutral-800 mt-1">{selectedBusiness.source}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-600">Scraped At:</span>
+                      <p className="text-neutral-800 mt-1">
+                        {formatDate(selectedBusiness.createdAt.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                </TabPanel>
+
+                <TabPanel value="data">
+                  <div>
+                    <span className="font-medium text-neutral-600">Original Scraped Data:</span>
+                    <pre className="bg-neutral-100 p-4 rounded-lg mt-2 overflow-x-auto text-sm">
+                      {JSON.stringify(selectedBusiness, null, 2)}
+                    </pre>
+                  </div>
+                </TabPanel>
+              </Tabs>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6 pt-6 border-t border-neutral-200">
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    console.log('Approve:', selectedBusiness.id);
+                    handleCloseDetailPanel();
+                  }}
+                >
+                  Approve
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    console.log('Reject:', selectedBusiness.id);
+                    handleCloseDetailPanel();
+                  }}
+                >
+                  Reject
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
