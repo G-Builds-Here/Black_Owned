@@ -144,12 +144,75 @@ export default function BusinessReviewPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<ReviewBusiness | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedBusinessIds, setSelectedBusinessIds] = useState<Set<string>>(new Set());
+  const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
+  const [bulkApproveResult, setBulkApproveResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const filteredBusinesses = MOCK_PENDING_REVIEWS.filter((business) =>
     business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     business.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
     business.source.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedBusinessIds(new Set(filteredBusinesses.map((b) => b.id)));
+    } else {
+      setSelectedBusinessIds(new Set());
+    }
+  };
+
+  const handleSelectBusiness = (businessId: string, checked: boolean) => {
+    const newSelected = new Set(selectedBusinessIds);
+    if (checked) {
+      newSelected.add(businessId);
+    } else {
+      newSelected.delete(businessId);
+    }
+    setSelectedBusinessIds(newSelected);
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedBusinessIds.size === 0) {
+      setBulkApproveResult({ success: false, message: 'No businesses selected' });
+      return;
+    }
+
+    setBulkApproveLoading(true);
+    setBulkApproveResult(null);
+
+    try {
+      const response = await fetch('/api/businesses/bulk-approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessIds: Array.from(selectedBusinessIds) }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setBulkApproveResult({
+          success: true,
+          message: result.data.approvedCount
+            ? `${result.data.approvedCount} businesses approved successfully`
+            : 'Businesses approved',
+        });
+        setSelectedBusinessIds(new Set());
+      } else {
+        setBulkApproveResult({
+          success: false,
+          message: result.error || 'Failed to approve businesses',
+        });
+      }
+    } catch (error) {
+      setBulkApproveResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setBulkApproveLoading(false);
+    }
+  };
 
   const handleRowClick = (business: ReviewBusiness) => {
     setSelectedBusiness(business);
@@ -215,6 +278,14 @@ export default function BusinessReviewPage() {
               <Button variant="secondary" size="sm">
                 Export List
               </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleBulkApprove}
+                disabled={selectedBusinessIds.size === 0 || bulkApproveLoading}
+              >
+                {bulkApproveLoading ? 'Approving...' : `Approve Selected (${selectedBusinessIds.size})`}
+              </Button>
             </div>
           </div>
         </div>
@@ -236,6 +307,11 @@ export default function BusinessReviewPage() {
               {filteredBusinesses.length} businesses pending review
             </div>
           </div>
+          {bulkApproveResult && (
+            <div className={`mt-4 p-3 rounded-lg ${bulkApproveResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              <p className="text-sm font-medium">{bulkApproveResult.message}</p>
+            </div>
+          )}
         </Card>
 
         {/* Review Table */}
@@ -246,6 +322,14 @@ export default function BusinessReviewPage() {
           >
             <TableHeader>
               <TableRow>
+                <TableColumn className="w-16">
+                  <input
+                    type="checkbox"
+                    checked={filteredBusinesses.length > 0 && selectedBusinessIds.size === filteredBusinesses.length}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300"
+                  />
+                </TableColumn>
                 <TableColumn className="w-1/3">Business Name</TableColumn>
                 <TableColumn className="w-1/4">Address</TableColumn>
                 <TableColumn>Source</TableColumn>
@@ -264,6 +348,14 @@ export default function BusinessReviewPage() {
               ) : (
                 filteredBusinesses.map((business) => (
                   <TableRow key={business.id} className="cursor-pointer hover:bg-neutral-50" onClick={() => handleRowClick(business)}>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedBusinessIds.has(business.id)}
+                        onChange={(e) => handleSelectBusiness(business.id, e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300"
+                      />
+                    </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-medium text-neutral-800">{business.name}</p>
