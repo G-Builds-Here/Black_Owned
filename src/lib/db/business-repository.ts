@@ -107,6 +107,121 @@ export async function findBusinessesByOwnerId(
 }
 
 /**
+ * Filter criteria for business queries
+ */
+export interface BusinessFilter {
+  ownerId?: string;
+  search?: string;
+  status?: "pending" | "approved" | "rejected";
+  source?: "google-maps" | "yelp" | "facebook";
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Paginated result wrapper
+ */
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * Find businesses with filtering and pagination
+ */
+export async function findBusinessesWithFilter(
+  client: PoolClient,
+  filter: BusinessFilter
+): Promise<PaginatedResult<Business>> {
+  const tableName = getTableName();
+  const page = filter.page ?? 1;
+  const limit = filter.limit ?? 20;
+  const offset = (page - 1) * limit;
+
+  // Build count query
+  let countQuery = `SELECT COUNT(*) FROM ${tableName}`;
+  let mainQuery = `SELECT * FROM ${tableName}`;
+  const countParams: unknown[] = [];
+  const mainParams: unknown[] = [];
+  const whereClauses: string[] = [];
+
+  // Add owner filter if provided
+  if (filter.ownerId) {
+    whereClauses.push(`owner_id = $${mainParams.length + 1}`);
+    mainParams.push(filter.ownerId);
+  }
+
+  // Add search filter (name or description)
+  if (filter.search) {
+    const searchParam = `%${filter.search}%`;
+    whereClauses.push(`(name ILIKE $${mainParams.length + 1} OR description ILIKE $${mainParams.length + 1})`);
+    mainParams.push(searchParam);
+  }
+
+  // Add status filter (verification_status maps to status)
+  if (filter.status) {
+    const statusMap: Record<string, string> = {
+      pending: "pending",
+      approved: "verified",
+      rejected: "unverified",
+    };
+    whereClauses.push(`verification_status = $${mainParams.length + 1}`);
+    mainParams.push(statusMap[filter.status]);
+  }
+
+  // Add source filter - join with scraped_businesses table if source is specified
+  if (filter.source) {
+    // For source filtering, we need to join with scraped_businesses
+    mainQuery = `
+      SELECT DISTINCT b.*
+      FROM ${tableName} b
+      INNER JOIN scraped_businesses sb ON b.id = sb.business_id
+      WHERE sb.source = $${mainParams.length + 1}
+    `;
+    mainParams.push(filter.source);
+
+    // Update count query for source filter
+    countQuery = `
+      SELECT COUNT(DISTINCT b.id)
+      FROM ${tableName} b
+      INNER JOIN scraped_businesses sb ON b.id = sb.business_id
+      WHERE sb.source = $${countParams.length + 1}
+    `;
+    countParams.push(filter.source);
+  }
+
+  // Add where clauses if any filters exist
+  if (whereClauses.length > 0 && !filter.source) {
+    const whereClause = whereClauses.join(" AND ");
+    countQuery += ` WHERE ${whereClause}`;
+    mainQuery += ` WHERE ${whereClause}`;
+  }
+
+  // Add ordering and pagination to main query
+  mainQuery += ` ORDER BY created_at DESC LIMIT $${mainParams.length + 1} OFFSET $${mainParams.length + 2}`;
+  mainParams.push(limit, offset);
+
+  // Execute count query
+  const countResult = await client.query<{ count: string }>(countQuery, countParams);
+  const total = parseInt(countResult.rows[0].count, 10);
+  const totalPages = Math.ceil(total / limit);
+
+  // Execute main query
+  const result = await client.query<Business>(mainQuery, mainParams);
+
+  return {
+    data: result.rows.map(rowToBusiness),
+    total,
+    page,
+    limit,
+    totalPages,
+  };
+}
+
+/**
  * Normalize phone number to exact match format.
  * Removes all non-digit characters and strips leading country code "1" for US numbers.
  * Returns a canonical 10-digit representation.
