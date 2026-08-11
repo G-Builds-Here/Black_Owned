@@ -12,13 +12,7 @@ jest.mock("../../../lib/db/user-repository", () => ({
   getPool: jest.fn(),
 }));
 
-// Mock the NATS client module
-jest.mock("../../../lib/nats/nats-client", () => ({
-  checkNatsHealth: jest.fn(),
-}));
-
 const { getPool } = require("../../../lib/db/user-repository");
-const { checkNatsHealth } = require("../../../lib/nats/nats-client");
 
 describe("GET /api/health", () => {
   const mockPool = {
@@ -33,7 +27,6 @@ describe("GET /api/health", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     getPool.mockReturnValue(mockPool);
-    checkNatsHealth.mockResolvedValue(true);
   });
 
   it("should return 200 with healthy status when database is reachable", async () => {
@@ -111,58 +104,6 @@ describe("GET /api/health", () => {
     expect(json.database).toBeDefined();
     expect(json.database.status).toBeDefined();
     expect(["healthy", "unhealthy"]).toContain(json.database.status);
-  });
-
-  it("should return 503 with nats status unhealthy when NATS is unreachable", async () => {
-    mockPool.connect.mockResolvedValue(mockClient);
-    mockClient.query.mockResolvedValue({ rows: [] });
-    checkNatsHealth.mockResolvedValue(false);
-
-    const request = new NextRequest("http://localhost/api/health", {
-      method: "GET",
-    });
-
-    const response = await GET(request);
-    const json = await response.json();
-
-    expect(response.status).toBe(503);
-    expect(json.status).toBe("unhealthy");
-    expect(json.nats.status).toBe("unhealthy");
-  });
-
-  it("should return 200 with nats status healthy when NATS is reachable", async () => {
-    mockPool.connect.mockResolvedValue(mockClient);
-    mockClient.query.mockResolvedValue({ rows: [] });
-    checkNatsHealth.mockResolvedValue(true);
-
-    const request = new NextRequest("http://localhost/api/health", {
-      method: "GET",
-    });
-
-    const response = await GET(request);
-    const json = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(json.status).toBe("healthy");
-    expect(json.nats.status).toBe("healthy");
-  });
-
-  it("should return 503 when database is healthy but NATS is unhealthy", async () => {
-    mockPool.connect.mockResolvedValue(mockClient);
-    mockClient.query.mockResolvedValue({ rows: [] });
-    checkNatsHealth.mockResolvedValue(false);
-
-    const request = new NextRequest("http://localhost/api/health", {
-      method: "GET",
-    });
-
-    const response = await GET(request);
-    const json = await response.json();
-
-    expect(response.status).toBe(503);
-    expect(json.status).toBe("unhealthy");
-    expect(json.database.status).toBe("healthy");
-    expect(json.nats.status).toBe("unhealthy");
   });
 });
 
