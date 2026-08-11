@@ -1,44 +1,12 @@
 /**
  * Scraper Result Types
  *
- * Defines data structures for Google Maps, Yelp, and Facebook scraper results.
+ * Raw scraped data from various sources before normalization.
+ * Each source has its own field structure based on the platform's API.
  */
 
 /**
- * Source platform for scraped business data
- */
-export enum ScraperSource {
-  GOOGLE_MAPS = "google_maps",
-  YELP = "yelp",
-  FACEBOOK = "facebook",
-}
-
-/**
- * Google Maps opening hours structure
- */
-export interface GoogleMapsOpeningHours {
-  openNow: boolean;
-  weekdayText: string[];
-}
-
-/**
- * Google Maps geometry location
- */
-export interface GoogleMapsGeometryLocation {
-  lat: number;
-  lng: number;
-}
-
-/**
- * Google Maps geometry structure
- */
-export interface GoogleMapsGeometry {
-  location: GoogleMapsGeometryLocation;
-  viewport?: unknown;
-}
-
-/**
- * Google Maps raw data structure
+ * Raw data from Google Maps scraper
  */
 export interface GoogleMapsRawData {
   placeId: string;
@@ -52,70 +20,27 @@ export interface GoogleMapsRawData {
   userRatingsTotal?: number;
   priceLevel?: number;
   businessStatus?: string;
-  openingHours?: GoogleMapsOpeningHours;
-  types: string[];
+  openingHours?: {
+    openNow: boolean;
+    weekdayText: string[];
+  };
+  types?: string[];
   formattedPhoneNumber?: string;
   internationalPhoneNumber?: string;
-  geometry?: GoogleMapsGeometry;
+  geometry?: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+    viewport: unknown;
+  };
   url?: string;
   utcOffset?: number;
   vicinity?: string;
 }
 
 /**
- * Yelp category structure
- */
-export interface YelpCategory {
-  alias: string;
-  title: string;
-}
-
-/**
- * Yelp location structure
- */
-export interface YelpLocation {
-  address1: string;
-  address2?: string;
-  address3?: string;
-  city: string;
-  state: string;
-  zip_code: string;
-  country: string;
-  display_address: string[];
-}
-
-/**
- * Yelp coordinates structure
- */
-export interface YelpCoordinates {
-  latitude: number;
-  longitude: number;
-}
-
-/**
- * Yelp hours structure
- */
-export interface YelpHours {
-  open: Array<{
-    is_overnight: boolean;
-    start: string;
-    end: string;
-    day: number;
-  }>;
-  hours_type: string;
-  is_open_now: boolean;
-}
-
-/**
- * Yelp messaging structure
- */
-export interface YelpMessaging {
-  url: string;
-  use_case_text: string;
-}
-
-/**
- * Yelp raw data structure
+ * Raw data from Yelp scraper
  */
 export interface YelpRawData {
   id: string;
@@ -128,41 +53,46 @@ export interface YelpRawData {
   phone: string;
   display_phone: string;
   review_count: number;
-  categories: YelpCategory[];
+  categories: Array<{
+    alias: string;
+    title: string;
+  }>;
   rating: number;
-  location: YelpLocation;
-  coordinates: YelpCoordinates;
-  photos?: string[];
-  price?: string;
-  hours?: YelpHours[];
-  transactions?: string[];
-  messaging?: YelpMessaging;
+  location: {
+    address1: string;
+    address2?: string;
+    address3?: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+    display_address: string[];
+  };
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  photos: string[];
+  price: string;
+  hours?: Array<{
+    open: Array<{
+      is_overnight: boolean;
+      start: string;
+      end: string;
+      day: number;
+    }>;
+    hours_type: string;
+    is_open_now: boolean;
+  }>;
+  transactions: string[];
+  messaging?: {
+    url: string;
+    use_case_text: string;
+  };
 }
 
 /**
- * Facebook location structure
- */
-export interface FacebookLocation {
-  city?: string;
-  state?: string;
-  country?: string;
-  latitude?: number;
-  longitude?: number;
-  street?: string;
-  zip?: string;
-}
-
-/**
- * Facebook cover structure
- */
-export interface FacebookCover {
-  cover_id: string;
-  offset_y?: number;
-  source: string;
-}
-
-/**
- * Facebook raw data structure
+ * Raw data from Facebook scraper
  */
 export interface FacebookRawData {
   id: string;
@@ -173,8 +103,20 @@ export interface FacebookRawData {
   email?: string;
   website?: string;
   category?: string;
-  location?: FacebookLocation;
-  cover?: FacebookCover;
+  location?: {
+    city?: string;
+    country?: string;
+    latitude?: number;
+    longitude?: number;
+    state?: string;
+    street?: string;
+    zip?: string;
+  };
+  cover?: {
+    cover_id: string;
+    offset_y: number;
+    source: string;
+  };
   about?: string;
   were_here_count?: number;
   checkins?: number;
@@ -184,69 +126,33 @@ export interface FacebookRawData {
 }
 
 /**
- * Union type for raw scraper data from any source
+ * Source enumeration for scraper origins
+ */
+export enum ScraperSource {
+  GOOGLE_MAPS = "google_maps",
+  YELP = "yelp",
+  FACEBOOK = "facebook",
+}
+
+/**
+ * Union type for all raw scraper data
  */
 export type RawScraperData = GoogleMapsRawData | YelpRawData | FacebookRawData;
 
 /**
- * Result from a Google Maps, Yelp, or Facebook scrape
+ * ScraperResult - Contains raw scraped data before normalization
+ *
+ * This type wraps the source-specific raw data and tracks its origin.
+ * Used as the intermediate representation before data is transformed
+ * into the normalized Business type.
  */
 export interface ScraperResult {
+  /** The source platform that provided this data */
   source: ScraperSource;
-  name: string;
-  address: string;
-  phone?: string;
-  website?: string;
-  category?: string;
-  rating?: number;
-  reviewCount?: number;
-  location?: {
-    lat: number;
-    lng: number;
-  };
+  /** The raw data from the source */
   rawData: RawScraperData;
+  /** Timestamp when the data was scraped */
   scrapedAt: Date;
-}
-
-/**
- * Wrap raw scraped data with source metadata
- */
-export function wrapScraperResult(
-  source: ScraperSource,
-  rawData: RawScraperData,
-  scrapedAt: Date = new Date()
-): ScraperResult {
-  let name: string;
-  let address: string;
-
-  if (source === ScraperSource.GOOGLE_MAPS) {
-    const googleData = rawData as GoogleMapsRawData;
-    name = googleData.name;
-    address = googleData.formattedAddress;
-  } else if (source === ScraperSource.YELP) {
-    const yelpData = rawData as YelpRawData;
-    name = yelpData.name;
-    address = yelpData.location.display_address.join(", ");
-  } else {
-    const fbData = rawData as FacebookRawData;
-    name = fbData.name;
-    address = fbData.location?.street || "";
-  }
-
-  return {
-    source,
-    name,
-    address,
-    rawData,
-    scrapedAt,
-  };
-}
-
-/**
- * Wrap multiple scraped results with source metadata
- */
-export function wrapScraperResults(
-  results: Array<{ source: ScraperSource; rawData: RawScraperData }>
-): ScraperResult[] {
-  return results.map(({ source, rawData }) => wrapScraperResult(source, rawData));
+  /** Optional job ID if scraped as part of a batch job */
+  jobId?: string;
 }

@@ -12,8 +12,6 @@ import {
   ScraperPagination,
   ScraperJobState,
 } from "../types/facebook-scraper";
-import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
-import { retryPageNavigation, retryDataExtraction } from "@/lib/scraper/scraper-retry";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
@@ -34,15 +32,6 @@ export class FacebookScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
-  }
-
-  /**
-   * Check robots.txt before scraping
-   */
-  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
-    const facebookBaseUrl = 'https://www.facebook.com';
-    const searchPath = '/search/pages';
-    return checkUrlAllowed(`${facebookBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
   }
 
   /**
@@ -82,26 +71,6 @@ export class FacebookScraper {
     query: string,
     location: string
   ): Promise<ScraperResult> {
-    // Check robots.txt before proceeding
-    const robotsCheck = await this.checkRobotsBeforeScraping();
-    if (!robotsCheck.allowed) {
-      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
-      return {
-        businesses: [],
-        pagination: {
-          currentPage: 0,
-          totalPages: 0,
-          resultsPerPage: 0,
-          totalResults: 0,
-          hasNextPage: false,
-        },
-        source: "facebook",
-        query,
-        location,
-        timestamp: new Date(),
-      };
-    }
-
     await this.initialize();
 
     const page = await this.context!.newPage();
@@ -112,12 +81,8 @@ export class FacebookScraper {
       // Build search URL with query and location
       const searchUrl = `${FACEBOOK_SEARCH_URL}?q=${encodeURIComponent(query)}&geo=${encodeURIComponent(location)}`;
 
-      await retryPageNavigation(async () => {
-        await page.goto(searchUrl, { waitUntil: "networkidle" });
-      }, 2);
-      await retryDataExtraction(async () => {
-        await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
-      }, 2);
+      await page.goto(searchUrl, { waitUntil: "networkidle" });
+      await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
 
       // Extract business pages from search results
       const extractedBusinesses = await this.extractBusinessesFromPage(page);
@@ -165,7 +130,7 @@ export class FacebookScraper {
     const pagination: ScraperPagination = {
       currentPage,
       totalPages: Math.min(currentPage, this.options.maxPages),
-      resultsPerPage: businesses.length / currentPage,
+      resultsPerPage: businesses.length / currentPage || 0,
       totalResults: businesses.length,
       hasNextPage: currentPage < this.options.maxPages,
     };
@@ -200,7 +165,7 @@ export class FacebookScraper {
   private async extractBusinessesFromPage(
     page: Page
   ): Promise<ScrapedBusiness[]> {
-    return await retryDataExtraction(async () => page.evaluate(() => {
+    return await page.evaluate(() => {
       const businesses: ScrapedBusiness[] = [];
       const pageUnits = document.querySelectorAll('[data-pagelet="PageUnits"]');
 
@@ -224,7 +189,7 @@ export class FacebookScraper {
       });
 
       return businesses;
-    }));
+    });
   }
 
   /**
@@ -234,10 +199,8 @@ export class FacebookScraper {
     try {
       const nextButton = await page.$('button:has-text("More Results")');
       if (nextButton) {
-        await retryPageNavigation(async () => {
-          await nextButton.click();
-          await page.waitForLoadState("networkidle");
-        }, 2);
+        await nextButton.click();
+        await page.waitForLoadState("networkidle");
         return true;
       }
       return false;

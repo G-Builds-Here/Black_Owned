@@ -12,9 +12,6 @@ import {
   ScraperOptions,
   ScraperJobState,
 } from "../types/yelp-scraper";
-import { ScraperSource } from "../types/scrape-job";
-import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
-import { retryPageNavigation, retryDataExtraction } from "@/lib/scraper/scraper-retry";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -35,15 +32,6 @@ export class YelpScraper {
         options.delayBetweenPagesMs ?? DEFAULT_DELAY_BETWEEN_PAGES_MS,
       includeDuplicates: options.includeDuplicates ?? false,
     };
-  }
-
-  /**
-   * Check robots.txt before scraping
-   */
-  async checkRobotsBeforeScraping(): Promise<RobotsCheckResult> {
-    const yelpBaseUrl = 'https://www.yelp.com';
-    const searchPath = '/search';
-    return checkUrlAllowed(`${yelpBaseUrl}${searchPath}`, 'BlackOwnedScraper/1.0');
   }
 
   /**
@@ -83,26 +71,6 @@ export class YelpScraper {
     query: string,
     location: string
   ): Promise<ScraperResult> {
-    // Check robots.txt before proceeding
-    const robotsCheck = await this.checkRobotsBeforeScraping();
-    if (!robotsCheck.allowed) {
-      console.warn(`Scraping blocked by robots.txt: ${robotsCheck.reason}`);
-      return {
-        businesses: [],
-        pagination: {
-          currentPage: 0,
-          totalPages: 0,
-          resultsPerPage: 0,
-          totalResults: 0,
-          hasNextPage: false,
-        },
-        source: "yelp",
-        query,
-        location,
-        timestamp: new Date(),
-      };
-    }
-
     await this.initialize();
 
     if (!this.context) {
@@ -113,39 +81,38 @@ export class YelpScraper {
     const collectedBusinesses: ScrapedBusiness[] = [];
     const seenNames = new Set<string>();
 
+    // Initialize job state and pagination variables before try block
+    const jobState: ScraperJobState = {
+      query,
+      location,
+      currentPage: 0,
+      totalPages: 0,
+      businessesCollected: [],
+      isComplete: false,
+    };
+    let currentPage = 1;
+    let totalPages = 0;
+
     try {
-      // Navigate to Yelp search with retry logic
-      await retryPageNavigation(async () => {
-        await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
-      }, 2);
+      // Navigate to Yelp search
+      const searchUrl = `https://www.yelp.com/search?find_desc=${encodeURIComponent(
+        query
+      )}&find_loc=${encodeURIComponent(location)}`;
+      await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
 
-      // Wait for results to load with retry
-      await retryDataExtraction(async () => {
-        let resultsLoaded = false;
-        try {
-          await page.waitForSelector(".business-name, .css-1c4t2b3", {
-            timeout: 10000,
-          });
-          resultsLoaded = true;
-        } catch {
-          // Continue even if selector not found - may have different structure
-          resultsLoaded = false;
-        }
-        return resultsLoaded;
-      }, 2);
-
-      // Initialize job state
-      const jobState: ScraperJobState = {
-        query,
-        location,
-        currentPage: 0,
-        totalPages: 0,
-        businessesCollected: [],
-        isComplete: false,
-      };
+      // Wait for results to load
+      let resultsLoaded = false;
+      try {
+        await page.waitForSelector(".business-name, .css-1c4t2b3", {
+          timeout: 10000,
+        });
+        resultsLoaded = true;
+      } catch {
+        // Continue even if selector not found - may have different structure
+        resultsLoaded = false;
+      }
 
       // Process pages
-      let currentPage = 1;
       let hasMoreResults = true;
 
       while (hasMoreResults && currentPage <= this.options.maxPages) {
@@ -188,7 +155,7 @@ export class YelpScraper {
 
       // Calculate pagination info
       const totalResults = collectedBusinesses.length;
-      const totalPages = Math.ceil(totalResults / DEFAULT_RESULTS_PER_PAGE);
+      totalPages = Math.ceil(totalResults / DEFAULT_RESULTS_PER_PAGE);
 
       return {
         businesses: collectedBusinesses,
@@ -206,8 +173,24 @@ export class YelpScraper {
       };
     } catch (error) {
       jobState.error = error instanceof Error ? error.message : "Unknown error";
-      jobState.isComplete = false;
-      throw error;
+      jobState.isComplete = true;
+
+      console.error("Error scraping Yelp:", error);
+
+      return {
+        businesses: collectedBusinesses,
+        pagination: {
+          currentPage,
+          totalPages,
+          resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
+          totalResults: collectedBusinesses.length,
+          hasNextPage: false,
+        },
+        source: "yelp",
+        query,
+        location,
+        timestamp: new Date(),
+      };
     } finally {
       await page.close();
     }
@@ -220,7 +203,7 @@ export class YelpScraper {
     page: Page,
     seenNames: Set<string>
   ): Promise<ScrapedBusiness[]> {
-    const businesses = await retryDataExtraction(async () => page.evaluate(() => {
+    const businesses = await page.evaluate(() => {
       const results: Array<{
         name: string;
         address: string;
@@ -274,20 +257,11 @@ export class YelpScraper {
         );
         const category = categoryEl?.textContent?.trim();
 
-        // Extract phone number - look for tel: links or phone patterns
-        const phoneEl = element.querySelector('a[href^="tel:"]') as HTMLAnchorElement | null;
-        const phone = phoneEl?.href?.replace('tel:', '')?.trim() ||
-                      element.textContent?.match(/(\+?\d[\d\s-]{7,}\d)/)?.[0]?.trim();
-
-        // Extract website - look for website icon or http links
-        const websiteEl = element.querySelector('a[href*="yelp.com/biz"]') as HTMLAnchorElement | null;
-        const website = websiteEl?.href?.trim();
-
         results.push({
           name,
           address,
-          phone: phone || undefined,
-          website: website || undefined,
+          phone: undefined,
+          website: undefined,
           category,
           rating,
           reviewCount,
@@ -295,7 +269,7 @@ export class YelpScraper {
       }
 
       return results;
-    }));
+    });
 
     // Filter duplicates in the Node.js context where seenNames is accessible
     const filteredBusinesses = businesses.filter((b) => {
@@ -311,7 +285,7 @@ export class YelpScraper {
 
     return filteredBusinesses.map((b) => ({
       ...b,
-      source: "yelp" as ScraperSource,
+      source: "yelp" as const,
     }));
   }
 
@@ -338,10 +312,8 @@ export class YelpScraper {
             const isDisabled = await nextButton.isDisabled();
 
             if (isVisible && !isDisabled) {
-              await retryPageNavigation(async () => {
-                await nextButton.click();
-                await page.waitForLoadState("networkidle", { timeout: 10000 });
-              }, 2);
+              await nextButton.click();
+              await page.waitForLoadState("networkidle", { timeout: 10000 });
               return true;
             }
           }
