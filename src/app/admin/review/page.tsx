@@ -4,17 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
 import { Card, Badge, Button, Tabs, TabPanel } from '@/components/ui';
 
-interface ScrapedBusiness {
+interface Business {
   id: string;
   name: string;
-  address: string;
-  source: string;
-  rating: number | null;
-  category: string | null;
-  phone: string | null;
-  website: string | null;
-  status: string;
-  createdAt: {
+  category_id: string;
+  verification_status: string;
+  created_at: {
     timestamp: number;
   };
 }
@@ -24,44 +19,11 @@ const PENDING_BUSINESSES_QUERY = `
     pendingBusinesses {
       id
       name
-      address
-      source
-      rating
-      category
-      phone
-      website
-      status
+      categoryId
+      verificationStatus
       createdAt {
         timestamp
       }
-    }
-  }
-`;
-
-const APPROVE_BUSINESS_MUTATION = `
-  mutation ApproveBusiness($id: String!) {
-    approveBusiness(id: $id) {
-      success
-      error
-      business {
-        id
-        name
-        categoryId
-        verified
-        createdAt {
-          timestamp
-        }
-      }
-    }
-  }
-`;
-
-const BULK_UPDATE_VERIFICATION_STATUS_MUTATION = `
-  mutation BulkUpdateVerificationStatus($businessIds: [String!]!, $status: String!) {
-    bulkUpdateVerificationStatus(businessIds: $businessIds, status: $status) {
-      success
-      updatedCount
-      error
     }
   }
 `;
@@ -71,8 +33,8 @@ export default function AdminReviewPage() {
   const [pendingBusinesses, setPendingBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [selectedBusinessIds, setSelectedBusinessIds] = useState<Set<string>>(new Set());
+  const [selectedBusinesses, setSelectedBusinesses] = useState<Set<string>>(new Set());
+  const [approving, setApproving] = useState(false);
 
   useEffect(() => {
     const fetchPendingBusinesses = async () => {
@@ -117,120 +79,100 @@ export default function AdminReviewPage() {
     });
   };
 
-  const handleApprove = async (businessId: string) => {
-    try {
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: APPROVE_BUSINESS_MUTATION,
-          variables: { id: businessId },
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      const approveResult = result.data?.approveBusiness;
-      if (approveResult?.success) {
-        setSuccessMessage('Business approved successfully');
-        // Remove the approved business from pending list
-        setPendingBusinesses(prev => prev.filter(b => b.id !== businessId));
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        throw new Error(approveResult?.error || 'Failed to approve business');
-      }
-    } catch (err) {
-      console.error('Failed to approve business:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      setTimeout(() => setError(null), 5000);
-    }
-  };
-
-  const handleReject = (businessId: string) => {
-    console.log('Reject business:', businessId);
-    // TODO: Implement rejection mutation
-  };
-
-  const handleSelectAll = () => {
-    if (selectedBusinessIds.size === pendingBusinesses.length) {
-      setSelectedBusinessIds(new Set());
-    } else {
-      setSelectedBusinessIds(new Set(pendingBusinesses.map(b => b.id)));
-    }
-  };
-
-  const handleSelectBusiness = (businessId: string) => {
-    const newSelected = new Set(selectedBusinessIds);
+  const toggleSelection = (businessId: string) => {
+    const newSelected = new Set(selectedBusinesses);
     if (newSelected.has(businessId)) {
       newSelected.delete(businessId);
     } else {
       newSelected.add(businessId);
     }
-    setSelectedBusinessIds(newSelected);
+    setSelectedBusinesses(newSelected);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedBusinesses.size === pendingBusinesses.length) {
+      setSelectedBusinesses(new Set());
+    } else {
+      setSelectedBusinesses(new Set(pendingBusinesses.map(b => b.id)));
+    }
+  };
+
+  const handleApprove = async (businessId: string) => {
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation ApproveBusinesses($businessIds: [String!]!) {
+            approveBusinesses(businessIds: $businessIds) {
+              success approvedCount failedIds error
+            }
+          }`,
+          variables: { businessIds: [businessId] },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+      if (result.data?.approveBusinesses.success) {
+        setPendingBusinesses(prev => prev.filter(b => b.id !== businessId));
+        setSelectedBusinesses(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(businessId);
+          return newSet;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to approve business:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
   };
 
   const handleBulkApprove = async () => {
-    if (selectedBusinessIds.size === 0) {
-      setError('No businesses selected');
-      setTimeout(() => setError(null), 5000);
-      return;
-    }
+    if (selectedBusinesses.size === 0) return;
+
+    setApproving(true);
+    setError(null);
 
     try {
       const response = await fetch('/api/graphql', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: BULK_UPDATE_VERIFICATION_STATUS_MUTATION,
-          variables: {
-            businessIds: Array.from(selectedBusinessIds),
-            status: 'approved',
-          },
+          query: `mutation ApproveBusinesses($businessIds: [String!]!) {
+            approveBusinesses(businessIds: $businessIds) {
+              success approvedCount failedIds error
+            }
+          }`,
+          variables: { businessIds: Array.from(selectedBusinesses) },
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const result = await response.json();
-
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-
-      const bulkResult = result.data?.bulkUpdateVerificationStatus;
-      if (bulkResult?.success) {
-        setSuccessMessage(`Successfully approved ${bulkResult.updatedCount} businesses`);
-        // Remove approved businesses from pending list
+      const approvalResult = result.data?.approveBusinesses;
+      if (approvalResult?.success) {
         setPendingBusinesses(prev =>
-          prev.filter(b => !selectedBusinessIds.has(b.id))
+          prev.filter(b => !selectedBusinesses.has(b.id))
         );
-        // Clear selection
-        setSelectedBusinessIds(new Set());
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        throw new Error(bulkResult?.error || 'Failed to approve businesses');
+        setSelectedBusinesses(new Set());
+      } else if (approvalResult?.error) {
+        setError(approvalResult.error);
       }
     } catch (err) {
-      console.error('Failed to bulk approve businesses:', err);
+      console.error('Failed to bulk approve:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
-      setTimeout(() => setError(null), 5000);
+    } finally {
+      setApproving(false);
     }
+  };
+
+  const handleReject = (businessId: string) => {
+    console.log('Reject business:', businessId);
   };
 
   if (loading) {
@@ -279,9 +221,9 @@ export default function AdminReviewPage() {
               <p className="text-neutral-100">Review and moderate pending business submissions</p>
             </div>
             <div className="flex items-center gap-4">
-              {selectedBusinessIds.size > 0 && (
+              {selectedBusinesses.size > 0 && (
                 <Badge variant="success" size="lg">
-                  {selectedBusinessIds.size} Selected
+                  {selectedBusinesses.size} Selected
                 </Badge>
               )}
               <Badge variant="warning" size="lg">
@@ -289,17 +231,21 @@ export default function AdminReviewPage() {
               </Badge>
             </div>
           </div>
-          {selectedBusinessIds.size > 0 && (
+          {selectedBusinesses.size > 0 && (
             <div className="mt-4 flex items-center gap-3">
               <Button
                 variant="primary"
+                size="md"
                 onClick={handleBulkApprove}
+                disabled={approving}
               >
-                Approve Selected ({selectedBusinessIds.size})
+                {approving ? 'Approving...' : `Approve Selected (${selectedBusinesses.size})`}
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => setSelectedBusinessIds(new Set())}
+                size="md"
+                onClick={() => setSelectedBusinesses(new Set())}
+                disabled={approving}
               >
                 Clear Selection
               </Button>
@@ -308,48 +254,18 @@ export default function AdminReviewPage() {
         </div>
       </section>
 
-      {/* Success Message */}
-      {successMessage && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
-            <p className="font-semibold">{successMessage}</p>
-          </div>
-        </section>
-      )}
-
-      {/* Error Message */}
-      {error && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
-            <p className="font-semibold">Error</p>
-            <p className="text-sm mt-1">{error}</p>
-          </div>
-        </section>
-      )}
-
       {/* Main Content */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
-        <div className="flex items-center justify-between">
-          <Tabs
-            tabs={[
-              { key: 'pending', label: `Pending (${pendingBusinesses.length})` },
-              { key: 'approved', label: 'Approved' },
-              { key: 'flagged', label: 'Flagged' },
-            ]}
-            selectedKey={activeTab}
-            onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
-          />
-          {activeTab === 'pending' && pendingBusinesses.length > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleSelectAll}
-            >
-              {selectedBusinessIds.size === pendingBusinesses.length ? 'Deselect All' : 'Select All'}
-            </Button>
-          )}
-        </div>
+        <Tabs
+          tabs={[
+            { key: 'pending', label: `Pending (${pendingBusinesses.length})` },
+            { key: 'approved', label: 'Approved' },
+            { key: 'flagged', label: 'Flagged' },
+          ]}
+          selectedKey={activeTab}
+          onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
+        />
 
         {/* Pending Tab */}
         <TabPanel value="pending" className="mt-6">
@@ -367,15 +283,31 @@ export default function AdminReviewPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {pendingBusinesses.map((business) => (
-                <Card key={business.id} variant="outlined" padding="md">
-                  <div className="flex items-start gap-4">
+              <Card variant="outlined" padding="md">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={selectedBusinessIds.has(business.id)}
-                      onChange={() => handleSelectBusiness(business.id)}
-                      className="mt-1 h-5 w-5 rounded border-gray-300 text-heritage-royal focus:ring-heritage-royal"
+                      aria-label="Select All"
+                      checked={selectedBusinesses.size === pendingBusinesses.length}
+                      onChange={toggleAllSelection}
+                      className="h-5 w-5 rounded border-neutral-300 text-heritage-royal focus:ring-heritage-royal"
                     />
+                    <span className="text-neutral-700 font-medium">Select All ({pendingBusinesses.length})</span>
+                  </div>
+                </div>
+              </Card>
+              {pendingBusinesses.map((business) => (
+                <Card key={business.id} variant="outlined" padding="md">
+                  <div className="flex items-start">
+                    <div className="flex items-start pt-1 mr-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedBusinesses.has(business.id)}
+                        onChange={() => toggleSelection(business.id)}
+                        className="h-5 w-5 rounded border-neutral-300 text-heritage-royal focus:ring-heritage-royal"
+                      />
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-neutral-800">{business.name}</h3>
@@ -383,19 +315,14 @@ export default function AdminReviewPage() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-neutral-500">
                         <span>
-                          <span className="font-medium">Source:</span> {business.source}
+                          <span className="font-medium">Source:</span> Business Submission
                         </span>
-                        {business.rating !== null && (
-                          <span>
-                            <span className="font-medium">Rating:</span> {business.rating.toFixed(1)}
-                          </span>
-                        )}
                         <span>
-                          <span className="font-medium">Submitted:</span> {formatDate(business.createdAt.timestamp)}
+                          <span className="font-medium">Submitted:</span> {formatDate(business.created_at.timestamp)}
                         </span>
                       </div>
                       <p className="text-sm text-neutral-600 mt-2">
-                        <span className="font-medium">Address:</span> {business.address}
+                        <span className="font-medium">Address:</span> Address not yet provided
                       </p>
                     </div>
                     <div className="flex gap-2">

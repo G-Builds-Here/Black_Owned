@@ -31,7 +31,6 @@ export const typeDefs = `#graphql
     rating: Float!
     reviewCount: Int!
     location: String!
-    address: String
     isVerified: Boolean!
     imageUrl: String
     description: String
@@ -64,20 +63,18 @@ export const typeDefs = `#graphql
     createdAt: DateTimeUtc!
   }
 
-  type PendingBusiness {
-    id: ID!
-    name: String!
-    address: String!
-    source: String!
-    rating: Float
-    createdAt: DateTimeUtc!
+  type BulkApprovalResult {
+    success: Boolean!
+    approvedCount: Int!
+    failedIds: [String!]
+    error: String
   }
 
   type Query {
     health: String!
     searchBusinesses(query: String!, page: Int, pageSize: Int): SearchResults!
     business(id: String!): GQLBusiness
-    pendingBusinesses: [PendingBusiness!]!
+    pendingBusinesses: [GQLBusiness!]!
   }
 
   type PresignedUrl {
@@ -99,25 +96,12 @@ export const typeDefs = `#graphql
     error: String
   }
 
-  type BulkUpdateVerificationResponse {
-    success: Boolean!
-    updatedCount: Int!
-    error: String
-  }
-
-  input RejectBusinessInput {
-    businessId: String!
-    rejectionReason: String!
-  }
-
   type Mutation {
     register(email: String!, password: String!, name: String!): AuthResponse!
     submitVerification(businessId: String!, fileNames: [String!]!): SubmitVerificationResponse!
     updateBusiness(id: String!, name: String!): UpdateBusinessResponse!
     createBusiness(input: CreateBusinessInput!): CreateBusinessPayload!
-    rejectBusiness(businessId: String!, rejectionReason: String!): SubmitVerificationResponse!
-    approveBusiness(businessId: String!): SubmitVerificationResponse!
-    bulkUpdateVerificationStatus(businessIds: [String!]!, status: String!): BulkUpdateVerificationResponse!
+    approveBusinesses(businessIds: [String!]!): BulkApprovalResult!
   }
 `;
 

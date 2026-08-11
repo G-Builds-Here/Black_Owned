@@ -1,379 +1,373 @@
 /**
- * Admin Review Page Tests - LOC-0068-AC3
- *
- * Validates AC3: Approve a business for import
- * - Given a business is selected
- * - When the admin clicks "Approve"
- * - Then the business status changes to "approved"
- * - And the UI shows a success confirmation
+ * Admin Review Page Tests - Bulk Approval Feature
  */
 
-'use client';
-
-import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminReviewPage from './page';
 
-// Mock the fetch API
+// Mock the Navigation component
+jest.mock('@/components/ui/Navigation', () => ({
+  Navigation: ({ onNavigate }: { onNavigate: (section: string) => void }) => (
+    <nav data-testid="navigation" onClick={() => onNavigate('test')} />
+  ),
+}));
+
+// Mock the UI components
+jest.mock('@/components/ui', () => ({
+  Card: ({ children, variant, padding }: any) => (
+    <div data-testid="card" data-variant={variant} data-padding={padding}>
+      {children}
+    </div>
+  ),
+  Badge: ({ children, variant, size }: any) => (
+    <span data-testid="badge" data-variant={variant} data-size={size}>
+      {children}
+    </span>
+  ),
+  Button: ({ children, onClick, disabled, variant, size }: any) => (
+    <button
+      data-testid="button"
+      data-variant={variant}
+      data-size={size}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  ),
+  Tabs: ({ tabs, selectedKey, onSelectionChange }: any) => (
+    <div data-testid="tabs" data-selected={selectedKey}>
+      {tabs.map((tab: any) => (
+        <button
+          key={tab.key}
+          data-testid={`tab-${tab.key}`}
+          onClick={() => onSelectionChange(tab.key)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  ),
+  TabPanel: ({ value, children }: any) => <div data-testid="tabpanel">{children}</div>,
+}));
+
+// Mock fetch
 global.fetch = jest.fn();
 
-const mockPendingBusinesses = [
-  {
-    id: 'biz-001',
-    name: 'Soul Food Kitchen',
-    address: '123 Main St, Harlem, NY',
-    source: 'Google Maps',
-    rating: 4.5,
-    category: 'Food & Dining',
-    phone: '(555) 123-4567',
-    website: 'https://soulfoodkitchen.com',
-    status: 'pending_review',
-    createdAt: { timestamp: 1723260000 },
-  },
-  {
-    id: 'biz-002',
-    name: 'Black Diamond Consulting',
-    address: '456 Business Ave, Atlanta, GA',
-    source: 'Bing Maps',
-    rating: 5.0,
-    category: 'Professional Services',
-    phone: '(555) 987-6543',
-    website: 'https://blackdiamondconsulting.com',
-    status: 'pending_review',
-    createdAt: { timestamp: 1723346400 },
-  },
-];
+describe('AdminReviewPage - Bulk Approval', () => {
+  const mockPendingBusinesses = [
+    {
+      id: 'business-1',
+      name: 'Test Business 1',
+      category_id: 'cat-1',
+      verification_status: 'unverified',
+      created_at: { timestamp: 1704067200 },
+      phone: null,
+      potential_duplicate_id: null,
+    },
+    {
+      id: 'business-2',
+      name: 'Test Business 2',
+      category_id: 'cat-2',
+      verification_status: 'unverified',
+      created_at: { timestamp: 1704153600 },
+      phone: null,
+      potential_duplicate_id: null,
+    },
+    {
+      id: 'business-3',
+      name: 'Test Business 3',
+      category_id: 'cat-1',
+      verification_status: 'unverified',
+      created_at: { timestamp: 1704240000 },
+      phone: null,
+      potential_duplicate_id: null,
+    },
+  ];
 
-describe('Admin Review Page - LOC-0068-AC3', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
-  describe('Page Rendering', () => {
-    it('renders the admin review page with pending businesses tab', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          data: { pendingBusinesses: [] },
-        }),
-      });
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/business review queue/i)).toBeInTheDocument();
-      });
-      expect(screen.getByText(/pending \(0\)/i)).toBeInTheDocument();
+  it('should render the page with pending businesses count', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
     });
 
-    it('displays pending businesses in cards', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      const badges = screen.getAllByTestId('badge');
+      const pendingBadge = badges.find(b => b.getAttribute('data-size') === 'lg');
+      expect(pendingBadge).toBeInTheDocument();
+      expect(pendingBadge?.textContent).toContain('Pending');
+    });
+  });
+
+  it('should show select all checkbox when businesses are loaded', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
+    });
+
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      expect(selectAllCheckbox).toBeInTheDocument();
+    });
+  });
+
+  it('should select all businesses when "Select All" checkbox is clicked', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
+    });
+
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
+    });
+
+    // Verify "Approve Selected" button appears with count
+    await waitFor(() => {
+      const approveButton = screen.getByText(/approve selected \(3\)/i);
+      expect(approveButton).toBeInTheDocument();
+    });
+  });
+
+  it('should toggle individual business selection', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
+    });
+
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      const checkboxes = screen.getAllByRole('checkbox');
+      // First checkbox is "Select All", second is first business
+      const firstBusinessCheckbox = checkboxes[1];
+      fireEvent.click(firstBusinessCheckbox);
+    });
+
+    // Verify selection count updates
+    await waitFor(() => {
+      const approveButton = screen.getByText(/approve selected \(1\)/i);
+      expect(approveButton).toBeInTheDocument();
+    });
+  });
+
+  it('should show "Approve Selected" button when items are selected', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
+    });
+
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
+    });
+
+    await waitFor(() => {
+      const approveButton = screen.getByText(/approve selected/i);
+      expect(approveButton).toBeInTheDocument();
+    });
+  });
+
+  it('should show "Clear Selection" button when items are selected', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
+    });
+
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
+    });
+
+    await waitFor(() => {
+      const clearButton = screen.getByText(/clear selection/i);
+      expect(clearButton).toBeInTheDocument();
+    });
+  });
+
+  it('should call bulk approve mutation when "Approve Selected" is clicked', async () => {
+    const mockMutationResponse = {
+      ok: true,
+      json: async () => ({
+        data: {
+          approveBusinesses: {
+            success: true,
+            approvedCount: 3,
+            failedIds: [],
+          },
+        },
+      }),
+    };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           data: { pendingBusinesses: mockPendingBusinesses },
         }),
-      });
+      })
+      .mockResolvedValueOnce(mockMutationResponse);
 
-      render(<AdminReviewPage />);
+    render(<AdminReviewPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-        expect(screen.getByText(/black diamond consulting/i)).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
     });
 
-    it('shows approve and reject buttons for each business', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+    await waitFor(() => {
+      const approveButton = screen.getByText(/approve selected/i);
+      fireEvent.click(approveButton);
+    });
+
+    // Verify mutation was called
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    // Check the second call was the mutation
+    const mutationCall = (global.fetch as jest.Mock).mock.calls[1];
+    expect(mutationCall[1].method).toBe('POST');
+    const body = JSON.parse(mutationCall[1].body);
+    expect(body.query).toContain('approveBusinesses');
+    expect(body.variables.businessIds).toHaveLength(3);
+  });
+
+  it('should show loading state during bulk approval', async () => {
+    const pendingPromise = new Promise((resolve) => setTimeout(resolve, 100));
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           data: { pendingBusinesses: mockPendingBusinesses },
         }),
-      });
+      })
+      .mockImplementationOnce(() => pendingPromise.then(() => ({
+        ok: true,
+        json: async () => ({
+          data: {
+            approveBusinesses: {
+              success: true,
+              approvedCount: 3,
+              failedIds: [],
+            },
+          },
+        }),
+      })));
 
-      render(<AdminReviewPage />);
+    render(<AdminReviewPage />);
 
-      await waitFor(() => {
-        const approveButtons = screen.getAllByTestId('button');
-        const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-        const rejectButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('reject'));
-        expect(approveButton).toBeInTheDocument();
-        expect(rejectButton).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
+    });
+
+    const approveButton = await screen.findByText(/approve selected/i);
+    fireEvent.click(approveButton);
+
+    // Button should show approving state
+    await waitFor(() => {
+      expect(screen.getByText(/approving/i)).toBeInTheDocument();
     });
   });
 
-  describe('AC3: Approve Business Flow', () => {
-    it('calls approveBusiness mutation when approve button is clicked', async () => {
-      const mockSuccessResponse = {
-        ok: true,
-        json: async () => ({
-          data: {
-            approveBusiness: {
-              success: true,
-              business: mockPendingBusinesses[0],
-            },
-          },
-        }),
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: { pendingBusinesses: mockPendingBusinesses },
-          }),
-        })
-        .mockResolvedValueOnce(mockSuccessResponse);
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-      });
-
-      const approveButtons = screen.getAllByTestId('button');
-      const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-      fireEvent.click(approveButton);
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/api/graphql',
-          expect.objectContaining({
-            method: 'POST',
-            body: expect.stringContaining('approveBusiness'),
-          })
-        );
-      });
+  it('should clear selection when "Clear Selection" is clicked', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: mockPendingBusinesses },
+      }),
     });
 
-    it('shows success confirmation message after approving a business', async () => {
-      const mockSuccessResponse = {
-        ok: true,
-        json: async () => ({
-          data: {
-            approveBusiness: {
-              success: true,
-              business: mockPendingBusinesses[0],
-            },
-          },
-        }),
-      };
+    render(<AdminReviewPage />);
 
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: { pendingBusinesses: mockPendingBusinesses },
-          }),
-        })
-        .mockResolvedValueOnce(mockSuccessResponse);
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-      });
-
-      const approveButtons = screen.getAllByTestId('button');
-      const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-      fireEvent.click(approveButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/business approved successfully/i)).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
     });
 
-    it('removes approved business from pending list after successful approval', async () => {
-      const mockSuccessResponse = {
-        ok: true,
-        json: async () => ({
-          data: {
-            approveBusiness: {
-              success: true,
-              business: mockPendingBusinesses[0],
-            },
-          },
-        }),
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: { pendingBusinesses: mockPendingBusinesses },
-          }),
-        })
-        .mockResolvedValueOnce(mockSuccessResponse);
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-        expect(screen.getByText(/black diamond consulting/i)).toBeInTheDocument();
-      });
-
-      const approveButtons = screen.getAllByTestId('button');
-      const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-      fireEvent.click(approveButton);
-
-      await waitFor(() => {
-        expect(screen.queryByText(/soul food kitchen/i)).not.toBeInTheDocument();
-      });
-
-      expect(screen.getByText(/black diamond consulting/i)).toBeInTheDocument();
+    await waitFor(() => {
+      const clearButton = screen.getByText(/clear selection/i);
+      fireEvent.click(clearButton);
     });
 
-    it('shows error message when approval fails', async () => {
-      const mockErrorResponse = {
-        ok: true,
-        json: async () => ({
-          errors: [{ message: 'Business not found' }],
-        }),
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: { pendingBusinesses: mockPendingBusinesses },
-          }),
-        })
-        .mockResolvedValueOnce(mockErrorResponse);
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-      });
-
-      const approveButtons = screen.getAllByTestId('button');
-      const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-      fireEvent.click(approveButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/error/i)).toBeInTheDocument();
-      });
-    });
-
-    it('handles network error gracefully', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: { pendingBusinesses: mockPendingBusinesses },
-          }),
-        })
-        .mockRejectedValueOnce(new Error('Network error'));
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-      });
-
-      const approveButtons = screen.getAllByTestId('button');
-      const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-      fireEvent.click(approveButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/network error/i)).toBeInTheDocument();
-      });
-    });
-
-    it('clears success message after 3 seconds', async () => {
-      jest.useFakeTimers();
-
-      const mockSuccessResponse = {
-        ok: true,
-        json: async () => ({
-          data: {
-            approveBusiness: {
-              success: true,
-              business: mockPendingBusinesses[0],
-            },
-          },
-        }),
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: { pendingBusinesses: mockPendingBusinesses },
-          }),
-        })
-        .mockResolvedValueOnce(mockSuccessResponse);
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
-      });
-
-      const approveButtons = screen.getAllByTestId('button');
-      const approveButton = approveButtons.find(btn => btn.textContent?.toLowerCase().includes('approve'));
-      fireEvent.click(approveButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/business approved successfully/i)).toBeInTheDocument();
-      });
-
-      jest.advanceTimersByTime(3000);
-
-      await waitFor(() => {
-        expect(screen.queryByText(/business approved successfully/i)).not.toBeInTheDocument();
-      });
-
-      jest.useRealTimers();
+    // Verify "Approve Selected" button is no longer visible
+    await waitFor(() => {
+      expect(screen.queryByText(/approve selected/i)).not.toBeInTheDocument();
     });
   });
 
-  describe('State Matrix - Edge Cases', () => {
-    it('handles empty pending businesses list', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
+  it('should show error when bulk approval fails', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: { pendingBusinesses: [] },
+          data: { pendingBusinesses: mockPendingBusinesses },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          errors: [{ message: 'Approval failed' }],
         }),
       });
 
-      render(<AdminReviewPage />);
+    render(<AdminReviewPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/no pending businesses/i)).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      const selectAllCheckbox = screen.getByRole('checkbox', { name: /select all/i });
+      fireEvent.click(selectAllCheckbox);
     });
 
-    it('handles GraphQL error response', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          errors: [{ message: 'Database connection failed' }],
-        }),
-      });
-
-      render(<AdminReviewPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/error loading pending businesses/i)).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      const approveButton = screen.getByText(/approve selected/i);
+      fireEvent.click(approveButton);
     });
 
-    it('handles HTTP error response', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
+    // Error should be displayed
+    await waitFor(() => {
+      expect(screen.getByText(/approval failed/i)).toBeInTheDocument();
+    });
+  });
 
-      render(<AdminReviewPage />);
+  it('should show empty state when no pending businesses', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { pendingBusinesses: [] },
+      }),
+    });
 
-      await waitFor(() => {
-        expect(screen.getByText(/error loading pending businesses/i)).toBeInTheDocument();
-      });
+    render(<AdminReviewPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/no pending businesses/i)).toBeInTheDocument();
     });
   });
 });

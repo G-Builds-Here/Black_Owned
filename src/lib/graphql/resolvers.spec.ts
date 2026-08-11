@@ -1,31 +1,19 @@
 /**
- * GraphQL Resolvers Tests - Registration and Business Creation
+ * GraphQL Resolvers Tests - Registration
  */
 
-// Mock minio-service before importing resolvers
-jest.mock("../minio/minio-service", () => ({
-  MinioService: {},
-  createMinioServiceFromEnv: jest.fn(),
-}));
-
-import { register, createBusiness } from "./resolvers";
-import { findByEmail, create, closePool, getPool } from "../db/user-repository";
+import { register, approveBusinesses, pendingBusinesses } from "./resolvers";
+import { findByEmail, create, closePool } from "../db/user-repository";
 import { hashPassword } from "../auth/auth-service";
 import { validatePassword } from "../../types/user";
 
 // Mock the database functions
-jest.mock("../db/user-repository", () => {
-  const mockPool = {
-    connect: jest.fn(),
-  };
-  return {
-    findByEmail: jest.fn(),
-    create: jest.fn(),
-    closePool: jest.fn(),
-    initializeUserSchema: jest.fn(),
-    getPool: jest.fn(() => mockPool),
-  };
-});
+jest.mock("../db/user-repository", () => ({
+  findByEmail: jest.fn(),
+  create: jest.fn(),
+  closePool: jest.fn(),
+  initializeUserSchema: jest.fn(),
+}));
 
 jest.mock("../auth/auth-service", () => ({
   hashPassword: jest.fn(),
@@ -212,217 +200,134 @@ describe("validatePassword", () => {
   });
 });
 
-describe("createBusiness resolver", () => {
-  const mockContext = {
-    user: { id: "user-123" },
-  };
+// Mock database pool for business resolver tests
+const mockQuery = jest.fn();
+const mockPool = {
+  connect: jest.fn(() => ({
+    query: mockQuery,
+    release: jest.fn(),
+  })),
+};
 
-  const mockArgs = {
-    input: {
-      name: "Test Business",
-      description: "Test description",
-      categoryId: "cat-1",
-    },
-  };
+jest.mock("../db/user-repository", () => ({
+  ...jest.requireActual("../db/user-repository"),
+  getPool: () => mockPool,
+}));
 
+describe("approveBusinesses resolver", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it("should reject request when user is not authenticated", async () => {
-    const result = await createBusiness(
-      null,
-      mockArgs,
-      { user: undefined }
-    );
+  it("should reject empty business IDs array", async () => {
+    const result = await approveBusinesses(null, { businessIds: [] });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("Authentication required");
+    expect(result.approvedCount).toBe(0);
+    expect(result.error).toBe("No business IDs provided");
   });
 
-  it("should reject when name is missing", async () => {
-    const result = await createBusiness(
-      null,
-      { input: { name: "", description: "Test", categoryId: "cat-1" } },
-      mockContext
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("Name is required");
-  });
-
-  it("should reject when category ID is missing", async () => {
-    const result = await createBusiness(
-      null,
-      { input: { name: "Test", description: "Test", categoryId: "" } },
-      mockContext
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("Category ID is required");
-  });
-
-  it("should successfully create a business", async () => {
-    const mockBusiness = {
-      id: "biz-123",
-      ownerId: "user-123",
-      name: "Test Business",
-      description: "Test description",
-      categoryId: "cat-1",
-      verificationStatus: "unverified",
-      createdAt: new Date("2024-01-01"),
-      updatedAt: new Date("2024-01-01"),
-    };
-
-    const mockClient = {
-      query: jest.fn()
-        .mockResolvedValueOnce({ rows: [] }) // BEGIN
-        .mockResolvedValueOnce({ rows: [mockBusiness] }) // INSERT
-        .mockResolvedValueOnce({ rows: [] }), // COMMIT
-      release: jest.fn(),
-    };
-
-    (getPool as jest.Mock).mockReturnValue({
-      connect: jest.fn().mockReturnValue(mockClient),
+  it("should approve a single business successfully", async () => {
+    const businessId = "test-business-id";
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: businessId }],
     });
 
-    const result = await createBusiness(null, mockArgs, mockContext);
+    const result = await approveBusinesses(null, { businessIds: [businessId] });
 
     expect(result.success).toBe(true);
-    expect(result.business).toBeDefined();
-    expect(result.business.name).toBe("Test Business");
-    expect(mockClient.query).toHaveBeenCalledWith("BEGIN");
-    expect(mockClient.query).toHaveBeenCalledWith("COMMIT");
-    expect(mockClient.release).toHaveBeenCalled();
+    expect(result.approvedCount).toBe(1);
+    expect(result.failedIds).toEqual([]);
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE"),
+      [businessId]
+    );
   });
 
-  it("should rollback transaction when insert fails", async () => {
-    const mockClient = {
-      query: jest.fn()
-        .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(new Error("Duplicate key violation")), // INSERT fails
-      release: jest.fn(),
-    };
+  it("should approve multiple businesses successfully", async () => {
+    const businessIds = ["id-1", "id-2", "id-3"];
+    mockQuery.mockResolvedValue({ rows: [{ id: "test-id" }] });
 
-    (getPool as jest.Mock).mockReturnValue({
-      connect: jest.fn().mockReturnValue(mockClient),
-    });
+    const result = await approveBusinesses(null, { businessIds });
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    expect(result.success).toBe(true);
+    expect(result.approvedCount).toBe(3);
+    expect(result.failedIds).toEqual([]);
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+  });
 
-    const result = await createBusiness(
-      null,
-      mockArgs,
-      mockContext
-    );
+  it("should track failed approvals when business not found", async () => {
+    const businessIds = ["existing-id", "non-existing-id"];
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "existing-id" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await approveBusinesses(null, { businessIds });
+
+    expect(result.success).toBe(true);
+    expect(result.approvedCount).toBe(1);
+    expect(result.failedIds).toEqual(["non-existing-id"]);
+  });
+
+  it("should handle database errors gracefully", async () => {
+    const businessIds = ["error-id"];
+    mockQuery.mockRejectedValueOnce(new Error("Database connection failed"));
+
+    const result = await approveBusinesses(null, { businessIds });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("Failed to create business");
-    expect(mockClient.query).toHaveBeenCalledWith("BEGIN");
-    expect(mockClient.query).toHaveBeenCalledWith("ROLLBACK");
-    expect(mockClient.release).toHaveBeenCalled();
+    expect(result.approvedCount).toBe(0);
+    expect(result.failedIds).toEqual(["error-id"]);
+  });
+});
 
-    consoleErrorSpy.mockRestore();
+describe("pendingBusinesses resolver", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it("should log error with business details on failure", async () => {
-    const mockClient = {
-      query: jest.fn()
-        .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(new Error("Constraint violation")), // INSERT fails
-      release: jest.fn(),
-    };
+  it("should return empty array when no pending businesses", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
 
-    (getPool as jest.Mock).mockReturnValue({
-      connect: jest.fn().mockReturnValue(mockClient),
-    });
+    const result = await pendingBusinesses();
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
-    await createBusiness(
-      null,
-      mockArgs,
-      mockContext
+    expect(result).toEqual([]);
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT")
     );
-
-    // Verify error was logged with business details
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Business creation failed - transaction rolled back:",
-      expect.stringContaining("createBusiness")
-    );
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Business creation failed - transaction rolled back:",
-      expect.stringContaining("user-123")
-    );
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Business creation failed - transaction rolled back:",
-      expect.stringContaining("Test Business")
-    );
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Business creation failed - transaction rolled back:",
-      expect.stringContaining("cat-1")
-    );
-
-    consoleErrorSpy.mockRestore();
   });
 
-  it("should handle rollback failure gracefully", async () => {
-    const mockClient = {
-      query: jest.fn()
-        .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(new Error("Insert failed")) // INSERT fails
-        .mockRejectedValueOnce(new Error("Rollback failed")), // ROLLBACK fails
-      release: jest.fn(),
-    };
+  it("should return pending businesses with correct format", async () => {
+    const mockRows = [
+      {
+        id: "business-1",
+        name: "Test Business",
+        category_id: "cat-1",
+        verification_status: "unverified",
+        created_at: new Date("2024-01-01"),
+      },
+    ];
+    mockQuery.mockResolvedValueOnce({ rows: mockRows });
 
-    (getPool as jest.Mock).mockReturnValue({
-      connect: jest.fn().mockReturnValue(mockClient),
-    });
+    const result = await pendingBusinesses();
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
-    const result = await createBusiness(null, mockArgs, mockContext);
-
-    expect(result.success).toBe(false);
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Rollback failed:", expect.any(Error));
-
-    consoleErrorSpy.mockRestore();
-  });
-
-  it("should trim whitespace from input fields", async () => {
-    const mockBusiness = {
-      id: "biz-123",
-      owner_id: "user-123",
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      id: "business-1",
       name: "Test Business",
-      description: "Test",
-      category_id: "cat-1",
-      verification_status: "unverified",
-      created_at: new Date(),
-      updated_at: new Date(),
-    };
-
-    const mockClient = {
-      query: jest.fn()
-        .mockResolvedValueOnce({}) // BEGIN
-        .mockResolvedValueOnce({ rows: [mockBusiness] }) // INSERT
-        .mockResolvedValueOnce({}), // COMMIT
-      release: jest.fn(),
-    };
-
-    (getPool as jest.Mock).mockReturnValue({
-      connect: jest.fn().mockReturnValue(mockClient),
+      categoryId: "cat-1",
+      verified: false,
+      createdAt: { timestamp: 1704067200 },
+      phone: undefined,
+      potentialDuplicateId: undefined,
     });
+  });
 
-    await createBusiness(
-      null,
-      { input: { name: "  Test Business  ", description: "  Test  ", categoryId: "  cat-1  " } },
-      mockContext
-    );
+  it("should handle database errors gracefully", async () => {
+    mockQuery.mockRejectedValueOnce(new Error("Database error"));
 
-    // Verify trimmed values were passed to the database (note: 'unverified' is hardcoded in SQL, not passed as param)
-    expect(mockClient.query).toHaveBeenCalledWith(
-      expect.stringContaining("INSERT INTO businesses"),
-      ["user-123", "Test Business", "Test", "cat-1"]
-    );
+    const result = await pendingBusinesses();
+
+    expect(result).toEqual([]);
   });
 });

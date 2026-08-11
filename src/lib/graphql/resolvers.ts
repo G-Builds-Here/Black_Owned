@@ -9,9 +9,6 @@ import {
   getPool,
 } from "../db/user-repository";
 import {
-  findByEmail as findUserByEmail,
-} from "../db/user-repository";
-import {
   hashPassword,
   generateTokenPair,
   verifyToken,
@@ -32,15 +29,12 @@ import {
 import {
   findById as findBusinessById,
   updateNameById,
-  create as createBusinessInDb,
-  approveBusinessById,
-  bulkUpdateVerificationStatus as bulkUpdateBusinessStatus,
+  create as createBusinessInRepo,
+  findBusinessByPhone,
+  updateBusinessWithDuplicateInfo,
+  normalizePhoneNumber,
   Business as BusinessRecord,
 } from "../db/business-repository";
-import {
-  findScrapedBusinessesByStatus,
-} from "../db/scraped-business-repository";
-import { PoolClient } from "pg";
 
 /**
  * Mock business data for search
@@ -318,14 +312,14 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
+function businessRecordToGraphql(business: BusinessRecord) {
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.categoryId,
-    verified: business.verificationStatus === "approved" || business.verificationStatus === "verified",
+    categoryId: business.category_id,
+    verified: business.verified,
     createdAt: {
-      timestamp: Math.floor(business.createdAt.getTime() / 1000),
+      timestamp: Math.floor(business.created_at.getTime() / 1000),
     },
   };
 }
@@ -380,147 +374,8 @@ export async function updateBusiness(
 
   return {
     success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
+    business: businessRecordToGraphql(updatedBusiness),
   };
-}
-
-/**
- * Approve business mutation resolver - updates verification status to "approved"
- */
-export async function approveBusiness(
-  _parent: unknown,
-  args: { id: string }
-): Promise<{
-  success: boolean;
-  business?: unknown;
-  error?: string;
-}> {
-  const { id } = args;
-
-  const dbClient = (global as unknown as { dbClient?: unknown }).dbClient;
-  if (!dbClient) {
-    return {
-      success: false,
-      error: "Database connection not available",
-    };
-  }
-
-  const client = dbClient as PoolClient;
-
-  try {
-    const approvedBusiness = await approveBusinessById(client, id);
-
-    if (!approvedBusiness) {
-      return {
-        success: false,
-        error: "Business not found",
-      };
-    }
-
-    return {
-      success: true,
-      business: businessToGraphqlBusinessEntity(approvedBusiness),
-    };
-  } catch (error) {
-    console.error("Error approving business:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-}
-
-/**
- * Bulk update verification status resolver
- */
-export async function bulkUpdateVerificationStatus(
-  _parent: unknown,
-  args: { businessIds: string[], status: string },
-  context: { headers: { authorization?: string } }
-): Promise<{
-  success: boolean;
-  updatedCount: number;
-  error?: string;
-}> {
-  const { businessIds, status } = args;
-  const authHeader = context.headers.authorization;
-
-  // Validate input
-  if (!businessIds || businessIds.length === 0) {
-    return {
-      success: false,
-      updatedCount: 0,
-      error: "Business IDs required",
-    };
-  }
-
-  // Validate status
-  const validStatuses = ['pending', 'approved', 'flagged'];
-  if (!validStatuses.includes(status)) {
-    return {
-      success: false,
-      updatedCount: 0,
-      error: "Invalid status. Must be 'pending', 'approved', or 'flagged'",
-    };
-  }
-
-  // Extract JWT token from Authorization header
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return {
-      success: false,
-      updatedCount: 0,
-      error: "Authorization required",
-    };
-  }
-
-  const token = authHeader.substring(7);
-
-  // Verify token
-  let payload: JwtPayload;
-  try {
-    payload = verifyToken(token);
-  } catch (error) {
-    return {
-      success: false,
-      updatedCount: 0,
-      error: "Invalid or expired token",
-    };
-  }
-
-  // Check admin role
-  if (payload.role !== 'admin') {
-    return {
-      success: false,
-      updatedCount: 0,
-      error: "Admin access required",
-    };
-  }
-
-  // Get database client and perform bulk update
-  const dbClient = (global as unknown as { dbClient?: unknown }).dbClient;
-  if (!dbClient) {
-    return {
-      success: false,
-      updatedCount: 0,
-      error: "Database connection not available",
-    };
-  }
-
-  const client = dbClient as PoolClient;
-  try {
-    const updatedBusinesses = await bulkUpdateBusinessStatus(client, businessIds, status as 'pending' | 'approved' | 'flagged');
-    return {
-      success: true,
-      updatedCount: updatedBusinesses.length,
-    };
-  } catch (error) {
-    console.error("Error in bulk update:", error);
-    return {
-      success: false,
-      updatedCount: 0,
-      error: error instanceof Error ? error.message : "Update failed",
-    };
-  }
 }
 
 /**
@@ -625,19 +480,26 @@ export async function searchBusinesses(
 /**
  * Convert Business entity to GraphQL Business type
  */
-function businessToGraphqlBusinessEntity(business: Business): {
+function businessToGraphqlBusiness(business: Business): {
   id: string;
   name: string;
   categoryId: string;
   verified: boolean;
   createdAt: { timestamp: number };
+  phone: string | undefined;
+  potentialDuplicateId: string | undefined;
 } {
+  // Handle both camelCase (Business type) and snake_case (raw DB rows)
+  const createdAtDate = business.createdAt || (business as Record<string, unknown>).created_at as Date;
+  const categoryId = business.categoryId || (business as Record<string, unknown>).category_id as string;
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.categoryId,
-    verified: business.verificationStatus === "verified" || business.verificationStatus === "approved",
-    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
+    categoryId: categoryId,
+    verified: business.verificationStatus === "verified",
+    createdAt: { timestamp: Math.floor(createdAtDate.getTime() / 1000) },
+    phone: business.phone,
+    potentialDuplicateId: business.potentialDuplicateId,
   };
 }
 
@@ -652,14 +514,16 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusinessResolver(
+export async function createBusiness(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string } },
+  args: { input: { name: string; description?: string; categoryId: string; phone?: string } },
   context: unknown
 ): Promise<{
   success: boolean;
   business?: unknown;
   error?: string;
+  isPotentialDuplicate?: boolean;
+  existingBusinessId?: string;
 }> {
   const { input } = args;
   const userId = getCurrentUserId(context);
@@ -689,17 +553,33 @@ export async function createBusinessResolver(
 
   const client = await getPool().connect();
   try {
+    // Check for duplicate phone number if provided
+    let existingBusinessId: string | undefined;
+    let isPotentialDuplicate = false;
+
+    if (input.phone && input.phone.trim() !== "") {
+      const existingBusiness = await findBusinessByPhone(client, input.phone.trim());
+      if (existingBusiness) {
+        isPotentialDuplicate = true;
+        existingBusinessId = existingBusiness.id;
+      }
+    }
+
     const business = await createBusinessInDb(
       client,
       userId,
       input.name.trim(),
       input.description?.trim(),
-      input.categoryId.trim()
+      input.categoryId.trim(),
+      input.phone?.trim(),
+      existingBusinessId
     );
 
     return {
       success: true,
       business: businessToGraphqlBusiness(business),
+      isPotentialDuplicate,
+      existingBusinessId,
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -713,81 +593,113 @@ export async function createBusinessResolver(
 }
 
 /**
- * Convert scraped business to GraphQL ScrapedBusiness type
+ * Internal function to create a business in the database
  */
-function scrapedBusinessToGraphql(scrapedBiz: {
-  id: string;
-  name: string;
-  address: string;
-  source: string;
-  rating?: number;
-  category?: string;
-  phone?: string;
-  website?: string;
-  status: string;
-  createdAt: Date;
-}): {
-  id: string;
-  name: string;
-  address: string;
-  source: string;
-  rating: number | null;
-  category: string | null;
-  phone: string | null;
-  website: string | null;
-  status: string;
-  createdAt: { timestamp: number };
-} {
-  return {
-    id: scrapedBiz.id,
-    name: scrapedBiz.name,
-    address: scrapedBiz.address,
-    source: scrapedBiz.source,
-    rating: scrapedBiz.rating ?? null,
-    category: scrapedBiz.category ?? null,
-    phone: scrapedBiz.phone ?? null,
-    website: scrapedBiz.website ?? null,
-    status: scrapedBiz.status,
-    createdAt: {
-      timestamp: Math.floor(scrapedBiz.createdAt.getTime() / 1000),
-    },
-  };
+async function createBusinessInDb(
+  client: import("pg").PoolClient,
+  ownerId: string,
+  name: string,
+  description: string | undefined,
+  categoryId: string,
+  phone?: string,
+  potentialDuplicateId?: string
+): Promise<Business> {
+  const schema = process.env.POSTGRES_SCHEMA;
+  const tableName = schema ? `${schema}.businesses` : "businesses";
+  const normalizedPhone = phone ? normalizePhoneNumber(phone) : undefined;
+  const result = await client.query<Business>(
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, phone, potential_duplicate_id)
+     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
+     RETURNING *`,
+    [ownerId, name, description || null, categoryId, normalizedPhone || null, potentialDuplicateId || null]
+  );
+  return result.rows[0];
 }
 
 /**
- * Pending businesses query resolver - returns businesses with pending_review status
+ * Get pending businesses query resolver
  */
-export async function pendingBusinesses(
-  _parent: unknown,
-  _args: unknown,
-  context: unknown
-): Promise<unknown[]> {
-  const ctx = context as { user?: { id: string } };
-  const userId = ctx?.user?.id ?? null;
-
-  if (!userId) {
-    console.warn("pendingBusinesses: admin access required");
-    return [];
-  }
-
-  const client = (global as unknown as { dbClient?: unknown }).dbClient;
-  if (!client) {
-    console.error("pendingBusinesses: database connection not available");
-    return [];
-  }
-
-  const dbClient = client as PoolClient;
-
+export async function pendingBusinesses(): Promise<unknown[]> {
+  const client = await getPool().connect();
   try {
-    const pendingBusinesses = await findScrapedBusinessesByStatus(
-      dbClient,
-      "pending_review"
+    const schema = process.env.POSTGRES_SCHEMA;
+    const tableName = schema ? `${schema}.businesses` : "businesses";
+    const result = await client.query(
+      `SELECT * FROM ${tableName} WHERE verification_status = 'unverified' ORDER BY created_at DESC`
     );
-
-    return pendingBusinesses.map(scrapedBusinessToGraphql);
+    return result.rows.map(businessToGraphqlBusiness);
   } catch (error) {
     console.error("Error fetching pending businesses:", error);
     return [];
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Bulk approve businesses mutation resolver
+ */
+export async function approveBusinesses(
+  _parent: unknown,
+  args: { businessIds: string[] }
+): Promise<{
+  success: boolean;
+  approvedCount: number;
+  failedIds: string[];
+  error?: string;
+}> {
+  const { businessIds } = args;
+
+  if (!businessIds || businessIds.length === 0) {
+    return {
+      success: false,
+      approvedCount: 0,
+      failedIds: [],
+      error: "No business IDs provided",
+    };
+  }
+
+  const client = await getPool().connect();
+  try {
+    const schema = process.env.POSTGRES_SCHEMA;
+    const tableName = schema ? `${schema}.businesses` : "businesses";
+
+    const approvedIds: string[] = [];
+    const failedIds: string[] = [];
+
+    for (const businessId of businessIds) {
+      try {
+        const result = await client.query(
+          `UPDATE ${tableName} SET verification_status = 'verified', updated_at = NOW() WHERE id = $1 RETURNING id`,
+          [businessId]
+        );
+
+        if (result.rows.length > 0) {
+          approvedIds.push(businessId);
+        } else {
+          failedIds.push(businessId);
+        }
+      } catch (error) {
+        console.error(`Error approving business ${businessId}:`, error);
+        failedIds.push(businessId);
+      }
+    }
+
+    return {
+      success: approvedIds.length > 0,
+      approvedCount: approvedIds.length,
+      failedIds,
+    };
+  } catch (error) {
+    console.error("Bulk approval error:", error);
+    return {
+      success: false,
+      approvedCount: 0,
+      failedIds: businessIds,
+      error: error instanceof Error ? error.message : "Failed to approve businesses",
+    };
+  } finally {
+    client.release();
   }
 }
 
@@ -802,10 +714,9 @@ export const resolvers = {
   },
   Mutation: {
     register,
-    createBusiness: createBusinessResolver,
+    createBusiness,
     submitVerification,
     updateBusiness,
-    approveBusiness,
-    bulkUpdateVerificationStatus,
+    approveBusinesses,
   },
 };
