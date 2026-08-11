@@ -14,6 +14,7 @@ import {
 } from "../types/yelp-scraper";
 import { ScraperSource } from "../types/scrape-job";
 import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
+import { retryPageNavigation, retryDataExtraction } from "@/lib/scraper/scraper-retry";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -113,23 +114,25 @@ export class YelpScraper {
     const seenNames = new Set<string>();
 
     try {
-      // Navigate to Yelp search
-      const searchUrl = `https://www.yelp.com/search?find_desc=${encodeURIComponent(
-        query
-      )}&find_loc=${encodeURIComponent(location)}`;
-      await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
+      // Navigate to Yelp search with retry logic
+      await retryPageNavigation(async () => {
+        await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30000 });
+      }, 2);
 
-      // Wait for results to load
-      let resultsLoaded = false;
-      try {
-        await page.waitForSelector(".business-name, .css-1c4t2b3", {
-          timeout: 10000,
-        });
-        resultsLoaded = true;
-      } catch {
-        // Continue even if selector not found - may have different structure
-        resultsLoaded = false;
-      }
+      // Wait for results to load with retry
+      await retryDataExtraction(async () => {
+        let resultsLoaded = false;
+        try {
+          await page.waitForSelector(".business-name, .css-1c4t2b3", {
+            timeout: 10000,
+          });
+          resultsLoaded = true;
+        } catch {
+          // Continue even if selector not found - may have different structure
+          resultsLoaded = false;
+        }
+        return resultsLoaded;
+      }, 2);
 
       // Initialize job state
       const jobState: ScraperJobState = {
@@ -217,7 +220,7 @@ export class YelpScraper {
     page: Page,
     seenNames: Set<string>
   ): Promise<ScrapedBusiness[]> {
-    const businesses = await page.evaluate(() => {
+    const businesses = await retryDataExtraction(async () => page.evaluate(() => {
       const results: Array<{
         name: string;
         address: string;
@@ -292,7 +295,7 @@ export class YelpScraper {
       }
 
       return results;
-    });
+    }));
 
     // Filter duplicates in the Node.js context where seenNames is accessible
     const filteredBusinesses = businesses.filter((b) => {
@@ -335,8 +338,10 @@ export class YelpScraper {
             const isDisabled = await nextButton.isDisabled();
 
             if (isVisible && !isDisabled) {
-              await nextButton.click();
-              await page.waitForLoadState("networkidle", { timeout: 10000 });
+              await retryPageNavigation(async () => {
+                await nextButton.click();
+                await page.waitForLoadState("networkidle", { timeout: 10000 });
+              }, 2);
               return true;
             }
           }

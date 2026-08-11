@@ -13,6 +13,7 @@ import {
   ScraperJobState,
 } from "../types/facebook-scraper";
 import { checkUrlAllowed, type RobotsCheckResult } from "@/lib/scraper/robots-service";
+import { retryPageNavigation, retryDataExtraction } from "@/lib/scraper/scraper-retry";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
@@ -111,8 +112,12 @@ export class FacebookScraper {
       // Build search URL with query and location
       const searchUrl = `${FACEBOOK_SEARCH_URL}?q=${encodeURIComponent(query)}&geo=${encodeURIComponent(location)}`;
 
-      await page.goto(searchUrl, { waitUntil: "networkidle" });
-      await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
+      await retryPageNavigation(async () => {
+        await page.goto(searchUrl, { waitUntil: "networkidle" });
+      }, 2);
+      await retryDataExtraction(async () => {
+        await page.waitForSelector('[data-pagelet="PageUnits"]', { timeout: 10000 });
+      }, 2);
 
       // Extract business pages from search results
       const extractedBusinesses = await this.extractBusinessesFromPage(page);
@@ -195,7 +200,7 @@ export class FacebookScraper {
   private async extractBusinessesFromPage(
     page: Page
   ): Promise<ScrapedBusiness[]> {
-    return await page.evaluate(() => {
+    return await retryDataExtraction(async () => page.evaluate(() => {
       const businesses: ScrapedBusiness[] = [];
       const pageUnits = document.querySelectorAll('[data-pagelet="PageUnits"]');
 
@@ -219,7 +224,7 @@ export class FacebookScraper {
       });
 
       return businesses;
-    });
+    }));
   }
 
   /**
@@ -229,8 +234,10 @@ export class FacebookScraper {
     try {
       const nextButton = await page.$('button:has-text("More Results")');
       if (nextButton) {
-        await nextButton.click();
-        await page.waitForLoadState("networkidle");
+        await retryPageNavigation(async () => {
+          await nextButton.click();
+          await page.waitForLoadState("networkidle");
+        }, 2);
         return true;
       }
       return false;

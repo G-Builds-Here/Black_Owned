@@ -5,6 +5,7 @@
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import { checkUrlAllowed, type RobotsCheckResult } from '@/lib/scraper/robots-service';
+import { withRetry, RetryError, type RetryConfig, retryPageNavigation, retryDataExtraction } from '@/lib/scraper/scraper-retry';
 
 export interface ScrapedBusiness {
   name: string;
@@ -145,16 +146,20 @@ class GoogleMapsScraper {
       const searchQuery = location ? `${query} in ${location}` : query;
       const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
 
-      // Navigate to Google Maps search
-      await page.goto(searchUrl, {
-        waitUntil: 'networkidle',
-        timeout: this.config.timeoutMs,
-      });
+      // Navigate to Google Maps search with retry logic
+      await retryPageNavigation(async () => {
+        await page.goto(searchUrl, {
+          waitUntil: 'networkidle',
+          timeout: this.config.timeoutMs,
+        });
+      }, 2);
 
-      // Wait for results to load
-      await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
-        // Continue even if selector not found - results may still load
-      });
+      // Wait for results to load with retry
+      await retryDataExtraction(async () => {
+        await page.waitForSelector('[role="main"]', { timeout: 30000 }).catch(() => {
+          // Continue even if selector not found - results may still load
+        });
+      }, 2);
 
       // Wait a moment for dynamic content
       await page.waitForTimeout(2000);
@@ -217,9 +222,11 @@ class GoogleMapsScraper {
         break;
       }
 
-      // Click the next button to go to the next page
-      await nextButton.click();
-      await page.waitForLoadState('networkidle');
+      // Click the next button to go to the next page with retry logic
+      await retryPageNavigation(async () => {
+        await nextButton.click();
+        await page.waitForLoadState('networkidle');
+      }, 2);
       await page.waitForTimeout(2000);
 
       currentPage++;
@@ -355,18 +362,24 @@ class GoogleMapsScraper {
     try {
       const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
 
-      await page.goto(searchUrl, {
-        waitUntil: 'networkidle',
-        timeout: this.config.timeoutMs,
-      });
+      await retryPageNavigation(async () => {
+        await page.goto(searchUrl, {
+          waitUntil: 'networkidle',
+          timeout: this.config.timeoutMs,
+        });
+      }, 2);
 
-      await page.waitForTimeout(2000);
+      await retryDataExtraction(async () => {
+        await page.waitForTimeout(2000);
+      }, 2);
 
       // Click on the first result to get details
       const firstResult = await page.$('[data-item-id]');
       if (firstResult) {
-        await firstResult.click();
-        await page.waitForTimeout(2000);
+        await retryPageNavigation(async () => {
+          await firstResult.click();
+          await page.waitForTimeout(2000);
+        }, 2);
 
         return this.extractBusinessDetails(page);
       }
