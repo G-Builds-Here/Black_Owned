@@ -6,6 +6,11 @@
  */
 
 /**
+ * Scraper source enumeration
+ */
+export type ScraperSource = "google-maps" | "yelp" | "facebook";
+
+/**
  * Raw data from Google Maps scraper
  */
 export interface GoogleMapsRawData {
@@ -126,20 +131,6 @@ export interface FacebookRawData {
 }
 
 /**
- * Source enumeration for scraper origins
- */
-export enum ScraperSource {
-  GOOGLE_MAPS = "google_maps",
-  YELP = "yelp",
-  FACEBOOK = "facebook",
-}
-
-/**
- * Union type for all raw scraper data
- */
-export type RawScraperData = GoogleMapsRawData | YelpRawData | FacebookRawData;
-
-/**
  * ScraperResult - Contains raw scraped data before normalization
  *
  * This type wraps the source-specific raw data and tracks its origin.
@@ -150,7 +141,7 @@ export interface ScraperResult {
   /** The source platform that provided this data */
   source: ScraperSource;
   /** The raw data from the source */
-  rawData: RawScraperData;
+  rawData: GoogleMapsRawData | YelpRawData | FacebookRawData;
   /** Timestamp when the data was scraped */
   scrapedAt: Date;
   /** Optional job ID if scraped as part of a batch job */

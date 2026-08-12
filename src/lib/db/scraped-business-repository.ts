@@ -5,7 +5,7 @@
  */
 
 import { PoolClient } from "pg";
-import { ScrapedBusiness, ScrapedBusinessStatus, CreateScrapedBusinessInput } from "../../types/scraped-business";
+import { CreateScrapedBusinessInput, ScrapedBusiness } from "../../types/scraped-business";
 import { ScraperSource } from "../../types/scraper-result";
 
 /**
@@ -28,24 +28,24 @@ export async function initializeScrapedBusinessSchema(client: PoolClient): Promi
       name VARCHAR(255) NOT NULL,
       address TEXT NOT NULL,
       phone VARCHAR(50),
-      website VARCHAR(500),
-      category VARCHAR(255),
+      website VARCHAR(255),
+      category VARCHAR(100),
       rating DECIMAL(3,2),
       review_count INTEGER,
-      status VARCHAR(20) NOT NULL DEFAULT 'pending_review',
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      CONSTRAINT fk_scrape_job FOREIGN KEY (scrape_job_id) REFERENCES scrape_jobs(id) ON DELETE CASCADE
     )
   `);
 
-  // Create index on scrape_job_id for fast lookups by job
+  // Create index on scrape_job_id for fast lookups
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_scraped_businesses_job_id ON ${getTableName()}(scrape_job_id)
   `);
 
-  // Create index on status for filtering
+  // Create index on source for filtering
   await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_status ON ${getTableName()}(status)
+    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_source ON ${getTableName()}(source)
   `);
 }
 
@@ -65,7 +65,6 @@ function rowToScrapedBusiness(row: unknown): ScrapedBusiness {
     category: (r.category as string | null) ?? undefined,
     rating: (r.rating as number | null) ?? undefined,
     reviewCount: (r.review_count as number | null) ?? undefined,
-    status: r.status as ScrapedBusinessStatus,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -80,26 +79,26 @@ export async function createScrapedBusiness(
 ): Promise<ScrapedBusiness> {
   const tableName = getTableName();
   const result = await client.query<ScrapedBusiness>(
-    `INSERT INTO ${tableName} (scrape_job_id, source, name, address, phone, website, category, rating, review_count, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending_review')
+    `INSERT INTO ${tableName} (scrape_job_id, source, name, address, phone, website, category, rating, review_count)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       input.scrapeJobId,
       input.source,
       input.name,
       input.address,
-      input.phone || null,
-      input.website || null,
-      input.category || null,
-      input.rating || null,
-      input.reviewCount || null,
+      input.phone ?? null,
+      input.website ?? null,
+      input.category ?? null,
+      input.rating ?? null,
+      input.reviewCount ?? null,
     ]
   );
   return rowToScrapedBusiness(result.rows[0]);
 }
 
 /**
- * Find all scraped businesses for a specific scrape job
+ * Find all scraped businesses for a given scrape job
  */
 export async function findScrapedBusinessesByJobId(
   client: PoolClient,
@@ -126,83 +125,4 @@ export async function findScrapedBusinessById(
     [id]
   );
   return result.rows[0] ? rowToScrapedBusiness(result.rows[0]) : undefined;
-}
-
-/**
- * Update the status of a scraped business
- */
-export async function updateScrapedBusinessStatus(
-  client: PoolClient,
-  id: string,
-  status: ScrapedBusinessStatus
-): Promise<ScrapedBusiness | undefined> {
-  const tableName = getTableName();
-  const result = await client.query<ScrapedBusiness>(
-    `UPDATE ${tableName}
-     SET status = $2, updated_at = NOW()
-     WHERE id = $1
-     RETURNING *`,
-    [id, status]
-  );
-  return result.rows[0] ? rowToScrapedBusiness(result.rows[0]) : undefined;
-}
-
-/**
- * Delete a scraped business by ID
- */
-export async function deleteScrapedBusiness(
-  client: PoolClient,
-  id: string
-): Promise<boolean> {
-  const tableName = getTableName();
-  const result = await client.query(
-    `DELETE FROM ${tableName} WHERE id = $1`,
-    [id]
-  );
-  return result.rowCount !== null && result.rowCount > 0;
-}
-
-/**
- * Delete all scraped businesses for a specific job
- */
-export async function deleteScrapedBusinessesByJobId(
-  client: PoolClient,
-  jobId: string
-): Promise<number> {
-  const tableName = getTableName();
-  const result = await client.query(
-    `DELETE FROM ${tableName} WHERE scrape_job_id = $1`,
-    [jobId]
-  );
-  return result.rowCount || 0;
-}
-
-/**
- * Get count of scraped businesses by job ID
- */
-export async function countScrapedBusinessesByJobId(
-  client: PoolClient,
-  jobId: string
-): Promise<number> {
-  const tableName = getTableName();
-  const result = await client.query<{ count: string }>(
-    `SELECT COUNT(*) FROM ${tableName} WHERE scrape_job_id = $1`,
-    [jobId]
-  );
-  return parseInt(result.rows[0].count, 10);
-}
-
-/**
- * Find all scraped businesses by status
- */
-export async function findScrapedBusinessesByStatus(
-  client: PoolClient,
-  status: ScrapedBusinessStatus
-): Promise<ScrapedBusiness[]> {
-  const tableName = getTableName();
-  const result = await client.query<ScrapedBusiness>(
-    `SELECT * FROM ${tableName} WHERE status = $1 ORDER BY created_at DESC`,
-    [status]
-  );
-  return result.rows.map(rowToScrapedBusiness);
 }

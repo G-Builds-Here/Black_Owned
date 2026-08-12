@@ -1,42 +1,51 @@
 /**
  * Business Listing Types
  *
- * Types for scraped business listing data from external sources.
+ * Raw and normalized data structures for business listings from various sources.
  */
 
 /**
- * Scraper source - the external platform to scrape from
+ * Scraper source enumeration
  */
 export type ScraperSource = "google-maps" | "yelp" | "facebook";
 
 /**
- * Raw business listing data from a scraper source
+ * Raw business listing data
  */
 export interface RawBusinessListing {
+  source: ScraperSource;
   rawName: string;
   rawAddress: string;
-  source: ScraperSource;
-  rawMetadata?: Record<string, unknown>;
+  rawPhone?: string;
+  rawWebsite?: string;
+  rawRating?: number;
+  rawReviewCount?: number;
+  rawCategory?: string;
 }
 
 /**
- * Extracted business data after parsing
+ * Address components
+ */
+export interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  countryCode: string;
+  fullAddress: string;
+}
+
+/**
+ * Extracted business data (normalized)
  */
 export interface ExtractedBusinessData {
   name: string;
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    countryCode: string;
-    fullAddress: string;
-  };
+  address: Address;
   source: ScraperSource;
 }
 
 /**
- * Result from extracting business data
+ * Extraction result
  */
 export interface ExtractionResult {
   success: boolean;
@@ -45,7 +54,7 @@ export interface ExtractionResult {
 }
 
 /**
- * Scraper interface for platform-specific extraction logic
+ * Business scraper interface
  */
 export interface BusinessScraper {
   source: ScraperSource;

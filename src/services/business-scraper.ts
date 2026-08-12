@@ -5,6 +5,7 @@
  */
 
 import {
+  BusinessScraper,
   RawBusinessListing,
   ExtractedBusinessData,
   ExtractionResult,

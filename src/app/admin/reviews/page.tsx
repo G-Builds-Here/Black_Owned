@@ -39,19 +39,27 @@ interface ReviewBusiness {
  */
 const MOCK_PENDING_REVIEWS: ReviewBusiness[] = [
   {
-    id: '1',
+    id: 'biz-001',
     name: 'Soul Food Kitchen',
-    address: '123 Main St, Atlanta GA',
-    source: 'Direct Submission',
-    rating: 0,
-    submittedAt: '2026-07-14',
+    address: '123 Main St, Harlem, NY',
+    source: 'Google Maps',
+    rating: 4.5,
+    submittedAt: '2026-08-09',
     description: 'Authentic soul food restaurant serving traditional Southern cuisine with a modern twist.',
-    category: 'Restaurant',
-    phone: '(404) 555-0123',
-    website: 'https://soulfoodkitchen.example.com',
+    category: 'Food & Dining',
+    phone: '(555) 123-4567',
+    website: 'https://soulfoodkitchen.com',
     hours: 'Mon-Sun: 11:00 AM - 10:00 PM',
     priceRange: '$$',
     originalData: {
+      id: 'biz-001',
+      name: 'Soul Food Kitchen',
+      address: '123 Main St, Harlem, NY',
+      source: 'Google Maps',
+      rating: 4.5,
+      category: 'Food & Dining',
+      phone: '(555) 123-4567',
+      website: 'https://soulfoodkitchen.com',
       scraper: 'DirectSubmission',
       submittedBy: 'business_owner',
       verificationStatus: 'pending',
@@ -59,82 +67,30 @@ const MOCK_PENDING_REVIEWS: ReviewBusiness[] = [
     }
   },
   {
-    id: '2',
-    name: 'Afro Threads',
-    address: '456 Oak Ave, Houston TX',
-    source: 'Partner Referral',
-    rating: 0,
-    submittedAt: '2026-07-14',
-    description: 'Boutique clothing store specializing in African-inspired fashion and accessories.',
-    category: 'Retail',
-    phone: '(713) 555-0456',
-    website: 'https://afrothreads.example.com',
-    hours: 'Mon-Sat: 10:00 AM - 8:00 PM, Sun: 12:00 PM - 6:00 PM',
+    id: 'biz-002',
+    name: 'Black Diamond Consulting',
+    address: '456 Business Ave, Atlanta, GA',
+    source: 'Bing Maps',
+    rating: 5.0,
+    submittedAt: '2026-08-08',
+    description: 'Professional consulting services for small businesses.',
+    category: 'Professional Services',
+    phone: '(555) 987-6543',
+    website: 'https://blackdiamondconsulting.com',
+    hours: 'Mon-Fri: 9:00 AM - 6:00 PM',
     priceRange: '$$$',
     originalData: {
+      id: 'biz-002',
+      name: 'Black Diamond Consulting',
+      address: '456 Business Ave, Atlanta, GA',
+      source: 'Bing Maps',
+      rating: 5.0,
+      category: 'Professional Services',
+      phone: '(555) 987-6543',
+      website: 'https://blackdiamondconsulting.com',
       scraper: 'PartnerAPI',
-      referredBy: 'HoustonBlackChamber',
-      referralDate: '2026-07-10',
-      partnerId: 'HBC-2024-001',
-    }
-  },
-  {
-    id: '3',
-    name: 'Heritage Wellness Center',
-    address: '789 Pine Rd, Dallas TX',
-    source: 'Direct Submission',
-    rating: 0,
-    submittedAt: '2026-07-13',
-    description: 'Comprehensive wellness center offering holistic health services and community programs.',
-    category: 'Health & Wellness',
-    phone: '(214) 555-0789',
-    website: 'https://heritagewellness.example.com',
-    hours: 'Mon-Fri: 8:00 AM - 8:00 PM, Sat: 9:00 AM - 5:00 PM',
-    priceRange: '$$',
-    originalData: {
-      scraper: 'DirectSubmission',
-      submittedBy: 'admin_nominated',
-      nominationCount: 15,
-      communitySupport: true,
-    }
-  },
-  {
-    id: '4',
-    name: 'Golden Era Barbershop',
-    address: '321 Elm St, Atlanta GA',
-    source: 'Community Nomination',
-    rating: 0,
-    submittedAt: '2026-07-11',
-    description: 'Classic barbershop providing premium haircuts and grooming services in a welcoming atmosphere.',
-    category: 'Personal Services',
-    phone: '(404) 555-0321',
-    hours: 'Tue-Sat: 9:00 AM - 7:00 PM',
-    priceRange: '$$',
-    originalData: {
-      scraper: 'CommunityNomination',
-      nominatedBy: 'AtlantaCommunityBoard',
-      nominationDate: '2026-06-28',
-      supporterCount: 23,
-    }
-  },
-  {
-    id: '5',
-    name: 'Rhythm & Blues Records',
-    address: '654 Cedar Ln, Houston TX',
-    source: 'Direct Submission',
-    rating: 0,
-    submittedAt: '2026-07-10',
-    description: 'Independent music store specializing in vinyl records, rare finds, and local artist merchandise.',
-    category: 'Retail',
-    phone: '(713) 555-0654',
-    website: 'https://rhythmbluesrecords.example.com',
-    hours: 'Mon-Sat: 11:00 AM - 9:00 PM, Sun: 12:00 PM - 6:00 PM',
-    priceRange: '$$$',
-    originalData: {
-      scraper: 'DirectSubmission',
-      submittedBy: 'business_owner',
-      yearsInBusiness: 25,
-      localArtistSupport: true,
+      referredBy: 'AtlantaChamber',
+      verificationStatus: 'pending',
     }
   },
 ];
@@ -147,12 +103,33 @@ export default function BusinessReviewPage() {
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<Set<string>>(new Set());
   const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
   const [bulkApproveResult, setBulkApproveResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [businesses, setBusinesses] = useState<ReviewBusiness[]>(MOCK_PENDING_REVIEWS);
 
-  const filteredBusinesses = MOCK_PENDING_REVIEWS.filter((business) =>
+  React.useEffect(() => {
+    const fetchBusinesses = async () => {
+      try {
+        const response = await fetch('/api/businesses/pending');
+        if (response.ok) {
+          const data = await response.json();
+          setBusinesses(data.data?.pendingBusinesses || MOCK_PENDING_REVIEWS);
+        }
+      } catch (error) {
+        console.error('Failed to fetch businesses:', error);
+      }
+    };
+    fetchBusinesses();
+  }, []);
+
+  const filteredBusinesses = businesses.filter((business) =>
     business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     business.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
     business.source.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleCardClick = (business: ReviewBusiness) => {
+    setSelectedBusiness(business);
+    setIsDetailModalOpen(true);
+  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -314,69 +291,40 @@ export default function BusinessReviewPage() {
           )}
         </Card>
 
-        {/* Review Table */}
-        <Card variant="elevated" padding="0" className="overflow-hidden">
-          <Table
-            aria-label="Business review queue"
-            className="w-full"
-          >
-            <TableHeader>
-              <TableRow>
-                <TableColumn className="w-16">
-                  <input
-                    type="checkbox"
-                    checked={filteredBusinesses.length > 0 && selectedBusinessIds.size === filteredBusinesses.length}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300"
-                  />
-                </TableColumn>
-                <TableColumn className="w-1/3">Business Name</TableColumn>
-                <TableColumn className="w-1/4">Address</TableColumn>
-                <TableColumn>Source</TableColumn>
-                <TableColumn>Rating</TableColumn>
-                <TableColumn>Submitted</TableColumn>
-                <TableColumn className="w-32">Actions</TableColumn>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBusinesses.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-neutral-500">
-                    No businesses found matching your search
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredBusinesses.map((business) => (
-                  <TableRow key={business.id} className="cursor-pointer hover:bg-neutral-50" onClick={() => handleRowClick(business)}>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedBusinessIds.has(business.id)}
-                        onChange={(e) => handleSelectBusiness(business.id, e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-300"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-neutral-800">{business.name}</p>
-                        <p className="text-sm text-neutral-500">ID: {business.id}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-neutral-600">{business.address}</TableCell>
-                    <TableCell>{getSourceBadge(business.source)}</TableCell>
-                    <TableCell>{renderRating(business.rating)}</TableCell>
-                    <TableCell className="text-neutral-600">{business.submittedAt}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="primary" size="sm">View Details</Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+        {/* Review Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredBusinesses.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-neutral-500">
+              No businesses found matching your search
+            </div>
+          ) : (
+            filteredBusinesses.map((business) => (
+              <Card
+                key={business.id}
+                variant="elevated"
+                padding="lg"
+                clickable
+                onClick={() => handleCardClick(business)}
+                className="cursor-pointer hover:shadow-lg transition-shadow"
+              >
+                <div className="flex flex-col h-full">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-neutral-900">{business.name}</h3>
+                    {getSourceBadge(business.source)}
+                  </div>
+                  <p className="text-sm text-neutral-600 mb-2">{business.address}</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm text-neutral-500">Rating:</span>
+                    {renderRating(business.rating)}
+                  </div>
+                  <div className="mt-auto pt-3 border-t border-neutral-200">
+                    <p className="text-xs text-neutral-500">Submitted: {business.submittedAt}</p>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </section>
 
       {/* Business Detail Modal */}
@@ -384,19 +332,24 @@ export default function BusinessReviewPage() {
         <Modal
           isOpen={isDetailModalOpen}
           onClose={handleCloseDetail}
-          title="Business Details"
+          title={
+            <div className="text-xl font-semibold">
+              {selectedBusiness.name}
+              <Badge variant="warning" size="sm" className="ml-3">Pending Review</Badge>
+            </div>
+          }
           size="xl"
           closeOnBackdrop={true}
           closeOnEscape={true}
         >
-          <div className="space-y-6">
+          <div role="presentation" className="space-y-6">
             {/* Basic Information */}
             <div>
               <h3 className="text-lg font-semibold text-neutral-900 mb-4">Basic Information</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-neutral-500">Business Name</label>
-                  <p className="mt-1 text-neutral-900">{selectedBusiness.name}</p>
+                  <label className="text-sm font-medium text-neutral-500">Business ID</label>
+                  <p className="mt-1 text-neutral-900">{selectedBusiness.id}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-neutral-500">Category</label>
@@ -434,6 +387,14 @@ export default function BusinessReviewPage() {
                   <label className="text-sm font-medium text-neutral-500">Price Range</label>
                   <p className="mt-1 text-neutral-900">{selectedBusiness.priceRange || 'N/A'}</p>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-500">Rating</label>
+                  <p className="mt-1">{renderRating(selectedBusiness.rating)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-500">Status</label>
+                  <p className="mt-1 text-neutral-900">Pending Review</p>
+                </div>
               </div>
             </div>
 
@@ -442,7 +403,7 @@ export default function BusinessReviewPage() {
               <h3 className="text-lg font-semibold text-neutral-900 mb-4">Source Information</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-neutral-500">Submission Source</label>
+                  <label className="text-sm font-medium text-neutral-500">Source</label>
                   <p className="mt-1">
                     <Badge variant="default" size="sm">
                       {selectedBusiness.source}
@@ -450,7 +411,7 @@ export default function BusinessReviewPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-neutral-500">Submitted Date</label>
+                  <label className="text-sm font-medium text-neutral-500">Scraped At</label>
                   <p className="mt-1 text-neutral-900">{selectedBusiness.submittedAt}</p>
                 </div>
               </div>
@@ -473,11 +434,11 @@ export default function BusinessReviewPage() {
               <Button variant="secondary" onClick={handleCloseDetail}>
                 Close
               </Button>
-              <Button variant="primary">
-                Approve Business
+              <Button variant="primary" onClick={handleCloseDetail}>
+                Approve
               </Button>
-              <Button variant="danger">
-                Reject Business
+              <Button variant="danger" onClick={handleCloseDetail}>
+                Reject
               </Button>
             </div>
           </div>

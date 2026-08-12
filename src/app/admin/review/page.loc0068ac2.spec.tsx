@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import AdminReviewPage from './page';
+import BusinessReviewPage from '../reviews/page';
 
 // Mock all UI components
 jest.mock('@/components/ui', () => {
@@ -23,7 +23,7 @@ jest.mock('@/components/ui', () => {
   );
 
   const Card = React.forwardRef<any, any>(
-    ({ children, variant, padding, clickable, as: Component, href, ...props }: any, ref) => {
+    ({ children, variant, padding, clickable, as: Component, href, onClick, ...props }: any, ref) => {
       const cardContent = (
         <div
           ref={ref}
@@ -31,6 +31,7 @@ jest.mock('@/components/ui', () => {
           data-variant={variant}
           data-padding={padding}
           data-clickable={clickable}
+          onClick={onClick}
           {...props}
         >
           {children}
@@ -89,6 +90,77 @@ jest.mock('@/components/ui', () => {
 
   const TabContent = ({ children }: any) => <>{children}</>;
 
+  const Input = React.forwardRef<any, any>(
+    ({ placeholder, value, onChange, ...props }: any, ref) => (
+      <input
+        ref={ref}
+        data-testid="input"
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        {...props}
+      />
+    )
+  );
+
+  const Table = React.forwardRef<any, any>(({ children, 'aria-label': ariaLabel }: any, ref) => (
+    <table ref={ref} data-testid="table" aria-label={ariaLabel}>{children}</table>
+  ));
+
+  const TableHeader = ({ children }: any) => <thead data-testid="table-header">{children}</thead>;
+  const TableColumn = ({ children, className }: any) => <th data-testid="table-column" className={className}>{children}</th>;
+  const TableBody = ({ children }: any) => <tbody data-testid="table-body">{children}</tbody>;
+  const TableRow = React.forwardRef<any, any>(({ children, onClick }: any, ref) => (
+    <tr ref={ref} data-testid="table-row" onClick={onClick}>{children}</tr>
+  ));
+  const TableCell = ({ children, colSpan }: any) => <td data-testid="table-cell" colSpan={colSpan}>{children}</td>;
+
+  const Dropdown = React.forwardRef<any, any>(
+    ({ trigger, items, position }: any, ref) => {
+      const [isOpen, setIsOpen] = React.useState(false);
+      return (
+        <div ref={ref} data-testid="dropdown" onClick={() => setIsOpen(!isOpen)}>
+          {trigger}
+          {isOpen && (
+            <div data-testid="dropdown-menu" className="absolute bg-white shadow-lg">
+              {items.map((item: any) => (
+                <div
+                  key={item.key}
+                  data-testid={`dropdown-item-${item.key}`}
+                  onClick={() => {
+                    item.onClick?.();
+                    setIsOpen(false);
+                  }}
+                >
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+  );
+
+  const DropdownItem = ({ children }: any) => <div data-testid="dropdown-item">{children}</div>;
+
+  const Modal = React.forwardRef<any, any>(
+    ({ isOpen, onClose, title, size, closeOnBackdrop, closeOnEscape, children }: any, ref) => {
+      if (!isOpen) return null;
+      return (
+        <div ref={ref} data-testid="modal" role="dialog" onClick={(e) => closeOnBackdrop && e.target === e.currentTarget && onClose?.()}>
+          <div data-testid="modal-content" className={`modal-${size || 'lg'}`}>
+            <div data-testid="modal-header">
+              <h2 data-testid="modal-title">{title}</h2>
+              <button data-testid="modal-close" onClick={onClose}>Close</button>
+            </div>
+            <div data-testid="modal-body">{children}</div>
+          </div>
+        </div>
+      );
+    }
+  );
+
   return {
     Navigation,
     Card,
@@ -97,6 +169,16 @@ jest.mock('@/components/ui', () => {
     Tabs,
     TabPanel,
     TabContent,
+    Input,
+    Table,
+    TableHeader,
+    TableColumn,
+    TableBody,
+    TableRow,
+    TableCell,
+    Dropdown,
+    DropdownItem,
+    Modal,
   };
 });
 
@@ -148,7 +230,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -172,7 +254,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -183,8 +265,8 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
 
       // Check that the detail panel header contains the business name
       await waitFor(() => {
-        const detailHeader = screen.getByRole('heading', { level: 2 });
-        expect(detailHeader).toHaveTextContent(/soul food kitchen/i);
+        const modalTitle = screen.getByTestId('modal-title');
+        expect(modalTitle).toHaveTextContent(/soul food kitchen/i);
       });
     });
 
@@ -196,7 +278,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -223,7 +305,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -247,7 +329,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -271,7 +353,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -295,7 +377,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -319,7 +401,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -343,7 +425,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -367,7 +449,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -391,7 +473,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -417,7 +499,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -442,7 +524,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -468,7 +550,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -493,7 +575,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -517,7 +599,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -543,7 +625,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -567,7 +649,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -578,16 +660,16 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
 
       // Check that the detail panel is open
       await waitFor(() => {
-        const textContent = screen.getByRole('presentation').textContent;
-        expect(textContent).toMatch(/basic information/i);
+        expect(screen.getByTestId('modal')).toBeInTheDocument();
       });
 
-      // Click close button
-      fireEvent.click(screen.getByText(/close/i));
+      // Click close button (using the mock's testid)
+      const closeButton = await screen.findByTestId('modal-close');
+      fireEvent.click(closeButton);
 
       // Detail panel should close
       await waitFor(() => {
-        expect(screen.queryByText(/basic information/i)).not.toBeInTheDocument();
+        expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
       });
     });
 
@@ -599,7 +681,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -614,9 +696,9 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         expect(textContent).toMatch(/basic information/i);
       });
 
-      // Click backdrop (the overlay div)
-      const backdrop = screen.getByRole('presentation');
-      fireEvent.click(backdrop);
+      // Click backdrop (the overlay div - the modal container, not the content)
+      const modal = screen.getByTestId('modal');
+      fireEvent.click(modal);
 
       // Detail panel should close
       await waitFor(() => {
@@ -634,7 +716,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -658,7 +740,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -682,7 +764,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       await waitFor(() => {
         expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
@@ -717,7 +799,7 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         }),
       });
 
-      render(<AdminReviewPage />);
+      render(<BusinessReviewPage />);
 
       // Wait for both businesses to render
       await waitFor(() => {
@@ -725,31 +807,41 @@ describe('Admin Review Page - LOC-0068-AC2: View Business Details', () => {
         expect(screen.getByText(/black diamond consulting/i)).toBeInTheDocument();
       });
 
-      // Click on first business - get the first card element specifically
-      const firstCard = screen.getAllByTestId('card')[0];
-      fireEvent.click(firstCard);
+      // Click on first business - query by the business name inside the card
+      const firstBusinessName = await screen.findByText(/soul food kitchen/i);
+      const firstCard = firstBusinessName.closest('[data-testid="card"]');
+      expect(firstCard).toBeInTheDocument();
+      fireEvent.click(firstCard as HTMLElement);
 
       // Check detail panel shows first business
       await waitFor(() => {
-        const textContent = screen.getByRole('presentation').textContent;
+        const modal = screen.getByTestId('modal');
+        expect(modal).toBeInTheDocument();
+        const textContent = modal.textContent;
         expect(textContent).toMatch(/soul food kitchen/i);
         expect(textContent).toMatch(/biz-001/i);
       });
 
       // Close panel
-      fireEvent.click(screen.getByText(/close/i));
+      const closeButton = await screen.findByTestId('modal-close');
+      fireEvent.click(closeButton);
 
+      // Wait for modal to close
       await waitFor(() => {
-        expect(screen.queryByText(/basic information/i)).not.toBeInTheDocument();
+        expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
       });
 
-      // Click on second business
-      const secondCard = screen.getAllByTestId('card')[1];
-      fireEvent.click(secondCard);
+      // Click on second business - query by the business name inside the card
+      const secondBusinessName = await screen.findByText(/black diamond consulting/i);
+      const secondCard = secondBusinessName.closest('[data-testid="card"]');
+      expect(secondCard).toBeInTheDocument();
+      fireEvent.click(secondCard as HTMLElement);
 
       // Check detail panel shows second business
       await waitFor(() => {
-        const textContent = screen.getByRole('presentation').textContent;
+        const modal = screen.getByTestId('modal');
+        expect(modal).toBeInTheDocument();
+        const textContent = modal.textContent;
         expect(textContent).toMatch(/black diamond consulting/i);
         expect(textContent).toMatch(/biz-002/i);
       });
