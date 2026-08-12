@@ -5,5 +5,6 @@
  */
 
 export * from "./business";
+export * from "./business-status";
 export * from "./review";
 export * from "./user";
