@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { BusinessDetail, Business } from './BusinessDetail';
+import { BusinessDetail, Business, ScrapeMetadata } from './BusinessDetail';
 
 const mockBusiness: Business = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -14,6 +14,16 @@ const mockBusiness: Business = {
   createdAt: {
     timestamp: 1704067200, // 2024-01-01
   },
+};
+
+const mockScrapedData: ScrapeMetadata = {
+  scrapedAt: '2024-01-15T10:30:00Z',
+  sourceUrl: 'https://example-business-directory.com/listing/123',
+  rawDescription: 'Family-owned soul food restaurant serving authentic Southern cuisine since 1985.',
+  rawAddress: '123 Main Street, Harlem, NY 10027',
+  rawPhoneNumber: '(212) 555-1234',
+  rawWebsite: 'https://soulfoodkitchen.com',
+  rawContactInfo: 'Email: info@soulfoodkitchen.com\nPhone: (212) 555-1234',
 };
 
 describe('BusinessDetail', () => {
@@ -279,6 +289,132 @@ describe('BusinessDetail', () => {
 
       // Should contain some date format
       expect(screen.getByText(/joined:/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Expanded Panel View', () => {
+    it('shows expanded panel when expanded prop is true', () => {
+      const mockOnCollapse = jest.fn();
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          expanded={true}
+          onCollapse={mockOnCollapse}
+        />
+      );
+
+      // Should show business name in panel
+      expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
+      // Should show collapse button
+      expect(screen.getByLabelText(/Collapse details/i)).toBeInTheDocument();
+    });
+
+    it('displays all business fields in expanded view', () => {
+      const businessWithAllFields: Business = {
+        ...mockBusiness,
+        description: 'Authentic Southern cuisine',
+        location: 'Harlem, NY',
+        tags: ['Southern', 'Family-Friendly'],
+      };
+
+      render(
+        <BusinessDetail
+          business={businessWithAllFields}
+          loading={false}
+          error={null}
+          expanded={true}
+        />
+      );
+
+      expect(screen.getByText(/description/i)).toBeInTheDocument();
+      expect(screen.getByText(/authentic southern cuisine/i)).toBeInTheDocument();
+      expect(screen.getByText(/location/i)).toBeInTheDocument();
+      expect(screen.getByText(/harlem, ny/i)).toBeInTheDocument();
+      expect(screen.getByText(/tags/i)).toBeInTheDocument();
+    });
+
+    it('displays scraped data section when scrapedData is provided', () => {
+      const businessWithScrapedData: Business = {
+        ...mockBusiness,
+        scrapedData: mockScrapedData,
+      };
+
+      render(
+        <BusinessDetail
+          business={businessWithScrapedData}
+          loading={false}
+          error={null}
+          expanded={true}
+        />
+      );
+
+      expect(screen.getByText(/original scraped data/i)).toBeInTheDocument();
+      expect(screen.getByText(/source url/i)).toBeInTheDocument();
+      expect(screen.getByText(/scraped at/i)).toBeInTheDocument();
+      expect(screen.getByText(/raw description/i)).toBeInTheDocument();
+      expect(screen.getByText(/raw address/i)).toBeInTheDocument();
+      expect(screen.getByText(/raw phone/i)).toBeInTheDocument();
+      expect(screen.getByText(/raw website/i)).toBeInTheDocument();
+      expect(screen.getByText(/raw contact info/i)).toBeInTheDocument();
+    });
+
+    it('shows raw scraped data values', () => {
+      const businessWithScrapedData: Business = {
+        ...mockBusiness,
+        scrapedData: mockScrapedData,
+      };
+
+      render(
+        <BusinessDetail
+          business={businessWithScrapedData}
+          loading={false}
+          error={null}
+          expanded={true}
+        />
+      );
+
+      expect(screen.getByText(/example-business-directory.com/i)).toBeInTheDocument();
+      expect(screen.getByText(/family-owned soul food/i)).toBeInTheDocument();
+      expect(screen.getByText(/123 main street/i)).toBeInTheDocument();
+      // Phone appears in both raw phone and raw contact info - use getAllByText
+      const phoneElements = screen.getAllByText(/\(212\) 555-1234/i);
+      expect(phoneElements.length).toBeGreaterThan(0);
+    });
+
+    it('calls onCollapse when collapse button is clicked', () => {
+      const mockOnCollapse = jest.fn();
+      const businessWithScrapedData: Business = {
+        ...mockBusiness,
+        scrapedData: mockScrapedData,
+      };
+
+      const { getByLabelText } = render(
+        <BusinessDetail
+          business={businessWithScrapedData}
+          loading={false}
+          error={null}
+          expanded={true}
+          onCollapse={mockOnCollapse}
+        />
+      );
+
+      fireEvent.click(getByLabelText(/collapse details/i));
+      expect(mockOnCollapse).toHaveBeenCalled();
+    });
+
+    it('does not show scraped data section when scrapedData is undefined', () => {
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          expanded={true}
+        />
+      );
+
+      expect(screen.queryByText(/original scraped data/i)).not.toBeInTheDocument();
     });
   });
 });

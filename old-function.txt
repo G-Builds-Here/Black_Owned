@@ -1,0 +1,41 @@
+export async function importBusinessBatch(
+  client: PoolClient,
+  scrapedResults: ScraperResult[],
+  ownerId: string,
+  batchSize: number = 50
+): Promise<BatchImportResult> {
+  const results: ImportResult[] = [];
+  const errors: Array<{ source: ScraperSource; originalId: string; error: string }> = [];
+
+  // Process in batches
+  for (let i = 0; i < scrapedResults.length; i += batchSize) {
+    const batch = scrapedResults.slice(i, i + batchSize);
+    const batchResults: ImportResult[] = [];
+
+    for (const scraped of batch) {
+      const result = await importSingleBusiness(client, scraped, ownerId);
+      batchResults.push(result);
+
+      if (!result.success && result.error) {
+        errors.push({
+          source: scraped.source,
+          originalId: result.originalId,
+          error: result.error,
+        });
+      }
+    }
+
+    results.push(...batchResults);
+  }
+
+  const succeeded = results.filter((r) => r.success).length;
+  const failed = results.filter((r) => !r.success).length;
+
+  return {
+    total: results.length,
+    succeeded,
+    failed,
+    results,
+    errors,
+  };
+}

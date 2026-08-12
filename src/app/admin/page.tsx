@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, BusinessDetailPanel } from '@/components/ui';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -13,6 +13,49 @@ const METRICS = {
   todaySignups: 87,
   weeklyGrowth: 12.5,
 };
+
+// Metrics by source
+const METRICS_BY_SOURCE = {
+  all: {
+    totalBusinesses: 1247,
+    googleMaps: 542,
+    yelp: 438,
+    facebook: 267,
+  },
+  google_maps: {
+    totalBusinesses: 542,
+    googleMaps: 542,
+    yelp: 0,
+    facebook: 0,
+  },
+  yelp: {
+    totalBusinesses: 438,
+    googleMaps: 0,
+    yelp: 438,
+    facebook: 0,
+  },
+  facebook: {
+    totalBusinesses: 267,
+    googleMaps: 0,
+    yelp: 0,
+    facebook: 267,
+  },
+};
+
+type SourceFilter = 'all' | 'google_maps' | 'yelp' | 'facebook';
+
+interface PendingBusiness {
+  id: string;
+  name: string;
+  address: string;
+  source: string;
+  rating: number | null;
+  status: string;
+  createdAt: string;
+  description?: string;
+  categoryId?: string;
+  sourceData?: Record<string, unknown>;
+}
 
 const RECENT_BUSINESSES = [
   { id: '1', name: 'Soul Food Kitchen', status: 'pending', submitted: '2026-07-14' },
@@ -45,8 +88,32 @@ const VERIFICATION_QUEUE = [
 ];
 
 export default function AdminConsole() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'verifications' | 'reviews' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'verifications' | 'reviews' | 'pending' | 'settings'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
+  const [pendingBusinesses, setPendingBusinesses] = useState<PendingBusiness[]>([]);
+  const [pendingBusinessesLoading, setPendingBusinessesLoading] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<PendingBusiness | null>(null);
+  const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'pending') {
+      fetchPendingBusinesses();
+    }
+  }, [activeTab]);
+
+  const fetchPendingBusinesses = async () => {
+    setPendingBusinessesLoading(true);
+    try {
+      const response = await fetch('/api/pending-businesses');
+      const data = await response.json();
+      setPendingBusinesses(data);
+    } catch (error) {
+      console.error('Failed to fetch pending businesses:', error);
+    } finally {
+      setPendingBusinessesLoading(false);
+    }
+  };
 
   const handleApproveVerification = (id: string) => {
     console.log('Approve verification:', id);
@@ -62,6 +129,16 @@ export default function AdminConsole() {
 
   const handleFlagReview = (id: string) => {
     console.log('Flag review:', id);
+  };
+
+  const handleRowClick = (business: PendingBusiness) => {
+    setSelectedBusiness(business);
+    setIsDetailPanelOpen(true);
+  };
+
+  const handleCloseDetailPanel = () => {
+    setIsDetailPanelOpen(false);
+    setSelectedBusiness(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -104,6 +181,20 @@ export default function AdminConsole() {
                 ]}
                 position="bottom-end"
               />
+              <Dropdown
+                trigger={<span className="text-sm bg-white/10 px-3 py-1.5 rounded-lg">
+                  {selectedSource === 'all' ? 'All Sources' :
+                   selectedSource === 'google_maps' ? 'Google Maps' :
+                   selectedSource === 'yelp' ? 'Yelp' : 'Facebook'}
+                </span>}
+                items={[
+                  { key: 'all', label: 'All Sources', onClick: () => setSelectedSource('all') },
+                  { key: 'google_maps', label: 'Google Maps', onClick: () => setSelectedSource('google_maps') },
+                  { key: 'yelp', label: 'Yelp', onClick: () => setSelectedSource('yelp') },
+                  { key: 'facebook', label: 'Facebook', onClick: () => setSelectedSource('facebook') },
+                ]}
+                position="bottom-end"
+              />
               <Button variant="secondary" size="sm">
                 Export Report
               </Button>
@@ -121,6 +212,7 @@ export default function AdminConsole() {
             { key: 'users', label: 'User Management' },
             { key: 'verifications', label: `Verifications (${METRICS.pendingVerifications})` },
             { key: 'reviews', label: `Reviews (${METRICS.pendingReviews})` },
+            { key: 'pending', label: `Pending Businesses (${pendingBusinesses.length})` },
             { key: 'settings', label: 'Settings' },
           ]}
           selectedKey={activeTab}
@@ -135,11 +227,51 @@ export default function AdminConsole() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-neutral-500 mb-1">Total Businesses</p>
-                  <p className="text-3xl font-bold text-neutral-800">{METRICS.totalBusinesses.toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].totalBusinesses.toLocaleString()}</p>
                   <p className="text-sm text-heritage-jade mt-1">+{METRICS.weeklyGrowth}% this week</p>
                 </div>
                 <div className="w-12 h-12 bg-heritage-ochre/10 rounded-lg flex items-center justify-center">
                   <span className="text-2xl">🏪</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Source Breakdown Cards */}
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Google Maps</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].googleMaps.toLocaleString()}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{((METRICS_BY_SOURCE[selectedSource].googleMaps / METRICS_BY_SOURCE[selectedSource].totalBusinesses) * 100).toFixed(1)}% of total</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">🗺️</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Yelp</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].yelp.toLocaleString()}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{((METRICS_BY_SOURCE[selectedSource].yelp / METRICS_BY_SOURCE[selectedSource].totalBusinesses) * 100).toFixed(1)}% of total</p>
+                </div>
+                <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">⭐</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="elevated" padding="lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Facebook</p>
+                  <p className="text-3xl font-bold text-neutral-800">{METRICS_BY_SOURCE[selectedSource].facebook.toLocaleString()}</p>
+                  <p className="text-sm text-neutral-500 mt-1">{((METRICS_BY_SOURCE[selectedSource].facebook / METRICS_BY_SOURCE[selectedSource].totalBusinesses) * 100).toFixed(1)}% of total</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-600/10 rounded-lg flex items-center justify-center">
+                  <span className="text-2xl">📘</span>
                 </div>
               </div>
             </Card>
@@ -358,6 +490,68 @@ export default function AdminConsole() {
                 </Card>
               ))}
             </div>
+          </Card>
+        </TabPanel>
+
+        {/* Pending Businesses Tab */}
+        <TabPanel value="pending" className="mt-6">
+          <Card variant="elevated" padding="lg">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-neutral-800">Pending Businesses for Review</h2>
+                <p className="text-sm text-neutral-500 mt-1">Businesses awaiting approval before going live</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={fetchPendingBusinesses}>
+                Refresh
+              </Button>
+            </div>
+            {pendingBusinessesLoading ? (
+              <div className="text-center py-8 text-neutral-500">Loading...</div>
+            ) : pendingBusinesses.length === 0 ? (
+              <div className="text-center py-8 text-neutral-500">No pending businesses found</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableColumn>Name</TableColumn>
+                    <TableColumn>Address</TableColumn>
+                    <TableColumn>Source</TableColumn>
+                    <TableColumn>Rating</TableColumn>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingBusinesses.map((business) => (
+                    <TableRow
+                      key={business.id}
+                      className="cursor-pointer"
+                      onClick={() => handleRowClick(business)}
+                    >
+                      <TableCell>{business.name}</TableCell>
+                      <TableCell>{business.address}</TableCell>
+                      <TableCell>
+                        <Badge variant="default" size="sm">
+                          {business.source.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {business.rating !== null ? (
+                          <span className="text-heritage-ochre">{'★'.repeat(business.rating)}{'☆'.repeat(5 - business.rating)}</span>
+                        ) : (
+                          <span className="text-neutral-400">N/A</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+
+            {/* Detail Panel */}
+            <BusinessDetailPanel
+              business={selectedBusiness}
+              isOpen={isDetailPanelOpen}
+              onClose={handleCloseDetailPanel}
+            />
           </Card>
         </TabPanel>
 

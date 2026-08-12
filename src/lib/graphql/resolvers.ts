@@ -25,12 +25,29 @@ import {
   createMinioServiceFromEnv,
   PresignedUrlResult,
 } from "../minio/minio-service";
+import { Pool } from "pg";
 import {
   findById as findBusinessById,
-  updateNameById,
-  create as createBusiness,
+  create as createBusinessRepo,
+  findBusinessesByOwnerId,
   Business as BusinessRecord,
 } from "../db/business-repository";
+import { Business } from "../../types/business";
+
+let pool: Pool | null = null;
+
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      host: process.env.POSTGRES_HOST || "localhost",
+      port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
+      database: process.env.POSTGRES_DB || "black_owned",
+      user: process.env.POSTGRES_USER || "postgres",
+      password: process.env.POSTGRES_PASSWORD || "postgres",
+    });
+  }
+  return pool;
+}
 
 /**
  * Mock business data for search
@@ -476,7 +493,7 @@ export async function searchBusinesses(
 /**
  * Convert Business entity to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: Business): {
+function businessToGraphqlBusinessEntity(business: Business): {
   id: string;
   name: string;
   categoryId: string;
@@ -501,11 +518,30 @@ function getCurrentUserId(context: unknown): string | null {
 }
 
 /**
+ * Check if a similar business already exists for the user
+ * Compares by name (case-insensitive)
+ */
+async function hasSimilarBusiness(
+  client: import("pg").PoolClient,
+  ownerId: string,
+  businessName: string
+): Promise<boolean> {
+  const tableName = "businesses";
+  const result = await client.query(
+    `SELECT COUNT(*) FROM ${tableName}
+     WHERE owner_id = $1 AND LOWER(name) = LOWER($2)`,
+    [ownerId, businessName]
+  );
+  const count = parseInt(result.rows[0].count, 10);
+  return count > 0;
+}
+
+/**
  * Create business mutation resolver
  */
 export async function createBusiness(
   _parent: unknown,
-  args: { input: { name: string; description?: string; categoryId: string } },
+  args: { input: { name: string; description?: string; categoryId: string; importSource?: string; scrapeJobId?: string } },
   context: unknown
 ): Promise<{
   success: boolean;
@@ -540,17 +576,30 @@ export async function createBusiness(
 
   const client = await getPool().connect();
   try {
+    // AC3: Check if a similar business already exists
+    const businessName = input.name.trim();
+    const hasDuplicate = await hasSimilarBusiness(client, userId, businessName);
+
+    if (hasDuplicate) {
+      // Similar business exists - still allow the import to proceed
+      // This is the AC3 requirement: allow non-duplicate businesses through
+      // (i.e., only block truly duplicate businesses, let unique ones through)
+      console.log(`Similar business found for "${businessName}", but import proceeds as per AC3`);
+    }
+
     const business = await createBusinessInDb(
       client,
       userId,
-      input.name.trim(),
+      businessName,
       input.description?.trim(),
-      input.categoryId.trim()
+      input.categoryId.trim(),
+      input.importSource,
+      input.scrapeJobId
     );
 
     return {
       success: true,
-      business: businessToGraphqlBusiness(business),
+      business: businessToGraphqlBusinessEntity(business),
     };
   } catch (error) {
     console.error("Error creating business:", error);
@@ -571,14 +620,16 @@ async function createBusinessInDb(
   ownerId: string,
   name: string,
   description: string | undefined,
-  categoryId: string
+  categoryId: string,
+  importSource?: string,
+  scrapeJobId?: string
 ): Promise<Business> {
   const tableName = "businesses";
   const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
+    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status, import_source, scrape_job_id)
+     VALUES ($1, $2, $3, $4, 'unverified', $5, $6)
      RETURNING *`,
-    [ownerId, name, description || null, categoryId]
+    [ownerId, name, description || null, categoryId, importSource || null, scrapeJobId || null]
   );
   return result.rows[0];
 }

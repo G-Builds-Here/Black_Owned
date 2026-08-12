@@ -30,6 +30,7 @@ async fn setup_test_schema(pool: &sqlx::PgPool) {
             category_id UUID NOT NULL,
             owner_id UUID NOT NULL,
             verified BOOLEAN DEFAULT false,
+            address TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
 

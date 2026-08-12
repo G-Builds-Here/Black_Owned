@@ -7,7 +7,7 @@
 /**
  * Verification status for a business
  */
-export type VerificationStatus = "unverified" | "pending" | "verified";
+export type VerificationStatus = "unverified" | "pending" | "verified" | "approved" | "rejected";
 
 /**
  * Business entity stored in PostgreSQL
