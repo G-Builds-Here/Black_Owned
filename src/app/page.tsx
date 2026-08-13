@@ -143,7 +143,7 @@ export default function Home() {
             <Button variant="primary" size="lg" href="/directory">
               Get Started
             </Button>
-            <Button variant="ghost" size="lg" className="text-white hover:bg-neutral-700" href="/about">
+            <Button variant="ghost" size="lg" className="text-white hover:bg-neutral-700" href="/search">
               Contact Us
             </Button>
           </div>
@@ -163,24 +163,24 @@ export default function Home() {
             <div>
               <h4 className="text-white font-semibold mb-4">Explore</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Businesses</a></li>
-                <li><a href="#" className="hover:text-white">Categories</a></li>
-                <li><a href="#" className="hover:text-white">Featured</a></li>
+                <li><a href="/directory" className="hover:text-white">Businesses</a></li>
+                <li><a href="/directory" className="hover:text-white">Categories</a></li>
+                <li><a href="/directory" className="hover:text-white">Featured</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Help Center</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-                <li><a href="#" className="hover:text-white">FAQ</a></li>
+                <li><a href="/search" className="hover:text-white">Help Center</a></li>
+                <li><a href="/search" className="hover:text-white">Contact</a></li>
+                <li><a href="/search" className="hover:text-white">FAQ</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white">Terms of Service</a></li>
+                <li><a href="/search" className="hover:text-white">Privacy Policy</a></li>
+                <li><a href="/search" className="hover:text-white">Terms of Service</a></li>
               </ul>
             </div>
           </div>
