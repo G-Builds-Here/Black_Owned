@@ -169,7 +169,7 @@ function ToastProvider({ children, position = 'top-right' }: ToastProviderProps)
   return (
     <ToastContext.Provider value={{ addToast, removeToast, clearToasts }}>
       {children}
-      {createPortal(
+      {typeof document !== 'undefined' && createPortal(
         <div className={`fixed z-[9999] flex flex-col gap-2 ${positionStyles[position]}`}>
           {toasts.map((toast) => (
             <Toast key={toast.id} {...toast} onClose={() => { if (toast.id) removeToast(toast.id); }} />

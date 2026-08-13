@@ -11,10 +11,9 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: 'Home', href: '#home', section: 'home' as const },
-    { label: 'Directory', href: '#directory', section: 'directory' as const },
-    { label: 'About', href: '#about', section: 'home' as const },
-    { label: 'Contact', href: '#contact', section: 'home' as const },
+    { label: 'Home', href: '/', section: 'home' as const },
+    { label: 'Directory', href: '/directory', section: 'directory' as const },
+    { label: 'Search', href: '/search', section: 'directory' as const },
   ];
 
   const handleNavClick = (section: string) => {

@@ -19,6 +19,7 @@ function getTableName(): string {
  * Initialize the scrape_jobs table schema
  */
 export async function initializeScrapeJobSchema(client: PoolClient): Promise<void> {
+  console.log("Executing CREATE TABLE for:", getTableName());
   await client.query(`
     CREATE TABLE IF NOT EXISTS ${getTableName()} (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,11 +27,18 @@ export async function initializeScrapeJobSchema(client: PoolClient): Promise<voi
       query TEXT NOT NULL,
       location VARCHAR(255) NOT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'pending',
-      result_count INTEGER,
+      business_count INTEGER,
       error_message TEXT,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
+  `);
+  console.log("CREATE TABLE executed successfully");
+
+  // Add error_message column if it doesn't exist (for existing tables)
+  await client.query(`
+    ALTER TABLE ${getTableName()}
+    ADD COLUMN IF NOT EXISTS error_message TEXT
   `);
 
   // Create index on status for filtering
@@ -55,7 +63,7 @@ function rowToScrapeJob(row: unknown): ScrapeJob {
     query: r.query as string,
     location: r.location as string,
     status: r.status as ScrapeJobStatus,
-    resultCount: (r.result_count as number | null) ?? undefined,
+    resultCount: (r.business_count as number | null) ?? undefined,
     errorMessage: (r.error_message as string | null) ?? undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
@@ -109,7 +117,7 @@ export async function updateScrapeJobStatus(
   const result = await client.query<ScrapeJob>(
     `UPDATE ${tableName}
      SET status = $2,
-         result_count = $3,
+         business_count = $3,
          error_message = $4,
          updated_at = NOW()
      WHERE id = $1
