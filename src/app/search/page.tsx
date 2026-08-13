@@ -4,22 +4,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
-import { GraphQLClient } from 'graphql-request';
-
-const GRAPHQL_ENDPOINT = '/api/graphql';
-const client = new GraphQLClient(GRAPHQL_ENDPOINT);
 
 const SEARCH_DEBOUNCE_MS = 300;
-
-interface SearchBusinessesQuery {
-  searchBusinesses: {
-    businesses: Business[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  };
-}
 
 interface Business {
   id: string;
@@ -33,6 +19,45 @@ interface Business {
   description: string;
   tags: string[];
 }
+
+const MOCK_BUSINESSES: Business[] = [
+  {
+    id: '1',
+    name: 'Soul Food Kitchen',
+    category: 'Food & Dining',
+    rating: 4.8,
+    reviewCount: 156,
+    location: 'Harlem, NY',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
+    tags: ['Southern', 'Family-Friendly', 'Takeout'],
+  },
+  {
+    id: '2',
+    name: 'Black Diamond Consulting',
+    category: 'Professional Services',
+    rating: 5.0,
+    reviewCount: 42,
+    location: 'Atlanta, GA',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Strategic business consulting for Black-owned enterprises and startups.',
+    tags: ['Consulting', 'Business Strategy', 'B2B'],
+  },
+  {
+    id: '3',
+    name: 'Afro Threads',
+    category: 'Retail & Fashion',
+    rating: 4.5,
+    reviewCount: 89,
+    location: 'Los Angeles, CA',
+    isVerified: false,
+    imageUrl: '',
+    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
+    tags: ['Clothing', 'Accessories', 'African-Inspired'],
+  },
+];
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -71,39 +96,16 @@ export default function SearchPage() {
     setError(null);
 
     try {
-      const graphqlQuery = `
-        query SearchBusinesses($query: String!, $page: Int, $pageSize: Int) {
-          searchBusinesses(query: $query, page: $page, pageSize: 10) {
-            businesses {
-              id
-              name
-              category
-              rating
-              reviewCount
-              location
-              isVerified
-              imageUrl
-              description
-              tags
-            }
-            total
-            page
-            pageSize
-            totalPages
-          }
-        }
-      `;
-
-      const variables = {
-        query: searchQuery,
-        page: currentPage,
-        pageSize: 10,
-      };
-
-      const data = await client.request<SearchBusinessesQuery>(graphqlQuery, variables);
-      setResults(data.searchBusinesses.businesses);
-      setTotalPages(data.searchBusinesses.totalPages);
-      setTotalResults(data.searchBusinesses.total);
+      // Mock search - filter mock data
+      const filtered = MOCK_BUSINESSES.filter(
+        (b) =>
+          b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.location.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setResults(filtered);
+      setTotalPages(Math.ceil(filtered.length / 10));
+      setTotalResults(filtered.length);
     } catch (err) {
       console.error('Search error:', err);
       setError('Failed to search businesses. Please try again.');

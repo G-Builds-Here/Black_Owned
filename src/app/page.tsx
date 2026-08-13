@@ -19,25 +19,17 @@ export default function Home() {
       <Navigation onNavigate={handleNavigate} />
 
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-heritage-midnight via-heritage-royal to-heritage-forest text-white">
+      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="text-center">
-            <Badge variant="secondary" size="md" className="mb-6">
+            <h1 className="text-6xl md:text-7xl font-bold mb-8">
               Celebrating Black Excellence
-            </Badge>
-            <h1 className="text-5xl md:text-6xl font-bold mb-6">
-              Black Owned
             </h1>
-            <p className="text-xl md:text-2xl text-neutral-100 max-w-3xl mx-auto mb-8">
-              Discover and support Black-owned businesses. A platform rooted in heritage,
-              built for community, and inspired by the rich traditions of Black American
-              and African history.
-            </p>
             <div className="flex flex-wrap justify-center gap-4 mb-12">
               <Button variant="primary" size="lg">
                 Explore Businesses
               </Button>
-              <Button variant="tertiary" size="lg">
+              <Button variant="secondary" size="lg" href="/business/claim">
                 List Your Business
               </Button>
             </div>
@@ -105,13 +97,12 @@ export default function Home() {
       </section>
 
       {/* Heritage Section */}
-      <section className="py-20 bg-heritage-forest text-white">
+      <section className="py-20 bg-neutral-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold mb-4">Rooted in Heritage</h2>
-            <p className="text-xl text-neutral-100 max-w-3xl mx-auto">
-              Our design celebrates the rich cultural traditions of Black American and
-              African history, from Kente cloth patterns to Bogolanfini mud cloth aesthetics.
+            <h2 className="text-4xl font-bold mb-4">Rooted in Heritage & Celebrating Black Excellence</h2>
+            <p className="text-xl text-neutral-300 max-w-3xl mx-auto">
+              Discover and support Black-owned businesses. A platform rooted in heritage, built for community, and inspired by the rich traditions of Black American and African history.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
@@ -141,7 +132,7 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-neutral-900 text-white">
+      <section className="py-20 bg-neutral-800 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold mb-6">Join Our Community</h2>
           <p className="text-xl text-neutral-300 mb-8">
@@ -149,11 +140,11 @@ export default function Home() {
             consumer seeking to support Black-owned businesses, you belong here.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Button variant="primary" size="lg">
+            <Button variant="primary" size="lg" href="/directory">
               Get Started
             </Button>
-            <Button variant="ghost" size="lg" className="text-white hover:bg-neutral-800">
-              Learn More
+            <Button variant="ghost" size="lg" className="text-white hover:bg-neutral-700" href="/about">
+              Contact Us
             </Button>
           </div>
         </div>

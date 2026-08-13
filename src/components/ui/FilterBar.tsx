@@ -96,11 +96,8 @@ export default function FilterBar({
       <div className="flex flex-wrap gap-4 items-end">
         {/* Category Filter */}
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Category
-          </label>
           <Dropdown
-            trigger={localFilters.category || 'Select category'}
+            trigger={localFilters.category || 'Category'}
             items={[
               { label: 'All Categories', key: '', onClick: () => handleCategoryChange('') },
               ...categories.map((cat) => ({ label: cat, key: cat, onClick: () => handleCategoryChange(cat) })),
@@ -110,11 +107,8 @@ export default function FilterBar({
 
         {/* Location Filter */}
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Location
-          </label>
           <Dropdown
-            trigger={localFilters.location || 'Select location'}
+            trigger={localFilters.location || 'Location'}
             items={[
               { label: 'All Locations', key: '', onClick: () => handleLocationChange('') },
               ...locations.map((loc) => ({ label: loc, key: loc, onClick: () => handleLocationChange(loc) })),
@@ -124,11 +118,8 @@ export default function FilterBar({
 
         {/* Rating Filter */}
         <div className="flex-1 min-w-[150px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Minimum Rating
-          </label>
           <Dropdown
-            trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Select rating'}
+            trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Rating'}
             items={RATING_FILTERS.map((r) => ({
               label: r.label,
               key: r.value.toString(),
@@ -138,26 +129,18 @@ export default function FilterBar({
         </div>
 
         {/* Verified Only Toggle */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Verification
-          </label>
-          <Button
-            variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
-            size="md"
-            onClick={handleVerifiedToggle}
-          >
-            {localFilters.verifiedOnly ? '✓ Verified Only' : 'All Businesses'}
-          </Button>
-        </div>
+        <Button
+          variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
+          size="md"
+          onClick={handleVerifiedToggle}
+        >
+          {localFilters.verifiedOnly ? '✓ Verified Only' : 'All Businesses'}
+        </Button>
 
         {/* Sort Dropdown */}
         <div className="flex-1 min-w-[150px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Sort By
-          </label>
           <Dropdown
-            trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort by'}
+            trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort'}
             items={SORT_OPTIONS.map((s) => ({
               label: s.label,
               key: s.value,
@@ -168,14 +151,9 @@ export default function FilterBar({
 
         {/* Clear Filters */}
         {hasActiveFilters && (
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
-              Actions
-            </label>
-            <Button variant="ghost" size="md" onClick={clearFilters}>
-              Clear All
-            </Button>
-          </div>
+          <Button variant="ghost" size="md" onClick={clearFilters}>
+            Clear All
+          </Button>
         )}
       </div>
 
