@@ -223,7 +223,7 @@ export default function DirectoryPage() {
       {/* Main Content - Split View */}
       <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-7xl mx-auto">
         {/* Business List - Left Side */}
-        <div className={`${showMap ? 'lg:w-[65%]' : 'w-full'} overflow-y-auto p-4`}>
+        <div className={`${showMap ? 'lg:w-[70%]' : 'w-full'} overflow-y-auto p-4`}>
           {/* Tabs */}
           <Tabs
             tabs={[
