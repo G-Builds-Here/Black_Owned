@@ -210,7 +210,7 @@ export default function DirectoryPage() {
       />
 
       {/* Page Header */}
-      <section className="bg-gradient-to-br from-heritage-midnight via-heritage-royal to-heritage-forest text-white py-12">
+      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl font-bold mb-4">Business Directory</h1>
           <p className="text-xl text-neutral-100 max-w-3xl">
