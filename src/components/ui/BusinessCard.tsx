@@ -114,28 +114,26 @@ export default function BusinessCard({
               size="sm"
               className="absolute top-2 left-2 bg-green-600 text-white border-0"
             >
-              ✓ Verified
+              ✓
             </Badge>
           )}
-
-          {/* Category Badge */}
-          <Badge variant="primary" size="sm" className="absolute top-2 right-2">
-            {business.category}
-          </Badge>
         </div>
 
         {/* Content - Right side */}
         <div className="flex flex-col flex-grow p-3">
-          <h3 className="text-lg font-semibold mb-1 text-neutral-800 line-clamp-1">{business.name}</h3>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="text-lg font-semibold text-neutral-900 line-clamp-1">{business.name}</h3>
+            <Badge variant="primary" size="sm">{business.category}</Badge>
+          </div>
 
           {renderStars(business.rating)}
 
-          <p className="text-sm text-neutral-500 mt-1 flex items-center gap-1">
+          <p className="text-sm text-neutral-700 mt-1 flex items-center gap-1">
             <span aria-hidden="true">📍</span>
             {business.location}
           </p>
 
-          <p className="text-sm text-neutral-600 mt-2 line-clamp-2 flex-grow">
+          <p className="text-sm text-neutral-700 mt-2 line-clamp-2 flex-grow">
             {business.description}
           </p>
 

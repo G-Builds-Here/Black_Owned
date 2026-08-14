@@ -23,7 +23,7 @@ export interface FilterBarProps {
 }
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
-  { label: 'Relevance', value: 'relevance' },
+  { label: 'Sort by', value: 'relevance' },
   { label: 'Highest Rated', value: 'rating' },
   { label: 'Nearest', value: 'distance' },
   { label: 'Newest', value: 'newest' },
@@ -92,8 +92,8 @@ export default function FilterBar({
     localFilters.verifiedOnly;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-4 mb-6">
-      <div className="flex flex-wrap gap-4 items-end">
+    <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-3 mb-4">
+      <div className="flex flex-wrap gap-3 items-end">
         {/* Category Filter */}
         <div className="flex-1 min-w-[200px]">
           <Dropdown
@@ -138,7 +138,7 @@ export default function FilterBar({
         </Button>
 
         {/* Sort Dropdown */}
-        <div className="flex-1 min-w-[150px]">
+        <div className="flex-1 min-w-[140px]">
           <Dropdown
             trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort'}
             items={SORT_OPTIONS.map((s) => ({
@@ -151,66 +151,11 @@ export default function FilterBar({
 
         {/* Clear Filters */}
         {hasActiveFilters && (
-          <Button variant="ghost" size="md" onClick={clearFilters}>
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
             Clear All
           </Button>
         )}
       </div>
-
-      {/* Active Filters Summary */}
-      {hasActiveFilters && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-sm text-neutral-500">Active filters:</span>
-          {localFilters.category && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Category: {localFilters.category}
-              <button
-                onClick={() => handleCategoryChange('')}
-                className="hover:text-red-500"
-                aria-label="Remove category filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.location && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Location: {localFilters.location}
-              <button
-                onClick={() => handleLocationChange('')}
-                className="hover:text-red-500"
-                aria-label="Remove location filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.minRating && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Rating: {localFilters.minRating}+ ★
-              <button
-                onClick={() => handleRatingChange(0)}
-                className="hover:text-red-500"
-                aria-label="Remove rating filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.verifiedOnly && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
-              Verified Only
-              <button
-                onClick={handleVerifiedToggle}
-                className="hover:text-red-500"
-                aria-label="Remove verified filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
