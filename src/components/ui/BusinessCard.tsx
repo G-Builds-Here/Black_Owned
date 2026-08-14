@@ -93,7 +93,7 @@ export default function BusinessCard({
     >
       <div className="flex h-full">
         {/* Image - Left side */}
-        <div className="relative w-48 flex-shrink-0 overflow-hidden bg-neutral-200">
+        <div className="relative w-32 flex-shrink-0 overflow-hidden bg-neutral-200">
           {business.imageUrl ? (
             <img
               src={business.imageUrl}
@@ -125,7 +125,7 @@ export default function BusinessCard({
         </div>
 
         {/* Content - Right side */}
-        <div className="flex flex-col flex-grow p-4">
+        <div className="flex flex-col flex-grow p-3">
           <h3 className="text-lg font-semibold mb-1 text-neutral-800 line-clamp-1">{business.name}</h3>
 
           {renderStars(business.rating)}
