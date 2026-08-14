@@ -221,81 +221,83 @@ export default function DirectoryPage() {
       </section>
 
       {/* Main Content - Split View */}
-      <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-7xl mx-auto">
+      <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-full">
         {/* Business List - Left Side */}
-        <div className={`${showMap ? 'lg:w-[70%]' : 'w-full'} overflow-y-auto p-4`}>
-          {/* Tabs */}
-          <Tabs
-            tabs={[
-              { key: 'all', label: `All Businesses (${filteredBusinesses.length})` },
-              { key: 'saved', label: `Saved (${savedBusinesses.size})` },
-            ]}
-            selectedKey={activeTab}
-            onSelectionChange={(key) => setActiveTab(key as 'all' | 'saved')}
-          />
+        <div className={`${showMap ? 'lg:w-[50%]' : 'w-full'} overflow-y-auto`}>
+          <div className="p-4 space-y-4">
+            {/* Tabs */}
+            <Tabs
+              tabs={[
+                { key: 'all', label: `All Businesses (${filteredBusinesses.length})` },
+                { key: 'saved', label: `Saved (${savedBusinesses.size})` },
+              ]}
+              selectedKey={activeTab}
+              onSelectionChange={(key) => setActiveTab(key as 'all' | 'saved')}
+            />
 
-          {/* Filter Bar */}
-          <FilterBar
-            categories={CATEGORIES}
-            locations={LOCATIONS}
-            onFilterChange={handleFilterChange}
-            onSortChange={handleSortChange}
-            currentSort={sort}
-            currentFilters={filters}
-          />
+            {/* Filter Bar */}
+            <FilterBar
+              categories={CATEGORIES}
+              locations={LOCATIONS}
+              onFilterChange={handleFilterChange}
+              onSortChange={handleSortChange}
+              currentSort={sort}
+              currentFilters={filters}
+            />
 
-          {/* Results Count */}
-          <div className="mb-6 text-neutral-600">
-            {displayBusinesses.length} {displayBusinesses.length === 1 ? 'business' : 'businesses'} found
+            {/* Results Count */}
+            <div className="text-neutral-600">
+              {displayBusinesses.length} {displayBusinesses.length === 1 ? 'business' : 'businesses'} found
+            </div>
+
+            {/* Business List - Horizontal Cards */}
+            {displayBusinesses.length > 0 ? (
+              <div className="space-y-4">
+                {displayBusinesses.map((business) => (
+                  <BusinessCard
+                    key={business.id}
+                    business={business}
+                    onViewDetails={handleViewDetails}
+                    onSave={handleSave}
+                    onShare={handleShare}
+                    enableLink={true}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Empty State */
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-6xl mb-4">🔍</div>
+                <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
+                  No businesses found
+                </h3>
+                <p className="text-neutral-600 mb-6 max-w-md mx-auto">
+                  {activeTab === 'saved'
+                    ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
+                    : 'Try adjusting your filters to find more businesses.'}
+                </p>
+                {activeTab === 'all' && (
+                  <button
+                    onClick={() => {
+                      setFilters({});
+                      setSort('relevance');
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+                {activeTab === 'saved' && (
+                  <button
+                    onClick={() => setActiveTab('all')}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                  >
+                    Browse Directory
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Business List - Horizontal Cards */}
-          {displayBusinesses.length > 0 ? (
-            <div className="space-y-4">
-              {displayBusinesses.map((business) => (
-                <BusinessCard
-                  key={business.id}
-                  business={business}
-                  onViewDetails={handleViewDetails}
-                  onSave={handleSave}
-                  onShare={handleShare}
-                  enableLink={true}
-                />
-              ))}
-            </div>
-          ) : (
-            /* Empty State */
-            <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
-              <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
-                No businesses found
-              </h3>
-              <p className="text-neutral-600 mb-6 max-w-md mx-auto">
-                {activeTab === 'saved'
-                  ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
-                  : 'Try adjusting your filters to find more businesses.'}
-              </p>
-              {activeTab === 'all' && (
-                <button
-                  onClick={() => {
-                    setFilters({});
-                    setSort('relevance');
-                  }}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
-                >
-                  Clear Filters
-                </button>
-              )}
-              {activeTab === 'saved' && (
-                <button
-                  onClick={() => setActiveTab('all')}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
-                >
-                  Browse Directory
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Map Panel - Right Side */}
