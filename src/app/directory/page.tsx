@@ -223,7 +223,7 @@ export default function DirectoryPage() {
       {/* Main Content - Split View */}
       <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-7xl mx-auto">
         {/* Business List - Left Side */}
-        <div className={`${showMap ? 'lg:w-1/2' : 'w-full'} overflow-y-auto p-4`}>
+        <div className={`${showMap ? 'lg:w-[60%]' : 'w-full'} overflow-y-auto p-4`}>
           {/* Tabs */}
           <Tabs
             tabs={[
@@ -300,7 +300,7 @@ export default function DirectoryPage() {
 
         {/* Map Panel - Right Side */}
         {showMap && (
-          <div className="hidden lg:block w-1/2 h-full border-l border-neutral-200 bg-neutral-100 relative">
+          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 bg-neutral-100 relative">
             {/* Map Toggle Button */}
             <button
               onClick={() => setShowMap(false)}
