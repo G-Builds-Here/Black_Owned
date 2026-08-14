@@ -20,6 +20,10 @@ export interface FilterBarProps {
   onSortChange: (sort: SortOption) => void;
   currentSort?: SortOption;
   currentFilters?: FilterOption;
+  savedCount?: number;
+  activeTab?: 'all' | 'saved';
+  onTabChange?: (tab: 'all' | 'saved') => void;
+  filteredCount?: number;
 }
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
@@ -92,10 +96,37 @@ export default function FilterBar({
     localFilters.verifiedOnly;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-3 mb-4">
-      <div className="flex flex-wrap gap-3 items-end">
+    <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
+      {/* Tabs */}
+      {savedCount !== undefined && onTabChange && (
+        <div className="border-b border-neutral-200 px-3">
+          <div className="flex gap-4">
+            <button
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'all'
+                  ? 'border-heritage-ochre text-heritage-ochre'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
+              }`}
+              onClick={() => onTabChange('all')}
+            >
+              All Businesses ({filteredCount ?? 0})
+            </button>
+            <button
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'saved'
+                  ? 'border-heritage-ochre text-heritage-ochre'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
+              }`}
+              onClick={() => onTabChange('saved')}
+            >
+              Saved ({savedCount})
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="p-3 flex flex-wrap gap-2 items-center">
         {/* Category Filter */}
-        <div className="flex-1 min-w-[200px]">
+        <div className="min-w-[160px]">
           <Dropdown
             trigger={localFilters.category || 'Category'}
             items={[
@@ -106,7 +137,7 @@ export default function FilterBar({
         </div>
 
         {/* Location Filter */}
-        <div className="flex-1 min-w-[200px]">
+        <div className="min-w-[160px]">
           <Dropdown
             trigger={localFilters.location || 'Location'}
             items={[
@@ -117,7 +148,7 @@ export default function FilterBar({
         </div>
 
         {/* Rating Filter */}
-        <div className="flex-1 min-w-[150px]">
+        <div className="min-w-[130px]">
           <Dropdown
             trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Rating'}
             items={RATING_FILTERS.map((r) => ({
@@ -131,16 +162,17 @@ export default function FilterBar({
         {/* Verified Only Toggle */}
         <Button
           variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
-          size="md"
+          size="sm"
           onClick={handleVerifiedToggle}
+          className="px-3"
         >
-          {localFilters.verifiedOnly ? '✓ Verified Only' : 'All Businesses'}
+          {localFilters.verifiedOnly ? '✓' : 'All'}
         </Button>
 
         {/* Sort Dropdown */}
-        <div className="flex-1 min-w-[140px]">
+        <div className="min-w-[130px]">
           <Dropdown
-            trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort'}
+            trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort by'}
             items={SORT_OPTIONS.map((s) => ({
               label: s.label,
               key: s.value,
@@ -151,8 +183,8 @@ export default function FilterBar({
 
         {/* Clear Filters */}
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            Clear All
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="px-2">
+            Clear
           </Button>
         )}
       </div>

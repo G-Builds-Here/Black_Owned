@@ -93,7 +93,7 @@ export default function BusinessCard({
     >
       <div className="flex h-full">
         {/* Image - Left side */}
-        <div className="relative w-32 flex-shrink-0 overflow-hidden bg-neutral-200">
+        <div className="relative w-40 flex-shrink-0 overflow-hidden bg-neutral-200">
           {business.imageUrl ? (
             <img
               src={business.imageUrl}
@@ -150,13 +150,13 @@ export default function BusinessCard({
 
           {/* Action Buttons */}
           <div className="flex gap-2 mt-3 pt-3 border-t border-neutral-200">
-            <Button variant="primary" size="sm" onClick={handleViewDetails} className="flex-1">
+            <Button variant="primary" size="sm" onClick={handleViewDetails} className="min-w-0 px-3">
               View Details
             </Button>
-            <Button variant="secondary" size="sm" onClick={handleSave} aria-label={`Save ${business.name}`}>
+            <Button variant="secondary" size="sm" onClick={handleSave} aria-label={`Save ${business.name}`} className="min-w-0 px-2">
               💾
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleShare} aria-label={`Share ${business.name}`}>
+            <Button variant="ghost" size="sm" onClick={handleShare} aria-label={`Share ${business.name}`} className="min-w-0 px-2">
               🔗
             </Button>
           </div>

@@ -225,17 +225,7 @@ export default function DirectoryPage() {
         {/* Business List - Left Side */}
         <div className={`${showMap ? 'lg:w-[40%]' : 'w-full'} overflow-y-auto`}>
           <div className="p-4 space-y-4">
-            {/* Tabs */}
-            <Tabs
-              tabs={[
-                { key: 'all', label: `All Businesses (${filteredBusinesses.length})` },
-                { key: 'saved', label: `Saved (${savedBusinesses.size})` },
-              ]}
-              selectedKey={activeTab}
-              onSelectionChange={(key) => setActiveTab(key as 'all' | 'saved')}
-            />
-
-            {/* Filter Bar */}
+            {/* Filter Bar with Tabs */}
             <FilterBar
               categories={CATEGORIES}
               locations={LOCATIONS}
@@ -243,12 +233,11 @@ export default function DirectoryPage() {
               onSortChange={handleSortChange}
               currentSort={sort}
               currentFilters={filters}
+              savedCount={savedBusinesses.size}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              filteredCount={filteredBusinesses.length}
             />
-
-            {/* Results Count */}
-            <div className="text-neutral-600">
-              {displayBusinesses.length} {displayBusinesses.length === 1 ? 'business' : 'businesses'} found
-            </div>
 
             {/* Business List - Horizontal Cards */}
             {displayBusinesses.length > 0 ? (
