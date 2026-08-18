@@ -12,9 +12,9 @@ import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const { jobId } = params;
+  const { jobId } = await params;
 
   if (!jobId || jobId === "") {
     return NextResponse.json(
@@ -55,7 +55,7 @@ export async function GET(
       priceRange: undefined,
       originalData: {
         scrapeJobId: business.scrapeJobId,
-        status: business.status,
+        status: job.status,
         createdAt: business.createdAt.toISOString(),
       },
     }));
@@ -69,7 +69,7 @@ export async function GET(
         query: job.query,
         location: job.location,
         status: job.status,
-        resultCount: job.resultCount,
+        resultCount: job.businessCount ?? 0,
         createdAt: job.createdAt.toISOString(),
       },
     });

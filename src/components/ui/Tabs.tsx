@@ -1,6 +1,6 @@
 'use client';
 
-import React, { HTMLAttributes, forwardRef, useState, useCallback, createContext, useContext } from 'react';
+import React, { HTMLAttributes, forwardRef, useState, useCallback, createContext, useContext, useEffect } from 'react';
 
 export interface Tab {
   key: string;
@@ -39,7 +39,7 @@ const TabsContext = createContext<TabsContextType | null>(null);
 const variantStyles = {
   underlined: {
     base: 'border-b border-neutral-200',
-    tab: 'border-b-2 -mb-px font-medium',
+    tab: 'border-b-2 -mb-px font-medium px-4 py-3',
     selected: 'border-heritage-ochre text-heritage-ochre',
     unselected: 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300',
   },
@@ -79,11 +79,16 @@ const Tabs = forwardRef<HTMLDivElement, TabsProps>(
     },
     ref
   ) => {
+    const [hasMounted, setHasMounted] = useState(false);
     const [internalSelectedKey, setInternalSelectedKey] = useState(
       defaultSelectedKey || tabs[0]?.key || ''
     );
 
-    const selectedKey = controlledSelectedKey !== undefined ? controlledSelectedKey : internalSelectedKey;
+    useEffect(() => {
+      setHasMounted(true);
+    }, []);
+
+    const selectedKey = controlledSelectedKey !== undefined ? controlledSelectedKey : (hasMounted ? internalSelectedKey : tabs[0]?.key || '');
 
     const handleSelect = useCallback(
       (key: string) => {
@@ -119,7 +124,7 @@ const Tabs = forwardRef<HTMLDivElement, TabsProps>(
             <TabButton key={tab.key} tab={tab} />
           ))}
         </div>
-        <div className="mt-4">{children}</div>
+        {children}
       </TabsContext.Provider>
     );
   }

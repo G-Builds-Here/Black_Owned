@@ -242,7 +242,7 @@ export default function AnalyticsPage() {
                           <td className="py-3 px-4 text-neutral-600 truncate max-w-xs">{job.targetUrl}</td>
                           <td className="py-3 px-4">
                             <Badge
-                              variant={job.status === 'success' ? 'primary' : job.status === 'failed' ? 'secondary' : 'tertiary'}
+                              variant={job.status === 'success' ? 'success' : job.status === 'failed' ? 'error' : 'default'}
                               size="sm"
                             >
                               {job.status}

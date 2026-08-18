@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findScrapeJobById } from '@/lib/db/scrape-job-repository';
+import { getPool } from '@/lib/db/user-repository';
 
 /**
  * GET /api/scrape-jobs/:id/status
@@ -7,10 +8,11 @@ import { findScrapeJobById } from '@/lib/db/scrape-job-repository';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const client = await getPool().connect();
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Validate ID is present
     if (!id || id === 'status') {
@@ -21,7 +23,7 @@ export async function GET(
     }
 
     // Fetch the job
-    const job = await findScrapeJobById(id);
+    const job = await findScrapeJobById(client, id);
 
     // Return 404 if job not found
     if (!job) {
@@ -38,9 +40,9 @@ export async function GET(
       query: job.query,
       location: job.location,
       status: job.status,
-      businessCount: job.business_count,
-      createdAt: job.created_at,
-      updatedAt: job.updated_at
+      businessCount: job.businessCount,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt
     });
   } catch (error) {
     console.error('Error fetching scrape job status:', error);
@@ -48,5 +50,7 @@ export async function GET(
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    client.release();
   }
 }

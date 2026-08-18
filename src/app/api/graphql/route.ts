@@ -44,14 +44,6 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
       return { data: { health: resolvers.Query.health() } };
     }
 
-    // Handle business query
-    const businessMatch = query.match(/business\s*\(\s*id:\s*"([^"]+)"\s*\)/);
-    if (businessMatch) {
-      const id = businessMatch[1];
-      const result = await resolvers.Query.business(undefined, { id });
-      return { data: { business: result } };
-    }
-
     // Handle searchBusinesses query
     if (query.includes('searchBusinesses')) {
       const queryArg = query.match(/query:\s*"([^"]+)"/);
@@ -100,16 +92,6 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
         email: registerMatch[1],
         password: registerMatch[2],
         name: registerMatch[3],
-      });
-      return result;
-    }
-
-    // Handle login mutation
-    const loginMatch = query.match(/login\s*\(\s*email:\s*"([^"]+)"\s*,\s*password:\s*"([^"]+)"\s*\)/);
-    if (loginMatch) {
-      const result = await resolvers.Mutation.login(undefined, {
-        email: loginMatch[1],
-        password: loginMatch[2],
       });
       return result;
     }

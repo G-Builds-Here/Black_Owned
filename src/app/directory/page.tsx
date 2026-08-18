@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
@@ -102,9 +104,13 @@ const LOCATIONS = [
   'Philadelphia, PA',
 ];
 
-export default function DirectoryPage() {
+function DirectoryContent() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
-  const [filters, setFilters] = useState<FilterOption>({});
+  const [filters, setFilters] = useState<FilterOption>(() => {
+    const category = searchParams.get('category');
+    return category ? { category } : {};
+  });
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
   const [showMap, setShowMap] = useState(true);
@@ -344,16 +350,15 @@ export default function DirectoryPage() {
               <h4 className="text-white font-semibold mb-4">Explore</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="/directory" className="hover:text-white">Businesses</a></li>
-                <li><a href="/directory" className="hover:text-white">Categories</a></li>
-                <li><a href="/directory" className="hover:text-white">Featured</a></li>
+                <li><a href="/about" className="hover:text-white">About Us</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="/help" className="hover:text-white">Help Center</a></li>
-                <li><a href="/about" className="hover:text-white">Contact</a></li>
-                <li><a href="/help" className="hover:text-white">FAQ</a></li>
+                <li><a href="/about" className="hover:text-white">Contact Us</a></li>
+                <li><a href="/help#faq" className="hover:text-white">FAQ</a></li>
               </ul>
             </div>
             <div>
@@ -370,5 +375,13 @@ export default function DirectoryPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function DirectoryPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <DirectoryContent />
+    </Suspense>
   );
 }

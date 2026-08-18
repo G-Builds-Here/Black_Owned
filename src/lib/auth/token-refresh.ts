@@ -6,7 +6,7 @@
 
 import { verifyToken, generateAccessToken, generateRefreshToken } from "./auth-service";
 import { getRefreshTokenUserId, storeRefreshToken, revokeRefreshToken } from "../valkey/valkey-client";
-import { TokenPair } from "../types/user";
+import { TokenPair } from "@/types/user";
 
 /**
  * Refresh token result type
@@ -65,6 +65,8 @@ export async function refreshAccessToken(
       email: "", // Email not available from Valkey, will be set in access token from JWT
       passwordHash: "",
       name: "",
+      role: "user" as const,
+      status: "active" as const,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

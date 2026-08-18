@@ -82,7 +82,7 @@ export default function ClaimBusinessPage() {
         <Navigation onNavigate={handleNavigate} />
         <div className="py-12 px-4">
           <div className="flex items-center justify-center">
-            <Card variant="elevated" padding="xl" className="max-w-md text-center bg-white dark:bg-neutral-800">
+            <Card variant="elevated" padding="lg" className="max-w-md text-center bg-white dark:bg-neutral-800">
               <h1 className="text-2xl font-bold text-neutral-900 dark:text-white mb-4">
                 Thank you for your submission!
               </h1>

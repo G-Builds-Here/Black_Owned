@@ -152,6 +152,23 @@ export async function findScrapedBusinessesByJobId(
 }
 
 /**
+ * Find the most recent scraped businesses for display
+ * (e.g. the homepage "Featured Businesses" section).
+ * Returns the latest `limit` businesses by created_at, newest first.
+ */
+export async function findFeaturedScrapedBusinesses(
+  client: PoolClient,
+  limit = 10
+): Promise<ScrapedBusiness[]> {
+  const tableName = getTableName();
+  const result = await client.query<ScrapedBusiness>(
+    `SELECT * FROM ${tableName} ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return result.rows.map(rowToScrapedBusiness);
+}
+
+/**
  * Find a scraped business by ID
  */
 export async function findScrapedBusinessById(

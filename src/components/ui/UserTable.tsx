@@ -106,6 +106,10 @@ export function UserTable({ apiUrl = '/api/users', adminUser = 'admin' }: UserTa
         throw new Error(result.error || 'Failed to fetch users');
       }
 
+      if (!result.data) {
+        throw new Error('No data in response');
+      }
+
       setUsers(result.data.users);
       setTotalPages(result.data.totalPages);
     } catch (err) {

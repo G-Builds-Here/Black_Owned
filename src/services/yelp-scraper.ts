@@ -11,8 +11,8 @@ import {
   ScraperResult,
   ScraperOptions,
   ScraperJobState,
-} from "../types/yelp-scraper";
-import { ScraperSource } from "../types/scrape-job";
+  ScraperSource,
+} from "../types/scraper-result";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -22,6 +22,7 @@ const DEFAULT_DELAY_BETWEEN_PAGES_MS = 1000;
  * Yelp scraper class with pagination support
  */
 export class YelpScraper {
+  source: ScraperSource = ScraperSource.YELP;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
@@ -82,6 +83,16 @@ export class YelpScraper {
     const collectedBusinesses: ScrapedBusiness[] = [];
     const seenNames = new Set<string>();
 
+    // Initialize job state
+    const jobState: ScraperJobState = {
+      query,
+      location,
+      currentPage: 0,
+      totalPages: 0,
+      businessesCollected: [],
+      isComplete: false,
+    };
+
     try {
       // Navigate to Yelp search
       const searchUrl = `https://www.yelp.com/search?find_desc=${encodeURIComponent(
@@ -100,16 +111,6 @@ export class YelpScraper {
         // Continue even if selector not found - may have different structure
         resultsLoaded = false;
       }
-
-      // Initialize job state
-      const jobState: ScraperJobState = {
-        query,
-        location,
-        currentPage: 0,
-        totalPages: 0,
-        businessesCollected: [],
-        isComplete: false,
-      };
 
       // Process pages
       let currentPage = 1;
@@ -166,7 +167,7 @@ export class YelpScraper {
           totalResults,
           hasNextPage: false,
         },
-        source: "yelp",
+        source: ScraperSource.YELP,
         query,
         location,
         timestamp: new Date(),
@@ -269,7 +270,7 @@ export class YelpScraper {
 
     return filteredBusinesses.map((b) => ({
       ...b,
-      source: "yelp" as ScraperSource,
+      source: ScraperSource.YELP,
     }));
   }
 

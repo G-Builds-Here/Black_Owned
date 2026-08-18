@@ -10,13 +10,13 @@ import {
 import {
   hashPassword,
   generateTokenPair,
-  verifyToken,
-  JwtPayload,
+  verifyToken
 } from "../auth/auth-service";
 import {
   validatePassword,
   isValidEmail,
   User,
+  JwtPayload,
 } from "../../types/user";
 import { storeRefreshToken } from "../valkey/valkey-client";
 import { getCachedResponse, cacheResponse, generateCacheKey } from "./query-cache";
@@ -26,12 +26,13 @@ import {
   PresignedUrlResult,
 } from "../minio/minio-service";
 import {
-  findById as findBusinessById,
+  findBusinessById,
+  createBusiness,
   updateNameById,
-  create as createBusiness,
-  Business as BusinessRecord,
 } from "../db/business-repository";
-import { getGoogleMapsScraper, SearchParams } from "../../services/google-maps-scraper";
+import { getPool } from "../db/user-repository";
+import { Business } from "../../types/business";
+import { createGoogleMapsScraper } from "../../services/google-maps-scraper";
 
 /**
  * Mock business data for search
@@ -309,14 +310,14 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: BusinessRecord) {
+function businessToGraphqlBusiness(business: Business) {
   return {
     id: business.id,
     name: business.name,
-    categoryId: business.category_id,
-    verified: business.verified,
+    categoryId: business.categoryId,
+    verified: business.verificationStatus === 'verified',
     createdAt: {
-      timestamp: Math.floor(business.created_at.getTime() / 1000),
+      timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },
   };
 }
@@ -359,20 +360,26 @@ export async function updateBusiness(
 
   const userId = payload.userId;
 
-  // Verify ownership - only the business owner can update
-  const updatedBusiness = await updateNameById(id, name, userId);
+  // Get database client and verify ownership - only the business owner can update
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    const updatedBusiness = await updateNameById(client, id, name, userId);
 
-  if (!updatedBusiness) {
+    if (!updatedBusiness) {
+      return {
+        success: false,
+        error: "Business not found or you are not the owner",
+      };
+    }
+
     return {
-      success: false,
-      error: "Business not found or you are not the owner",
+      success: true,
+      business: businessToGraphqlBusiness(updatedBusiness),
     };
+  } finally {
+    client.release();
   }
-
-  return {
-    success: true,
-    business: businessToGraphqlBusiness(updatedBusiness),
-  };
 }
 
 /**
@@ -449,10 +456,22 @@ export async function searchBusinesses(
 
   try {
     // Use Google Maps scraper for live search
-    const scraper = getGoogleMapsScraper();
-    const searchParams: SearchParams = { query: normalizedQuery };
+    const scraper = createGoogleMapsScraper();
 
-    const scrapedBusinesses = await scraper.searchBusinesses(searchParams);
+    const scrapedResult = await scraper.scrape(normalizedQuery, "");
+
+    const scrapedBusinesses = scrapedResult.businesses.map((scraped, index) => ({
+      id: `scraped-${index}-${Date.now()}`,
+      name: scraped.name,
+      category: "Professional Services",
+      rating: scraped.rating ?? 0,
+      reviewCount: scraped.reviewCount ?? 0,
+      location: scraped.address,
+      isVerified: true,
+      imageUrl: "",
+      description: scraped.website ? `Verified business. Website: ${scraped.website}` : "Verified business",
+      tags: [],
+    }));
 
     // Convert scraped businesses to internal format
     const formattedBusinesses = scrapedBusinesses.map((scraped, index) => ({
@@ -538,25 +557,6 @@ export async function searchBusinesses(
 }
 
 /**
- * Convert Business entity to GraphQL Business type
- */
-function businessToGraphqlBusiness(business: Business): {
-  id: string;
-  name: string;
-  categoryId: string;
-  verified: boolean;
-  createdAt: { timestamp: number };
-} {
-  return {
-    id: business.id,
-    name: business.name,
-    categoryId: business.categoryId,
-    verified: business.verificationStatus === "verified",
-    createdAt: { timestamp: Math.floor(business.createdAt.getTime() / 1000) },
-  };
-}
-
-/**
  * Get the current user ID from context (set by auth middleware)
  */
 function getCurrentUserId(context: unknown): string | null {
@@ -567,7 +567,7 @@ function getCurrentUserId(context: unknown): string | null {
 /**
  * Create business mutation resolver
  */
-export async function createBusiness(
+export async function createBusinessResolver(
   _parent: unknown,
   args: { input: { name: string; description?: string; categoryId: string } },
   context: unknown
@@ -657,7 +657,7 @@ export const resolvers = {
   },
   Mutation: {
     register,
-    createBusiness,
+    createBusiness: createBusinessResolver,
     submitVerification,
     updateBusiness,
   },

@@ -19,16 +19,16 @@ export interface Scraper {
 
 /**
  * Get a scraper instance by source type
- * @param source - The scraper source (google-maps, yelp, facebook)
+ * @param source - The scraper source (GOOGLE_MAPS, YELP, FACEBOOK)
  * @returns Scraper instance
  */
-export function getScraper(source: "google-maps" | "yelp" | "facebook"): Scraper {
+export function getScraper(source: ScraperSource): Scraper {
   switch (source) {
-    case "google-maps":
+    case ScraperSource.GOOGLE_MAPS:
       return new GoogleMapsScraper();
-    case "yelp":
+    case ScraperSource.YELP:
       return new YelpScraper();
-    case "facebook":
+    case ScraperSource.FACEBOOK:
       return new FacebookScraper();
     default:
       throw new Error(`Unknown scraper source: ${source}`);
@@ -40,5 +40,5 @@ export function getScraper(source: "google-maps" | "yelp" | "facebook"): Scraper
  * @returns Array of supported scraper sources
  */
 export function getAvailableSources(): ScraperSource[] {
-  return ["google-maps", "yelp", "facebook"];
+  return [ScraperSource.GOOGLE_MAPS, ScraperSource.YELP, ScraperSource.FACEBOOK];
 }

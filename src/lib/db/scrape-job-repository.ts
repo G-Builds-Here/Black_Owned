@@ -63,7 +63,7 @@ function rowToScrapeJob(row: unknown): ScrapeJob {
     query: r.query as string,
     location: r.location as string,
     status: r.status as ScrapeJobStatus,
-    resultCount: (r.business_count as number | null) ?? undefined,
+    businessCount: (r.business_count as number | null) ?? undefined,
     errorMessage: (r.error_message as string | null) ?? undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),

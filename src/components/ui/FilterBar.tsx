@@ -51,6 +51,10 @@ export default function FilterBar({
   onSortChange,
   currentSort = 'relevance',
   currentFilters = {},
+  savedCount,
+  onTabChange,
+  activeTab,
+  filteredCount,
 }: FilterBarProps) {
   const [localFilters, setLocalFilters] = useState<FilterOption>(currentFilters);
 

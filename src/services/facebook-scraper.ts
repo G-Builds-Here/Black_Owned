@@ -4,14 +4,15 @@
  * Scrapes Facebook for business page search results.
  */
 
-import { Browser, Page } from "playwright";
+import { Browser, Page, BrowserContext } from "playwright";
 import {
-  ScraperOptions,
-  ScraperResult,
   ScrapedBusiness,
-  ScraperPagination,
+  ScraperResult,
+  ScraperOptions,
   ScraperJobState,
-} from "../types/facebook-scraper";
+  ScraperPagination,
+  ScraperSource,
+} from "../types/scraper-result";
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_DELAY_BETWEEN_PAGES_MS = 2000;
@@ -21,6 +22,7 @@ const FACEBOOK_SEARCH_URL = "https://www.facebook.com/search/pages";
  * Facebook Scraper - extracts business page data from Facebook search results
  */
 export class FacebookScraper {
+  source: ScraperSource = ScraperSource.FACEBOOK;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
@@ -181,7 +183,8 @@ export class FacebookScraper {
 
           businesses.push({
             name,
-            source: "facebook",
+            address: "",
+            source: ScraperSource.FACEBOOK,
             sourceId,
             category: categoryEl?.textContent?.trim() || undefined,
           });

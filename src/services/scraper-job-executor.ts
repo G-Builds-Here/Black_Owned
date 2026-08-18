@@ -21,7 +21,7 @@ import {
   createScrapedBusiness,
   findScrapedBusinessesByJobId,
 } from "../lib/db/scraped-business-repository";
-import { CreateScrapedBusinessInput } from "../types/scraped-business";
+import type { CreateScrapedBusinessInput } from "../lib/db/scraped-business-repository";
 import { ScraperSource } from "../types/scraper-result";
 import { getScraper, getAvailableSources } from "./business-scraper";
 
@@ -126,8 +126,8 @@ export async function executeScrapeJob(
     let scraperResult: ScraperExecutionResult;
 
     try {
-      scraper = getScraper(input.source as "google-maps" | "yelp" | "facebook");
-      scraperResult = await scraper.scrape(input.query, input.location);
+      scraper = getScraper(input.source as ScraperSource);
+      scraperResult = await scraper.scrape(input.query, input.location) as ScraperExecutionResult;
     } catch (scraperError) {
       // Step 4a: Mark as failed on scraper error
       const failedJob = await updateScrapeJobStatus(

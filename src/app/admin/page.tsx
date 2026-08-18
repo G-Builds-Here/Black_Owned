@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Navigation } from '@/components/ui/Navigation';
-import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, UserTable } from '@/components/ui';
+import { Card, Badge, Button, TabPanel, Input, Dropdown, DropdownItem, Tabs, TabContent, UserTable } from '@/components/ui';
 
 // Mock data for admin metrics
 const METRICS = {
@@ -125,10 +125,10 @@ export default function AdminConsole() {
           ]}
           selectedKey={activeTab}
           onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
-        />
-
-        {/* Dashboard Tab */}
-        <TabPanel value="dashboard" className="mt-6">
+        >
+          <TabContent>
+            {/* Dashboard Tab */}
+            <TabPanel value="dashboard" className="mt-4">
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <Card variant="elevated" padding="lg">
@@ -267,7 +267,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* User Management Tab */}
-        <TabPanel value="users" className="mt-6">
+        <TabPanel value="users" className="mt-4">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -280,7 +280,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* Verifications Tab */}
-        <TabPanel value="verifications" className="mt-6">
+        <TabPanel value="verifications" className="mt-4">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-neutral-800">Verification Queue</h2>
@@ -325,7 +325,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* Reviews Tab */}
-        <TabPanel value="reviews" className="mt-6">
+        <TabPanel value="reviews" className="mt-4">
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-neutral-800">Review Moderation Queue</h2>
@@ -362,7 +362,7 @@ export default function AdminConsole() {
         </TabPanel>
 
         {/* Settings Tab */}
-        <TabPanel value="settings" className="mt-6">
+        <TabPanel value="settings" className="mt-4">
           <Card variant="elevated" padding="lg">
             <h2 className="text-xl font-bold text-neutral-800 mb-6">Platform Settings</h2>
             <div className="space-y-6">
@@ -406,6 +406,8 @@ export default function AdminConsole() {
             </div>
           </Card>
         </TabPanel>
+          </TabContent>
+        </Tabs>
       </section>
 
       {/* Footer */}

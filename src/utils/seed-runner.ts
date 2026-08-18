@@ -15,9 +15,9 @@
 import {
   TEST_PREFIX,
   TEST_EMAIL_DOMAIN,
-  generateBusinessesWithImages,
+  generateTestBusinesses,
   generateTestUsers,
-  TestBusinessWithImages,
+  TestBusiness,
   TestUser,
 } from "./test-data-seeder";
 import { generateImagesForBusiness } from "../services/image-service";
@@ -43,7 +43,7 @@ export interface SeedSummary {
  * In production, this would be replaced with actual database queries
  */
 interface SeedDatabase {
-  businesses: Map<string, TestBusinessWithImages>;
+  businesses: Map<string, TestBusiness>;
   users: Map<string, TestUser>;
   reviews: Map<string, any[]>; // businessId -> reviews
   images: Map<string, any[]>; // businessId -> images
@@ -130,9 +130,9 @@ export function hasTestData(): boolean {
  * Seed businesses with idempotency
  * Returns array of created business IDs and count of skipped
  */
-function seedBusinesses(): { created: TestBusinessWithImages[]; skipped: number } {
-  const businesses = generateBusinessesWithImages(30);
-  const created: TestBusinessWithImages[] = [];
+function seedBusinesses(): { created: TestBusiness[]; skipped: number } {
+  const businesses = generateTestBusinesses(30);
+  const created: TestBusiness[] = [];
   let skipped = 0;
 
   for (const business of businesses) {
@@ -152,7 +152,7 @@ function seedBusinesses(): { created: TestBusinessWithImages[]; skipped: number 
  * Only creates reviews for businesses that don't already have them
  */
 function seedReviews(
-  businesses: TestBusinessWithImages[]
+  businesses: TestBusiness[]
 ): { created: number; skipped: number } {
   let created = 0;
   let skipped = 0;
@@ -175,7 +175,7 @@ function seedReviews(
  * Only creates images for businesses that don't already have them
  */
 function seedImages(
-  businesses: TestBusinessWithImages[]
+  businesses: TestBusiness[]
 ): { created: number; skipped: number } {
   let created = 0;
   let skipped = 0;
@@ -247,7 +247,7 @@ export async function runSeed(reset: boolean = false): Promise<SeedSummary> {
   const businessResult = seedBusinesses();
 
   // Get all 30 businesses (both newly created and existing) for review/image checks
-  const allBusinesses = generateBusinessesWithImages(30);
+  const allBusinesses = generateTestBusinesses(30);
 
   // Seed reviews for all businesses (idempotent - checks each business)
   const reviewResult = seedReviews(allBusinesses);
