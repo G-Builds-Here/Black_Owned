@@ -17,6 +17,7 @@ export interface TestBusiness {
   name: string;
   formattedName: string;
   description?: string;
+  category?: string;
 }
 
 export type UserRole = "customer" | "business_owner" | "admin";
@@ -34,15 +35,6 @@ export interface TestUser {
 export interface TestSeedData {
   businesses: TestBusiness[];
   users: TestUser[];
-}
-
-/**
- * Business with associated images for seeding
- */
-export interface TestBusinessWithImages extends TestBusiness {
-  id: string;
-  category: string;
-  imageCount: number;
 }
 
 /**
@@ -102,60 +94,6 @@ export function generateTestBusinesses(count: number = 5): TestBusiness[] {
       name,
       formattedName: formatBusinessName(name),
       description: `Test business - ${name}`,
-    };
-  });
-}
-
-/**
- * Generates businesses with associated image data for seeding
- * Creates businesses with varied categories and assigns image counts
- */
-export function generateBusinessesWithImages(count: number = 20): TestBusinessWithImages[] {
-  const categoryList: Array<{ category: string; name: string; description: string }> = [
-    { category: "food-dining", name: "Soul Food Kitchen", description: "Traditional Southern cuisine" },
-    { category: "food-dining", name: "Community Taco Bar", description: "Authentic Mexican street food" },
-    { category: "food-dining", name: "Harlem Soul Cafe", description: "Breakfast and lunch comfort food" },
-    { category: "food-dining", name: "Family BBQ Pit", description: "Slow-smoked meats and sides" },
-    { category: "food-dining", name: "Sweet Treats Bakery", description: "Fresh baked goods daily" },
-    { category: "retail-fashion", name: "Urban Style Boutique", description: "Trendy clothing and accessories" },
-    { category: "retail-fashion", name: "Community Thrift Store", description: "Affordable quality goods" },
-    { category: "retail-fashion", name: "Classic Barbershop", description: "Traditional cuts and styling" },
-    { category: "retail-fashion", name: "Beauty Essentials Shop", description: "Cosmetics and skincare" },
-    { category: "professional-services", name: "Black Professionals Consulting", description: "Business strategy services" },
-    { category: "professional-services", name: "Community Legal Aid", description: "Accessible legal services" },
-    { category: "professional-services", name: "Financial Planning Group", description: "Wealth management and advice" },
-    { category: "health-wellness", name: "Wellness First Clinic", description: "Comprehensive healthcare" },
-    { category: "health-wellness", name: "Community Fitness Center", description: "Affordable gym and classes" },
-    { category: "health-wellness", name: "Family Dental Care", description: "Complete dental services" },
-    { category: "automotive", name: "Reliable Auto Repair", description: "Full-service auto maintenance" },
-    { category: "home-services", name: "Quality Home Solutions", description: "Plumbing and electrical" },
-    { category: "entertainment", name: "Community Arts Center", description: "Cultural events and workshops" },
-    { category: "education", name: "Bright Futures Tutoring", description: "Academic support services" },
-    { category: "financial-services", name: "Community Credit Union", description: "Member-owned financial services" },
-    { category: "food-dining", name: "Gospel Soul Food", description: "Comfort food with a spiritual touch" },
-    { category: "food-dining", name: "Caribbean Spice House", description: "Authentic island flavors and jerk specialties" },
-    { category: "retail-fashion", name: "Heritage Fashion", description: "Culturally inspired clothing and accessories" },
-    { category: "retail-fashion", name: "Community Bookstore", description: "Local literature and educational resources" },
-    { category: "professional-services", name: "Community Insurance Agency", description: "Family and business coverage solutions" },
-    { category: "health-wellness", name: "Holistic Health Center", description: "Integrative wellness and preventive care" },
-    { category: "health-wellness", name: "Community Eye Care", description: "Affordable vision services and eyewear" },
-    { category: "automotive", name: "Family Auto Care", description: "Trusted maintenance and repair services" },
-    { category: "home-services", name: "Neighborhood HVAC", description: "Heating and cooling solutions" },
-    { category: "entertainment", name: "Jazz Lounge & Cafe", description: "Live music and community gathering space" },
-  ];
-
-  return Array.from({ length: count }, (_, i) => {
-    const template = categoryList[i % categoryList.length];
-    const suffix = categoryList.length > count && i >= categoryList.length ? ` ${Math.floor(i / categoryList.length) + 1}` : "";
-    const businessName = `${template.name}${suffix}`;
-
-    return {
-      id: `biz-${i + 1}`,
-      name: formatBusinessName(businessName),
-      formattedName: formatBusinessName(businessName),
-      description: template.description,
-      category: template.category,
-      imageCount: 2 + (i % 3), // 2-4 images per business
     };
   });
 }

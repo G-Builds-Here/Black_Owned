@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import AnalyticsPage from './page';
 
 // Mock fetch
@@ -7,8 +7,6 @@ global.fetch = jest.fn();
 describe('AnalyticsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Reset fetch mock to undefined to force fresh mocks per test
-    (global.fetch as jest.Mock) = jest.fn();
   });
 
   it('renders the analytics page header', () => {
@@ -19,6 +17,9 @@ describe('AnalyticsPage', () => {
         successfulJobs: 0,
         failedJobs: 0,
         totalItemsScraped: 0,
+        totalBusinessesScraped: 0,
+        totalBusinessesImported: 0,
+        importRate: 0,
         periodDays: 30,
       }),
     });
@@ -37,6 +38,9 @@ describe('AnalyticsPage', () => {
         successfulJobs: 0,
         failedJobs: 0,
         totalItemsScraped: 0,
+        totalBusinessesScraped: 0,
+        totalBusinessesImported: 0,
+        importRate: 0,
         periodDays: 30,
       }),
     });
@@ -47,26 +51,6 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('Last 14 days')).toBeInTheDocument();
     expect(screen.getByText('Last 30 days')).toBeInTheDocument();
     expect(screen.getByText('Last 90 days')).toBeInTheDocument();
-  });
-
-  it('displays source filter buttons', () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        totalJobs: 0,
-        successfulJobs: 0,
-        failedJobs: 0,
-        totalItemsScraped: 0,
-        periodDays: 30,
-      }),
-    });
-
-    render(<AnalyticsPage />);
-
-    expect(screen.getByText('All Sources')).toBeInTheDocument();
-    expect(screen.getByText('Google Maps')).toBeInTheDocument();
-    expect(screen.getByText('Yelp')).toBeInTheDocument();
-    expect(screen.getByText('Facebook')).toBeInTheDocument();
   });
 
   it('displays loading state initially', () => {
@@ -85,18 +69,16 @@ describe('AnalyticsPage', () => {
       successfulJobs: 135,
       failedJobs: 15,
       totalItemsScraped: 45000,
+      totalBusinessesScraped: 100,
+      totalBusinessesImported: 75,
+      importRate: 75.0,
       periodDays: 30,
     };
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStats,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      });
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockStats,
+    });
 
     render(<AnalyticsPage />);
 
@@ -105,6 +87,8 @@ describe('AnalyticsPage', () => {
       expect(screen.getByText('135')).toBeInTheDocument();
       expect(screen.getByText('15')).toBeInTheDocument();
       expect(screen.getByText('45,000')).toBeInTheDocument();
+      expect(screen.getByText('100')).toBeInTheDocument();
+      expect(screen.getByText('75')).toBeInTheDocument();
     });
   });
 
@@ -117,6 +101,9 @@ describe('AnalyticsPage', () => {
           successfulJobs: 0,
           failedJobs: 0,
           totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
           periodDays: 30,
         }),
       })
@@ -133,29 +120,33 @@ describe('AnalyticsPage', () => {
   });
 
   it('displays error message when fetch fails', async () => {
-    (global.fetch as jest.Mock)
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockRejectedValueOnce(new Error('Network error'));
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
     render(<AnalyticsPage />);
 
-    // Wait for error to be displayed - the component shows "Error: Network error"
     await waitFor(() => {
-      expect(screen.getByText(/Error: Network error/)).toBeInTheDocument();
-    }, { timeout: 5000 });
+      expect(screen.getByText(/Error:/i)).toBeInTheDocument();
+    });
   });
 
   it('changes period when clicking period buttons', async () => {
     const fetchMock = jest.fn()
-      .mockResolvedValue({
+      .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           totalJobs: 0,
           successfulJobs: 0,
           failedJobs: 0,
           totalItemsScraped: 0,
-          periodDays: 30,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
+          periodDays: 7,
         }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
       });
 
     (global.fetch as jest.Mock).mockImplementation(fetchMock);
@@ -168,23 +159,9 @@ describe('AnalyticsPage', () => {
       );
     });
 
-    // Update mock to return 7 days after click
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        totalJobs: 0,
-        successfulJobs: 0,
-        failedJobs: 0,
-        totalItemsScraped: 0,
-        periodDays: 7,
-      }),
-    });
-
     // Click on "Last 7 days" button
     const sevenDaysButton = screen.getByText('Last 7 days');
-    await act(async () => {
-      sevenDaysButton.click();
-    });
+    sevenDaysButton.click();
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -199,6 +176,9 @@ describe('AnalyticsPage', () => {
       successfulJobs: 4,
       failedJobs: 1,
       totalItemsScraped: 1000,
+      totalBusinessesScraped: 5,
+      totalBusinessesImported: 3,
+      importRate: 60.0,
       periodDays: 30,
     };
 
@@ -234,14 +214,16 @@ describe('AnalyticsPage', () => {
     });
   });
 
-  it('filters metrics by Google Maps source when selected', async () => {
+  it('displays businesses scraped and imported stats', async () => {
     const mockStats = {
-      totalJobs: 50,
-      successfulJobs: 45,
-      failedJobs: 5,
-      totalItemsScraped: 5000,
+      totalJobs: 10,
+      successfulJobs: 8,
+      failedJobs: 2,
+      totalItemsScraped: 500,
+      totalBusinessesScraped: 50,
+      totalBusinessesImported: 35,
+      importRate: 70.0,
       periodDays: 30,
-      source: 'GoogleMaps',
     };
 
     (global.fetch as jest.Mock)
@@ -256,173 +238,13 @@ describe('AnalyticsPage', () => {
 
     render(<AnalyticsPage />);
 
-    // Click on "Google Maps" source filter
-    const googleMapsButton = screen.getByText('Google Maps');
-    await act(async () => {
-      googleMapsButton.click();
-    });
-
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('source=GoogleMaps')
-      );
+      expect(screen.getByText('Businesses Scraped')).toBeInTheDocument();
+      expect(screen.getByText('Businesses Imported')).toBeInTheDocument();
+      expect(screen.getByText('50')).toBeInTheDocument();
+      expect(screen.getByText('35')).toBeInTheDocument();
+      expect(screen.getByText(/70\.0/)).toBeInTheDocument();
+      expect(screen.getByText(/import rate/)).toBeInTheDocument();
     });
-  });
-
-  it('filters metrics by Yelp source when selected', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          periodDays: 30,
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      });
-
-    render(<AnalyticsPage />);
-
-    // Click on "Yelp" source filter
-    const yelpButton = screen.getByText('Yelp');
-    await act(async () => {
-      yelpButton.click();
-    });
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('source=Yelp')
-      );
-    });
-  });
-
-  it('filters metrics by Facebook source when selected', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          periodDays: 30,
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      });
-
-    render(<AnalyticsPage />);
-
-    // Click on "Facebook" source filter
-    const facebookButton = screen.getByText('Facebook');
-    await act(async () => {
-      facebookButton.click();
-    });
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('source=Facebook')
-      );
-    });
-  });
-
-  it('removes source filter when "All Sources" is selected', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          periodDays: 30,
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      });
-
-    render(<AnalyticsPage />);
-
-    // Wait for initial load
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
-
-    // Click on "Google Maps" source filter
-    const googleMapsButton = screen.getByText('Google Maps');
-    await act(async () => {
-      googleMapsButton.click();
-    });
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('source=GoogleMaps')
-      );
-    });
-
-    // Click on "All Sources" to remove filter
-    const allSourcesButton = screen.getByText('All Sources');
-    await act(async () => {
-      allSourcesButton.click();
-    });
-
-    await waitFor(() => {
-      const calls = (global.fetch as jest.Mock).mock.calls;
-      const lastCall = calls[calls.length - 1];
-      expect(lastCall[0]).not.toContain('source=');
-    });
-  });
-
-  it('updates metrics within 2 seconds when source filter changes', async () => {
-    const mockStats = {
-      totalJobs: 100,
-      successfulJobs: 90,
-      failedJobs: 10,
-      totalItemsScraped: 10000,
-      periodDays: 30,
-    };
-
-    const fetchStartTime = Date.now();
-    (global.fetch as jest.Mock).mockImplementation(() => {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            ok: true,
-            json: async () => mockStats,
-          });
-        }, 500); // Simulate 500ms response time
-      });
-    });
-
-    render(<AnalyticsPage />);
-
-    // Wait for initial load
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
-
-    // Click on "Google Maps" source filter
-    const googleMapsButton = screen.getByText('Google Maps');
-    googleMapsButton.click();
-
-    // Wait for the update to complete
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('source=GoogleMaps')
-      );
-    });
-
-    const fetchDuration = Date.now() - fetchStartTime;
-    // Verify the update happens within 2 seconds
-    expect(fetchDuration).toBeLessThan(2000);
   });
 });

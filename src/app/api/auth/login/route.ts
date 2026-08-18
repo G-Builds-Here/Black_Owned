@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { login } from "@/lib/graphql/resolvers";
+import { login } from "@/lib/graphql/login-resolvers";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {

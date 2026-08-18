@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import Button from './Button';
 
 export interface NavigationProps {
@@ -11,10 +12,8 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: 'Home', href: '#home', section: 'home' as const },
-    { label: 'Directory', href: '#directory', section: 'directory' as const },
-    { label: 'About', href: '#about', section: 'home' as const },
-    { label: 'Contact', href: '#contact', section: 'home' as const },
+    { label: 'Home', href: '/', section: 'home' as const },
+    { label: 'Directory', href: '/directory', section: 'directory' as const },
   ];
 
   const handleNavClick = (section: string) => {
@@ -27,12 +26,12 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-heritage-ochre to-heritage-gold rounded-lg flex items-center justify-center">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="w-10 h-10 bg-gradient-to-br from-heritage-ochre to-heritage-gold rounded-lg flex items-center justify-center group-hover:opacity-80 transition-opacity">
               <span className="text-white font-bold text-lg">BO</span>
             </div>
             <span className="text-xl font-bold font-display">Black Owned</span>
-          </div>
+          </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">

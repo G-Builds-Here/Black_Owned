@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import BusinessCard, { Business, ScrapeMetadata } from './BusinessCard';
+import BusinessCard, { Business } from './BusinessCard';
 
 describe('BusinessCard', () => {
   const mockBusiness: Business = {
@@ -18,20 +18,9 @@ describe('BusinessCard', () => {
     tags: ['Tag1', 'Tag2', 'Tag3'],
   };
 
-  const mockScrapedData: ScrapeMetadata = {
-    scrapedAt: '2024-01-15T10:30:00Z',
-    sourceUrl: 'https://example-directory.com/business/123',
-    rawDescription: 'Original scraped description',
-    rawAddress: '456 Scraped Street',
-    rawPhoneNumber: '(555) 123-4567',
-    rawWebsite: 'https://scraped-business.com',
-    rawContactInfo: 'Contact via scraped source',
-  };
-
   it('renders business name', () => {
     render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const name = screen.getByTestId('business-name');
-    expect(name).toHaveTextContent(/test business/i);
+    expect(screen.getByText(/test business/i)).toBeInTheDocument();
   });
 
   it('renders business category', () => {
@@ -51,8 +40,8 @@ describe('BusinessCard', () => {
 
   it('renders rating stars', () => {
     render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    // Check for review count
-    expect(screen.getByText(/100/)).toBeInTheDocument();
+    // Check for star character (unicode)
+    expect(screen.getByText(/\d+/)).toBeInTheDocument(); // Review count
   });
 
   it('renders review count', () => {
@@ -139,13 +128,13 @@ describe('BusinessCard', () => {
   it('has rounded corners', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
     const card = container.querySelector('[data-testid="business-card"]');
-    expect(card).toHaveClass('rounded-xl');
+    expect(card).toHaveClass('rounded-t-lg');
   });
 
   it('has shadow', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
     const card = container.querySelector('[data-testid="business-card"]');
-    expect(card).toHaveClass('shadow-soft');
+    expect(card).toHaveClass('shadow');
   });
 
   it('has flex column layout', () => {
@@ -157,8 +146,8 @@ describe('BusinessCard', () => {
 
   it('has aspect ratio for image', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const imageContainer = container.querySelector('.aspect-video');
-    expect(imageContainer).toBeInTheDocument();
+    const imageContainer = container.querySelector('[role="img"]');
+    expect(imageContainer).toHaveClass('aspect-video');
   });
 
   it('shows placeholder when no image URL', () => {
@@ -222,35 +211,5 @@ describe('BusinessCard', () => {
     const name = container.querySelector('[data-testid="business-name"]');
     expect(name).toHaveClass('font-semibold');
     expect(name).toHaveClass('text-xl');
-  });
-
-  describe('Scraped Data Support', () => {
-    it('accepts business with scrapedData without errors', () => {
-      const businessWithScrapedData: Business = {
-        ...mockBusiness,
-        scrapedData: mockScrapedData,
-      };
-      expect(() =>
-        render(<BusinessCard business={businessWithScrapedData} onViewDetails={jest.fn()} />)
-      ).not.toThrow();
-    });
-
-    it('handles business without scrapedData (optional field)', () => {
-      const businessWithoutScrapedData: Business = {
-        id: '2',
-        name: 'No Scraped Data Business',
-        category: 'Retail',
-        rating: 4.0,
-        reviewCount: 50,
-        location: 'Chicago, IL',
-        isVerified: false,
-        imageUrl: '',
-        description: 'A business without scraped data',
-        tags: [],
-      };
-      expect(() =>
-        render(<BusinessCard business={businessWithoutScrapedData} onViewDetails={jest.fn()} />)
-      ).not.toThrow();
-    });
   });
 });

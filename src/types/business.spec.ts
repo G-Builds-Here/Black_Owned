@@ -12,7 +12,6 @@ import {
   type BusinessHours,
   type VerificationStatus,
   type BusinessCategory,
-  type Business,
 } from "./business";
 
 describe("Business Types", () => {
@@ -172,44 +171,6 @@ describe("Business Types", () => {
       const result = validateBusinessProfile(profile);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(1);
-    });
-  });
-
-  describe("Business entity", () => {
-    it("should include rating and reviewCount fields", () => {
-      const business: Business = {
-        id: "test-id",
-        ownerId: "owner-id",
-        name: "Test Business",
-        description: "Test description",
-        categoryId: "cat-1",
-        rating: 4.5,
-        reviewCount: 25,
-        verificationStatus: "verified",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      expect(business.rating).toBe(4.5);
-      expect(business.reviewCount).toBe(25);
-    });
-
-    it("should allow null rating", () => {
-      const business: Business = {
-        id: "test-id",
-        ownerId: "owner-id",
-        name: "Test Business",
-        description: "Test description",
-        categoryId: "cat-1",
-        rating: null,
-        reviewCount: 0,
-        verificationStatus: "unverified",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      expect(business.rating).toBeNull();
-      expect(business.reviewCount).toBe(0);
     });
   });
 });

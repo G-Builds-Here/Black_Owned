@@ -15,14 +15,15 @@ import {
   createScrapeJob,
   findScrapeJobById,
   updateScrapeJobStatus,
+  findScrapeJobs,
 } from "../lib/db/scrape-job-repository";
 import {
   createScrapedBusiness,
   findScrapedBusinessesByJobId,
 } from "../lib/db/scraped-business-repository";
-import { CreateScrapedBusinessInput } from "../types/scraped-business";
-import { ScraperSource, RawBusinessListing } from "../types/business-listing";
-import { getScraper } from "./business-scraper";
+import type { CreateScrapedBusinessInput } from "../lib/db/scraped-business-repository";
+import { ScraperSource } from "../types/scraper-result";
+import { getScraper, getAvailableSources } from "./business-scraper";
 
 /**
  * Result of executing a scrape job
@@ -46,7 +47,7 @@ interface NormalizedBusiness {
   rating?: number;
   reviewCount?: number;
   category?: string;
-  source: ScraperSource;
+  source: "google-maps" | "yelp" | "facebook";
 }
 
 /**
@@ -54,7 +55,7 @@ interface NormalizedBusiness {
  */
 type ScraperExecutionResult = {
   businesses: NormalizedBusiness[];
-  source: ScraperSource;
+  source: "google-maps" | "yelp" | "facebook";
   query: string;
   location: string;
   timestamp: Date;
@@ -71,6 +72,25 @@ export async function executeScrapeJob(
   input: CreateScrapeJobInput
 ): Promise<ScraperJobExecutionResult> {
   try {
+    // Check for existing non-pending jobs with the same input
+    const existingJobs = await findScrapeJobs(client, undefined, 10);
+    const matchingNonPendingJob = existingJobs.find(
+      job =>
+        job.source === input.source &&
+        job.query === input.query &&
+        job.location === input.location &&
+        job.status !== "pending"
+    );
+
+    if (matchingNonPendingJob) {
+      return {
+        success: false,
+        jobId: matchingNonPendingJob.id,
+        finalStatus: matchingNonPendingJob.status,
+        error: "Only pending jobs can be executed",
+      };
+    }
+
     // Step 1: Create job with pending status
     const job = await createScrapeJob(client, input);
 
@@ -78,7 +98,8 @@ export async function executeScrapeJob(
     const runningJob = await updateScrapeJobStatus(
       client,
       job.id,
-      "running"
+      "running",
+      0
     );
 
     if (!runningJob) {
@@ -90,47 +111,23 @@ export async function executeScrapeJob(
       };
     }
 
-    // Step 3: Execute scraper
-    const scraper = getScraper(input.source as ScraperSource);
+    // Step 3: Validate source before getting scraper
+    const validSources = getAvailableSources();
+    if (!validSources.includes(input.source as any)) {
+      return {
+        success: false,
+        jobId: job.id,
+        finalStatus: "failed",
+        error: `Invalid source: ${input.source}. Valid sources are: ${validSources.join(", ")}`,
+      };
+    }
+
+    let scraper: ReturnType<typeof getScraper>;
     let scraperResult: ScraperExecutionResult;
 
     try {
-      // Create a mock raw listing for the scraper to process
-      const mockListing: RawBusinessListing = {
-        source: input.source as ScraperSource,
-        rawName: `Test Business for ${input.query}`,
-        rawAddress: `${input.location}, Test City, TX, US`,
-        rawPhone: "(555) 123-4567",
-        rawWebsite: "https://test.com",
-        rawRating: 4.5,
-        rawReviewCount: 100,
-        rawCategory: "Test Category",
-      };
-
-      const extractionResult = scraper.extract(mockListing);
-
-      if (!extractionResult.success) {
-        throw new Error(extractionResult.error || "Scraper extraction failed");
-      }
-
-      scraperResult = {
-        businesses: [
-          {
-            name: extractionResult.data.name,
-            address: extractionResult.data.address.fullAddress,
-            phone: mockListing.rawPhone,
-            website: mockListing.rawWebsite,
-            rating: mockListing.rawRating,
-            reviewCount: mockListing.rawReviewCount,
-            category: mockListing.rawCategory,
-            source: input.source as ScraperSource,
-          },
-        ],
-        source: input.source as ScraperSource,
-        query: input.query,
-        location: input.location,
-        timestamp: new Date(),
-      };
+      scraper = getScraper(input.source as ScraperSource);
+      scraperResult = await scraper.scrape(input.query, input.location) as ScraperExecutionResult;
     } catch (scraperError) {
       // Step 4a: Mark as failed on scraper error
       const failedJob = await updateScrapeJobStatus(
@@ -154,7 +151,7 @@ export async function executeScrapeJob(
     for (const business of businesses) {
       await createScrapedBusiness(client, {
         scrapeJobId: job.id,
-        source: business.source,
+        source: business.source as import("../types/scraper-result").ScraperSource,
         name: business.name,
         address: business.address,
         phone: business.phone,
@@ -166,6 +163,7 @@ export async function executeScrapeJob(
     }
 
     // Step 5: Update job with business count and mark as completed
+    console.log(`Scraper found ${businesses.length} businesses`);
     const completedJob = await updateScrapeJobStatus(
       client,
       job.id,
@@ -244,11 +242,11 @@ export async function executeScrapeJobById(
 export async function getScrapeJobWithBusinesses(
   client: PoolClient,
   jobId: string
-): Promise<{ job: ScrapeJob | undefined; businesses: CreateScrapedBusinessInput[] }> {
+): Promise<{ job: ScrapeJob | null; businesses: CreateScrapedBusinessInput[] }> {
   const job = await findScrapeJobById(client, jobId);
 
   if (!job) {
-    return { job: undefined, businesses: [] };
+    return { job: null, businesses: [] };
   }
 
   const businesses = await findScrapedBusinessesByJobId(client, jobId);

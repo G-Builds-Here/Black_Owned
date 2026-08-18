@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Badge from './Badge';
 import Button from './Button';
-import Dropdown from './Dropdown';
-import type { DropdownItem } from './Dropdown';
+import Dropdown, { DropdownItem } from './Dropdown';
 import Input from './Input';
 import { Toast, useToast } from './Toast';
 import { User, UserRole, UserStatus } from '@/types/user';
@@ -105,6 +104,10 @@ export function UserTable({ apiUrl = '/api/users', adminUser = 'admin' }: UserTa
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to fetch users');
+      }
+
+      if (!result.data) {
+        throw new Error('No data in response');
       }
 
       setUsers(result.data.users);

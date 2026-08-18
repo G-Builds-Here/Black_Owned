@@ -20,10 +20,14 @@ export interface FilterBarProps {
   onSortChange: (sort: SortOption) => void;
   currentSort?: SortOption;
   currentFilters?: FilterOption;
+  savedCount?: number;
+  activeTab?: 'all' | 'saved';
+  onTabChange?: (tab: 'all' | 'saved') => void;
+  filteredCount?: number;
 }
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
-  { label: 'Relevance', value: 'relevance' },
+  { label: 'Sort by', value: 'relevance' },
   { label: 'Highest Rated', value: 'rating' },
   { label: 'Nearest', value: 'distance' },
   { label: 'Newest', value: 'newest' },
@@ -47,6 +51,10 @@ export default function FilterBar({
   onSortChange,
   currentSort = 'relevance',
   currentFilters = {},
+  savedCount,
+  onTabChange,
+  activeTab,
+  filteredCount,
 }: FilterBarProps) {
   const [localFilters, setLocalFilters] = useState<FilterOption>(currentFilters);
 
@@ -92,15 +100,39 @@ export default function FilterBar({
     localFilters.verifiedOnly;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-4 mb-6">
-      <div className="flex flex-wrap gap-4 items-end">
+    <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
+      {/* Tabs */}
+      {savedCount !== undefined && onTabChange && (
+        <div className="border-b border-neutral-200 px-3">
+          <div className="flex gap-4">
+            <button
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'all'
+                  ? 'border-heritage-ochre text-heritage-ochre'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
+              }`}
+              onClick={() => onTabChange('all')}
+            >
+              All Businesses ({filteredCount ?? 0})
+            </button>
+            <button
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'saved'
+                  ? 'border-heritage-ochre text-heritage-ochre'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
+              }`}
+              onClick={() => onTabChange('saved')}
+            >
+              Saved ({savedCount})
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="p-3 flex flex-wrap gap-2 items-center">
         {/* Category Filter */}
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Category
-          </label>
+        <div className="min-w-[160px]">
           <Dropdown
-            trigger={localFilters.category || 'Select category'}
+            trigger={localFilters.category || 'Category'}
             items={[
               { label: 'All Categories', key: '', onClick: () => handleCategoryChange('') },
               ...categories.map((cat) => ({ label: cat, key: cat, onClick: () => handleCategoryChange(cat) })),
@@ -109,12 +141,9 @@ export default function FilterBar({
         </div>
 
         {/* Location Filter */}
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Location
-          </label>
+        <div className="min-w-[160px]">
           <Dropdown
-            trigger={localFilters.location || 'Select location'}
+            trigger={localFilters.location || 'Location'}
             items={[
               { label: 'All Locations', key: '', onClick: () => handleLocationChange('') },
               ...locations.map((loc) => ({ label: loc, key: loc, onClick: () => handleLocationChange(loc) })),
@@ -123,12 +152,9 @@ export default function FilterBar({
         </div>
 
         {/* Rating Filter */}
-        <div className="flex-1 min-w-[150px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Minimum Rating
-          </label>
+        <div className="min-w-[130px]">
           <Dropdown
-            trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Select rating'}
+            trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Rating'}
             items={RATING_FILTERS.map((r) => ({
               label: r.label,
               key: r.value.toString(),
@@ -138,24 +164,17 @@ export default function FilterBar({
         </div>
 
         {/* Verified Only Toggle */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Verification
-          </label>
-          <Button
-            variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
-            size="md"
-            onClick={handleVerifiedToggle}
-          >
-            {localFilters.verifiedOnly ? '✓ Verified Only' : 'All Businesses'}
-          </Button>
-        </div>
+        <Button
+          variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={handleVerifiedToggle}
+          className="px-3"
+        >
+          {localFilters.verifiedOnly ? '✓' : 'All'}
+        </Button>
 
         {/* Sort Dropdown */}
-        <div className="flex-1 min-w-[150px]">
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Sort By
-          </label>
+        <div className="min-w-[130px]">
           <Dropdown
             trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort by'}
             items={SORT_OPTIONS.map((s) => ({
@@ -168,71 +187,11 @@ export default function FilterBar({
 
         {/* Clear Filters */}
         {hasActiveFilters && (
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
-              Actions
-            </label>
-            <Button variant="ghost" size="md" onClick={clearFilters}>
-              Clear All
-            </Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="px-2">
+            Clear
+          </Button>
         )}
       </div>
-
-      {/* Active Filters Summary */}
-      {hasActiveFilters && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-sm text-neutral-500">Active filters:</span>
-          {localFilters.category && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Category: {localFilters.category}
-              <button
-                onClick={() => handleCategoryChange('')}
-                className="hover:text-red-500"
-                aria-label="Remove category filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.location && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Location: {localFilters.location}
-              <button
-                onClick={() => handleLocationChange('')}
-                className="hover:text-red-500"
-                aria-label="Remove location filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.minRating && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 rounded text-sm">
-              Rating: {localFilters.minRating}+ ★
-              <button
-                onClick={() => handleRatingChange(0)}
-                className="hover:text-red-500"
-                aria-label="Remove rating filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-          {localFilters.verifiedOnly && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
-              Verified Only
-              <button
-                onClick={handleVerifiedToggle}
-                className="hover:text-red-500"
-                aria-label="Remove verified filter"
-              >
-                ×
-              </button>
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

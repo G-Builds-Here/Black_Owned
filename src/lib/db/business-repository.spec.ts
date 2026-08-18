@@ -5,7 +5,6 @@
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
 import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
-import { ImportSource } from "../../types/business";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -80,107 +79,6 @@ describe("Business Repository", () => {
 
           expect(business.name).toBe("Test Business No Desc");
           expect(business.description).toBeUndefined();
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("creates a business with import source and scrape job ID", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(
-            client,
-            user.id,
-            "Imported Business",
-            "Imported from Yelp",
-            "cat-3",
-            "yelp",
-            "123e4567-e89b-12d3-a456-426614174000"
-          );
-
-          expect(business.name).toBe("Imported Business");
-          expect(business.importSource).toBe("yelp");
-          expect(business.scrapeJobId).toBe("123e4567-e89b-12d3-a456-426614174000");
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("creates a business with Google Maps source", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(
-            client,
-            user.id,
-            "Google Maps Business",
-            "Found on Google",
-            "cat-4",
-            "google_maps",
-            "123e4567-e89b-12d3-a456-426614174001"
-          );
-
-          expect(business.importSource).toBe("google_maps");
-          expect(business.scrapeJobId).toBe("123e4567-e89b-12d3-a456-426614174001");
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("creates a business with Facebook source", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(
-            client,
-            user.id,
-            "Facebook Business",
-            "Found on Facebook",
-            "cat-5",
-            "facebook",
-            "123e4567-e89b-12d3-a456-426614174002"
-          );
-
-          expect(business.importSource).toBe("facebook");
-          expect(business.scrapeJobId).toBe("123e4567-e89b-12d3-a456-426614174002");
-        } finally {
-          client.release();
-        }
-      } finally {
-        await cleanupUser(user.email);
-      }
-    });
-
-    it("creates a business without import source (backward compatibility)", async () => {
-      const user = await createTestUser();
-
-      try {
-        const client = await getPool().connect();
-        try {
-          await initializeBusinessSchema(client);
-          const business = await createBusiness(client, user.id, "Manual Business", "Manually added", "cat-6");
-
-          expect(business.importSource).toBeUndefined();
-          expect(business.scrapeJobId).toBeUndefined();
         } finally {
           client.release();
         }

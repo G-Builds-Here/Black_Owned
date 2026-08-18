@@ -11,18 +11,14 @@ const mockClient = {
   release: jest.fn(),
 };
 
-// Mock the pg Pool to return our mock client
-jest.mock("pg", () => {
-  return {
-    Pool: jest.fn(() => ({
-      connect: jest.fn(() => mockClient),
-    })),
-  };
-});
+jest.mock("../db/user-repository", () => ({
+  getPool: jest.fn(() => ({
+    connect: jest.fn(() => mockClient),
+  })),
+}));
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockQuery.mockClear();
 });
 
 describe("createBusiness mutation", () => {
@@ -310,127 +306,5 @@ describe("createBusiness mutation", () => {
     expect(result.success).toBe(true);
     expect(result.business?.name).toBe("Trimmed Business Name");
     expect(result.business?.categoryId).toBe("cat-4");
-  });
-
-  it("allows unique business to be created (AC3 - no duplicate blocking)", async () => {
-    const mockUserId = "test-user-id-666";
-    const mockBusinessId = "business-id-111";
-    const mockDate = new Date("2026-07-19T10:00:00Z");
-
-    // First query checks for duplicates (returns 0 existing businesses)
-    mockQuery
-      .mockResolvedValueOnce({ rows: [{ count: "0" }] }) // No duplicates found
-      .mockResolvedValueOnce({ rows: [{
-        id: mockBusinessId,
-        ownerId: mockUserId,
-        name: "Unique New Business",
-        description: null,
-        categoryId: "cat-5",
-        verificationStatus: "unverified",
-        createdAt: mockDate,
-        updatedAt: mockDate,
-      }] });
-
-    const context = {
-      user: {
-        id: mockUserId,
-        email: "owner@example.com",
-      },
-    };
-
-    const args = {
-      input: {
-        name: "Unique New Business",
-        categoryId: "cat-5",
-      },
-    };
-
-    const result = await createBusiness(null, args, context);
-
-    expect(result.success).toBe(true);
-    expect(result.business?.name).toBe("Unique New Business");
-    // Verify the duplicate check was performed
-    expect(mockQuery).toHaveBeenCalledTimes(2);
-  });
-
-  it("allows business creation even when similar business exists (AC3 - import proceeds)", async () => {
-    const mockUserId = "test-user-id-777";
-    const mockBusinessId = "business-id-222";
-    const mockDate = new Date("2026-07-19T10:00:00Z");
-
-    // First query finds a duplicate (returns 1 existing business)
-    // But AC3 says import proceeds anyway for unique businesses
-    mockQuery
-      .mockResolvedValueOnce({ rows: [{ count: "1" }] }) // Duplicate found
-      .mockResolvedValueOnce({ rows: [{
-        id: mockBusinessId,
-        ownerId: mockUserId,
-        name: "Similar Business",
-        description: null,
-        categoryId: "cat-6",
-        verificationStatus: "unverified",
-        createdAt: mockDate,
-        updatedAt: mockDate,
-      }] });
-
-    const context = {
-      user: {
-        id: mockUserId,
-        email: "owner@example.com",
-      },
-    };
-
-    const args = {
-      input: {
-        name: "Similar Business",
-        categoryId: "cat-6",
-      },
-    };
-
-    const result = await createBusiness(null, args, context);
-
-    // AC3: Import proceeds even when similar business exists
-    expect(result.success).toBe(true);
-    expect(result.business?.name).toBe("Similar Business");
-  });
-
-  it("supports importSource and scrapeJobId parameters", async () => {
-    const mockUserId = "test-user-id-888";
-    const mockBusinessId = "business-id-333";
-    const mockDate = new Date("2026-07-19T10:00:00Z");
-
-    mockQuery
-      .mockResolvedValueOnce({ rows: [{ count: "0" }] })
-      .mockResolvedValueOnce({ rows: [{
-        id: mockBusinessId,
-        ownerId: mockUserId,
-        name: "Imported Business",
-        description: null,
-        categoryId: "cat-7",
-        verificationStatus: "unverified",
-        createdAt: mockDate,
-        updatedAt: mockDate,
-      }] });
-
-    const context = {
-      user: {
-        id: mockUserId,
-        email: "owner@example.com",
-      },
-    };
-
-    const args = {
-      input: {
-        name: "Imported Business",
-        categoryId: "cat-7",
-        importSource: "google-maps",
-        scrapeJobId: "scrape-job-123",
-      },
-    };
-
-    const result = await createBusiness(null, args, context);
-
-    expect(result.success).toBe(true);
-    expect(result.business?.name).toBe("Imported Business");
   });
 });

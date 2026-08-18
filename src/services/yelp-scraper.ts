@@ -11,7 +11,8 @@ import {
   ScraperResult,
   ScraperOptions,
   ScraperJobState,
-} from "../types/yelp-scraper";
+  ScraperSource,
+} from "../types/scraper-result";
 
 const DEFAULT_RESULTS_PER_PAGE = 10;
 const DEFAULT_MAX_PAGES = 10;
@@ -21,6 +22,7 @@ const DEFAULT_DELAY_BETWEEN_PAGES_MS = 1000;
  * Yelp scraper class with pagination support
  */
 export class YelpScraper {
+  source: ScraperSource = ScraperSource.YELP;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private options: Required<ScraperOptions>;
@@ -81,7 +83,7 @@ export class YelpScraper {
     const collectedBusinesses: ScrapedBusiness[] = [];
     const seenNames = new Set<string>();
 
-    // Initialize job state and pagination variables before try block
+    // Initialize job state
     const jobState: ScraperJobState = {
       query,
       location,
@@ -90,8 +92,6 @@ export class YelpScraper {
       businessesCollected: [],
       isComplete: false,
     };
-    let currentPage = 1;
-    let totalPages = 0;
 
     try {
       // Navigate to Yelp search
@@ -113,6 +113,7 @@ export class YelpScraper {
       }
 
       // Process pages
+      let currentPage = 1;
       let hasMoreResults = true;
 
       while (hasMoreResults && currentPage <= this.options.maxPages) {
@@ -155,7 +156,7 @@ export class YelpScraper {
 
       // Calculate pagination info
       const totalResults = collectedBusinesses.length;
-      totalPages = Math.ceil(totalResults / DEFAULT_RESULTS_PER_PAGE);
+      const totalPages = Math.ceil(totalResults / DEFAULT_RESULTS_PER_PAGE);
 
       return {
         businesses: collectedBusinesses,
@@ -166,31 +167,15 @@ export class YelpScraper {
           totalResults,
           hasNextPage: false,
         },
-        source: "yelp",
+        source: ScraperSource.YELP,
         query,
         location,
         timestamp: new Date(),
       };
     } catch (error) {
       jobState.error = error instanceof Error ? error.message : "Unknown error";
-      jobState.isComplete = true;
-
-      console.error("Error scraping Yelp:", error);
-
-      return {
-        businesses: collectedBusinesses,
-        pagination: {
-          currentPage,
-          totalPages,
-          resultsPerPage: DEFAULT_RESULTS_PER_PAGE,
-          totalResults: collectedBusinesses.length,
-          hasNextPage: false,
-        },
-        source: "yelp",
-        query,
-        location,
-        timestamp: new Date(),
-      };
+      jobState.isComplete = false;
+      throw error;
     } finally {
       await page.close();
     }
@@ -285,7 +270,7 @@ export class YelpScraper {
 
     return filteredBusinesses.map((b) => ({
       ...b,
-      source: "yelp" as const,
+      source: ScraperSource.YELP,
     }));
   }
 

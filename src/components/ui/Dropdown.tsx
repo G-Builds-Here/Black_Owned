@@ -1,7 +1,6 @@
 'use client';
 
 import React, { HTMLAttributes, forwardRef, useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 
 export interface DropdownItem {
   key: string;
@@ -29,8 +28,6 @@ export interface DropdownProps extends HTMLAttributes<HTMLDivElement> {
   closeOnOutsideClick?: boolean;
   /** Min width of dropdown */
   minWidth?: string;
-  /** Portal target */
-  portalTarget?: HTMLElement | null;
 }
 
 const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
@@ -44,7 +41,6 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       closeOnItemClick = true,
       closeOnOutsideClick = true,
       minWidth = '160px',
-      portalTarget: portalTargetProp,
       className = '',
       ...props
     },
@@ -52,8 +48,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
   ) => {
     const [internalOpen, setInternalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const triggerRef = useRef<HTMLButtonElement>(null);
-    const portalTarget = portalTargetProp || typeof document !== 'undefined' ? document.body : null;
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
 
@@ -72,7 +67,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       if (!isOpen) return;
 
       const handleClickOutside = (e: MouseEvent) => {
-        if (closeOnOutsideClick && dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        if (closeOnOutsideClick && containerRef.current && !containerRef.current.contains(e.target as Node)) {
           handleOpenChange(false);
         }
       };
@@ -88,7 +83,6 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           handleOpenChange(false);
-          triggerRef.current?.focus();
         }
       };
 
@@ -115,47 +109,6 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       }
     };
 
-    const dropdownContent = (
-      <div
-        ref={(node) => {
-          dropdownRef.current = node;
-          if (typeof ref === 'function') ref(node);
-          else if (ref) ref.current = node;
-        }}
-        className={getPositionClasses()}
-        style={{ minWidth }}
-        role="menu"
-        {...props}
-      >
-        <div className="py-1">
-          {items.map((item, index) => (
-            <React.Fragment key={item.key}>
-              <button
-                ref={index === 0 ? triggerRef : undefined}
-                className={`
-                  w-full flex items-center gap-3 px-4 py-2.5 text-sm
-                  transition-colors text-left
-                  ${item.disabled
-                    ? 'text-neutral-400 cursor-not-allowed'
-                    : 'text-neutral-700 hover:bg-neutral-100'
-                  }
-                `}
-                onClick={() => handleItemClick(item)}
-                disabled={item.disabled}
-                role="menuitem"
-              >
-                {item.icon && <span className="flex-shrink-0 w-5 h-5">{item.icon}</span>}
-                <span className="flex-1">{item.label}</span>
-              </button>
-              {item.dividerAfter && (
-                <div className="border-t border-neutral-200 my-1" />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-    );
-
     return (
       <div className="relative inline-block" ref={ref}>
         <button
@@ -175,7 +128,45 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        {isOpen && portalTarget && createPortal(dropdownContent, portalTarget)}
+        {isOpen && (
+          <div
+            ref={(node) => {
+              dropdownRef.current = node;
+              if (typeof ref === 'function') ref(node);
+              else if (ref) ref.current = node;
+            }}
+            className={getPositionClasses()}
+            style={{ minWidth }}
+            role="menu"
+            {...props}
+          >
+            <div className="py-1">
+              {items.map((item, index) => (
+                <React.Fragment key={item.key}>
+                  <button
+                    className={`
+                      w-full flex items-center gap-3 px-4 py-2.5 text-sm
+                      transition-colors text-left
+                      ${item.disabled
+                        ? 'text-neutral-400 cursor-not-allowed'
+                        : 'text-neutral-700 hover:bg-neutral-100'
+                      }
+                    `}
+                    onClick={() => handleItemClick(item)}
+                    disabled={item.disabled}
+                    role="menuitem"
+                  >
+                    {item.icon && <span className="flex-shrink-0 w-5 h-5">{item.icon}</span>}
+                    <span className="flex-1">{item.label}</span>
+                  </button>
+                  {item.dividerAfter && (
+                    <div className="border-t border-neutral-200 my-1" />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

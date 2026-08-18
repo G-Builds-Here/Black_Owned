@@ -369,7 +369,7 @@ export default function UserManagement({
       </Card>
 
       {/* User table */}
-      <Card variant="elevated" padding="0">
+      <Card variant="elevated" padding="none">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-neutral-50 border-b border-neutral-200">

@@ -18,7 +18,7 @@ export interface ScrapeJob {
   query: string;
   location: string;
   status: ScrapeJobStatus;
-  resultCount?: number;
+  businessCount?: number;
   errorMessage?: string;
   createdAt: Date;
   updatedAt: Date;

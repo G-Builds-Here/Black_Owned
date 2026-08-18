@@ -1,12 +1,45 @@
 /**
  * Scraped Business Repository
  *
- * PostgreSQL data access layer for scraped business operations.
+ * PostgreSQL data access layer for storing scraped business data.
  */
 
 import { PoolClient } from "pg";
-import { CreateScrapedBusinessInput, ScrapedBusiness } from "../../types/scraped-business";
 import { ScraperSource } from "../../types/scraper-result";
+
+/**
+ * Input for creating a new scraped business record
+ */
+export interface CreateScrapedBusinessInput {
+  scrapeJobId: string;
+  source: ScraperSource;
+  name: string;
+  address: string;
+  phone?: string;
+  website?: string;
+  category?: string;
+  rating?: number;
+  reviewCount?: number;
+  sourceId?: string;
+}
+
+/**
+ * Scraped business entity
+ */
+export interface ScrapedBusiness {
+  id: string;
+  scrapeJobId: string;
+  source: ScraperSource;
+  name: string;
+  address: string;
+  phone?: string;
+  website?: string;
+  category?: string;
+  rating?: number;
+  reviewCount?: number;
+  sourceId?: string;
+  createdAt: Date;
+}
 
 /**
  * Get the scraped_businesses table name
@@ -23,18 +56,17 @@ export async function initializeScrapedBusinessSchema(client: PoolClient): Promi
   await client.query(`
     CREATE TABLE IF NOT EXISTS ${getTableName()} (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      scrape_job_id UUID NOT NULL,
-      source VARCHAR(50) NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      address TEXT NOT NULL,
+      scrape_job_id UUID NOT NULL REFERENCES scrape_jobs(id) ON DELETE CASCADE,
+      source VARCHAR(20) NOT NULL,
+      name VARCHAR(500) NOT NULL,
+      address TEXT,
       phone VARCHAR(50),
-      website VARCHAR(255),
-      category VARCHAR(100),
+      website VARCHAR(500),
+      category VARCHAR(255),
       rating DECIMAL(3,2),
       review_count INTEGER,
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      CONSTRAINT fk_scrape_job FOREIGN KEY (scrape_job_id) REFERENCES scrape_jobs(id) ON DELETE CASCADE
+      source_id VARCHAR(255),
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     )
   `);
 
@@ -46,6 +78,11 @@ export async function initializeScrapedBusinessSchema(client: PoolClient): Promi
   // Create index on source for filtering
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_scraped_businesses_source ON ${getTableName()}(source)
+  `);
+
+  // Create composite index on job_id + source for common queries
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_job_source ON ${getTableName()}(scrape_job_id, source)
   `);
 }
 
@@ -59,14 +96,14 @@ function rowToScrapedBusiness(row: unknown): ScrapedBusiness {
     scrapeJobId: r.scrape_job_id as string,
     source: r.source as ScraperSource,
     name: r.name as string,
-    address: r.address as string,
-    phone: (r.phone as string | null) ?? undefined,
-    website: (r.website as string | null) ?? undefined,
-    category: (r.category as string | null) ?? undefined,
+    address: (r.address as string) ?? "",
+    phone: (r.phone as string) ?? undefined,
+    website: (r.website as string) ?? undefined,
+    category: (r.category as string) ?? undefined,
     rating: (r.rating as number | null) ?? undefined,
     reviewCount: (r.review_count as number | null) ?? undefined,
+    sourceId: (r.source_id as string) ?? undefined,
     createdAt: new Date(r.created_at as string),
-    updatedAt: new Date(r.updated_at as string),
   };
 }
 
@@ -79,8 +116,9 @@ export async function createScrapedBusiness(
 ): Promise<ScrapedBusiness> {
   const tableName = getTableName();
   const result = await client.query<ScrapedBusiness>(
-    `INSERT INTO ${tableName} (scrape_job_id, source, name, address, phone, website, category, rating, review_count)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO ${tableName}
+     (scrape_job_id, source, name, address, phone, website, category, rating, review_count, source_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       input.scrapeJobId,
@@ -92,13 +130,14 @@ export async function createScrapedBusiness(
       input.category ?? null,
       input.rating ?? null,
       input.reviewCount ?? null,
+      input.sourceId ?? null,
     ]
   );
   return rowToScrapedBusiness(result.rows[0]);
 }
 
 /**
- * Find all scraped businesses for a given scrape job
+ * Find all scraped businesses by job ID
  */
 export async function findScrapedBusinessesByJobId(
   client: PoolClient,
@@ -108,6 +147,23 @@ export async function findScrapedBusinessesByJobId(
   const result = await client.query<ScrapedBusiness>(
     `SELECT * FROM ${tableName} WHERE scrape_job_id = $1 ORDER BY created_at DESC`,
     [jobId]
+  );
+  return result.rows.map(rowToScrapedBusiness);
+}
+
+/**
+ * Find the most recent scraped businesses for display
+ * (e.g. the homepage "Featured Businesses" section).
+ * Returns the latest `limit` businesses by created_at, newest first.
+ */
+export async function findFeaturedScrapedBusinesses(
+  client: PoolClient,
+  limit = 10
+): Promise<ScrapedBusiness[]> {
+  const tableName = getTableName();
+  const result = await client.query<ScrapedBusiness>(
+    `SELECT * FROM ${tableName} ORDER BY created_at DESC LIMIT $1`,
+    [limit]
   );
   return result.rows.map(rowToScrapedBusiness);
 }
@@ -125,4 +181,33 @@ export async function findScrapedBusinessById(
     [id]
   );
   return result.rows[0] ? rowToScrapedBusiness(result.rows[0]) : undefined;
+}
+
+/**
+ * Count businesses by job ID
+ */
+export async function countBusinessesByJobId(
+  client: PoolClient,
+  jobId: string
+): Promise<number> {
+  const tableName = getTableName();
+  const result = await client.query<{ count: string }>(
+    `SELECT COUNT(*) FROM ${tableName} WHERE scrape_job_id = $1`,
+    [jobId]
+  );
+  return parseInt(result.rows[0].count, 10);
+}
+
+/**
+ * Delete all businesses for a job (used in cleanup)
+ */
+export async function deleteBusinessesByJobId(
+  client: PoolClient,
+  jobId: string
+): Promise<void> {
+  const tableName = getTableName();
+  await client.query(
+    `DELETE FROM ${tableName} WHERE scrape_job_id = $1`,
+    [jobId]
+  );
 }

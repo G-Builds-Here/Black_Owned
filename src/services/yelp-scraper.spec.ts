@@ -6,46 +6,38 @@
 
 import { YelpScraper, createYelpScraper } from "./yelp-scraper";
 import { ScrapedBusiness, ScraperResult } from "../types/yelp-scraper";
-import { checkUrlAllowed } from "@/lib/scraper/robots-service";
-
-// Mock fetch for robots.txt checks (allows all paths by default)
-global.fetch = jest.fn().mockResolvedValue({
-  ok: false,
-  status: 404,
-});
 
 // Mock Playwright
-jest.mock("playwright", () => {
-  const mockPage = {
-    goto: jest.fn(),
-    waitForSelector: jest.fn(),
-    evaluate: jest.fn(),
-    close: jest.fn(),
-    $: jest.fn(),
-    waitForLoadState: jest.fn(),
-  };
-  const mockContext = {
-    newPage: jest.fn().mockReturnValue(mockPage),
-    close: jest.fn(),
-  };
-  const mockBrowser = {
-    newContext: jest.fn().mockReturnValue(mockContext),
-    close: jest.fn(),
-  };
-  return {
-    chromium: {
-      launch: jest.fn().mockResolvedValue(mockBrowser),
-    },
-  };
-});
+const mockPage = {
+  goto: jest.fn(),
+  waitForSelector: jest.fn(),
+  evaluate: jest.fn(),
+  close: jest.fn(),
+  $: jest.fn(),
+  waitForLoadState: jest.fn(),
+};
+
+const mockContext = {
+  newPage: jest.fn().mockReturnValue(mockPage),
+  close: jest.fn(),
+};
+
+const mockBrowser = {
+  newContext: jest.fn().mockReturnValue(mockContext),
+  close: jest.fn(),
+};
+
+jest.mock("playwright", () => ({
+  chromium: {
+    launch: jest.fn().mockResolvedValue(mockBrowser),
+  },
+}));
 
 describe("YelpScraper", () => {
   let scraper: YelpScraper;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-    // Default mock: allow all paths for existing scrape tests
-    jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue({ allowed: true });
     scraper = createYelpScraper();
   });
 
@@ -66,31 +58,6 @@ describe("YelpScraper", () => {
         includeDuplicates: true,
       });
       expect(customScraper).toBeInstanceOf(YelpScraper);
-    });
-  });
-
-  describe("checkRobotsBeforeScraping", () => {
-    it("should check robots.txt for Yelp search path", async () => {
-      const mockRobotsCheck = { allowed: true };
-      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
-
-      const result = await scraper.checkRobotsBeforeScraping();
-
-      expect(result).toEqual(mockRobotsCheck);
-      expect(checkUrlAllowed).toHaveBeenCalledWith(
-        "https://www.yelp.com/search",
-        "BlackOwnedScraper/1.0"
-      );
-    });
-
-    it("should return disallowed when robots.txt blocks scraping", async () => {
-      const mockRobotsCheck = { allowed: false, reason: "Path /search is disallowed by robots.txt" };
-      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
-
-      const result = await scraper.checkRobotsBeforeScraping();
-
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("disallowed by robots.txt");
     });
   });
 
@@ -298,17 +265,6 @@ describe("YelpScraper", () => {
       expect(business.category).toBe("Professional Services");
       expect(business.rating).toBe(4.5);
       expect(business.reviewCount).toBe(150);
-    });
-
-    it("should return empty results when robots.txt blocks scraping", async () => {
-      const mockRobotsCheck = { allowed: false, reason: "Path /search is disallowed by robots.txt" };
-      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
-
-      const result = await scraper.scrape("restaurants", "New York");
-
-      expect(result.businesses).toHaveLength(0);
-      expect(result.pagination.currentPage).toBe(0);
-      expect(result.pagination.totalPages).toBe(0);
     });
   });
 

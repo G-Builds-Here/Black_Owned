@@ -144,7 +144,7 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails> {
           '[aria-label*="open"], [aria-label*="closed"], [data-testid="place-status"]'
         );
         const statusText = statusEl?.textContent?.toLowerCase() || "";
-        const status = statusText.includes("open")
+        const status: "open" | "closed" | undefined = statusText.includes("open")
           ? "open"
           : statusText.includes("closed")
           ? "closed"
@@ -163,7 +163,7 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails> {
           priceLevel: priceLevel || undefined,
           status,
           images: images.length > 0 ? images : undefined,
-          source: "google-maps",
+          source: "google-maps" as const,
           scrapedAt: new Date().toISOString(),
         };
       });

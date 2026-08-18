@@ -8,26 +8,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createScrapeJob,
-  findAllScrapeJobs,
+  findScrapeJobs,
   initializeScrapeJobSchema,
 } from "@/lib/db/scrape-job-repository";
 import {
   validateScrapeJobInput,
   CreateScrapeJobInput,
+  ScrapeJobStatus,
+  isValidScrapeJobStatus,
 } from "@/types/scrape-job";
+import { getPool } from "@/lib/db/user-repository";
 
 /**
  * GET /api/jobs
  * List all scrape jobs with pagination
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const client = await getPool().connect();
   try {
-    await initializeScrapeJobSchema();
+    await initializeScrapeJobSchema(client);
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
-    const status = searchParams.get("status") || undefined;
+    const statusParam = searchParams.get("status");
+    const status = statusParam && isValidScrapeJobStatus(statusParam) ? statusParam : undefined;
 
     // Validate pagination params
     if (page < 1 || pageSize < 1 || pageSize > 100) {
@@ -40,7 +45,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const result = await findAllScrapeJobs(page, pageSize, status);
+    const result = await findScrapeJobs(client, status, pageSize);
 
     return NextResponse.json({
       success: true,
@@ -55,6 +60,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
       { status: 500 }
     );
+  } finally {
+    client.release();
   }
 }
 
@@ -63,8 +70,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * Create a new scrape job
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const client = await getPool().connect();
   try {
-    await initializeScrapeJobSchema();
+    await initializeScrapeJobSchema(client);
 
     const body: CreateScrapeJobInput = await request.json();
 
@@ -81,7 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Create the job
-    const job = await createScrapeJob(body);
+    const job = await createScrapeJob(client, body);
 
     return NextResponse.json({
       success: true,
@@ -97,5 +105,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       { status: 500 }
     );
+  } finally {
+    client.release();
   }
 }

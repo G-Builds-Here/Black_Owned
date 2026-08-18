@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Scraper Job Executor Integration Tests
  *
  * AC: LOC-0073-AC1 - Complete scrape job flow with mock data
@@ -12,7 +12,6 @@
  */
 
 import { getPool } from "../lib/db/user-repository";
-import { PoolClient } from "pg";
 import {
   initializeScrapeJobSchema,
   createScrapeJob,
@@ -25,37 +24,43 @@ import {
 } from "../lib/db/scraped-business-repository";
 import { executeScrapeJob, executeScrapeJobById } from "./scraper-job-executor";
 import { CreateScrapeJobInput } from "../types/scrape-job";
-import { ScraperSource, RawBusinessListing, ExtractionResult, BusinessScraper } from "../types/business-listing";
 
 // Mock the scraper to avoid actual network calls
-jest.mock("./business-scraper", () => {
-  const mockScraper = {
-    source: "google-maps" as ScraperSource,
-    extract: jest.fn().mockReturnValue({
-      success: true,
-      data: {
-        name: "Test Business 1",
-        address: {
-          street: "123 Test St",
-          city: "Test City",
-          state: "TX",
-          zipCode: "75001",
-          countryCode: "US",
-          fullAddress: "123 Test St, Test City, TX, US",
+jest.mock("./business-scraper", () => ({
+  getScraper: jest.fn().mockReturnValue({
+    source: "google-maps",
+    scrape: jest.fn().mockResolvedValue({
+      businesses: [
+        {
+          name: "Test Business 1",
+          address: "123 Test St, Test City, TX",
+          phone: "(555) 123-4567",
+          website: "https://test1.com",
+          rating: 4.5,
+          reviewCount: 100,
+          source: "google-maps",
         },
-        source: "google-maps" as ScraperSource,
-      },
+        {
+          name: "Test Business 2",
+          address: "456 Test Ave, Test City, TX",
+          phone: "(555) 987-6543",
+          website: "https://test2.com",
+          rating: 4.0,
+          reviewCount: 50,
+          source: "google-maps",
+        },
+      ],
+      source: "google-maps",
+      query: "test query",
+      location: "Test City",
+      timestamp: new Date(),
     }),
-  };
-
-  return {
-    getScraper: jest.fn().mockReturnValue(mockScraper),
-  };
-});
+  }),
+}));
 
 describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
   const testPrefix = `scraperjob-exec-${Date.now()}`;
-  let client: PoolClient;
+  let client: ReturnType<typeof getPool>["connect"];
 
   async function cleanup(): Promise<void> {
     client = await getPool().connect();
@@ -127,7 +132,7 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         const job = await findScrapeJobById(client, result.jobId);
         expect(job).toBeDefined();
         expect(job?.status).toBe("completed");
-        expect(job?.resultCount).toBe(1); // Mock returns 1 business
+        expect(job?.businessCount).toBe(2); // Mock returns 2 businesses
       } finally {
         client.release();
       }
@@ -155,11 +160,17 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
           result.jobId
         );
 
-        expect(businesses.length).toBe(1);
+        expect(businesses.length).toBe(2);
 
         // Verify first business
-        expect(businesses[0].name).toBe("Test Business for stored test");
+        expect(businesses[0].name).toBe("Test Business 1");
+        expect(businesses[0].address).toBe("123 Test St, Test City, TX");
         expect(businesses[0].source).toBe("google-maps");
+
+        // Verify second business
+        expect(businesses[1].name).toBe("Test Business 2");
+        expect(businesses[1].address).toBe("456 Test Ave, Test City, TX");
+        expect(businesses[1].source).toBe("google-maps");
       } finally {
         client.release();
       }
@@ -180,11 +191,11 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         const result = await executeScrapeJob(client, input);
 
         expect(result.success).toBe(true);
-        expect(result.businessCount).toBe(1);
+        expect(result.businessCount).toBe(2);
 
         // Verify job has correct business count
         const job = await findScrapeJobById(client, result.jobId);
-        expect(job?.resultCount).toBe(1);
+        expect(job?.businessCount).toBe(2);
       } finally {
         client.release();
       }
@@ -192,16 +203,13 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
     it("AC1: Handles scraper errors gracefully", async () => {
       // Mock scraper that throws an error
-      const mockScraperWithError = {
-        source: "google-maps" as ScraperSource,
-        extract: jest.fn().mockReturnValue({
-          success: false,
-          error: "Network timeout",
-        }),
-      };
-
       jest.mock("./business-scraper", () => ({
-        getScraper: jest.fn().mockReturnValue(mockScraperWithError),
+        getScraper: jest.fn().mockReturnValue({
+          source: "google-maps",
+          scrape: jest.fn().mockRejectedValue(
+            new Error("Network timeout")
+          ),
+        }),
       }));
 
       client = await getPool().connect();
@@ -231,27 +239,17 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
     it("AC1: Empty results handled correctly", async () => {
       // Mock scraper that returns empty results
-      const mockScraperWithEmpty = {
-        source: "google-maps" as ScraperSource,
-        extract: jest.fn().mockReturnValue({
-          success: true,
-          data: {
-            name: "",
-            address: {
-              street: "",
-              city: "",
-              state: "",
-              zipCode: "",
-              countryCode: "US",
-              fullAddress: "",
-            },
-            source: "google-maps" as ScraperSource,
-          },
-        }),
-      };
-
       jest.mock("./business-scraper", () => ({
-        getScraper: jest.fn().mockReturnValue(mockScraperWithEmpty),
+        getScraper: jest.fn().mockReturnValue({
+          source: "google-maps",
+          scrape: jest.fn().mockResolvedValue({
+            businesses: [],
+            source: "google-maps",
+            query: "empty test",
+            location: "Test City",
+            timestamp: new Date(),
+          }),
+        }),
       }));
 
       client = await getPool().connect();
@@ -266,9 +264,14 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
         const result = await executeScrapeJob(client, input);
 
-        // Empty name should cause failure
-        expect(result.success).toBe(false);
-        expect(result.finalStatus).toBe("failed");
+        expect(result.success).toBe(true);
+        expect(result.finalStatus).toBe("completed");
+        expect(result.businessCount).toBe(0);
+
+        // Verify job is completed with zero businesses
+        const job = await findScrapeJobById(client, result.jobId);
+        expect(job?.status).toBe("completed");
+        expect(job?.businessCount).toBe(0);
       } finally {
         client.release();
       }
@@ -313,7 +316,7 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         };
 
         const job = await createScrapeJob(client, input);
-        await updateScrapeJobStatus(client, job.id, "completed", 5);
+        await updateScrapeJobStatus(job.id, "completed", 5);
 
         // Try to execute already completed job
         const result = await executeScrapeJobById(client, job.id);

@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
-import { BusinessDetail } from '@/components/BusinessDetail';
 
 // Mock data - in production this would come from an API
 const MOCK_BUSINESSES: Business[] = [
@@ -103,12 +104,16 @@ const LOCATIONS = [
   'Philadelphia, PA',
 ];
 
-export default function DirectoryPage() {
+function DirectoryContent() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
-  const [filters, setFilters] = useState<FilterOption>({});
+  const [filters, setFilters] = useState<FilterOption>(() => {
+    const category = searchParams.get('category');
+    return category ? { category } : {};
+  });
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
-  const [expandedBusinessId, setExpandedBusinessId] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(true);
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
@@ -119,12 +124,8 @@ export default function DirectoryPage() {
   };
 
   const handleViewDetails = (businessId: string) => {
-    // Toggle expansion - click again to collapse
-    setExpandedBusinessId((prev) => (prev === businessId ? null : businessId));
-  };
-
-  const handleCollapseDetail = () => {
-    setExpandedBusinessId(null);
+    console.log('View details:', businessId);
+    // Navigate to business detail page
   };
 
   const handleSave = (businessId: string) => {
@@ -215,7 +216,7 @@ export default function DirectoryPage() {
       />
 
       {/* Page Header */}
-      <section className="bg-gradient-to-br from-heritage-midnight via-heritage-royal to-heritage-forest text-white py-12">
+      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl font-bold mb-4">Business Directory</h1>
           <p className="text-xl text-neutral-100 max-w-3xl">
@@ -225,107 +226,113 @@ export default function DirectoryPage() {
         </div>
       </section>
 
-      {/* Main Content */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tabs */}
-        <Tabs
-          tabs={[
-            { key: 'all', label: `All Businesses (${filteredBusinesses.length})` },
-            { key: 'saved', label: `Saved (${savedBusinesses.size})` },
-          ]}
-          selectedKey={activeTab}
-          onSelectionChange={(key) => setActiveTab(key as 'all' | 'saved')}
-        />
+      {/* Main Content - Split View */}
+      <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-full">
+        {/* Business List - Left Side */}
+        <div className={`${showMap ? 'lg:w-[40%]' : 'w-full'} overflow-y-auto`}>
+          <div className="p-4 space-y-4">
+            {/* Filter Bar with Tabs */}
+            <FilterBar
+              categories={CATEGORIES}
+              locations={LOCATIONS}
+              onFilterChange={handleFilterChange}
+              onSortChange={handleSortChange}
+              currentSort={sort}
+              currentFilters={filters}
+              savedCount={savedBusinesses.size}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              filteredCount={filteredBusinesses.length}
+            />
 
-        {/* Filter Bar */}
-        <FilterBar
-          categories={CATEGORIES}
-          locations={LOCATIONS}
-          onFilterChange={handleFilterChange}
-          onSortChange={handleSortChange}
-          currentSort={sort}
-          currentFilters={filters}
-        />
-
-        {/* Results Count */}
-        <div className="mb-6 text-neutral-600">
-          {displayBusinesses.length} {displayBusinesses.length === 1 ? 'business' : 'businesses'} found
-        </div>
-
-        {/* Business Grid */}
-        {displayBusinesses.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayBusinesses.map((business) => (
-              <BusinessCard
-                key={business.id}
-                business={business}
-                onViewDetails={handleViewDetails}
-                onSave={handleSave}
-                onShare={handleShare}
-                enableLink={expandedBusinessId !== business.id}
-              />
-            ))}
-            {expandedBusinessId && (
-              <div className="md:col-span-2 lg:col-span-3">
-                {(() => {
-                  const expandedBusiness = displayBusinesses.find((b) => b.id === expandedBusinessId);
-                  if (!expandedBusiness) return null;
-                  return (
-                    <BusinessDetail
-                      business={{
-                        id: expandedBusiness.id,
-                        name: expandedBusiness.name,
-                        categoryId: expandedBusiness.category,
-                        verified: expandedBusiness.isVerified,
-                        createdAt: { timestamp: Date.now() / 1000 },
-                        description: expandedBusiness.description,
-                        location: expandedBusiness.location,
-                        imageUrl: expandedBusiness.imageUrl,
-                        tags: expandedBusiness.tags,
-                        scrapedData: expandedBusiness.scrapedData,
-                      }}
-                      loading={false}
-                      error={null}
-                      expanded={true}
-                      onCollapse={handleCollapseDetail}
-                    />
-                  );
-                })()}
+            {/* Business List - Horizontal Cards */}
+            {displayBusinesses.length > 0 ? (
+              <div className="space-y-4">
+                {displayBusinesses.map((business) => (
+                  <BusinessCard
+                    key={business.id}
+                    business={business}
+                    onViewDetails={handleViewDetails}
+                    onSave={handleSave}
+                    onShare={handleShare}
+                    enableLink={true}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Empty State */
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-6xl mb-4">🔍</div>
+                <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
+                  No businesses found
+                </h3>
+                <p className="text-neutral-600 mb-6 max-w-md mx-auto">
+                  {activeTab === 'saved'
+                    ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
+                    : 'Try adjusting your filters to find more businesses.'}
+                </p>
+                {activeTab === 'all' && (
+                  <button
+                    onClick={() => {
+                      setFilters({});
+                      setSort('relevance');
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+                {activeTab === 'saved' && (
+                  <button
+                    onClick={() => setActiveTab('all')}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                  >
+                    Browse Directory
+                  </button>
+                )}
               </div>
             )}
           </div>
-        ) : (
-          /* Empty State */
-          <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-2xl font-semibold text-neutral-800 mb-2">
-              No businesses found
-            </h3>
-            <p className="text-neutral-600 mb-6 max-w-md mx-auto">
-              {activeTab === 'saved'
-                ? "You haven't saved any businesses yet. Browse the directory and click the save button to build your list."
-                : 'Try adjusting your filters to find more businesses.'}
-            </p>
-            {activeTab === 'all' && (
-              <button
-                onClick={() => {
-                  setFilters({});
-                  setSort('relevance');
-                }}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
-              >
-                Clear Filters
-              </button>
-            )}
-            {activeTab === 'saved' && (
-              <button
-                onClick={() => setActiveTab('all')}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
-              >
-                Browse Directory
-              </button>
-            )}
+        </div>
+
+        {/* Map Panel - Right Side */}
+        {showMap && (
+          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 bg-neutral-100 relative">
+            {/* Map Toggle Button */}
+            <button
+              onClick={() => setShowMap(false)}
+              className="absolute top-4 right-4 z-10 bg-white px-3 py-2 rounded-lg shadow-md text-sm font-medium hover:bg-neutral-50"
+            >
+              Hide Map ×
+            </button>
+            {/* Placeholder Map */}
+            <div className="w-full h-full flex items-center justify-center text-neutral-400">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🗺️</div>
+                <p className="text-lg font-medium">Map View</p>
+                <p className="text-sm mt-2">Business locations will appear here</p>
+                {displayBusinesses.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                    {displayBusinesses.map((b) => (
+                      <div key={b.id} className="bg-white px-3 py-1 rounded-full text-sm shadow-sm">
+                        {b.location}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* Show Map Button (when hidden) */}
+        {!showMap && (
+          <button
+            onClick={() => setShowMap(true)}
+            className="absolute bottom-8 right-8 z-10 bg-heritage-ochre text-white px-4 py-2 rounded-lg shadow-lg hover:bg-heritage-ochre/90"
+          >
+            Show Map
+          </button>
         )}
       </section>
 
@@ -342,24 +349,23 @@ export default function DirectoryPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">Explore</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Businesses</a></li>
-                <li><a href="#" className="hover:text-white">Categories</a></li>
-                <li><a href="#" className="hover:text-white">Featured</a></li>
+                <li><a href="/directory" className="hover:text-white">Businesses</a></li>
+                <li><a href="/about" className="hover:text-white">About Us</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Help Center</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-                <li><a href="#" className="hover:text-white">FAQ</a></li>
+                <li><a href="/help" className="hover:text-white">Help Center</a></li>
+                <li><a href="/about" className="hover:text-white">Contact Us</a></li>
+                <li><a href="/help#faq" className="hover:text-white">FAQ</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white">Terms of Service</a></li>
+                <li><a href="/privacy" className="hover:text-white">Privacy Policy</a></li>
+                <li><a href="/terms" className="hover:text-white">Terms of Service</a></li>
               </ul>
             </div>
           </div>
@@ -369,5 +375,13 @@ export default function DirectoryPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function DirectoryPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <DirectoryContent />
+    </Suspense>
   );
 }

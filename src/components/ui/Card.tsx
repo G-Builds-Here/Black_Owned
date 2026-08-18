@@ -72,7 +72,6 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     const cardContent = (
       <div
         ref={ref}
-        data-testid="business-card"
         className={`${baseStyles} ${variantStyles[variant]} ${paddingStyles[padding]} ${clickableStyles} ${className}`}
         {...props}
       >

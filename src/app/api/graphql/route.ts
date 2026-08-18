@@ -44,14 +44,6 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
       return { data: { health: resolvers.Query.health() } };
     }
 
-    // Handle business query
-    const businessMatch = query.match(/business\s*\(\s*id:\s*"([^"]+)"\s*\)/);
-    if (businessMatch) {
-      const id = businessMatch[1];
-      const result = await resolvers.Query.business(undefined, { id });
-      return { data: { business: result } };
-    }
-
     // Handle searchBusinesses query
     if (query.includes('searchBusinesses')) {
       const queryArg = query.match(/query:\s*"([^"]+)"/);
@@ -104,18 +96,8 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
       return result;
     }
 
-    // Handle login mutation
-    const loginMatch = query.match(/login\s*\(\s*email:\s*"([^"]+)"\s*,\s*password:\s*"([^"]+)"\s*\)/);
-    if (loginMatch) {
-      const result = await resolvers.Mutation.login(undefined, {
-        email: loginMatch[1],
-        password: loginMatch[2],
-      });
-      return result;
-    }
-
     // Handle createBusiness mutation
-    const createMatch = query.match(/createBusiness\s*\(\s*input:\s*\{\s*name:\s*"([^"]+)"\s*,\s*description:\s*"([^"]*)"\s*,\s*categoryId:\s*"([^"]+)"(?:\s*,\s*phone:\s*"([^"]*)")?\s*\}\s*\)/);
+    const createMatch = query.match(/createBusiness\s*\(\s*input:\s*\{\s*name:\s*"([^"]+)"\s*,\s*description:\s*"([^"]*)"\s*,\s*categoryId:\s*"([^"]+)"\s*\}\s*\)/);
     if (createMatch) {
       const result = await resolvers.Mutation.createBusiness(
         undefined,
@@ -124,10 +106,9 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
             name: createMatch[1],
             description: createMatch[2],
             categoryId: createMatch[3],
-            phone: createMatch[4] || undefined,
           },
         },
-        { user: { id: 'test-user' } }
+        { headers: { authorization: 'Bearer token' } }
       );
       return result;
     }

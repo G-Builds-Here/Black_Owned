@@ -6,7 +6,6 @@
  */
 
 import * as Minio from "minio";
-const MinioClient = Minio.Client;
 
 /**
  * Configuration for MinIO connection
@@ -44,12 +43,12 @@ export interface PresignedUrlResult {
  * MinIO service class for handling presigned URL operations
  */
 export class MinioService {
-  private client: MinioClient;
+  private client: Minio.Client;
   private config: MinioConfig;
 
   constructor(config: MinioConfig) {
     this.config = config;
-    this.client = new MinioClient({
+    this.client = new Minio.Client({
       endPoint: config.endpoint,
       port: config.port,
       useSSL: config.useSSL,
@@ -73,8 +72,7 @@ export class MinioService {
     const url = await this.client.presignedPutObject(
       bucket,
       objectName,
-      expirySeconds,
-      contentType ? { "Content-Type": contentType } : undefined
+      expirySeconds
     );
 
     return {
@@ -143,4 +141,3 @@ export function createMinioServiceFromEnv(): MinioService {
   });
 }
 
-export { MinioClient };

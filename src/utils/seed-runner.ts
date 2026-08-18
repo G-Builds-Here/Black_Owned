@@ -15,16 +15,13 @@
 import {
   TEST_PREFIX,
   TEST_EMAIL_DOMAIN,
-  generateBusinessesWithImages,
-  generateTestUsers,
   generateTestBusinesses,
-  TestBusinessWithImages,
-  TestUser,
+  generateTestUsers,
   TestBusiness,
+  TestUser,
 } from "./test-data-seeder";
 import { generateImagesForBusiness } from "../services/image-service";
 import { generateReviewsForBusinesses } from "../services/review-service";
-import { createAdminUser } from "./admin-user-seeder";
 
 /**
  * Seed result summary
@@ -190,7 +187,7 @@ function seedImages(
       const imageData = generateImagesForBusiness(
         business.id!,
         business.formattedName,
-        business.category || "other"
+        business.category || "restaurants"
       );
       db.images.set(business.id!, imageData.images);
       created += imageData.images.length;
@@ -260,10 +257,6 @@ export async function runSeed(reset: boolean = false): Promise<SeedSummary> {
 
   // Seed users (idempotent)
   const userResult = seedUsers();
-
-  // Create admin test user (idempotent - checks if user exists first)
-  console.log("\n--- Admin User Seeding ---");
-  await createAdminUser();
 
   const endTime = Date.now();
   const runtime = `${endTime - startTime}ms`;

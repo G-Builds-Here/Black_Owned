@@ -13,12 +13,18 @@ import {
   GetUserListInput,
   UserListResult,
 } from "../../types/user-management";
-import { getPool } from "./user-repository";
+import { getPool, initializeUserSchema } from "./user-repository";
 
 /**
  * Initialize user management schema with role and status columns
  */
 export async function initializeUserManagementSchema(): Promise<void> {
+  // Ensure the base users table exists before adding management columns.
+  // This route is the only runtime entry point that reaches the users table,
+  // so the table must be created here or the ALTER TABLE below fails with
+  // "relation users does not exist".
+  await initializeUserSchema();
+
   const client = await getPool().connect();
   try {
     // Add role and status columns if they don't exist

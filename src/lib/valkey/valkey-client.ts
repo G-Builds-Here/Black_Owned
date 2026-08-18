@@ -26,7 +26,6 @@ export function getValkey(): Redis {
     host,
     port,
     maxRetriesPerRequest: 3,
-    retryDelayOnFailover: 100,
   });
 
   return valkey;

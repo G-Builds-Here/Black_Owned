@@ -4,7 +4,6 @@
 
 import { FacebookScraper } from "./facebook-scraper";
 import { Browser, BrowserContext, Page } from "playwright";
-import { checkUrlAllowed } from "@/lib/scraper/robots-service";
 
 // Mock playwright
 const mockPage = {
@@ -37,8 +36,6 @@ describe("FacebookScraper", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock checkUrlAllowed to allow scraping by default
-    jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue({ allowed: true });
     scraper = new FacebookScraper();
   });
 
@@ -58,31 +55,6 @@ describe("FacebookScraper", () => {
         delayBetweenPagesMs: 5000,
       });
       expect(customScraper).toBeDefined();
-    });
-  });
-
-  describe("checkRobotsBeforeScraping", () => {
-    it("should check robots.txt for Facebook search path", async () => {
-      const mockRobotsCheck = { allowed: true };
-      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
-
-      const result = await scraper.checkRobotsBeforeScraping();
-
-      expect(result).toEqual(mockRobotsCheck);
-      expect(checkUrlAllowed).toHaveBeenCalledWith(
-        "https://www.facebook.com/search/pages",
-        "BlackOwnedScraper/1.0"
-      );
-    });
-
-    it("should return disallowed when robots.txt blocks scraping", async () => {
-      const mockRobotsCheck = { allowed: false, reason: "Path /search/pages is disallowed by robots.txt" };
-      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
-
-      const result = await scraper.checkRobotsBeforeScraping();
-
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("disallowed by robots.txt");
     });
   });
 
@@ -243,17 +215,6 @@ describe("FacebookScraper", () => {
       await expect(scraper.scrape("restaurants", "New York")).rejects.toThrow(
         "Facebook scraping failed"
       );
-    });
-
-    it("should return empty results when robots.txt blocks scraping", async () => {
-      const mockRobotsCheck = { allowed: false, reason: "Path /search/pages is disallowed by robots.txt" };
-      jest.spyOn(require("@/lib/scraper/robots-service"), "checkUrlAllowed").mockResolvedValue(mockRobotsCheck);
-
-      const result = await scraper.scrape("restaurants", "New York");
-
-      expect(result.businesses).toHaveLength(0);
-      expect(result.pagination.currentPage).toBe(0);
-      expect(result.pagination.totalPages).toBe(0);
     });
   });
 

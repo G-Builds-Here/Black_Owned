@@ -151,6 +151,16 @@ interface ToastProviderProps {
 
 function ToastProvider({ children, position = 'top-right' }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Array<ToastProps & { id: string }>>([]);
+  // The portal must NOT render during SSR or the hydration pass: `document` is
+  // undefined on the server, and a `typeof document !== 'undefined'` branch makes
+  // the client render the portal <div> while the server does not -> hydration
+  // mismatch on every route (ToastProvider wraps the whole app). Instead, mount
+  // the portal only after the component has mounted on the client; useEffect runs
+  // client-side after hydration, so the hydration render still matches the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const addToast = useCallback((message: string, options?: Omit<ToastProps, 'message' | 'onClose'>) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -169,7 +179,7 @@ function ToastProvider({ children, position = 'top-right' }: ToastProviderProps)
   return (
     <ToastContext.Provider value={{ addToast, removeToast, clearToasts }}>
       {children}
-      {createPortal(
+      {mounted && createPortal(
         <div className={`fixed z-[9999] flex flex-col gap-2 ${positionStyles[position]}`}>
           {toasts.map((toast) => (
             <Toast key={toast.id} {...toast} onClose={() => { if (toast.id) removeToast(toast.id); }} />

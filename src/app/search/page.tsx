@@ -5,19 +5,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
 
-const GRAPHQL_ENDPOINT = '/api/graphql';
-
 const SEARCH_DEBOUNCE_MS = 300;
-
-interface SearchBusinessesQuery {
-  searchBusinesses: {
-    businesses: Business[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  };
-}
 
 interface Business {
   id: string;
@@ -31,6 +19,45 @@ interface Business {
   description: string;
   tags: string[];
 }
+
+const MOCK_BUSINESSES: Business[] = [
+  {
+    id: '1',
+    name: 'Soul Food Kitchen',
+    category: 'Food & Dining',
+    rating: 4.8,
+    reviewCount: 156,
+    location: 'Harlem, NY',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
+    tags: ['Southern', 'Family-Friendly', 'Takeout'],
+  },
+  {
+    id: '2',
+    name: 'Black Diamond Consulting',
+    category: 'Professional Services',
+    rating: 5.0,
+    reviewCount: 42,
+    location: 'Atlanta, GA',
+    isVerified: true,
+    imageUrl: '',
+    description: 'Strategic business consulting for Black-owned enterprises and startups.',
+    tags: ['Consulting', 'Business Strategy', 'B2B'],
+  },
+  {
+    id: '3',
+    name: 'Afro Threads',
+    category: 'Retail & Fashion',
+    rating: 4.5,
+    reviewCount: 89,
+    location: 'Los Angeles, CA',
+    isVerified: false,
+    imageUrl: '',
+    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
+    tags: ['Clothing', 'Accessories', 'African-Inspired'],
+  },
+];
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -69,46 +96,16 @@ export default function SearchPage() {
     setError(null);
 
     try {
-      const graphqlQuery = `
-        query SearchBusinesses($query: String!, $page: Int, $pageSize: Int) {
-          searchBusinesses(query: $query, page: $page, pageSize: 10) {
-            businesses {
-              id
-              name
-              category
-              rating
-              reviewCount
-              location
-              isVerified
-              imageUrl
-              description
-              tags
-            }
-            total
-            page
-            pageSize
-            totalPages
-          }
-        }
-      `;
-
-      const variables = {
-        query: searchQuery,
-        page: currentPage,
-        pageSize: 10,
-      };
-
-      const response = await fetch(`${GRAPHQL_ENDPOINT}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: graphqlQuery, variables }),
-      });
-
-      const result = await response.json();
-      const data = result.data as SearchBusinessesQuery;
-      setResults(data.searchBusinesses.businesses);
-      setTotalPages(data.searchBusinesses.totalPages);
-      setTotalResults(data.searchBusinesses.total);
+      // Mock search - filter mock data
+      const filtered = MOCK_BUSINESSES.filter(
+        (b) =>
+          b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.location.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setResults(filtered);
+      setTotalPages(Math.ceil(filtered.length / 10));
+      setTotalResults(filtered.length);
     } catch (err) {
       console.error('Search error:', err);
       setError('Failed to search businesses. Please try again.');
@@ -221,24 +218,23 @@ export default function SearchPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">Explore</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Businesses</a></li>
-                <li><a href="#" className="hover:text-white">Categories</a></li>
-                <li><a href="#" className="hover:text-white">Featured</a></li>
+                <li><a href="/directory" className="hover:text-white">Businesses</a></li>
+                <li><a href="/about" className="hover:text-white">About Us</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Help Center</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-                <li><a href="#" className="hover:text-white">FAQ</a></li>
+                <li><a href="/help" className="hover:text-white">Help Center</a></li>
+                <li><a href="/about" className="hover:text-white">Contact Us</a></li>
+                <li><a href="/help#faq" className="hover:text-white">FAQ</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-white">Terms of Service</a></li>
+                <li><a href="/privacy" className="hover:text-white">Privacy Policy</a></li>
+                <li><a href="/terms" className="hover:text-white">Terms of Service</a></li>
               </ul>
             </div>
           </div>

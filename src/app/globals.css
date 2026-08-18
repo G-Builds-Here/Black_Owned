@@ -227,11 +227,9 @@ a:hover {
 }
 
 .pattern-bogolan {
-  background-color: #000000;
-  background-image:
-    repeating-linear-gradient(45deg, rgba(204, 119, 34, 0.3) 0px, rgba(204, 119, 34, 0.3) 2px, transparent 2px, transparent 15px),
-    repeating-linear-gradient(-45deg, rgba(204, 119, 34, 0.3) 0px, rgba(204, 119, 34, 0.3) 2px, transparent 2px, transparent 15px);
-  background-size: 30px 30px;
+  background-color: var(--color-neutral-900);
+  background-image: var(--pattern-bogolan-dots);
+  background-size: 20px 20px;
 }
 
 .pattern-geometric {
@@ -297,16 +295,57 @@ a:hover {
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-neutral-50: #171717;
-    --color-neutral-100: #262626;
-    --color-neutral-200: #404040;
-    --color-neutral-800: #E5E5E5;
-    --color-neutral-900: #FAFAFA;
+    --color-neutral-50: #0a0a0a;
+    --color-neutral-100: #171717;
+    --color-neutral-200: #262626;
+    --color-neutral-300: #404040;
+    --color-neutral-400: #525252;
+    --color-neutral-500: #737373;
+    --color-neutral-600: #a3a3a3;
+    --color-neutral-700: #d4d4d4;
+    --color-neutral-800: #e5e5e5;
+    --color-neutral-900: #fafafa;
   }
 
-  body {
-    background-color: var(--color-neutral-50);
-    color: var(--color-neutral-100);
+  .bg-white {
+    background-color: #1f1f1f !important;
+    color: #fafafa !important;
+  }
+
+  .bg-neutral-50 {
+    background-color: #0a0a0a !important;
+  }
+
+  .text-neutral-900 {
+    color: #fafafa !important;
+  }
+
+  .text-neutral-800 {
+    color: #e5e5e5 !important;
+  }
+
+  .text-neutral-700 {
+    color: #d4d4d4 !important;
+  }
+
+  .text-neutral-600 {
+    color: #a3a3a3 !important;
+  }
+
+  .text-neutral-500 {
+    color: #737373 !important;
+  }
+
+  .border-neutral-200 {
+    border-color: #404040 !important;
+  }
+
+  .bg-neutral-100 {
+    background-color: #262626 !important;
+  }
+
+  .bg-neutral-800 {
+    background-color: #262626 !important;
   }
 }
 

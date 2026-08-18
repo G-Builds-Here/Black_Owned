@@ -5,10 +5,6 @@ import { TextEncoder, TextDecoder } from 'util';
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
-// Polyfill for fetch (required by robots-service in Node.js test environment)
-// Default mock allows all paths (returns empty robots.txt)
-global.fetch = jest.fn().mockRejectedValue(new Error('fetch not mocked in test'));
-
 // Polyfill for Response (required by Next.js API routes in jsdom environment)
 // Define a minimal mock Response class for testing API routes
 class MockResponse {
