@@ -43,7 +43,6 @@ describe("MinioService", () => {
       process.env = originalEnv;
     });
   });
-});
 
   describe("generatePresignedPutUrl", () => {
     let minioContainer: GenericContainer;

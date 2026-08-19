@@ -15,7 +15,7 @@ describe('POST /api/scrape-jobs/:id/cancel', () => {
       method: 'POST'
     });
 
-    const response = await POST(request, { params: { id: 'cancel' } });
+    const response = await POST(request, { params: { id: '' } });
     const json = await response.json();
 
     expect(response.status).toBe(400);

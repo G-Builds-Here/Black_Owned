@@ -6,6 +6,7 @@
 
 import { PoolClient } from "pg";
 import { ScrapeJob, ScrapeJobStatus, CreateScrapeJobInput } from "../../types/scrape-job";
+import { getPool } from "./user-repository";
 
 /**
  * Get the scrape_jobs table name
@@ -103,6 +104,21 @@ export async function findScrapeJobById(
 }
 
 /**
+ * Delete a scrape job by ID, returning the deleted row (or undefined if absent)
+ */
+export async function deleteScrapeJob(
+  client: PoolClient,
+  id: string
+): Promise<ScrapeJob | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<ScrapeJob>(
+    `DELETE FROM ${tableName} WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return result.rows[0] ? rowToScrapeJob(result.rows[0]) : undefined;
+}
+
+/**
  * Update scrape job status
  */
 export async function updateScrapeJobStatus(
@@ -155,4 +171,26 @@ export async function findScrapeJobs(
     limit ? [limit] : []
   );
   return result.rows.map(rowToScrapeJob);
+}
+
+/**
+ * Cancel a running scrape job by ID. Manages its own connection (unlike the
+ * caller-supplied client functions above) so route handlers can invoke it with
+ * just the job id. Returns the cancelled job, or null if the job is missing or
+ * not in a cancellable (running) state.
+ */
+export async function cancelScrapeJob(id: string): Promise<ScrapeJob | null> {
+  const client = await getPool().connect();
+  try {
+    const result = await client.query<ScrapeJob>(
+      `UPDATE ${getTableName()}
+       SET status = 'cancelled', updated_at = NOW()
+       WHERE id = $1 AND status = 'running'
+       RETURNING *`,
+      [id]
+    );
+    return result.rows[0] ? rowToScrapeJob(result.rows[0]) : null;
+  } finally {
+    client.release();
+  }
 }

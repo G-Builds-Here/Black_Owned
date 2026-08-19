@@ -30,9 +30,9 @@ describe('Scrape Job Details and Delete Endpoints', () => {
         query: 'test query',
         location: 'New York',
         status: 'completed',
-        business_count: 5,
-        created_at: new Date('2024-01-01T00:00:00Z'),
-        updated_at: new Date('2024-01-02T00:00:00Z')
+        businessCount: 5,
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-02T00:00:00Z')
       };
 
       (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
@@ -91,9 +91,9 @@ describe('Scrape Job Details and Delete Endpoints', () => {
         query: 'test query',
         location: 'New York',
         status: 'completed',
-        business_count: 5,
-        created_at: new Date('2024-01-01T00:00:00Z'),
-        updated_at: new Date('2024-01-02T00:00:00Z')
+        businessCount: 5,
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-02T00:00:00Z')
       };
 
       (deleteScrapeJob as jest.Mock).mockResolvedValue(mockJob);

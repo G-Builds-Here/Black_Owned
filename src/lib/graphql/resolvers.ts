@@ -27,7 +27,6 @@ import {
 } from "../minio/minio-service";
 import {
   findBusinessById,
-  createBusiness,
   updateNameById,
 } from "../db/business-repository";
 import { getPool } from "../db/user-repository";
@@ -626,6 +625,12 @@ export async function createBusinessResolver(
     client.release();
   }
 }
+
+/**
+ * Expose the create-business mutation resolver under its GraphQL field name so
+ * specs and direct consumers can `import { createBusiness } from "./resolvers"`.
+ */
+export const createBusiness = createBusinessResolver;
 
 /**
  * Internal function to create a business in the database

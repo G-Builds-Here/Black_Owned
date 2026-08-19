@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { findScrapeJobById } from '@/lib/db/scrape-job-repository';
+import { findScrapeJobById, deleteScrapeJob } from '@/lib/db/scrape-job-repository';
 import { findBusinessById } from '@/lib/db/business-repository';
 import { getPool } from '@/lib/db/user-repository';
 
@@ -65,6 +65,61 @@ export async function GET(
     }
   } catch (error) {
     console.error('Get scrape job error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Internal server error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/scrape-jobs/:id
+ * Delete a scrape job by id
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    if (!id || id.trim() === '') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Job ID is required'
+        },
+        { status: 400 }
+      );
+    }
+
+    const client = await getPool().connect();
+    try {
+      const job = await deleteScrapeJob(client, id);
+
+      if (!job) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Scrape job not found'
+          },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Scrape job deleted successfully',
+        data: { id: job.id }
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Delete scrape job error:', error);
     return NextResponse.json(
       {
         success: false,

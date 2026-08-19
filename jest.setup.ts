@@ -37,3 +37,34 @@ class MockResponse {
 }
 
 global.Response = MockResponse as unknown as typeof Response;
+
+// Polyfill for Request (required by Next.js API route tests in jsdom environment)
+// The jsdom test environment does not expose the Web `Request` constructor, but the
+// API-route specs build requests with `new Request(url, { method, headers, body })`
+// and the route handlers call `request.json()` / `request.text()`.
+class MockRequest {
+  url: string;
+  method: string;
+  body: string;
+  headers: Record<string, string>;
+
+  constructor(
+    input: string,
+    init?: { method?: string; headers?: Record<string, string>; body?: string }
+  ) {
+    this.url = input;
+    this.method = init?.method ?? 'GET';
+    this.headers = init?.headers ?? {};
+    this.body = init?.body ?? '';
+  }
+
+  async json(): Promise<unknown> {
+    return this.body ? JSON.parse(this.body) : {};
+  }
+
+  async text(): Promise<string> {
+    return this.body;
+  }
+}
+
+global.Request = MockRequest as unknown as typeof Request;
