@@ -152,9 +152,11 @@ describe("GET /api/admin/reviews/job/[jobId]", () => {
     expect(json.data[0].category).toBe("Restaurant");
     expect(json.data[0].phone).toBe("(404) 555-0001");
     expect(json.data[0].website).toBe("https://test1.example.com");
+    // originalData.status is the scrape job's status (the ScrapedBusiness
+    // entity has no status field; the route reports job.status).
     expect(json.data[0].originalData).toEqual({
       scrapeJobId: mockJobId,
-      status: "pending_review",
+      status: "completed",
       createdAt: "2026-08-12T10:01:00.000Z",
     });
   });
