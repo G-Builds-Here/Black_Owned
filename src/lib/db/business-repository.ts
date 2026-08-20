@@ -71,6 +71,76 @@ export async function createBusiness(
 }
 
 /**
+ * Filter options for finding businesses
+ */
+export interface BusinessFilter {
+  search?: string;
+  status?: "pending" | "approved" | "rejected" | "unverified" | "verified";
+  page: number;
+  limit: number;
+}
+
+/**
+ * Paginated result wrapper
+ */
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * Find businesses with optional search/status filter and pagination
+ */
+export async function findBusinessesWithFilter(
+  client: PoolClient,
+  filter: BusinessFilter
+): Promise<PaginatedResult<Business>> {
+  const tableName = getTableName();
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (filter.search) {
+    conditions.push(`name ILIKE $${paramIndex}`);
+    params.push(`%${filter.search}%`);
+    paramIndex++;
+  }
+
+  if (filter.status) {
+    conditions.push(`verification_status = $${paramIndex}`);
+    params.push(filter.status);
+    paramIndex++;
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const countResult = await client.query<{ count: string }>(
+    `SELECT COUNT(*) FROM ${tableName} ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult.rows[0].count, 10);
+
+  const offset = (filter.page - 1) * filter.limit;
+  const result = await client.query<Business>(
+    `SELECT * FROM ${tableName} ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    [...params, filter.limit, offset]
+  );
+
+  return {
+    data: result.rows.map(rowToBusiness),
+    total,
+    page: filter.page,
+    limit: filter.limit,
+    totalPages: Math.ceil(total / filter.limit),
+  };
+}
+
+/**
  * Find a business by ID
  */
 export async function findBusinessById(

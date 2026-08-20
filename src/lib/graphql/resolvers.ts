@@ -29,6 +29,7 @@ import {
   findBusinessById,
   updateNameById,
 } from "../db/business-repository";
+import { findScrapedBusinessById } from "../db/scraped-business-repository";
 import { getPool } from "../db/user-repository";
 import { Business } from "../../types/business";
 import { createGoogleMapsScraper } from "../../services/google-maps-scraper";
@@ -260,6 +261,80 @@ export async function register(
  */
 export function health(): string {
   return "ok";
+}
+
+/**
+ * Business query resolver
+ *
+ * Resolves a business by ID across the three sources, in priority order:
+ *   1. Canonical `businesses` row (owner-submitted / verified pipeline)
+ *   2. Approved `pending_import_businesses` row (passed admin review)
+ *   3. `scraped_businesses` row (raw scrape — shown as unverified)
+ *
+ * Returns the GraphQL Business shape, or null when no source has the ID.
+ */
+export async function business(
+  _parent: unknown,
+  args: { id: string }
+): Promise<{
+  id: string;
+  name: string;
+  categoryId: string;
+  verified: boolean;
+  createdAt: { timestamp: number };
+} | null> {
+  const { id } = args;
+  if (!id) return null;
+
+  const client = await getPool().connect();
+  try {
+    // 1. Canonical business
+    const canonical = await findBusinessById(client, id);
+    if (canonical) {
+      return businessToGraphqlBusiness(canonical);
+    }
+
+    // 2. Approved pending import (passed review)
+    const pendingResult = await client.query(
+      `SELECT id, name, category_id, created_at
+       FROM pending_import_businesses
+       WHERE id = $1 AND status = 'approved'`,
+      [id]
+    );
+    if (pendingResult.rows[0]) {
+      const row = pendingResult.rows[0] as {
+        id: string;
+        name: string;
+        category_id: string;
+        created_at: Date | string;
+      };
+      const createdAt =
+        row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
+      return {
+        id: row.id,
+        name: row.name,
+        categoryId: row.category_id,
+        verified: true,
+        createdAt: { timestamp: Math.floor(createdAt.getTime() / 1000) },
+      };
+    }
+
+    // 3. Raw scraped business (unverified fallback)
+    const scraped = await findScrapedBusinessById(client, id);
+    if (scraped) {
+      return {
+        id: scraped.id,
+        name: scraped.name,
+        categoryId: scraped.category || "other",
+        verified: false,
+        createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
+      };
+    }
+
+    return null;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -658,6 +733,7 @@ async function createBusinessInDb(
 export const resolvers = {
   Query: {
     health,
+    business,
     searchBusinesses,
   },
   Mutation: {

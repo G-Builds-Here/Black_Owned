@@ -48,6 +48,10 @@
     "packages/**/*",
     "playwright.config.ts",
     "jest.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "diag-firefox.ts",
+    "diag-hydration.ts",
+    "diag-toast.ts",
+    "check-hydration.ts"
   ]
 }

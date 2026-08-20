@@ -1,108 +1,86 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
-import { Tabs, TabPanel } from '@/components/ui/Tabs';
 
-// Mock data - in production this would come from an API
-const MOCK_BUSINESSES: Business[] = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-  {
-    id: '4',
-    name: 'Heritage Wellness Center',
-    category: 'Health & Wellness',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Chicago, IL',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
-    tags: ['Wellness', 'Massage', 'Holistic'],
-  },
-  {
-    id: '5',
-    name: 'Golden Era Barbershop',
-    category: 'Personal Services',
-    rating: 4.7,
-    reviewCount: 312,
-    location: 'Houston, TX',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
-    tags: ['Barber', 'Grooming', 'Community'],
-  },
-  {
-    id: '6',
-    name: 'Rhythm & Blues Records',
-    category: 'Entertainment',
-    rating: 4.6,
-    reviewCount: 78,
-    location: 'New Orleans, LA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
-    tags: ['Music', 'Vinyl', 'Audio'],
-  },
-];
+/**
+ * Shape of a /api/directory business item
+ */
+interface DirectoryBusiness {
+  id: string;
+  name: string;
+  category: string;
+  rating: number | null;
+  reviewCount: number | null;
+  location: string;
+  isVerified: boolean;
+  description: string | null;
+  website: string | null;
+  phone: string | null;
+  source: string | null;
+  createdAt: string;
+}
 
-const CATEGORIES = [
-  'Food & Dining',
-  'Professional Services',
-  'Retail & Fashion',
-  'Health & Wellness',
-  'Personal Services',
-  'Entertainment',
-];
+interface DirectoryFacets {
+  categories: string[];
+  locations: string[];
+}
 
-const LOCATIONS = [
-  'Harlem, NY',
-  'Atlanta, GA',
-  'Los Angeles, CA',
-  'Chicago, IL',
-  'Houston, TX',
-  'New Orleans, LA',
-  'Washington, DC',
-  'Philadelphia, PA',
-];
+/**
+ * Derive a neighborhood/city ("Harlem, NY") from a full street address.
+ * Matches the server-side deriveLocation used for location facets.
+ */
+function deriveLocation(address: string): string {
+  if (!address) return '';
+  const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 2) return address;
+  return parts.slice(-2).join(', ');
+}
+
+/**
+ * Map a directory item to the BusinessCard shape
+ */
+function toCardBusiness(item: DirectoryBusiness): Business {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    rating: item.rating ?? 0,
+    reviewCount: item.reviewCount ?? 0,
+    location: item.location,
+    isVerified: item.isVerified,
+    imageUrl: '',
+    description: item.description || (item.website ? `Website: ${item.website}` : ''),
+    tags: [],
+  };
+}
+
+/**
+ * Sort directory items by the active sort option
+ */
+function sortDirectory(items: DirectoryBusiness[], sort: SortOption): DirectoryBusiness[] {
+  const result = [...items];
+  switch (sort) {
+    case 'rating':
+      result.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+      break;
+    case 'distance':
+      result.sort((a, b) => a.location.localeCompare(b.location));
+      break;
+    case 'newest':
+      result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      break;
+    case 'relevance':
+    default:
+      result.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.name.localeCompare(b.name));
+      break;
+  }
+  return result;
+}
 
 function DirectoryContent() {
   const searchParams = useSearchParams();
@@ -114,6 +92,34 @@ function DirectoryContent() {
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
   const [showMap, setShowMap] = useState(true);
+  const [directory, setDirectory] = useState<DirectoryBusiness[]>([]);
+  const [facets, setFacets] = useState<DirectoryFacets>({ categories: [], locations: [] });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchDirectory = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await fetch('/api/directory');
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setDirectory(data.data.businesses);
+        setFacets(data.data.facets);
+      } else {
+        setLoadError('Failed to load the directory');
+      }
+    } catch (error) {
+      console.error('Failed to load directory:', error);
+      setLoadError('Failed to load the directory');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDirectory();
+  }, [fetchDirectory]);
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
@@ -125,7 +131,7 @@ function DirectoryContent() {
 
   const handleViewDetails = (businessId: string) => {
     console.log('View details:', businessId);
-    // Navigate to business detail page
+    // Navigation is handled by the card link (enableLink)
   };
 
   const handleSave = (businessId: string) => {
@@ -141,7 +147,7 @@ function DirectoryContent() {
   };
 
   const handleShare = async (businessId: string) => {
-    const business = MOCK_BUSINESSES.find((b) => b.id === businessId);
+    const business = directory.find((b) => b.id === businessId);
     if (business && navigator.share) {
       try {
         await navigator.share({
@@ -159,52 +165,40 @@ function DirectoryContent() {
     }
   };
 
-  // Filter and sort businesses
-  const filteredBusinesses = useMemo(() => {
-    let result = [...MOCK_BUSINESSES];
+  // Apply filters to the fetched directory
+  const filteredDirectory = useMemo(() => {
+    let result = directory;
 
-    // Apply filters
     if (filters.category) {
       result = result.filter((b) => b.category === filters.category);
     }
     if (filters.location) {
-      result = result.filter((b) => b.location === filters.location);
+      result = result.filter((b) => deriveLocation(b.location) === filters.location);
     }
     if (filters.minRating) {
-      result = result.filter((b) => b.rating >= filters.minRating!);
+      result = result.filter((b) => b.rating !== null && b.rating >= filters.minRating!);
     }
     if (filters.verifiedOnly) {
       result = result.filter((b) => b.isVerified);
     }
 
-    // Apply sort
-    switch (sort) {
-      case 'rating':
-        result.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'distance':
-        // Mock distance sorting - in production would use geolocation
-        result.sort((a, b) => a.location.localeCompare(b.location));
-        break;
-      case 'newest':
-        // Mock newest - in production would use created date
-        result.sort((a, b) => b.reviewCount - a.reviewCount);
-        break;
-      case 'relevance':
-      default:
-        // Default sort by rating as relevance proxy
-        result.sort((a, b) => b.rating - a.rating);
-        break;
-    }
-
     return result;
-  }, [filters, sort]);
+  }, [directory, filters]);
 
-  const savedBusinessList = useMemo(() => {
-    return MOCK_BUSINESSES.filter((b) => savedBusinesses.has(b.id));
-  }, [savedBusinesses]);
+  const sortedDirectory = useMemo(
+    () => sortDirectory(filteredDirectory, sort),
+    [filteredDirectory, sort]
+  );
 
-  const displayBusinesses = activeTab === 'all' ? filteredBusinesses : savedBusinessList;
+  const savedDirectory = useMemo(
+    () => directory.filter((b) => savedBusinesses.has(b.id)),
+    [directory, savedBusinesses]
+  );
+
+  const displayBusinesses: Business[] =
+    activeTab === 'all'
+      ? sortedDirectory.map(toCardBusiness)
+      : savedDirectory.map(toCardBusiness);
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -233,8 +227,8 @@ function DirectoryContent() {
           <div className="p-4 space-y-4">
             {/* Filter Bar with Tabs */}
             <FilterBar
-              categories={CATEGORIES}
-              locations={LOCATIONS}
+              categories={facets.categories}
+              locations={facets.locations}
               onFilterChange={handleFilterChange}
               onSortChange={handleSortChange}
               currentSort={sort}
@@ -242,11 +236,27 @@ function DirectoryContent() {
               savedCount={savedBusinesses.size}
               activeTab={activeTab}
               onTabChange={setActiveTab}
-              filteredCount={filteredBusinesses.length}
+              filteredCount={sortedDirectory.length}
             />
 
             {/* Business List - Horizontal Cards */}
-            {displayBusinesses.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-neutral-500">Loading businesses...</div>
+              </div>
+            ) : loadError && directory.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-6xl mb-4">⚠️</div>
+                <h3 className="text-2xl font-semibold text-neutral-800 mb-2">{loadError}</h3>
+                <p className="text-neutral-600 mb-6">Please try again in a moment.</p>
+                <button
+                  onClick={fetchDirectory}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : displayBusinesses.length > 0 ? (
               <div className="space-y-4">
                 {displayBusinesses.map((business) => (
                   <BusinessCard
@@ -315,7 +325,7 @@ function DirectoryContent() {
                   <div className="mt-4 flex flex-wrap gap-2 justify-center">
                     {displayBusinesses.map((b) => (
                       <div key={b.id} className="bg-white px-3 py-1 rounded-full text-sm shadow-sm">
-                        {b.location}
+                        {b.location || b.name}
                       </div>
                     ))}
                   </div>
