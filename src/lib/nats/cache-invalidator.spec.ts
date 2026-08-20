@@ -83,7 +83,8 @@ describe("Cache Invalidator", () => {
 
       // Simulate a cache invalidation event
       const mockData = Buffer.from(JSON.stringify({ key: "cache:biz-123" }));
-      await callback({ data: mockData });
+      // NATS delivers (err, msg); the handler reads msg.data.
+      await callback(null, { data: mockData });
 
       expect(mockDel).toHaveBeenCalledWith("cache:biz-123");
     });
@@ -96,7 +97,8 @@ describe("Cache Invalidator", () => {
 
       // Simulate an event without a key
       const mockData = Buffer.from(JSON.stringify({}));
-      await callback({ data: mockData });
+      // NATS delivers (err, msg); the handler reads msg.data.
+      await callback(null, { data: mockData });
 
       expect(mockDel).not.toHaveBeenCalled();
     });
@@ -109,7 +111,8 @@ describe("Cache Invalidator", () => {
 
       // Simulate invalid JSON
       const mockData = Buffer.from("invalid json");
-      await callback({ data: mockData });
+      // NATS delivers (err, msg); the handler reads msg.data.
+      await callback(null, { data: mockData });
 
       expect(mockDel).not.toHaveBeenCalled();
     });
@@ -123,7 +126,8 @@ describe("Cache Invalidator", () => {
       const callback = (subscribeCall as any)[1].callback;
 
       const mockData = Buffer.from(JSON.stringify({ key: "cache:test" }));
-      await callback({ data: mockData });
+      // NATS delivers (err, msg); the handler reads msg.data.
+      await callback(null, { data: mockData });
 
       expect(mockDel).toHaveBeenCalledWith("cache:test");
     });

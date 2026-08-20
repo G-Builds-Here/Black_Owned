@@ -55,7 +55,7 @@ export async function GET(
       priceRange: undefined,
       originalData: {
         scrapeJobId: business.scrapeJobId,
-        status: job.status,
+        status: business.status,
         createdAt: business.createdAt.toISOString(),
       },
     }));

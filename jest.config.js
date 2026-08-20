@@ -15,9 +15,32 @@ module.exports = {
   // and which needs a live MinIO container).
   testPathIgnorePatterns: [
     "/node_modules/",
+    // Wrong-runner strays (see comment above): the vitest performance test,
+    // the testcontainers integration specs, and the minio Docker/testcontainers
+    // spec (ESM-only `testcontainers` import + needs a live MinIO container).
     "src/app/performance\\.test\\.ts$",
     "-integration\\.spec\\.ts$",
     "src/lib/minio/minio-service\\.spec\\.ts$",
+    // Env-bound suites excluded from the unit runner. They stay in-tree but
+    // require live infra (a Postgres pool or a Valkey/Redis server) and belong
+    // to the integration/e2e pass, not this jsdom unit run. (The DB-mocked and
+    // scraper-mocked unit specs were reconciled to current APIs and now run here.)
+    //
+    // DB-backed — need a live Postgres via getPool().connect():
+    "src/lib/db/business-repository\\.spec\\.ts$",
+    "src/lib/db/scrape-job-repository\\.spec\\.ts$",
+    "src/lib/db/user-management-repository\\.spec\\.ts$",
+    "src/qa/scraper-e2e\\.spec\\.ts$",
+    "src/services/scraper-job-executor\\.spec\\.ts$",
+    // Valkey/Redis-bound — searchBusinesses drives the live scraper and writes
+    // through a real getValkey() cache (real OOM responses + an open handle):
+    "src/lib/graphql/search-resolvers\\.spec\\.ts$",
+    // Orphaned spec — no env/DB dependency. It imports BusinessReviewPage
+    // from ./page, but src/app/admin/reviews/ holds only this spec (no page
+    // component exists yet; the API route /api/admin/reviews/job/[jobId] does).
+    // Excluded so the unit runner isn't blocked on a missing SUT; re-include
+    // once the review page component lands.
+    "src/app/admin/reviews/page\\.job-filter\\.spec\\.tsx$",
   ],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.spec.ts"],
   coverageDirectory: "coverage",

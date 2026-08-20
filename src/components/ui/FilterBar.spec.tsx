@@ -4,9 +4,24 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import FilterBar, { FilterOption, SortOption } from './FilterBar';
 
+// Current component notes (source of truth: FilterBar.tsx):
+// - No data-testid on the root; the root div is container.firstChild with
+//   bg-white rounded-lg shadow-sm border border-neutral-200, and the padded
+//   control row is its first child (p-3 flex flex-wrap gap-2 items-center).
+// - The filters are Dropdown triggers labeled "Category", "Location",
+//   "Rating", and the current sort label (default "Sort by").
+// - The verified toggle is a Button labeled "All" (inactive) / "✓" (active).
+// - The clear button is labeled "Clear" (not "Clear All") and appears only
+//   when filters are active. The old active-filter summary (with per-filter
+//   remove buttons) was removed in the redesign.
+
 describe('FilterBar', () => {
   const mockCategories = ['Food & Dining', 'Professional Services', 'Retail'];
   const mockLocations = ['New York', 'Los Angeles', 'Chicago'];
+
+  const filterBarRoot = (container: HTMLElement) => container.firstChild as HTMLElement;
+  const filterRow = (container: HTMLElement) =>
+    (filterBarRoot(container).querySelector('.p-3') as HTMLElement);
 
   it('renders category filter label', () => {
     render(
@@ -41,7 +56,7 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    expect(screen.getByText(/minimum rating/i)).toBeInTheDocument();
+    expect(screen.getByText('Rating')).toBeInTheDocument();
   });
 
   it('renders sort by label', () => {
@@ -65,7 +80,7 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    expect(screen.getByText(/all businesses/i)).toBeInTheDocument();
+    expect(screen.getByText(/all/i)).toBeInTheDocument();
   });
 
   it('toggles verified only filter', () => {
@@ -78,22 +93,21 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    fireEvent.click(screen.getByText(/all businesses/i));
+    fireEvent.click(screen.getByText(/all/i));
     expect(handleFilterChange).toHaveBeenCalledWith({ verifiedOnly: true });
   });
 
-  it('shows "Verified Only" when filter is active', () => {
-    const handleFilterChange = jest.fn();
+  it('shows the checkmark when verified-only filter is active', () => {
     render(
       <FilterBar
         categories={mockCategories}
         locations={mockLocations}
-        onFilterChange={handleFilterChange}
+        onFilterChange={jest.fn()}
         onSortChange={jest.fn()}
         currentFilters={{ verifiedOnly: true }}
       />
     );
-    expect(screen.getByText(/✓ verified only/i)).toBeInTheDocument();
+    expect(screen.getByText('✓')).toBeInTheDocument();
   });
 
   it('calls onFilterChange when category is selected', () => {
@@ -106,8 +120,8 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    // Click category dropdown
-    fireEvent.click(screen.getByRole('button', { name: /select category/i }));
+    // Open the category dropdown (trigger shows the current value or "Category")
+    fireEvent.click(screen.getByRole('button', { name: 'Category' }));
     // Select a category
     fireEvent.click(screen.getByText(/food & dining/i));
     expect(handleFilterChange).toHaveBeenCalledWith({ category: 'Food & Dining' });
@@ -123,8 +137,8 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    // Click location dropdown
-    fireEvent.click(screen.getByRole('button', { name: /select location/i }));
+    // Open the location dropdown
+    fireEvent.click(screen.getByRole('button', { name: 'Location' }));
     // Select a location
     fireEvent.click(screen.getByText(/new york/i));
     expect(handleFilterChange).toHaveBeenCalledWith({ location: 'New York' });
@@ -140,8 +154,8 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    // Click rating dropdown
-    fireEvent.click(screen.getByRole('button', { name: /select rating/i }));
+    // Open the rating dropdown
+    fireEvent.click(screen.getByRole('button', { name: 'Rating' }));
     // Select a rating
     fireEvent.click(screen.getByText(/4\+ stars/i));
     expect(handleFilterChange).toHaveBeenCalledWith({ minRating: 4 });
@@ -157,14 +171,14 @@ describe('FilterBar', () => {
         onSortChange={handleSortChange}
       />
     );
-    // Click sort dropdown
+    // Open the sort dropdown
     fireEvent.click(screen.getByRole('button', { name: /sort by/i }));
     // Select a sort option
     fireEvent.click(screen.getByText(/highest rated/i));
     expect(handleSortChange).toHaveBeenCalledWith('rating');
   });
 
-  it('shows clear all button when filters are active', () => {
+  it('shows clear button when filters are active', () => {
     render(
       <FilterBar
         categories={mockCategories}
@@ -174,10 +188,10 @@ describe('FilterBar', () => {
         currentFilters={{ category: 'Food & Dining' }}
       />
     );
-    expect(screen.getByText(/clear all/i)).toBeInTheDocument();
+    expect(screen.getByText(/clear/i)).toBeInTheDocument();
   });
 
-  it('does not show clear all button when no filters are active', () => {
+  it('does not show clear button when no filters are active', () => {
     render(
       <FilterBar
         categories={mockCategories}
@@ -186,7 +200,7 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    expect(screen.queryByText(/clear all/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/clear/i)).not.toBeInTheDocument();
   });
 
   it('clears all filters when clear button is clicked', () => {
@@ -202,38 +216,9 @@ describe('FilterBar', () => {
         currentSort="relevance"
       />
     );
-    fireEvent.click(screen.getByText(/clear all/i));
+    fireEvent.click(screen.getByText(/clear/i));
     expect(handleFilterChange).toHaveBeenCalledWith({});
     expect(handleSortChange).toHaveBeenCalledWith('relevance');
-  });
-
-  it('shows active filter summary', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-        currentFilters={{ category: 'Food & Dining' }}
-      />
-    );
-    expect(screen.getByText(/active filters:/i)).toBeInTheDocument();
-    expect(screen.getByText(/category: food & dining/i)).toBeInTheDocument();
-  });
-
-  it('allows removing individual filters from summary', () => {
-    const handleFilterChange = jest.fn();
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={handleFilterChange}
-        onSortChange={jest.fn()}
-        currentFilters={{ category: 'Food & Dining' }}
-      />
-    );
-    fireEvent.click(screen.getByLabelText(/remove category filter/i));
-    expect(handleFilterChange).toHaveBeenCalledWith({});
   });
 
   it('has rounded border', () => {
@@ -245,8 +230,7 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
-    expect(filterBar).toHaveClass('rounded-lg');
+    expect(filterBarRoot(container)).toHaveClass('rounded-lg');
   });
 
   it('has shadow', () => {
@@ -258,8 +242,7 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
-    expect(filterBar).toHaveClass('shadow-sm');
+    expect(filterBarRoot(container)).toHaveClass('shadow-sm');
   });
 
   it('has border', () => {
@@ -271,12 +254,12 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
+    const filterBar = filterBarRoot(container);
     expect(filterBar).toHaveClass('border');
     expect(filterBar).toHaveClass('border-neutral-200');
   });
 
-  it('has padding', () => {
+  it('has padding on the control row', () => {
     const { container } = render(
       <FilterBar
         categories={mockCategories}
@@ -285,21 +268,8 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
-    expect(filterBar).toHaveClass('p-4');
-  });
-
-  it('has margin bottom', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
-    expect(filterBar).toHaveClass('mb-6');
+    const row = filterRow(container);
+    expect(row).toHaveClass('p-3');
   });
 
   it('has flex layout', () => {
@@ -311,10 +281,10 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
-    expect(filterBar).toHaveClass('flex');
-    expect(filterBar).toHaveClass('flex-wrap');
-    expect(filterBar).toHaveClass('gap-4');
+    const row = filterRow(container);
+    expect(row).toHaveClass('flex');
+    expect(row).toHaveClass('flex-wrap');
+    expect(row).toHaveClass('gap-2');
   });
 
   it('shows results count when provided', () => {
@@ -340,7 +310,6 @@ describe('FilterBar', () => {
         onSortChange={jest.fn()}
       />
     );
-    const filterBar = container.querySelector('[data-testid="filter-bar"]');
-    expect(filterBar).toHaveClass('bg-white');
+    expect(filterBarRoot(container)).toHaveClass('bg-white');
   });
 });

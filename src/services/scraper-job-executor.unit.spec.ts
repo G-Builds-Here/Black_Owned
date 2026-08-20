@@ -44,6 +44,9 @@ jest.mock("../lib/db/scrape-job-repository", () => ({
       updatedAt: new Date(),
     })
   ),
+  // The executor checks for existing non-pending jobs with the same input
+  // before creating a new one. Return an empty list so the flow proceeds.
+  findScrapeJobs: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock the scraped business repository
@@ -67,6 +70,10 @@ const mockScraper = {
 
 jest.mock("./business-scraper", () => ({
   getScraper: jest.fn(() => mockScraper),
+  // The executor validates the input source against this list before scraping.
+  // Return the three real sources so the valid-source tests proceed and the
+  // "invalid-source" test fails validation.
+  getAvailableSources: jest.fn(() => ["google-maps", "yelp", "facebook"]),
 }));
 
 describe("Scraper Job Executor - Unit Tests (LOC-0054)", () => {
@@ -202,8 +209,10 @@ describe("Scraper Job Executor - Unit Tests (LOC-0054)", () => {
     });
 
     it("AC1: Handles invalid source", async () => {
-      // Configure mock to throw error for invalid source
-      mockScraper.scrape.mockRejectedValueOnce(new Error("Unknown scraper source"));
+      // No scrape stub: an invalid source is rejected by getAvailableSources()
+      // before any scraper is invoked. (Stubbing scrape here would set a
+      // mockRejectedValueOnce that is never consumed and would leak into the
+      // next test, since validation rejects before scrape is ever called.)
 
       const input: CreateScrapeJobInput = {
         source: "invalid-source" as any,

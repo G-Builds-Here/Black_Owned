@@ -5,21 +5,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createScrapeJob,
-  findAllScrapeJobs,
+  findScrapeJobs,
   initializeScrapeJobSchema,
 } from "@/lib/db/scrape-job-repository";
 import { validateScrapeJobInput } from "@/types/scrape-job";
 import { POST, GET } from "./route";
 
+// The route opens its own client via getPool().connect() and passes it to the
+// repo functions. Mock the pool so no live Postgres is needed. `mock`-prefixed
+// so the hoisted jest.mock factory may reference the pool/client.
+const mockDbClient = { release: jest.fn() };
+const mockDbPool = { connect: jest.fn().mockResolvedValue(mockDbClient) };
+
 // Mock dependencies
 jest.mock("@/lib/db/scrape-job-repository", () => ({
   initializeScrapeJobSchema: jest.fn(),
   createScrapeJob: jest.fn(),
-  findAllScrapeJobs: jest.fn(),
+  findScrapeJobs: jest.fn(),
+}));
+
+jest.mock("@/lib/db/user-repository", () => ({
+  getPool: jest.fn(() => mockDbPool),
 }));
 
 jest.mock("@/types/scrape-job", () => ({
   validateScrapeJobInput: jest.fn(),
+  isValidScrapeJobStatus: jest.fn(() => true),
 }));
 
 describe("Scrape Jobs API", () => {
@@ -158,7 +169,7 @@ describe("Scrape Jobs API", () => {
       } as unknown as NextRequest;
 
       (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue({
+      (findScrapeJobs as jest.Mock).mockResolvedValue({
         jobs: [
           {
             id: "job-1",
@@ -192,7 +203,7 @@ describe("Scrape Jobs API", () => {
       } as unknown as NextRequest;
 
       (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue({
+      (findScrapeJobs as jest.Mock).mockResolvedValue({
         jobs: [],
         total: 0,
         page: 1,
@@ -202,7 +213,8 @@ describe("Scrape Jobs API", () => {
 
       await GET(mockRequest);
 
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(1, 20, "completed");
+      // Route calls findScrapeJobs(client, status, pageSize).
+      expect(findScrapeJobs).toHaveBeenCalledWith(mockDbClient, "completed", 20);
     });
 
     it("should use default pagination when not provided", async () => {
@@ -211,7 +223,7 @@ describe("Scrape Jobs API", () => {
       } as unknown as NextRequest;
 
       (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
-      (findAllScrapeJobs as jest.Mock).mockResolvedValue({
+      (findScrapeJobs as jest.Mock).mockResolvedValue({
         jobs: [],
         total: 0,
         page: 1,
@@ -221,7 +233,8 @@ describe("Scrape Jobs API", () => {
 
       await GET(mockRequest);
 
-      expect(findAllScrapeJobs).toHaveBeenCalledWith(1, 20, undefined);
+      // Route calls findScrapeJobs(client, status, pageSize) with defaults.
+      expect(findScrapeJobs).toHaveBeenCalledWith(mockDbClient, undefined, 20);
     });
 
     it("should reject invalid page numbers", async () => {

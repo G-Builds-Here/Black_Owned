@@ -2,13 +2,20 @@
  * GraphQL Resolvers Tests - Business Update
  */
 
+// Mock pool/client so the resolver's `getPool().connect()` path resolves
+// without a live Postgres. `mock`-prefixed so the hoisted jest.mock factory
+// may reference them. (clearAllMocks in beforeEach preserves these
+// implementations — only call history is cleared.)
+const mockDbClient = { release: jest.fn() };
+const mockDbPool = { connect: jest.fn().mockResolvedValue(mockDbClient) };
+
 // Mock user-repository before importing resolvers (to prevent pg module loading)
 jest.mock("../db/user-repository", () => ({
   findByEmail: jest.fn(),
   create: jest.fn(),
   initializeUserSchema: jest.fn(),
   closePool: jest.fn(),
-  getPool: jest.fn(),
+  getPool: jest.fn(() => mockDbPool),
 }));
 
 // Mock auth-service before importing resolvers
@@ -141,7 +148,8 @@ describe("updateBusiness resolver", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Business not found or you are not the owner");
-    expect(updateNameById).toHaveBeenCalledWith(mockBusinessId, mockNewName, "other-user-id");
+    // Resolver calls updateNameById(client, id, name, userId).
+    expect(updateNameById).toHaveBeenCalledWith(mockDbClient, mockBusinessId, mockNewName, "other-user-id");
   });
 
   it("should reject when business does not exist", async () => {
@@ -159,14 +167,14 @@ describe("updateBusiness resolver", () => {
   });
 
   it("should successfully update business when user is owner", async () => {
+    // The resolver reads a camelCase Business entity (businessToGraphqlBusiness
+    // uses categoryId / verificationStatus / createdAt), not a raw snake_case row.
     const mockUpdatedBusiness = {
       id: mockBusinessId,
       name: mockNewName,
-      owner_id: mockUserId,
-      category_id: "food-dining",
-      verified: false,
-      created_at: new Date("2024-01-01"),
-      updated_at: new Date(),
+      categoryId: "food-dining",
+      verificationStatus: "unverified",
+      createdAt: new Date("2024-01-01"),
     };
 
     (verifyToken as jest.Mock).mockReturnValue({ userId: mockUserId });
@@ -190,18 +198,19 @@ describe("updateBusiness resolver", () => {
         timestamp: expect.any(Number),
       },
     });
-    expect(updateNameById).toHaveBeenCalledWith(mockBusinessId, mockNewName, mockUserId);
+    // Resolver calls updateNameById(client, id, name, userId).
+    expect(updateNameById).toHaveBeenCalledWith(mockDbClient, mockBusinessId, mockNewName, mockUserId);
   });
 
   it("should call updateNameById with correct parameters", async () => {
+    // The resolver reads a camelCase Business entity (businessToGraphqlBusiness
+    // uses categoryId / verificationStatus / createdAt), not a raw snake_case row.
     const mockUpdatedBusiness = {
       id: mockBusinessId,
       name: mockNewName,
-      owner_id: mockUserId,
-      category_id: "food-dining",
-      verified: false,
-      created_at: new Date("2024-01-01"),
-      updated_at: new Date(),
+      categoryId: "food-dining",
+      verificationStatus: "unverified",
+      createdAt: new Date("2024-01-01"),
     };
 
     (verifyToken as jest.Mock).mockReturnValue({ userId: mockUserId });
@@ -214,6 +223,7 @@ describe("updateBusiness resolver", () => {
     );
 
     expect(updateNameById).toHaveBeenCalledTimes(1);
-    expect(updateNameById).toHaveBeenCalledWith(mockBusinessId, mockNewName, mockUserId);
+    // Resolver calls updateNameById(client, id, name, userId).
+    expect(updateNameById).toHaveBeenCalledWith(mockDbClient, mockBusinessId, mockNewName, mockUserId);
   });
 });

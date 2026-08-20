@@ -32,7 +32,7 @@ describe('SearchBar', () => {
 
   it('renders search button', () => {
     render(<SearchBar />);
-    expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit search' })).toBeInTheDocument();
   });
 
   it('renders clear button', () => {
@@ -50,7 +50,7 @@ describe('SearchBar', () => {
   it('calls onSearch when search button is clicked', () => {
     const handleSearch = jest.fn();
     render(<SearchBar onSearch={handleSearch} />);
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit search' }));
     expect(handleSearch).toHaveBeenCalledTimes(1);
   });
 
@@ -59,7 +59,7 @@ describe('SearchBar', () => {
     render(<SearchBar onSearch={handleSearch} />);
     const input = screen.getByPlaceholderText(/search for businesses/i);
     fireEvent.change(input, { target: { value: 'test' } });
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit search' }));
     expect(handleSearch).toHaveBeenCalledWith('test', []);
   });
 
@@ -114,7 +114,7 @@ describe('SearchBar', () => {
     render(<SearchBar onSearch={handleSearch} categories={['All', 'Cat A']} />);
     const catA = screen.getByText(/cat a/i);
     fireEvent.click(catA);
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit search' }));
     expect(handleSearch).toHaveBeenCalledWith('', ['Cat A']);
   });
 

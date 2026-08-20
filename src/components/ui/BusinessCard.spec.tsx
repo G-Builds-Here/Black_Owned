@@ -4,6 +4,14 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import BusinessCard, { Business } from './BusinessCard';
 
+// Current component notes (source of truth: BusinessCard.tsx + Card.tsx):
+// - The card wrapper is Card's root div (no testids): rounded-xl shadow-soft
+//   flex flex-col cursor-pointer (variant "elevated", clickable).
+// - The verified badge renders a "✓" glyph (no "verified" text).
+// - The image frame is a fixed-width w-40 column (no aspect-video, no
+//   hover-scale on the img); rating sits in a div with aria-label
+//   "Rating: <n> out of 5 stars".
+
 describe('BusinessCard', () => {
   const mockBusiness: Business = {
     id: '1',
@@ -18,9 +26,11 @@ describe('BusinessCard', () => {
     tags: ['Tag1', 'Tag2', 'Tag3'],
   };
 
+  const cardRoot = (container: HTMLElement) => container.firstChild as HTMLElement;
+
   it('renders business name', () => {
     render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    expect(screen.getByText(/test business/i)).toBeInTheDocument();
+    expect(screen.getByText('Test Business')).toBeInTheDocument();
   });
 
   it('renders business category', () => {
@@ -38,10 +48,11 @@ describe('BusinessCard', () => {
     expect(screen.getByText(/a test business description/i)).toBeInTheDocument();
   });
 
-  it('renders rating stars', () => {
-    render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    // Check for star character (unicode)
-    expect(screen.getByText(/\d+/)).toBeInTheDocument(); // Review count
+  it('renders rating stars with accessible label', () => {
+    const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
+    expect(
+      container.querySelector('[aria-label="Rating: 4.5 out of 5 stars"]')
+    ).toBeInTheDocument();
   });
 
   it('renders review count', () => {
@@ -51,13 +62,15 @@ describe('BusinessCard', () => {
 
   it('shows verified badge when isVerified is true', () => {
     render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    expect(screen.getByText(/verified/i)).toBeInTheDocument();
+    const badge = screen.getByText('✓');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('bg-green-600');
   });
 
   it('does not show verified badge when isVerified is false', () => {
     const unverifiedBusiness = { ...mockBusiness, isVerified: false };
     render(<BusinessCard business={unverifiedBusiness} onViewDetails={jest.fn()} />);
-    expect(screen.queryByText(/verified/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('✓')).not.toBeInTheDocument();
   });
 
   it('renders tags', () => {
@@ -105,7 +118,10 @@ describe('BusinessCard', () => {
     const { container } = render(
       <BusinessCard business={mockBusiness} onViewDetails={jest.fn()} enableLink={true} />
     );
-    const card = container.querySelector('[data-testid="business-card"]');
+    // With enableLink the Card renders inside an <a>; the clickable styles
+    // live on the card div the link wraps.
+    const link = container.querySelector('a');
+    const card = link.firstElementChild as HTMLElement;
     expect(card).toHaveClass('cursor-pointer');
   });
 
@@ -127,27 +143,25 @@ describe('BusinessCard', () => {
 
   it('has rounded corners', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const card = container.querySelector('[data-testid="business-card"]');
-    expect(card).toHaveClass('rounded-t-lg');
+    expect(cardRoot(container)).toHaveClass('rounded-xl');
   });
 
   it('has shadow', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const card = container.querySelector('[data-testid="business-card"]');
-    expect(card).toHaveClass('shadow');
+    expect(cardRoot(container)).toHaveClass('shadow-soft');
   });
 
   it('has flex column layout', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const card = container.querySelector('[data-testid="business-card"]');
-    expect(card).toHaveClass('flex');
-    expect(card).toHaveClass('flex-col');
+    expect(cardRoot(container)).toHaveClass('flex');
+    expect(cardRoot(container)).toHaveClass('flex-col');
   });
 
-  it('has aspect ratio for image', () => {
+  it('has fixed-width image column', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const imageContainer = container.querySelector('[role="img"]');
-    expect(imageContainer).toHaveClass('aspect-video');
+    const imageContainer = container.querySelector('.bg-neutral-200') as HTMLElement;
+    expect(imageContainer).toHaveClass('w-40');
+    expect(imageContainer).toHaveClass('overflow-hidden');
   });
 
   it('shows placeholder when no image URL', () => {
@@ -169,47 +183,44 @@ describe('BusinessCard', () => {
     expect(img).toHaveAttribute('loading', 'lazy');
   });
 
-  it('has hover scale effect on image', () => {
+  it('renders image with cover fit', () => {
     const businessWithImage = { ...mockBusiness, imageUrl: 'https://example.com/image.jpg' };
-    const { container } = render(
-      <BusinessCard business={businessWithImage} onViewDetails={jest.fn()} />
-    );
-    const img = container.querySelector('img');
-    expect(img).toHaveClass('transition-transform');
-    expect(img).toHaveClass('duration-300');
-    expect(img).toHaveClass('hover:scale-105');
+    render(<BusinessCard business={businessWithImage} onViewDetails={jest.fn()} />);
+    const img = screen.getByAltText(/business photo/i) as HTMLElement;
+    // The old hover-scale effect was removed; the image is a static cover crop.
+    expect(img).toHaveClass('object-cover');
+    expect(img).toHaveClass('w-full');
   });
 
   it('has padding', () => {
-    const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const content = container.querySelector('[data-testid="business-card-content"]');
-    expect(content).toHaveClass('p-4');
+    render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
+    const content = screen.getByText('Test Business').closest('.flex-grow') as HTMLElement;
+    expect(content).toHaveClass('p-3');
   });
 
   it('has border top for action buttons', () => {
-    const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const actions = container.querySelector('[data-testid="business-card-actions"]');
+    render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
+    const actions = screen.getByRole('button', { name: /view details/i }).parentElement as HTMLElement;
     expect(actions).toHaveClass('border-t');
     expect(actions).toHaveClass('border-neutral-200');
   });
 
   it('has flex gap for action buttons', () => {
-    const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const actions = container.querySelector('[data-testid="business-card-actions"]');
+    render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
+    const actions = screen.getByRole('button', { name: /view details/i }).parentElement as HTMLElement;
     expect(actions).toHaveClass('flex');
     expect(actions).toHaveClass('gap-2');
   });
 
   it('has line clamp for description', () => {
-    const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const description = container.querySelector('[data-testid="business-description"]');
-    expect(description).toHaveClass('line-clamp-2');
+    render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
+    expect(screen.getByText(/a test business description/i)).toHaveClass('line-clamp-2');
   });
 
   it('has font-semibold for business name', () => {
-    const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
-    const name = container.querySelector('[data-testid="business-name"]');
+    render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
+    const name = screen.getByText('Test Business');
     expect(name).toHaveClass('font-semibold');
-    expect(name).toHaveClass('text-xl');
+    expect(name).toHaveClass('text-lg');
   });
 });

@@ -4,6 +4,14 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import Badge from './Badge';
 
+// Current component notes (source of truth: Badge.tsx):
+// - Variants are soft tints (e.g. primary = bg-heritage-ochre/10 text-heritage-ochre),
+//   not solid fills with white text.
+// - Sizes are only sm and md (lg was removed); the default size is md.
+// - The shape is rounded-md by default; the pill prop switches it to rounded-full.
+// - The old rounded, fontWeight, textTransform, and letterSpacing props were
+//   removed in the redesign, so their tests were dropped.
+
 describe('Badge', () => {
   it('renders children correctly', () => {
     render(<Badge>Test Badge</Badge>);
@@ -13,44 +21,51 @@ describe('Badge', () => {
   it('applies default variant (default)', () => {
     const { container } = render(<Badge>Test</Badge>);
     expect(container.firstChild).toHaveClass('bg-neutral-100');
-    expect(container.firstChild).toHaveClass('text-neutral-800');
+    expect(container.firstChild).toHaveClass('text-neutral-700');
+    expect(container.firstChild).toHaveClass('border-neutral-200');
   });
 
   it('applies primary variant styles', () => {
     const { container } = render(<Badge variant="primary">Test</Badge>);
-    expect(container.firstChild).toHaveClass('bg-heritage-ochre');
-    expect(container.firstChild).toHaveClass('text-white');
+    expect(container.firstChild).toHaveClass('bg-heritage-ochre/10');
+    expect(container.firstChild).toHaveClass('text-heritage-ochre');
   });
 
   it('applies secondary variant styles', () => {
     const { container } = render(<Badge variant="secondary">Test</Badge>);
-    expect(container.firstChild).toHaveClass('bg-heritage-jade');
-    expect(container.firstChild).toHaveClass('text-white');
+    expect(container.firstChild).toHaveClass('bg-heritage-jade/10');
+    expect(container.firstChild).toHaveClass('text-heritage-jade');
   });
 
   it('applies success variant styles', () => {
     const { container } = render(<Badge variant="success">Test</Badge>);
-    expect(container.firstChild).toHaveClass('bg-green-100');
-    expect(container.firstChild).toHaveClass('text-green-800');
+    expect(container.firstChild).toHaveClass('bg-heritage-jade/10');
+    expect(container.firstChild).toHaveClass('text-heritage-jade');
   });
 
   it('applies warning variant styles', () => {
     const { container } = render(<Badge variant="warning">Test</Badge>);
-    expect(container.firstChild).toHaveClass('bg-heritage-amber');
-    expect(container.firstChild).toHaveClass('text-white');
+    expect(container.firstChild).toHaveClass('bg-heritage-amber/10');
+    expect(container.firstChild).toHaveClass('text-heritage-amber');
   });
 
   it('applies error variant styles', () => {
     const { container } = render(<Badge variant="error">Test</Badge>);
-    expect(container.firstChild).toHaveClass('bg-heritage-crimson');
-    expect(container.firstChild).toHaveClass('text-white');
+    expect(container.firstChild).toHaveClass('bg-heritage-crimson/10');
+    expect(container.firstChild).toHaveClass('text-heritage-crimson');
   });
 
-  it('applies default size (sm)', () => {
+  it('applies info variant styles', () => {
+    const { container } = render(<Badge variant="info">Test</Badge>);
+    expect(container.firstChild).toHaveClass('bg-heritage-royal/10');
+    expect(container.firstChild).toHaveClass('text-heritage-royal');
+  });
+
+  it('applies default size (md)', () => {
     const { container } = render(<Badge>Test</Badge>);
-    expect(container.firstChild).toHaveClass('px-2');
-    expect(container.firstChild).toHaveClass('py-0.5');
-    expect(container.firstChild).toHaveClass('text-xs');
+    expect(container.firstChild).toHaveClass('px-2.5');
+    expect(container.firstChild).toHaveClass('py-1');
+    expect(container.firstChild).toHaveClass('text-sm');
   });
 
   it('applies small size', () => {
@@ -67,27 +82,15 @@ describe('Badge', () => {
     expect(container.firstChild).toHaveClass('text-sm');
   });
 
-  it('applies large size', () => {
-    const { container } = render(<Badge size="lg">Test</Badge>);
-    expect(container.firstChild).toHaveClass('px-3');
-    expect(container.firstChild).toHaveClass('py-1.5');
-    expect(container.firstChild).toHaveClass('text-base');
-  });
-
-  it('applies rounded-full shape by default', () => {
+  it('does not apply pill shape by default', () => {
     const { container } = render(<Badge>Test</Badge>);
-    expect(container.firstChild).toHaveClass('rounded-full');
-  });
-
-  it('applies rounded-lg when rounded is lg', () => {
-    const { container } = render(<Badge rounded="lg">Test</Badge>);
-    expect(container.firstChild).toHaveClass('rounded-lg');
-  });
-
-  it('applies rounded-none when rounded is none', () => {
-    const { container } = render(<Badge rounded="none">Test</Badge>);
     expect(container.firstChild).not.toHaveClass('rounded-full');
-    expect(container.firstChild).not.toHaveClass('rounded-lg');
+    expect(container.firstChild).toHaveClass('rounded-md');
+  });
+
+  it('applies pill shape when pill is true', () => {
+    const { container } = render(<Badge pill>Test</Badge>);
+    expect(container.firstChild).toHaveClass('rounded-full');
   });
 
   it('applies custom className', () => {
@@ -99,31 +102,16 @@ describe('Badge', () => {
     const { container } = render(<Badge>Test</Badge>);
     expect(container.firstChild).toHaveClass('inline-flex');
     expect(container.firstChild).toHaveClass('items-center');
-    expect(container.firstChild).toHaveClass('justify-center');
   });
 
-  it('has font-medium when medium font weight', () => {
-    const { container } = render(<Badge fontWeight="medium">Test</Badge>);
+  it('has font-medium by default', () => {
+    const { container } = render(<Badge>Test</Badge>);
     expect(container.firstChild).toHaveClass('font-medium');
   });
 
-  it('has font-semibold when semibold font weight', () => {
-    const { container } = render(<Badge fontWeight="semibold">Test</Badge>);
-    expect(container.firstChild).toHaveClass('font-semibold');
-  });
-
-  it('has font-bold when bold font weight', () => {
-    const { container } = render(<Badge fontWeight="bold">Test</Badge>);
-    expect(container.firstChild).toHaveClass('font-bold');
-  });
-
-  it('has uppercase when textTransform is uppercase', () => {
-    const { container } = render(<Badge textTransform="uppercase">Test</Badge>);
-    expect(container.firstChild).toHaveClass('uppercase');
-  });
-
-  it('has tracking-wide when letterSpacing is wide', () => {
-    const { container } = render(<Badge letterSpacing="wide">Test</Badge>);
-    expect(container.firstChild).toHaveClass('tracking-wide');
+  it('has transition styles', () => {
+    const { container } = render(<Badge>Test</Badge>);
+    expect(container.firstChild).toHaveClass('transition-colors');
+    expect(container.firstChild).toHaveClass('duration-150');
   });
 });

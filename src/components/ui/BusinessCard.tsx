@@ -43,7 +43,7 @@ export default function BusinessCard({
     const hasHalfStar = rating % 1 >= 0.5;
 
     return (
-      <div className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 5 stars`}>
+      <div role="img" className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 5 stars`}>
         {[...Array(5)].map((_, index) => {
           if (index < fullStars) {
             return (
@@ -114,7 +114,7 @@ export default function BusinessCard({
               size="sm"
               className="absolute top-2 left-2 bg-green-600 text-white border-0"
             >
-              ✓
+              ✓<span className="sr-only">Verified</span>
             </Badge>
           )}
         </div>

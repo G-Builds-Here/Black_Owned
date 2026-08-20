@@ -45,9 +45,11 @@ describe("GET /api/scrape-jobs/:id/status", () => {
       query: "restaurants",
       location: "New York",
       status: "running" as const,
-      business_count: 42,
-      created_at: new Date("2024-01-15T10:00:00Z"),
-      updated_at: new Date("2024-01-15T10:30:00Z"),
+      // findScrapeJobById returns a camelCase entity (business_count is
+      // mapped to businessCount, created_at/updated_at to createdAt/updatedAt).
+      businessCount: 42,
+      createdAt: new Date("2024-01-15T10:00:00Z"),
+      updatedAt: new Date("2024-01-15T10:30:00Z"),
     };
 
     mockFindScrapeJobById.mockResolvedValue(mockJob);
@@ -63,7 +65,7 @@ describe("GET /api/scrape-jobs/:id/status", () => {
       query: mockJob.query,
       location: mockJob.location,
       status: mockJob.status,
-      businessCount: mockJob.business_count,
+      businessCount: mockJob.businessCount,
       createdAt: "2024-01-15T10:00:00.000Z",
       updatedAt: "2024-01-15T10:30:00.000Z",
     });

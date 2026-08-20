@@ -51,7 +51,7 @@ describe('Tabs', () => {
       <Tabs tabs={mockTabs} selectedKey="tab1" onSelectionChange={jest.fn()} />
     );
     const tabButton = container.querySelector('button[role="tab"]');
-    expect(tabButton).toHaveClass('px-1');
+    expect(tabButton).toHaveClass('px-4');
     expect(tabButton).toHaveClass('py-3');
   });
 
@@ -163,12 +163,17 @@ describe('Tabs', () => {
     expect(screen.getByTestId('icon2')).toBeInTheDocument();
   });
 
-  it('has gap between tabs', () => {
+  it('lays out tab labels with a flex span', () => {
     const { container } = render(
       <Tabs tabs={mockTabs} selectedKey="tab1" onSelectionChange={jest.fn()} />
     );
-    const tabList = container.querySelector('[role="tablist"]');
-    expect(tabList).toHaveClass('gap-8');
+    // The redesign removed the old gap-8 tab spacing; each tab's label
+    // (and optional icon) sits in a flex span instead.
+    const tabButton = container.querySelector('button[role="tab"]');
+    const labelSpan = tabButton.querySelector('span');
+    expect(labelSpan).toHaveClass('flex');
+    expect(labelSpan).toHaveClass('items-center');
+    expect(labelSpan).toHaveClass('gap-2');
   });
 
   it('applies pills variant styles', () => {

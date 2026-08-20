@@ -43,7 +43,10 @@ describe("GET /api/admin/reviews/job/[jobId]", () => {
     query: "Black owned restaurants",
     location: "Atlanta, GA",
     status: "completed" as const,
-    resultCount: 5,
+    // Entity field is businessCount (snake_case business_count in the DB row,
+    // mapped to camelCase by findScrapeJobById). The route maps it to the
+    // response's resultCount.
+    businessCount: 5,
     errorMessage: undefined,
     createdAt: new Date("2026-08-12T10:00:00Z"),
     updatedAt: new Date("2026-08-12T10:05:00Z"),

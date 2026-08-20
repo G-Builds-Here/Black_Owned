@@ -159,8 +159,9 @@ describe('AnalyticsPage', () => {
       );
     });
 
-    // Click on "Last 7 days" button
-    const sevenDaysButton = screen.getByText('Last 7 days');
+    // Click on "Last 7 days" button (role query avoids ambiguity with the
+    // "Last 7 days" stats caption rendered when stats.periodDays is 7)
+    const sevenDaysButton = screen.getByRole('button', { name: 'Last 7 days' });
     sevenDaysButton.click();
 
     await waitFor(() => {
