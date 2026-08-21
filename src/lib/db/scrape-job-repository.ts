@@ -20,7 +20,6 @@ function getTableName(): string {
  * Initialize the scrape_jobs table schema
  */
 export async function initializeScrapeJobSchema(client: PoolClient): Promise<void> {
-  console.log("Executing CREATE TABLE for:", getTableName());
   await client.query(`
     CREATE TABLE IF NOT EXISTS ${getTableName()} (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,16 +29,36 @@ export async function initializeScrapeJobSchema(client: PoolClient): Promise<voi
       status VARCHAR(20) NOT NULL DEFAULT 'pending',
       business_count INTEGER,
       error_message TEXT,
+      started_at TIMESTAMP WITH TIME ZONE,
+      completed_at TIMESTAMP WITH TIME ZONE,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      CONSTRAINT scrape_jobs_status_check
+        CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled'))
     )
   `);
-  console.log("CREATE TABLE executed successfully");
 
-  // Add error_message column if it doesn't exist (for existing tables)
+  // Idempotent upgrades for tables created before these columns/constraint existed
   await client.query(`
     ALTER TABLE ${getTableName()}
     ADD COLUMN IF NOT EXISTS error_message TEXT
+  `);
+  await client.query(`
+    ALTER TABLE ${getTableName()}
+    ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE
+  `);
+  await client.query(`
+    ALTER TABLE ${getTableName()}
+    ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE
+  `);
+  await client.query(`
+    ALTER TABLE ${getTableName()}
+    DROP CONSTRAINT IF EXISTS scrape_jobs_status_check
+  `);
+  await client.query(`
+    ALTER TABLE ${getTableName()}
+    ADD CONSTRAINT scrape_jobs_status_check
+      CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled'))
   `);
 
   // Create index on status for filtering
@@ -50,6 +69,11 @@ export async function initializeScrapeJobSchema(client: PoolClient): Promise<voi
   // Create index on created_at for sorting
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_scrape_jobs_created_at ON ${getTableName()}(created_at DESC)
+  `);
+
+  // Create index on started_at for analytics (duration/duration-trend queries)
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_started_at ON ${getTableName()}(started_at DESC)
   `);
 }
 
@@ -66,6 +90,8 @@ function rowToScrapeJob(row: unknown): ScrapeJob {
     status: r.status as ScrapeJobStatus,
     businessCount: (r.business_count as number | null) ?? undefined,
     errorMessage: (r.error_message as string | null) ?? undefined,
+    startedAt: r.started_at ? new Date(r.started_at as string) : undefined,
+    completedAt: r.completed_at ? new Date(r.completed_at as string) : undefined,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
   };
@@ -130,11 +156,15 @@ export async function updateScrapeJobStatus(
 ): Promise<ScrapeJob | undefined> {
   const tableName = getTableName();
 
+  // Lifecycle timestamps: started_at is stamped on the first transition to
+  // running, completed_at on any terminal transition (completed/failed/cancelled)
   const result = await client.query<ScrapeJob>(
     `UPDATE ${tableName}
      SET status = $2,
          business_count = $3,
          error_message = $4,
+         started_at = COALESCE(started_at, CASE WHEN $2 = 'running' THEN NOW() END),
+         completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() END,
          updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
@@ -184,7 +214,7 @@ export async function cancelScrapeJob(id: string): Promise<ScrapeJob | null> {
   try {
     const result = await client.query<ScrapeJob>(
       `UPDATE ${getTableName()}
-       SET status = 'cancelled', updated_at = NOW()
+       SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND status = 'running'
        RETURNING *`,
       [id]

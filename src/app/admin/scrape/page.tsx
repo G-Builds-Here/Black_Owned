@@ -111,6 +111,7 @@ export default function ScrapeJobPage() {
       running: 'primary',
       completed: 'success',
       failed: 'default',
+      cancelled: 'default',
     };
 
     const labels: Record<ScrapeJobStatus, string> = {
@@ -118,6 +119,7 @@ export default function ScrapeJobPage() {
       running: 'Running',
       completed: 'Completed',
       failed: 'Failed',
+      cancelled: 'Cancelled',
     };
 
     return (

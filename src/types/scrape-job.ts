@@ -7,7 +7,7 @@
 /**
  * Job scraping status
  */
-export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed";
+export type ScrapeJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 /**
  * ScrapeJob entity stored in PostgreSQL
@@ -20,6 +20,8 @@ export interface ScrapeJob {
   status: ScrapeJobStatus;
   businessCount?: number;
   errorMessage?: string;
+  startedAt?: Date;
+  completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,6 +63,12 @@ export function validateScrapeJobInput(input: CreateScrapeJobInput): { valid: bo
  * Validates scrape job status
  */
 export function isValidScrapeJobStatus(status: string): status is ScrapeJobStatus {
-  const validStatuses: ScrapeJobStatus[] = ["pending", "running", "completed", "failed"];
+  const validStatuses: ScrapeJobStatus[] = [
+    "pending",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+  ];
   return validStatuses.includes(status as ScrapeJobStatus);
 }

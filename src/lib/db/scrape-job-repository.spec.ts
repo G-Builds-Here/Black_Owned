@@ -9,6 +9,7 @@ import {
   findScrapeJobById,
   updateScrapeJobStatus,
   findScrapeJobs,
+  cancelScrapeJob,
 } from "./scrape-job-repository";
 import { ScrapeJobStatus } from "../../types/scrape-job";
 
@@ -188,6 +189,74 @@ describe("Scrape Job Repository", () => {
           "completed"
         );
         expect(result).toBeUndefined();
+      } finally {
+        client.release();
+      }
+    });
+
+    it("stamps started_at on transition to running and completed_at on terminal transitions", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-timestamps`,
+          query: "timestamp test",
+          location: "Kansas City, MO",
+        });
+        expect(job.startedAt).toBeUndefined();
+        expect(job.completedAt).toBeUndefined();
+
+        const running = await updateScrapeJobStatus(client, job.id, "running", 0);
+        expect(running?.status).toBe("running");
+        expect(running?.startedAt).toBeInstanceOf(Date);
+        expect(running?.completedAt).toBeUndefined();
+
+        const completed = await updateScrapeJobStatus(client, job.id, "completed", 3);
+        expect(completed?.status).toBe("completed");
+        expect(completed?.startedAt).toBeInstanceOf(Date);
+        expect(completed?.completedAt).toBeInstanceOf(Date);
+        // started_at is not overwritten on later transitions
+        expect((completed?.startedAt as Date).getTime()).toBe((running?.startedAt as Date).getTime());
+      } finally {
+        client.release();
+      }
+    });
+
+    it("allows the cancelled status and stamps completed_at", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel`,
+          query: "cancel test",
+          location: "Nashville, TN",
+        });
+        await updateScrapeJobStatus(client, job.id, "running", 0);
+
+        const cancelled = await cancelScrapeJob(job.id);
+        expect(cancelled).toBeDefined();
+        expect(cancelled?.status).toBe("cancelled");
+        expect(cancelled?.completedAt).toBeInstanceOf(Date);
+      } finally {
+        client.release();
+      }
+    });
+
+    it("refuses to cancel a job that is not running", async () => {
+      const client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel-pending`,
+          query: "cancel pending test",
+          location: "Baltimore, MD",
+        });
+
+        const result = await cancelScrapeJob(job.id);
+        expect(result).toBeNull();
       } finally {
         client.release();
       }

@@ -7,9 +7,9 @@
  * previous version tested `createScrapeJob` / `updateScrapeJobStatus` factory
  * helpers and a capitalized 5-value status enum; none of those exist in
  * `./scrape-job`. The real module exposes the `ScrapeJobStatus` type
- * (4 lowercase values), the `ScrapeJob` entity, `validateScrapeJobInput`, and
- * `isValidScrapeJobStatus`. Job creation/status updates live in
- * `@/lib/db/scrape-job-repository`, not here.
+ * (5 lowercase values incl. cancelled), the `ScrapeJob` entity,
+ * `validateScrapeJobInput`, and `isValidScrapeJobStatus`. Job creation/status
+ * updates live in `@/lib/db/scrape-job-repository`, not here.
  */
 
 import {
@@ -21,17 +21,19 @@ import {
 
 describe("Scrape Job Types", () => {
   describe("ScrapeJobStatus values", () => {
-    it("should have the four required (lowercase) status values", () => {
+    it("should have the five required (lowercase) status values", () => {
       const validStatuses: ScrapeJobStatus[] = [
         "pending",
         "running",
         "completed",
         "failed",
+        "cancelled",
       ];
       expect(validStatuses).toContain("pending");
       expect(validStatuses).toContain("running");
       expect(validStatuses).toContain("completed");
       expect(validStatuses).toContain("failed");
+      expect(validStatuses).toContain("cancelled");
     });
   });
 
@@ -41,6 +43,7 @@ describe("Scrape Job Types", () => {
       expect(isValidScrapeJobStatus("running")).toBe(true);
       expect(isValidScrapeJobStatus("completed")).toBe(true);
       expect(isValidScrapeJobStatus("failed")).toBe(true);
+      expect(isValidScrapeJobStatus("cancelled")).toBe(true);
     });
 
     it("should return false for wrong-case values", () => {
@@ -48,13 +51,15 @@ describe("Scrape Job Types", () => {
       expect(isValidScrapeJobStatus("Running")).toBe(false);
       expect(isValidScrapeJobStatus("Completed")).toBe(false);
       expect(isValidScrapeJobStatus("Failed")).toBe(false);
+      expect(isValidScrapeJobStatus("Cancelled")).toBe(false);
     });
 
     it("should return false for statuses outside the union", () => {
-      expect(isValidScrapeJobStatus("cancelled")).toBe(false);
       expect(isValidScrapeJobStatus("")).toBe(false);
       expect(isValidScrapeJobStatus("unknown")).toBe(false);
       expect(isValidScrapeJobStatus("InProgress")).toBe(false);
+      expect(isValidScrapeJobStatus("success")).toBe(false);
+      expect(isValidScrapeJobStatus("running ")).toBe(false);
     });
   });
 
