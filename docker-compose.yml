@@ -1,3 +1,9 @@
+# Fixed project name: worktree checkouts must not spawn loc-* compose
+# projects (fixed container_names collide across worktrees anyway).
+# Must match the name compose infers from the directory (lowercased
+# "Black_Owned") so existing containers/volumes stay recognized.
+name: black_owned
+
 services:
   bw-scraper:
     build:
