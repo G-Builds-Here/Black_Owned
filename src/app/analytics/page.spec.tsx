@@ -186,13 +186,15 @@ describe('AnalyticsPage', () => {
     const mockJobs = [
       {
         id: '1',
-        jobName: 'Business Scraper',
-        targetUrl: 'https://example.com/businesses',
-        status: 'success' as const,
+        source: 'yelp',
+        query: 'black owned restaurants',
+        location: 'Atlanta, GA',
+        status: 'completed' as const,
+        businessCount: 12,
         errorMessage: null,
-        itemsScraped: 500,
         startedAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       },
     ];
 
@@ -210,8 +212,11 @@ describe('AnalyticsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Recent Jobs')).toBeInTheDocument();
-      expect(screen.getByText('Business Scraper')).toBeInTheDocument();
-      expect(screen.getByText('success')).toBeInTheDocument();
+      expect(screen.getByText('yelp')).toBeInTheDocument();
+      expect(screen.getByText('black owned restaurants')).toBeInTheDocument();
+      expect(screen.getByText('Atlanta, GA')).toBeInTheDocument();
+      expect(screen.getByText('completed')).toBeInTheDocument();
+      expect(screen.getByText('12')).toBeInTheDocument();
     });
   });
 

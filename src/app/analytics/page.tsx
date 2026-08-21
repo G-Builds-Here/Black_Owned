@@ -19,13 +19,15 @@ interface ScrapeJobStats {
 
 interface ScrapeJob {
   id: string;
-  jobName: string;
-  targetUrl: string;
-  status: 'success' | 'failed' | 'running';
+  source: string;
+  query: string;
+  location: string;
+  status: string;
+  businessCount: number | null;
   errorMessage: string | null;
-  itemsScraped: number;
-  startedAt: string;
+  startedAt: string | null;
   completedAt: string | null;
+  createdAt: string;
 }
 
 export default function AnalyticsPage() {
@@ -76,10 +78,11 @@ export default function AnalyticsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'success': return 'bg-green-100 text-green-800';
+      case 'completed': return 'bg-green-100 text-green-800';
       case 'failed': return 'bg-red-100 text-red-800';
       case 'running': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'cancelled': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800'; // pending
     }
   };
 
@@ -228,28 +231,30 @@ export default function AnalyticsPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-neutral-200">
-                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Job Name</th>
-                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Target</th>
+                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Source</th>
+                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Query</th>
+                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Location</th>
                         <th className="text-left py-2 px-4 font-medium text-neutral-600">Status</th>
-                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Items</th>
-                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Started</th>
+                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Businesses</th>
+                        <th className="text-left py-2 px-4 font-medium text-neutral-600">Created</th>
                       </tr>
                     </thead>
                     <tbody>
                       {recentJobs.map((job) => (
                         <tr key={job.id} className="border-b border-neutral-100 hover:bg-neutral-50">
-                          <td className="py-3 px-4 font-medium">{job.jobName}</td>
-                          <td className="py-3 px-4 text-neutral-600 truncate max-w-xs">{job.targetUrl}</td>
+                          <td className="py-3 px-4 font-medium">{job.source}</td>
+                          <td className="py-3 px-4 text-neutral-600 truncate max-w-xs">{job.query}</td>
+                          <td className="py-3 px-4 text-neutral-600">{job.location}</td>
                           <td className="py-3 px-4">
                             <Badge
-                              variant={job.status === 'success' ? 'success' : job.status === 'failed' ? 'error' : 'default'}
+                              variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'error' : 'default'}
                               size="sm"
                             >
                               {job.status}
                             </Badge>
                           </td>
-                          <td className="py-3 px-4 text-neutral-600">{job.itemsScraped}</td>
-                          <td className="py-3 px-4 text-neutral-500 text-sm">{formatDateTime(job.startedAt)}</td>
+                          <td className="py-3 px-4 text-neutral-600">{job.businessCount ?? '—'}</td>
+                          <td className="py-3 px-4 text-neutral-500 text-sm">{formatDateTime(job.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>

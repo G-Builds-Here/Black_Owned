@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPool } from '@/lib/db/user-repository';
 
-interface ScrapeJob {
+export interface RecentScrapeJob {
   id: string;
-  jobName: string;
-  targetUrl: string;
-  status: 'success' | 'failed' | 'running';
+  source: string;
+  query: string;
+  location: string;
+  status: string;
+  businessCount: number | null;
   errorMessage: string | null;
-  itemsScraped: number;
-  startedAt: string;
+  startedAt: string | null;
   completedAt: string | null;
+  createdAt: string;
 }
 
+/**
+ * GET /api/analytics/scrape-jobs/recent?limit=N
+ *
+ * Returns the most recent scrape jobs (newest first) in the live schema shape.
+ */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -23,11 +31,34 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // In production, this would query the database directly
-    // For now, return empty array (no jobs recorded yet)
-    const mockJobs: ScrapeJob[] = [];
+    const client = await getPool().connect();
+    try {
+      const result = await client.query(
+        `SELECT id, source, query, location, status, business_count, error_message,
+                started_at, completed_at, created_at
+         FROM scrape_jobs
+         ORDER BY created_at DESC
+         LIMIT $1`,
+        [limit]
+      );
 
-    return NextResponse.json(mockJobs);
+      const jobs: RecentScrapeJob[] = result.rows.map((r) => ({
+        id: r.id,
+        source: r.source,
+        query: r.query,
+        location: r.location,
+        status: r.status,
+        businessCount: r.business_count,
+        errorMessage: r.error_message,
+        startedAt: r.started_at,
+        completedAt: r.completed_at,
+        createdAt: r.created_at,
+      }));
+
+      return NextResponse.json(jobs);
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Error fetching recent scrape jobs:', error);
     return NextResponse.json(
