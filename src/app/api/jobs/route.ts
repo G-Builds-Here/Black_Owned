@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createScrapeJob,
   findScrapeJobs,
-  initializeScrapeJobSchema,
 } from "@/lib/db/scrape-job-repository";
 import {
   validateScrapeJobInput,
@@ -26,7 +25,6 @@ import { getPool } from "@/lib/db/user-repository";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const client = await getPool().connect();
   try {
-    await initializeScrapeJobSchema(client);
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
@@ -72,7 +70,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const client = await getPool().connect();
   try {
-    await initializeScrapeJobSchema(client);
 
     const body: CreateScrapeJobInput = await request.json();
 

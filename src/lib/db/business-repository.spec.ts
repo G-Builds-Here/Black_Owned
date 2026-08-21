@@ -4,7 +4,7 @@
 
 import { getPool } from "./user-repository";
 import { hashPassword } from "../auth/auth-service";
-import { initializeBusinessSchema, createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
+import { createBusiness, findBusinessById, findBusinessesByOwnerId } from "./business-repository";
 
 describe("Business Repository", () => {
   const testEmailPrefix = `bizrepo-${Date.now()}`;
@@ -49,7 +49,6 @@ describe("Business Repository", () => {
       try {
         const client = await getPool().connect();
         try {
-          await initializeBusinessSchema(client);
           const business = await createBusiness(client, user.id, "Test Business", "Test description", "cat-1");
 
           expect(business.id).toBeDefined();
@@ -74,7 +73,6 @@ describe("Business Repository", () => {
       try {
         const client = await getPool().connect();
         try {
-          await initializeBusinessSchema(client);
           const business = await createBusiness(client, user.id, "Test Business No Desc", undefined, "cat-2");
 
           expect(business.name).toBe("Test Business No Desc");
@@ -95,7 +93,6 @@ describe("Business Repository", () => {
       try {
         const client = await getPool().connect();
         try {
-          await initializeBusinessSchema(client);
           const business = await createBusiness(client, user.id, "Find Test Business", "Desc", "cat-3");
           const found = await findBusinessById(client, business.id);
 
@@ -128,7 +125,6 @@ describe("Business Repository", () => {
       try {
         const client = await getPool().connect();
         try {
-          await initializeBusinessSchema(client);
           await createBusiness(client, user.id, "Business 1", "Desc 1", "cat-1");
           await createBusiness(client, user.id, "Business 2", "Desc 2", "cat-2");
 

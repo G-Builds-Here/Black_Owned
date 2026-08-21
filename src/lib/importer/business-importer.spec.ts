@@ -7,7 +7,6 @@
 import { PoolClient } from "pg";
 import {
   importBusinessBatch,
-  initializeImportSchema,
   ImportResult,
   BatchImportResult,
 } from "./business-importer";
@@ -21,16 +20,6 @@ const mockClient = {
 describe("Business Importer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  describe("initializeImportSchema", () => {
-    it("should initialize the business schema", async () => {
-      mockClient.query.mockResolvedValueOnce({ rows: [] });
-
-      await initializeImportSchema(mockClient);
-
-      expect(mockClient.query).toHaveBeenCalled();
-    });
   });
 
   describe("importBusinessBatch", () => {

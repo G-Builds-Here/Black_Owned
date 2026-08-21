@@ -13,7 +13,6 @@ const mockDbPool = { connect: jest.fn().mockResolvedValue(mockDbClient) };
 jest.mock("../db/user-repository", () => ({
   findByEmail: jest.fn(),
   create: jest.fn(),
-  initializeUserSchema: jest.fn(),
   closePool: jest.fn(),
   getPool: jest.fn(() => mockDbPool),
 }));

@@ -8,7 +8,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
   findScrapedBusinessesByJobId,
-  initializeScrapedBusinessSchema,
 } from "@/lib/db/scraped-business-repository";
 import { getPool } from "@/lib/db/user-repository";
 import { ScrapeJobStatus } from "@/types/scrape-job";
@@ -42,7 +41,6 @@ export async function GET(
 
     try {
       // Initialize schema if needed
-      await initializeScrapedBusinessSchema(client);
 
       // Check if scrape job exists
       const job = await findScrapeJobById(client, id);

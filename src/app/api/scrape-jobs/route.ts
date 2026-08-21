@@ -6,7 +6,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
 } from "@/lib/db/scrape-job-repository";
 import { validateScrapeJobInput } from "@/types/scrape-job";
@@ -27,7 +26,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     try {
       // Initialize schema on first request
-      await initializeScrapeJobSchema(client);
 
       const { findScrapeJobs } = await import("@/lib/db/scrape-job-repository");
       const jobs = await findScrapeJobs(client, status as "pending" | "running" | "completed" | "failed" | undefined);
@@ -92,7 +90,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     try {
       // Initialize schema on first request
-      await initializeScrapeJobSchema(client);
 
       // Create the scrape job
       const job = await createScrapeJob(client, input);

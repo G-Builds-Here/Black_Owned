@@ -18,14 +18,12 @@
 
 import { getPool } from "../lib/db/user-repository";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
   findScrapeJobById,
   updateScrapeJobStatus,
   cancelScrapeJob,
 } from "../lib/db/scrape-job-repository";
 import {
-  initializeScrapedBusinessSchema,
   findScrapedBusinessesByJobId,
 } from "../lib/db/scraped-business-repository";
 import { executeScrapeJob, executeScrapeJobById } from "./scraper-job-executor";
@@ -122,7 +120,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("AC1: Creates job with pending status", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -143,7 +140,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("AC1: Job transitions from pending to running to completed", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -172,8 +168,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("AC1: Scraped data is stored in database", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
-        await initializeScrapedBusinessSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -210,8 +204,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("AC1: Job business count matches stored businesses", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
-        await initializeScrapedBusinessSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -238,7 +230,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -273,7 +264,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -301,7 +291,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input = {
           source: `${testPrefix}-invalid-source`,
@@ -330,7 +319,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("never overwrites a cancelled job (repository guard)", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -385,7 +373,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
           source: "google-maps",
@@ -412,7 +399,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("executes a pending job by ID", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         // Create a pending job
         const input: CreateScrapeJobInput = {
@@ -436,7 +422,6 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     it("fails for non-pending jobs", async () => {
       client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         // Create and complete a job
         const input: CreateScrapeJobInput = {

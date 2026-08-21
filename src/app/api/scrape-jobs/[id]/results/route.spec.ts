@@ -13,7 +13,6 @@ jest.mock("@/lib/db/scrape-job-repository", () => ({
 
 jest.mock("@/lib/db/scraped-business-repository", () => ({
   findScrapedBusinessesByJobId: jest.fn(),
-  initializeScrapedBusinessSchema: jest.fn(),
 }));
 
 jest.mock("@/lib/db/user-repository", () => ({
@@ -24,7 +23,6 @@ import { GET } from "./route";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
   findScrapedBusinessesByJobId,
-  initializeScrapedBusinessSchema,
 } from "@/lib/db/scraped-business-repository";
 import { getPool } from "@/lib/db/user-repository";
 
@@ -64,7 +62,6 @@ describe("GET /api/scrape-jobs/[id]/results", () => {
     const jobId = "550e8400-e29b-41d4-a716-446655440000";
     (findScrapeJobById as jest.Mock).mockResolvedValue(undefined);
     (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([]);
-    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
     const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
     const context = { params: Promise.resolve({ id: jobId }) };
@@ -93,7 +90,6 @@ describe("GET /api/scrape-jobs/[id]/results", () => {
 
     (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
     (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([]);
-    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
     const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
     const context = { params: Promise.resolve({ id: jobId }) };
@@ -157,7 +153,6 @@ describe("GET /api/scrape-jobs/[id]/results", () => {
 
     (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
     (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue(mockBusinesses);
-    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
     const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
     const context = { params: Promise.resolve({ id: jobId }) };
@@ -190,14 +185,12 @@ describe("GET /api/scrape-jobs/[id]/results", () => {
 
     (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
     (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([]);
-    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
     const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
     const context = { params: Promise.resolve({ id: jobId }) };
 
     await GET(request, context);
 
-    expect(initializeScrapedBusinessSchema).toHaveBeenCalledWith(mockClient);
     expect(findScrapedBusinessesByJobId).toHaveBeenCalledWith(mockClient, jobId);
   });
 
@@ -216,7 +209,6 @@ describe("GET /api/scrape-jobs/[id]/results", () => {
     };
 
     (findScrapeJobById as jest.Mock).mockResolvedValue(runningJob);
-    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
 
     const request = new NextRequest(`http://localhost/api/scrape-jobs/${jobId}/results`);
     const context = { params: Promise.resolve({ id: jobId }) };

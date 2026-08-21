@@ -17,13 +17,11 @@
 
 import { getPool, PoolClient } from "../lib/db/user-repository";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
   findScrapeJobById,
   updateScrapeJobStatus,
 } from "../lib/db/scrape-job-repository";
 import {
-  initializeScrapedBusinessSchema,
   findScrapedBusinessesByJobId,
   countBusinessesByJobId,
 } from "../lib/db/scraped-business-repository";
@@ -43,9 +41,7 @@ describe("Scraper E2E - LOC-0054", () => {
       console.log("Database connection established");
       // Initialize database schema
       console.log("Initializing scrape_jobs schema...");
-      await initializeScrapeJobSchema(client);
       console.log("Initializing scraped_businesses schema...");
-      await initializeScrapedBusinessSchema(client);
       console.log("Schema initialization complete");
       dbConnected = true;
     } catch (error) {

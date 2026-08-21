@@ -6,7 +6,6 @@
 
 export {
   importBusinessBatch,
-  initializeImportSchema,
   type ImportResult,
   type BatchImportResult,
 } from "./business-importer";
@@ -15,7 +14,6 @@ export {
   importNormalizedBusinesses,
   batchImportBusinesses,
   insertPendingBusiness,
-  initializePendingImportSchema,
   findPendingByStatus,
   countByStatus,
   findBusinessesByJobId,

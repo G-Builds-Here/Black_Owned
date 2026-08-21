@@ -8,7 +8,6 @@ import { getPool } from "./user-repository";
 import {
   batchImportBusinesses,
   insertPendingBusiness,
-  initializePendingImportSchema,
   findPendingByStatus,
   countByStatus,
   importNormalizedBusinesses,
@@ -58,7 +57,6 @@ describe("Pending Import Business Repository", () => {
     const client = await getPool().connect();
     try {
       await client.query("BEGIN");
-      await initializePendingImportSchema(client);
     } finally {
       await client.query("ROLLBACK");
       client.release();
@@ -70,7 +68,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         const businessId = await insertPendingBusiness(client, {
           name: "Test Business",
@@ -103,7 +100,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         const businessId = await insertPendingBusiness(client, {
           name: "Test Business No Description",
@@ -131,7 +127,6 @@ describe("Pending Import Business Repository", () => {
     it("should insert all businesses when batch succeeds", async () => {
       const client = await getPool().connect();
       try {
-        await initializePendingImportSchema(client);
 
         const businesses = [
           {
@@ -281,7 +276,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         const result = await batchImportBusinesses(client, []);
 
@@ -302,7 +296,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         await insertPendingBusiness(client, {
           name: "Pending Business 1",
@@ -336,7 +329,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         const results = await findPendingByStatus(client, "approved");
         expect(results.length).toBe(0);
@@ -353,7 +345,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         await insertPendingBusiness(client, {
           name: "Count Test 1",
@@ -384,7 +375,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         const count = await countByStatus(client, "approved");
         expect(count).toBe(0);
@@ -400,7 +390,6 @@ describe("Pending Import Business Repository", () => {
     it("should insert all normalized businesses in a single transaction", async () => {
       const client = await getPool().connect();
       try {
-        await initializePendingImportSchema(client);
 
         const businesses = [
           {
@@ -447,7 +436,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       let jobId: string | null = null;
       try {
-        await initializePendingImportSchema(client);
 
         // Create a scrape job to track the count
         const jobResult = await client.query(
@@ -542,7 +530,6 @@ describe("Pending Import Business Repository", () => {
       const client = await getPool().connect();
       try {
         await client.query("BEGIN");
-        await initializePendingImportSchema(client);
 
         const result = await importNormalizedBusinesses(client, []);
 
@@ -559,7 +546,6 @@ describe("Pending Import Business Repository", () => {
     it("should not fail import when count recording fails", async () => {
       const client = await getPool().connect();
       try {
-        await initializePendingImportSchema(client);
 
         // Use a job ID that will fail to update
         const invalidJobId = "00000000-0000-0000-0000-000000000000";

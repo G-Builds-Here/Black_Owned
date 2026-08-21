@@ -7,7 +7,6 @@ import { Pool } from "pg";
 import {
   findByEmail,
   create,
-  initializeUserSchema,
   closePool,
   getPool,
 } from "../db/user-repository";
@@ -36,7 +35,6 @@ describe("Login Integration Tests", () => {
 
     // Initialize the pool and schema
     pool = getPool();
-    await initializeUserSchema();
 
     // Set JWT secret for tests
     process.env.JWT_SECRET = "test-secret-key-for-login-tests";

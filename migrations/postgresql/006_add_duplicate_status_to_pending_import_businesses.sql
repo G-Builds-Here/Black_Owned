@@ -6,6 +6,7 @@ ALTER TABLE pending_import_businesses ADD COLUMN IF NOT EXISTS duplicate_status 
 
 -- Update constraint to include new status values
 ALTER TABLE pending_import_businesses DROP CONSTRAINT IF EXISTS pending_import_businesses_status_check;
+ALTER TABLE pending_import_businesses DROP CONSTRAINT IF EXISTS pending_import_businesses_duplicate_status_check;
 ALTER TABLE pending_import_businesses ADD CONSTRAINT pending_import_businesses_duplicate_status_check
   CHECK (duplicate_status IN ('new', 'potential_duplicate', 'skipped'));
 

@@ -18,20 +18,7 @@ function getTableName(): string {
 /**
  * Initialize the businesses table schema
  */
-export async function initializeBusinessSchema(client: PoolClient): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${getTableName()} (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
-      category_id VARCHAR(100) NOT NULL,
-      verification_status VARCHAR(20) NOT NULL DEFAULT 'unverified',
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    )
-  `);
-}
+
 
 /**
  * Convert database row to Business entity

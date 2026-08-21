@@ -3,26 +3,22 @@
  */
 
 import { NextRequest } from "next/server";
-import { getPool, initializeUserSchema } from "@/lib/db/user-repository";
+import { getPool } from "@/lib/db/user-repository";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
   findScrapedBusinessesByJobId,
   findScrapedCandidatesForDedup,
-  initializeScrapedBusinessSchema,
 } from "@/lib/db/scraped-business-repository";
 import {
   importNormalizedBusinesses,
-  initializePendingImportSchema,
 } from "@/lib/db/pending-import-business-repository";
 import {
   findBusinessNames,
-  initializeBusinessSchema,
 } from "@/lib/db/business-repository";
 import { POST } from "./route";
 
 jest.mock("@/lib/db/user-repository", () => ({
   getPool: jest.fn(),
-  initializeUserSchema: jest.fn(),
 }));
 
 jest.mock("@/lib/db/scrape-job-repository", () => ({
@@ -32,17 +28,14 @@ jest.mock("@/lib/db/scrape-job-repository", () => ({
 jest.mock("@/lib/db/scraped-business-repository", () => ({
   findScrapedBusinessesByJobId: jest.fn(),
   findScrapedCandidatesForDedup: jest.fn(),
-  initializeScrapedBusinessSchema: jest.fn(),
 }));
 
 jest.mock("@/lib/db/pending-import-business-repository", () => ({
   importNormalizedBusinesses: jest.fn(),
-  initializePendingImportSchema: jest.fn(),
 }));
 
 jest.mock("@/lib/db/business-repository", () => ({
   findBusinessNames: jest.fn(),
-  initializeBusinessSchema: jest.fn(),
 }));
 
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
@@ -102,10 +95,6 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
       release: jest.fn(),
     };
     (getPool as jest.Mock).mockReturnValue({ connect: jest.fn().mockResolvedValue(mockClient) });
-    (initializeUserSchema as jest.Mock).mockResolvedValue(undefined);
-    (initializeBusinessSchema as jest.Mock).mockResolvedValue(undefined);
-    (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
-    (initializePendingImportSchema as jest.Mock).mockResolvedValue(undefined);
     (findBusinessNames as jest.Mock).mockResolvedValue([]);
     (findScrapedCandidatesForDedup as jest.Mock).mockResolvedValue([]);
     (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);

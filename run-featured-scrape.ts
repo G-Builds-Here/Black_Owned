@@ -6,8 +6,9 @@
  * Uses the same scraper + repositories the app uses (not a mock). Bounded to a
  * single results page (~10 businesses) to match the request.
  *
- * Prereqs: Postgres running (DATABASE_URL), Playwright chromium installed,
- * outbound network to Google Maps.
+ * Prereqs: Postgres running (DATABASE_URL) with migrations applied
+ * (npm run migrate), Playwright chromium installed, outbound network
+ * to Google Maps.
  *
  * Run:
  *   npx tsx run-featured-scrape.ts
@@ -19,12 +20,10 @@ import { Pool } from "pg";
 import { GoogleMapsScraper } from "./src/services/google-maps-scraper";
 import { ScraperSource } from "./src/types/scraper-result";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
   updateScrapeJobStatus,
 } from "./src/lib/db/scrape-job-repository";
 import {
-  initializeScrapedBusinessSchema,
   createScrapedBusiness,
 } from "./src/lib/db/scraped-business-repository";
 
@@ -35,9 +34,6 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
   try {
-    await initializeScrapeJobSchema(client);
-    await initializeScrapedBusinessSchema(client);
-
     const job = await createScrapeJob(client, {
       source: ScraperSource.GOOGLE_MAPS,
       query: QUERY,

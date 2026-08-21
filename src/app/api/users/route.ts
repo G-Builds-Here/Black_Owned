@@ -11,7 +11,6 @@ import {
   getUsersPaginated,
   updateUserRole,
   updateUserStatus,
-  initializeUserManagementSchema,
 } from "@/lib/db/user-management-repository";
 import { publishRoleChangedEvent } from "@/lib/nats/nats-client";
 import {
@@ -29,7 +28,6 @@ import { verifyTokenSafe } from "@/lib/auth/auth-service";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // Initialize schema on first request
-    await initializeUserManagementSchema();
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1", 10);

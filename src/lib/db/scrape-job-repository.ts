@@ -19,63 +19,7 @@ function getTableName(): string {
 /**
  * Initialize the scrape_jobs table schema
  */
-export async function initializeScrapeJobSchema(client: PoolClient): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${getTableName()} (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      source VARCHAR(255) NOT NULL,
-      query TEXT NOT NULL,
-      location VARCHAR(255) NOT NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'pending',
-      business_count INTEGER,
-      error_message TEXT,
-      started_at TIMESTAMP WITH TIME ZONE,
-      completed_at TIMESTAMP WITH TIME ZONE,
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      CONSTRAINT scrape_jobs_status_check
-        CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled'))
-    )
-  `);
 
-  // Idempotent upgrades for tables created before these columns/constraint existed
-  await client.query(`
-    ALTER TABLE ${getTableName()}
-    ADD COLUMN IF NOT EXISTS error_message TEXT
-  `);
-  await client.query(`
-    ALTER TABLE ${getTableName()}
-    ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE
-  `);
-  await client.query(`
-    ALTER TABLE ${getTableName()}
-    ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE
-  `);
-  await client.query(`
-    ALTER TABLE ${getTableName()}
-    DROP CONSTRAINT IF EXISTS scrape_jobs_status_check
-  `);
-  await client.query(`
-    ALTER TABLE ${getTableName()}
-    ADD CONSTRAINT scrape_jobs_status_check
-      CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled'))
-  `);
-
-  // Create index on status for filtering
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_status ON ${getTableName()}(status)
-  `);
-
-  // Create index on created_at for sorting
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_created_at ON ${getTableName()}(created_at DESC)
-  `);
-
-  // Create index on started_at for analytics (duration/duration-trend queries)
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scrape_jobs_started_at ON ${getTableName()}(started_at DESC)
-  `);
-}
 
 /**
  * Convert database row to ScrapeJob entity

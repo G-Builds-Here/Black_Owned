@@ -5,12 +5,11 @@
 import {
   findByEmail,
   create,
-  initializeUserSchema,
 } from "../db/user-repository";
 import {
   hashPassword,
   generateTokenPair,
-  verifyToken
+  verifyToken,
 } from "../auth/auth-service";
 import {
   validatePassword,

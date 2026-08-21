@@ -52,39 +52,7 @@ function getTableName(): string {
 /**
  * Initialize the scraped_businesses table schema
  */
-export async function initializeScrapedBusinessSchema(client: PoolClient): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${getTableName()} (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      scrape_job_id UUID NOT NULL REFERENCES scrape_jobs(id) ON DELETE CASCADE,
-      source VARCHAR(20) NOT NULL,
-      name VARCHAR(500) NOT NULL,
-      address TEXT,
-      phone VARCHAR(50),
-      website VARCHAR(500),
-      category VARCHAR(255),
-      rating DECIMAL(3,2),
-      review_count INTEGER,
-      source_id VARCHAR(255),
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    )
-  `);
 
-  // Create index on scrape_job_id for fast lookups
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_job_id ON ${getTableName()}(scrape_job_id)
-  `);
-
-  // Create index on source for filtering
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_source ON ${getTableName()}(source)
-  `);
-
-  // Create composite index on job_id + source for common queries
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_job_source ON ${getTableName()}(scrape_job_id, source)
-  `);
-}
 
 /**
  * Convert database row to ScrapedBusiness entity

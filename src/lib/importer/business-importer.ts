@@ -8,7 +8,7 @@
 import { PoolClient } from "pg";
 import { RawScraperResult, ScraperSource, RawScraperData, GoogleMapsRawData, YelpRawData, FacebookRawData } from "../../types/scraper-result";
 import { Business } from "../../types/business";
-import { createBusiness, initializeBusinessSchema } from "../db/business-repository";
+import { createBusiness } from "../db/business-repository";
 
 /**
  * Import result for a single business record
@@ -312,6 +312,4 @@ export async function importBusinessBatch(
 /**
  * Initialize the import pipeline schema
  */
-export async function initializeImportSchema(client: PoolClient): Promise<void> {
-  await initializeBusinessSchema(client);
-}
+

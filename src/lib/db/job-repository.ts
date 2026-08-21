@@ -18,22 +18,7 @@ function getTableName(): string {
 /**
  * Initialize the jobs table schema
  */
-export async function initializeJobSchema(client: PoolClient): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${getTableName()} (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      title VARCHAR(255) NOT NULL,
-      company VARCHAR(255) NOT NULL,
-      location VARCHAR(255) NOT NULL,
-      description TEXT,
-      url VARCHAR(500) NOT NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'pending',
-      scraped_at TIMESTAMP WITH TIME ZONE,
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    )
-  `);
-}
+
 
 /**
  * Convert database row to Job entity

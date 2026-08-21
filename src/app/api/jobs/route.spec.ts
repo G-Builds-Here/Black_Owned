@@ -6,7 +6,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createScrapeJob,
   findScrapeJobs,
-  initializeScrapeJobSchema,
 } from "@/lib/db/scrape-job-repository";
 import { validateScrapeJobInput } from "@/types/scrape-job";
 import { POST, GET } from "./route";
@@ -19,7 +18,6 @@ const mockDbPool = { connect: jest.fn().mockResolvedValue(mockDbClient) };
 
 // Mock dependencies
 jest.mock("@/lib/db/scrape-job-repository", () => ({
-  initializeScrapeJobSchema: jest.fn(),
   createScrapeJob: jest.fn(),
   findScrapeJobs: jest.fn(),
 }));
@@ -53,7 +51,6 @@ describe("Scrape Jobs API", () => {
         errors: [],
       });
 
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
       (createScrapeJob as jest.Mock).mockResolvedValue({
         id: "test-id-123",
         source: "google-maps",
@@ -150,7 +147,6 @@ describe("Scrape Jobs API", () => {
         errors: [],
       });
 
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
       (createScrapeJob as jest.Mock).mockRejectedValue(new Error("Database error"));
 
       const response = await POST(mockRequest);
@@ -168,7 +164,6 @@ describe("Scrape Jobs API", () => {
         url: "http://localhost:3000/api/jobs?page=1&pageSize=20",
       } as unknown as NextRequest;
 
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
       (findScrapeJobs as jest.Mock).mockResolvedValue({
         jobs: [
           {
@@ -202,7 +197,6 @@ describe("Scrape Jobs API", () => {
         url: "http://localhost:3000/api/jobs?page=1&pageSize=20&status=completed",
       } as unknown as NextRequest;
 
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
       (findScrapeJobs as jest.Mock).mockResolvedValue({
         jobs: [],
         total: 0,
@@ -222,7 +216,6 @@ describe("Scrape Jobs API", () => {
         url: "http://localhost:3000/api/jobs",
       } as unknown as NextRequest;
 
-      (initializeScrapeJobSchema as jest.Mock).mockResolvedValue(undefined);
       (findScrapeJobs as jest.Mock).mockResolvedValue({
         jobs: [],
         total: 0,
@@ -268,9 +261,7 @@ describe("Scrape Jobs API", () => {
         url: "http://localhost:3000/api/jobs",
       } as unknown as NextRequest;
 
-      (initializeScrapeJobSchema as jest.Mock).mockRejectedValue(
-        new Error("Database error")
-      );
+      (findScrapeJobs as jest.Mock).mockRejectedValue(new Error("Database error"));
 
       const response = await GET(mockRequest);
       const json = await response.json();

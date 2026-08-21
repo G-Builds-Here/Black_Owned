@@ -13,20 +13,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getPool, initializeUserSchema } from "@/lib/db/user-repository";
+import { getPool } from "@/lib/db/user-repository";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
   findScrapedBusinessesByJobId,
   findScrapedCandidatesForDedup,
-  initializeScrapedBusinessSchema,
 } from "@/lib/db/scraped-business-repository";
 import {
   importNormalizedBusinesses,
-  initializePendingImportSchema,
 } from "@/lib/db/pending-import-business-repository";
 import {
   findBusinessNames,
-  initializeBusinessSchema,
 } from "@/lib/db/business-repository";
 import {
   checkForDuplicate,
@@ -81,10 +78,6 @@ export async function POST(
     const client = await pool.connect();
 
     try {
-      await initializeUserSchema();
-      await initializeBusinessSchema(client);
-      await initializeScrapedBusinessSchema(client);
-      await initializePendingImportSchema(client);
 
       const job = await findScrapeJobById(client, jobId);
       if (!job) {

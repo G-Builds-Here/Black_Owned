@@ -4,7 +4,6 @@
 
 import { getPool } from "./user-repository";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
   findScrapeJobById,
   updateScrapeJobStatus,
@@ -37,7 +36,6 @@ describe("Scrape Job Repository", () => {
     it("creates a scrape job with pending status", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-source`,
@@ -62,7 +60,6 @@ describe("Scrape Job Repository", () => {
     it("creates a scrape job with special characters in query", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-special`,
@@ -81,7 +78,6 @@ describe("Scrape Job Repository", () => {
     it("finds a scrape job by ID", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-find`,
@@ -114,7 +110,6 @@ describe("Scrape Job Repository", () => {
     it("updates job status from pending to running", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-running`,
@@ -137,7 +132,6 @@ describe("Scrape Job Repository", () => {
     it("updates job status to completed with result count", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-completed`,
@@ -157,7 +151,6 @@ describe("Scrape Job Repository", () => {
     it("updates job status to failed with error message", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-failed`,
@@ -197,7 +190,6 @@ describe("Scrape Job Repository", () => {
     it("stamps started_at on transition to running and completed_at on terminal transitions", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-timestamps`,
@@ -226,7 +218,6 @@ describe("Scrape Job Repository", () => {
     it("allows the cancelled status and stamps completed_at", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-cancel`,
@@ -247,7 +238,6 @@ describe("Scrape Job Repository", () => {
     it("refuses to cancel a job that is not running", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-cancel-pending`,
@@ -267,7 +257,6 @@ describe("Scrape Job Repository", () => {
     it("returns all jobs when no filter specified", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         await createScrapeJob(client, {
           source: `${testPrefix}-all-1`,
@@ -292,7 +281,6 @@ describe("Scrape Job Repository", () => {
     it("filters jobs by status", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const pendingJob = await createScrapeJob(client, {
           source: `${testPrefix}-pending-filter`,
@@ -318,7 +306,6 @@ describe("Scrape Job Repository", () => {
     it("limits results when limit specified", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const jobs = await findScrapeJobs(client, undefined, 1);
         expect(jobs.length).toBeLessThanOrEqual(1);
@@ -330,7 +317,6 @@ describe("Scrape Job Repository", () => {
     it("returns jobs ordered by created_at descending", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job1 = await createScrapeJob(client, {
           source: `${testPrefix}-order-1`,

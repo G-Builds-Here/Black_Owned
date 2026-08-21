@@ -11,7 +11,6 @@ jest.mock("@/lib/db/user-repository", () => ({
 }));
 
 jest.mock("@/lib/db/scrape-job-repository", () => ({
-  initializeScrapeJobSchema: jest.fn().mockResolvedValue(undefined),
   createScrapeJob: jest.fn(),
   findScrapeJobs: jest.fn(),
   findScrapeJobById: jest.fn(),
