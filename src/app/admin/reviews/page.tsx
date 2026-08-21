@@ -79,6 +79,10 @@ export default function BusinessReviewPage() {
   const [bulkApproveResult, setBulkApproveResult] = useState<{ success: boolean; message: string } | null>(null);
   const [businesses, setBusinesses] = useState<ReviewBusiness[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [decisionState, setDecisionState] = useState<'idle' | 'approving' | 'rejecting'>('idle');
+  const [rejectMode, setRejectMode] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [decisionResult, setDecisionResult] = useState<{ success: boolean; message: string } | null>(null);
 
   React.useEffect(() => {
     const fetchBusinesses = async () => {
@@ -104,10 +108,14 @@ export default function BusinessReviewPage() {
     business.source.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCardClick = (business: ReviewBusiness) => {
+  const openDetail = (business: ReviewBusiness) => {
     setSelectedBusiness(business);
+    setRejectMode(false);
+    setRejectReason('');
     setIsDetailModalOpen(true);
   };
+
+  const handleCardClick = openDetail;
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -169,14 +177,80 @@ export default function BusinessReviewPage() {
     }
   };
 
-  const handleRowClick = (business: ReviewBusiness) => {
-    setSelectedBusiness(business);
-    setIsDetailModalOpen(true);
-  };
+  const handleRowClick = openDetail;
 
   const handleCloseDetail = () => {
     setIsDetailModalOpen(false);
     setSelectedBusiness(null);
+    setRejectMode(false);
+    setRejectReason('');
+  };
+
+  const finishDecision = (businessId: string) => {
+    setBusinesses((prev) => prev.filter((b) => b.id !== businessId));
+    setIsDetailModalOpen(false);
+    setSelectedBusiness(null);
+    setRejectMode(false);
+    setRejectReason('');
+  };
+
+  const handleApprove = async () => {
+    if (!selectedBusiness || decisionState !== 'idle') return;
+    const business = selectedBusiness;
+    setDecisionState('approving');
+    setDecisionResult(null);
+    try {
+      const response = await fetch(`/api/businesses/${business.id}/approve`, {
+        method: 'POST',
+      });
+      const result = await response.json();
+      if (result.success) {
+        setDecisionResult({ success: true, message: `${business.name} approved` });
+        finishDecision(business.id);
+      } else {
+        setDecisionResult({ success: false, message: result.error || 'Failed to approve business' });
+      }
+    } catch (error) {
+      setDecisionResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setDecisionState('idle');
+    }
+  };
+
+  const handleRejectToggle = () => {
+    setRejectMode((prev) => !prev);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!selectedBusiness || decisionState !== 'idle' || !rejectReason.trim()) return;
+    const business = selectedBusiness;
+    const reason = rejectReason.trim();
+    setDecisionState('rejecting');
+    setDecisionResult(null);
+    try {
+      const response = await fetch(`/api/businesses/${business.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setDecisionResult({ success: true, message: `${business.name} rejected` });
+        finishDecision(business.id);
+      } else {
+        setDecisionResult({ success: false, message: result.error || 'Failed to reject business' });
+      }
+    } catch (error) {
+      setDecisionResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setDecisionState('idle');
+    }
   };
 
   const renderRating = (rating: number) => {
@@ -266,6 +340,11 @@ export default function BusinessReviewPage() {
           {bulkApproveResult && (
             <div className={`mt-4 p-3 rounded-lg ${bulkApproveResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
               <p className="text-sm font-medium">{bulkApproveResult.message}</p>
+            </div>
+          )}
+          {decisionResult && (
+            <div className={`mt-4 p-3 rounded-lg ${decisionResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              <p className="text-sm font-medium">{decisionResult.message}</p>
             </div>
           )}
         </Card>
@@ -408,17 +487,45 @@ export default function BusinessReviewPage() {
               </div>
             )}
 
+            {/* Rejection Reason */}
+            {rejectMode && (
+              <div>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-4">Rejection Reason</h3>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <Input
+                    label="Why is this business being rejected?"
+                    placeholder="Enter a rejection reason..."
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    maxLength={500}
+                    disabled={decisionState !== 'idle'}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-              <Button variant="secondary" onClick={handleCloseDetail}>
+              <Button variant="secondary" onClick={handleCloseDetail} disabled={decisionState !== 'idle'}>
                 Close
               </Button>
-              <Button variant="primary" onClick={handleCloseDetail}>
-                Approve
+              <Button variant="primary" onClick={handleApprove} disabled={decisionState !== 'idle'}>
+                {decisionState === 'approving' ? 'Approving...' : 'Approve'}
               </Button>
-              <Button variant="danger" onClick={handleCloseDetail}>
-                Reject
-              </Button>
+              {rejectMode ? (
+                <>
+                  <Button variant="secondary" onClick={handleRejectToggle} disabled={decisionState !== 'idle'}>
+                    Cancel Reject
+                  </Button>
+                  <Button variant="danger" onClick={handleConfirmReject} disabled={decisionState !== 'idle' || !rejectReason.trim()}>
+                    {decisionState === 'rejecting' ? 'Rejecting...' : 'Confirm Reject'}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="danger" onClick={handleRejectToggle} disabled={decisionState !== 'idle'}>
+                  Reject
+                </Button>
+              )}
             </div>
           </div>
         </Modal>

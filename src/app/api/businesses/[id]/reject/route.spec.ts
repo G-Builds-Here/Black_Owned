@@ -190,7 +190,9 @@ describe("Business Reject API", () => {
         rows: [updatedBusiness],
       });
 
-      const mockRequest = {} as unknown as Request;
+      const mockRequest = {
+        json: async () => ({ reason: "Not verified as Black-owned" }),
+      } as unknown as Request;
       const context = { params: Promise.resolve({ id: validUuid }) };
 
       const response = await POST(mockRequest, context);
@@ -203,6 +205,7 @@ describe("Business Reject API", () => {
         id: validUuid,
         name: businessName,
         status: "rejected",
+        rejection_reason: "Not verified as Black-owned",
       });
 
       // Verify first query
@@ -212,15 +215,119 @@ describe("Business Reject API", () => {
         [validUuid]
       );
 
-      // Verify second query (update)
+      // Verify second query (update with trimmed reason)
       expect(mockClient.query).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining("UPDATE pending_import_businesses"),
-        [validUuid]
+        [validUuid, "Not verified as Black-owned"]
       );
 
       // Verify client was released
       expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it("should trim whitespace from the rejection reason before persisting", async () => {
+      const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: validUuid, name: "Test Business", status: "pending_review" }],
+      });
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: validUuid, name: "Test Business", status: "rejected" }],
+      });
+
+      const mockRequest = {
+        json: async () => ({ reason: "  padding check  " }),
+      } as unknown as Request;
+      const context = { params: Promise.resolve({ id: validUuid }) };
+
+      const response = await POST(mockRequest, context);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.data.rejection_reason).toBe("padding check");
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        [validUuid, "padding check"]
+      );
+    });
+
+    it("should return 400 REASON_REQUIRED when the reason is missing", async () => {
+      const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: validUuid, name: "Test Business", status: "pending_review" }],
+      });
+
+      const mockRequest = {
+        json: async () => ({}),
+      } as unknown as Request;
+      const context = { params: Promise.resolve({ id: validUuid }) };
+
+      const response = await POST(mockRequest, context);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.success).toBe(false);
+      expect(json.code).toBe("REASON_REQUIRED");
+      expect(json.error).toBe("Rejection reason is required");
+    });
+
+    it("should return 400 REASON_REQUIRED when the reason is empty or whitespace", async () => {
+      const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: validUuid, name: "Test Business", status: "pending_review" }],
+      });
+
+      const mockRequest = {
+        json: async () => ({ reason: "   " }),
+      } as unknown as Request;
+      const context = { params: Promise.resolve({ id: validUuid }) };
+
+      const response = await POST(mockRequest, context);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.code).toBe("REASON_REQUIRED");
+    });
+
+    it("should return 400 REASON_REQUIRED when the request has no JSON body", async () => {
+      const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: validUuid, name: "Test Business", status: "pending_review" }],
+      });
+
+      const mockRequest = {} as unknown as Request;
+      const context = { params: Promise.resolve({ id: validUuid }) };
+
+      const response = await POST(mockRequest, context);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.code).toBe("REASON_REQUIRED");
+    });
+
+    it("should return 400 REASON_TOO_LONG when the reason exceeds 500 characters", async () => {
+      const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ id: validUuid, name: "Test Business", status: "pending_review" }],
+      });
+
+      const mockRequest = {
+        json: async () => ({ reason: "x".repeat(501) }),
+      } as unknown as Request;
+      const context = { params: Promise.resolve({ id: validUuid }) };
+
+      const response = await POST(mockRequest, context);
+      const json = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(json.code).toBe("REASON_TOO_LONG");
+      expect(json.error).toContain("500 characters");
     });
 
     it("should handle database errors gracefully", async () => {
@@ -262,16 +369,19 @@ describe("Business Reject API", () => {
         ],
       });
 
-      const mockRequest = {} as unknown as Request;
+      const mockRequest = {
+        json: async () => ({ reason: "duplicate listing" }),
+      } as unknown as Request;
       const context = { params: Promise.resolve({ id: validUuid }) };
 
       await POST(mockRequest, context);
 
-      // Verify the update query includes status = 'rejected' and updated_at = NOW()
+      // Verify the update query includes status, reason and updated_at
       const secondCall = (mockClient.query as jest.Mock).mock.calls[1];
       expect(secondCall[0]).toContain("SET status = 'rejected'");
+      expect(secondCall[0]).toContain("rejection_reason = $2");
       expect(secondCall[0]).toContain("updated_at = NOW()");
-      expect(secondCall[1]).toEqual([validUuid]);
+      expect(secondCall[1]).toEqual([validUuid, "duplicate listing"]);
     });
 
     it("should handle valid UUID with uppercase letters (case-insensitive validation)", async () => {
@@ -297,7 +407,9 @@ describe("Business Reject API", () => {
         ],
       });
 
-      const mockRequest = {} as unknown as Request;
+      const mockRequest = {
+        json: async () => ({ reason: "case check" }),
+      } as unknown as Request;
       const context = { params: Promise.resolve({ id: validUuid }) };
 
       const response = await POST(mockRequest, context);

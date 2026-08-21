@@ -206,4 +206,116 @@ describe('BusinessReviewPage', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
+
+  describe('single-business decisions', () => {
+    const decisionFetch = (decisionResult: { success: boolean; error?: string }) => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url === '/api/pending-businesses') {
+          return Promise.resolve({ ok: true, json: async () => pendingRows });
+        }
+        if (url.endsWith('/approve') || url.endsWith('/reject')) {
+          return Promise.resolve({ ok: true, json: async () => decisionResult });
+        }
+        return Promise.resolve({ ok: false, json: async () => ({}) });
+      });
+    };
+
+    it('approves a business via POST /api/businesses/[id]/approve and removes it from the queue', async () => {
+      decisionFetch({ success: true, message: 'Business approved successfully' });
+      render(<BusinessReviewPage />);
+
+      fireEvent.click(await screen.findByText('Soul Food Kitchen'));
+      await screen.findByRole('dialog');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Approve', exact: true }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Soul Food Kitchen approved/i)).toBeInTheDocument();
+      });
+
+      const approveCall = mockFetch.mock.calls.find(([url]) =>
+        String(url).endsWith('/approve')
+      );
+      expect(approveCall).toBeDefined();
+      expect(String(approveCall![0])).toBe('/api/businesses/b-1/approve');
+      expect(approveCall![1]).toMatchObject({ method: 'POST' });
+
+      // The approved business leaves the queue
+      await waitFor(() => {
+        expect(screen.queryByText('Soul Food Kitchen')).not.toBeInTheDocument();
+      });
+      expect(screen.getByText('Afro Threads')).toBeInTheDocument();
+    });
+
+    it('reject flow shows a reason input and requires it before confirming', async () => {
+      decisionFetch({ success: false, error: 'unused' });
+      render(<BusinessReviewPage />);
+
+      fireEvent.click(await screen.findByText('Soul Food Kitchen'));
+      await screen.findByRole('dialog');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reject', exact: true }));
+
+      const reasonInput = await screen.findByPlaceholderText(/Enter a rejection reason/i);
+      expect(reasonInput).toBeInTheDocument();
+
+      const confirm = screen.getByRole('button', { name: 'Confirm Reject', exact: true });
+      expect(confirm).toBeDisabled();
+
+      fireEvent.change(reasonInput, { target: { value: '  ' } });
+      expect(confirm).toBeDisabled();
+
+      fireEvent.change(reasonInput, { target: { value: 'Not Black-owned' } });
+      expect(confirm).toBeEnabled();
+    });
+
+    it('rejects a business via POST /api/businesses/[id]/reject with the reason in the body', async () => {
+      decisionFetch({ success: true, message: 'Business rejected successfully' });
+      render(<BusinessReviewPage />);
+
+      fireEvent.click(await screen.findByText('Afro Threads'));
+      await screen.findByRole('dialog');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reject', exact: true }));
+      fireEvent.change(
+        await screen.findByPlaceholderText(/Enter a rejection reason/i),
+        { target: { value: 'Unverified source' } }
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Reject', exact: true }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Afro Threads rejected/i)).toBeInTheDocument();
+      });
+
+      const rejectCall = mockFetch.mock.calls.find(([url]) =>
+        String(url).endsWith('/reject')
+      );
+      expect(rejectCall).toBeDefined();
+      expect(String(rejectCall![0])).toBe('/api/businesses/b-2/reject');
+      expect(rejectCall![1]).toMatchObject({ method: 'POST' });
+      expect(JSON.parse(rejectCall![1]!.body)).toEqual({ reason: 'Unverified source' });
+
+      await waitFor(() => {
+        expect(screen.queryByText('Afro Threads')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows an error banner when the approve request fails', async () => {
+      decisionFetch({ success: false, error: 'Business is not in pending_review status (current status: approved)' });
+      render(<BusinessReviewPage />);
+
+      fireEvent.click(await screen.findByText('Soul Food Kitchen'));
+      await screen.findByRole('dialog');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Approve', exact: true }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Business is not in pending_review status/i)
+        ).toBeInTheDocument();
+      });
+      // The business stays in the queue on failure (count unchanged, modal still open)
+      expect(screen.getByText('2 businesses pending review')).toBeInTheDocument();
+    });
+  });
 });

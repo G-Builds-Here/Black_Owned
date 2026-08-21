@@ -20,6 +20,7 @@ export interface PendingImportBusiness {
   source: ScraperSource;
   source_data: Record<string, unknown>;
   job_id: string | undefined;
+  rejection_reason: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -60,9 +61,16 @@ export async function initializePendingImportSchema(client: any): Promise<void> 
       source VARCHAR(50) NOT NULL,
       source_data JSONB,
       job_id UUID,
+      rejection_reason TEXT,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     );
+  `);
+
+  // Idempotent upgrade for databases created before rejection_reason existed
+  await client.query(`
+    ALTER TABLE pending_import_businesses
+    ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
   `);
 
   await client.query(`
