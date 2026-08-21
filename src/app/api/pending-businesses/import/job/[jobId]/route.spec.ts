@@ -2,21 +2,27 @@
  * POST /api/pending-businesses/import/job/[jobId] tests
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/db/user-repository";
+import { NextRequest } from "next/server";
+import { getPool, initializeUserSchema } from "@/lib/db/user-repository";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
   findScrapedBusinessesByJobId,
+  findScrapedCandidatesForDedup,
   initializeScrapedBusinessSchema,
 } from "@/lib/db/scraped-business-repository";
 import {
   importNormalizedBusinesses,
   initializePendingImportSchema,
 } from "@/lib/db/pending-import-business-repository";
+import {
+  findBusinessNames,
+  initializeBusinessSchema,
+} from "@/lib/db/business-repository";
 import { POST } from "./route";
 
 jest.mock("@/lib/db/user-repository", () => ({
   getPool: jest.fn(),
+  initializeUserSchema: jest.fn(),
 }));
 
 jest.mock("@/lib/db/scrape-job-repository", () => ({
@@ -25,12 +31,18 @@ jest.mock("@/lib/db/scrape-job-repository", () => ({
 
 jest.mock("@/lib/db/scraped-business-repository", () => ({
   findScrapedBusinessesByJobId: jest.fn(),
+  findScrapedCandidatesForDedup: jest.fn(),
   initializeScrapedBusinessSchema: jest.fn(),
 }));
 
 jest.mock("@/lib/db/pending-import-business-repository", () => ({
   importNormalizedBusinesses: jest.fn(),
   initializePendingImportSchema: jest.fn(),
+}));
+
+jest.mock("@/lib/db/business-repository", () => ({
+  findBusinessNames: jest.fn(),
+  initializeBusinessSchema: jest.fn(),
 }));
 
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
@@ -90,8 +102,12 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
       release: jest.fn(),
     };
     (getPool as jest.Mock).mockReturnValue({ connect: jest.fn().mockResolvedValue(mockClient) });
+    (initializeUserSchema as jest.Mock).mockResolvedValue(undefined);
+    (initializeBusinessSchema as jest.Mock).mockResolvedValue(undefined);
     (initializeScrapedBusinessSchema as jest.Mock).mockResolvedValue(undefined);
     (initializePendingImportSchema as jest.Mock).mockResolvedValue(undefined);
+    (findBusinessNames as jest.Mock).mockResolvedValue([]);
+    (findScrapedCandidatesForDedup as jest.Mock).mockResolvedValue([]);
     (findScrapeJobById as jest.Mock).mockResolvedValue(mockJob);
     (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue(mockScraped);
     // dedupe query: no existing pending businesses
@@ -103,9 +119,11 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
       results: [],
       errors: [],
     });
+    delete process.env.DUPLICATE_NAME_THRESHOLD;
+    delete process.env.DUPLICATE_ADDRESS_THRESHOLD;
   });
 
-  it("should import all scraped businesses when none exist in the queue", async () => {
+  it("should import all scraped businesses when none exist anywhere", async () => {
     const response = await POST(makeRequest(), makeContext(JOB_ID));
     const json = await response.json();
 
@@ -113,6 +131,7 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     expect(json.success).toBe(true);
     expect(json.imported).toBe(2);
     expect(json.skipped).toBe(0);
+    expect(json.duplicates).toEqual([]);
 
     expect(importNormalizedBusinesses).toHaveBeenCalledWith(
       expect.any(Object),
@@ -136,7 +155,7 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
   });
 
   it("should skip businesses whose name already exists in the review queue", async () => {
-    mockClient.query.mockResolvedValue({ rows: [{ name: "soul kitchen" }] });
+    mockClient.query.mockResolvedValue({ rows: [{ name: "soul kitchen", source_data: null }] });
     (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
       total: 1,
       succeeded: 1,
@@ -151,10 +170,258 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     expect(json.success).toBe(true);
     expect(json.imported).toBe(1);
     expect(json.skipped).toBe(1);
+    expect(json.duplicates).toEqual([
+      { name: "Soul Kitchen", matchedName: "soul kitchen", matchSource: "queue" },
+    ]);
 
     const normalized = (importNormalizedBusinesses as jest.Mock).mock.calls[0][1];
     expect(normalized).toHaveLength(1);
     expect(normalized[0].name).toBe("Corner Grocery");
+  });
+
+  it("should skip a fuzzy name/address match against a previously scraped business", async () => {
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-1",
+        scrapeJobId: JOB_ID,
+        source: "google",
+        name: "Soul Kitchen Bar Grill & Events",
+        address: "123 Peachtree St",
+        sourceId: "g-1",
+        createdAt: new Date(),
+      },
+    ]);
+    (findScrapedCandidatesForDedup as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-other",
+        name: "Soul Kitchen Bar Grill and Events",
+        address: "123 Peachtree St",
+        phone: undefined,
+      },
+    ]);
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 0,
+      succeeded: 0,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const response = await POST(makeRequest(), makeContext(JOB_ID));
+    const json = await response.json();
+
+    expect(json.imported).toBe(0);
+    expect(json.skipped).toBe(1);
+    expect(json.duplicates).toEqual([
+      {
+        name: "Soul Kitchen Bar Grill & Events",
+        matchedName: "Soul Kitchen Bar Grill and Events",
+        matchSource: "scraped",
+      },
+    ]);
+    expect(importNormalizedBusinesses).toHaveBeenCalledWith(expect.any(Object), [], JOB_ID);
+  });
+
+  it("should skip a business with an identical normalized phone number", async () => {
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-1",
+        scrapeJobId: JOB_ID,
+        source: "yelp",
+        name: "Bluebird Coffee",
+        address: "9 Oak Ave",
+        phone: "555-867-5309",
+        sourceId: "yelp-bird",
+        createdAt: new Date(),
+      },
+    ]);
+    mockClient.query.mockResolvedValue({
+      rows: [
+        {
+          name: "Bluebird Cafe",
+          source_data: { address: "12 Different Rd", phone: "(555) 867-5309" },
+        },
+      ],
+    });
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 0,
+      succeeded: 0,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const response = await POST(makeRequest(), makeContext(JOB_ID));
+    const json = await response.json();
+
+    expect(json.imported).toBe(0);
+    expect(json.skipped).toBe(1);
+    expect(json.duplicates).toEqual([
+      { name: "Bluebird Coffee", matchedName: "Bluebird Cafe", matchSource: "queue" },
+    ]);
+  });
+
+  it("should skip an exact name match against the live businesses table", async () => {
+    (findBusinessNames as jest.Mock).mockResolvedValue(["Corner Grocery"]);
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const response = await POST(makeRequest(), makeContext(JOB_ID));
+    const json = await response.json();
+
+    expect(json.imported).toBe(1);
+    expect(json.skipped).toBe(1);
+    expect(json.duplicates).toEqual([
+      { name: "Corner Grocery", matchedName: "Corner Grocery", matchSource: "directory" },
+    ]);
+
+    const normalized = (importNormalizedBusinesses as jest.Mock).mock.calls[0][1];
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].name).toBe("Soul Kitchen");
+  });
+
+  it("should import only the first of two same-job rows with the same name", async () => {
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([
+      {
+        id: "dup-1",
+        scrapeJobId: JOB_ID,
+        source: "yelp",
+        name: "Dup Diner",
+        address: "1 A St",
+        sourceId: "yelp-d1",
+        createdAt: new Date(),
+      },
+      {
+        id: "dup-2",
+        scrapeJobId: JOB_ID,
+        source: "google",
+        name: "Dup Diner",
+        address: "2 B St",
+        sourceId: "g-d2",
+        createdAt: new Date(),
+      },
+    ]);
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const response = await POST(makeRequest(), makeContext(JOB_ID));
+    const json = await response.json();
+
+    expect(json.imported).toBe(1);
+    expect(json.skipped).toBe(1);
+    expect(json.duplicates).toEqual([
+      { name: "Dup Diner", matchedName: "Dup Diner", matchSource: "scraped" },
+    ]);
+
+    const normalized = (importNormalizedBusinesses as jest.Mock).mock.calls[0][1];
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].originalId).toBe("yelp-d1");
+  });
+
+  it("should respect the DUPLICATE_NAME_THRESHOLD env override", async () => {
+    // Name similarity for this pair is ~0.69 (below the 0.8 default),
+    // addresses are identical (1.0, above the 0.85 default).
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-1",
+        scrapeJobId: JOB_ID,
+        source: "yelp",
+        name: "Blackbird Cafe",
+        address: "500 Peachtree St",
+        sourceId: "yelp-bb",
+        createdAt: new Date(),
+      },
+    ]);
+    (findScrapedCandidatesForDedup as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-other",
+        name: "Blackbird Cafes",
+        address: "500 Peachtree St",
+        phone: undefined,
+      },
+    ]);
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const defaultResponse = await POST(makeRequest(), makeContext(JOB_ID));
+    const defaultJson = await defaultResponse.json();
+    expect(defaultJson.imported).toBe(1);
+    expect(defaultJson.skipped).toBe(0);
+
+    process.env.DUPLICATE_NAME_THRESHOLD = "0.5";
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 0,
+      succeeded: 0,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const loweredResponse = await POST(makeRequest(), makeContext(JOB_ID));
+    const loweredJson = await loweredResponse.json();
+    expect(loweredJson.imported).toBe(0);
+    expect(loweredJson.skipped).toBe(1);
+    expect(loweredJson.duplicates).toEqual([
+      {
+        name: "Blackbird Cafe",
+        matchedName: "Blackbird Cafes",
+        matchSource: "scraped",
+      },
+    ]);
+  });
+
+  it("should fall back to defaults when the threshold env value is invalid", async () => {
+    (findScrapedBusinessesByJobId as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-1",
+        scrapeJobId: JOB_ID,
+        source: "yelp",
+        name: "Blackbird Cafe",
+        address: "500 Peachtree St",
+        sourceId: "yelp-bb",
+        createdAt: new Date(),
+      },
+    ]);
+    (findScrapedCandidatesForDedup as jest.Mock).mockResolvedValue([
+      {
+        id: "scraped-other",
+        name: "Blackbird Cafes",
+        address: "500 Peachtree St",
+        phone: undefined,
+      },
+    ]);
+    process.env.DUPLICATE_NAME_THRESHOLD = "not-a-number";
+    (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+      errors: [],
+    });
+
+    const response = await POST(makeRequest(), makeContext(JOB_ID));
+    const json = await response.json();
+
+    // ~0.69 name similarity stays below the 0.8 default -> not deduped
+    expect(json.skipped).toBe(0);
+    expect(json.duplicates).toEqual([]);
+    const normalized = (importNormalizedBusinesses as jest.Mock).mock.calls[0][1];
+    expect(normalized).toHaveLength(1);
   });
 
   it("should reject invalid job id format", async () => {
@@ -196,6 +463,7 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
     expect(json.total).toBe(0);
+    expect(json.duplicates).toEqual([]);
     expect(importNormalizedBusinesses).not.toHaveBeenCalled();
   });
 

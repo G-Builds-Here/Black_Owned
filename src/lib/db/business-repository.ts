@@ -186,3 +186,15 @@ export async function updateNameById(
   );
   return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
 }
+
+/**
+ * Find all business names (dedup candidate pool for the import route).
+ * The live businesses table carries no address/phone columns, so name only.
+ */
+export async function findBusinessNames(client: PoolClient): Promise<string[]> {
+  const tableName = getTableName();
+  const result = await client.query<{ name: string }>(
+    `SELECT name FROM ${tableName}`
+  );
+  return result.rows.map((r) => r.name);
+}

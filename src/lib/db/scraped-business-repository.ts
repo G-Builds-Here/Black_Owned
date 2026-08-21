@@ -152,6 +152,38 @@ export async function findScrapedBusinessesByJobId(
 }
 
 /**
+ * Lightweight dedup candidate rows across all jobs: id, name, address, phone.
+ */
+export interface ScrapedBusinessDedupCandidate {
+  id: string;
+  name: string;
+  address: string;
+  phone: string | undefined;
+}
+
+/**
+ * Find every scraped business's id/name/address/phone for the import
+ * route's duplicate-detection candidate pool.
+ */
+export async function findScrapedCandidatesForDedup(
+  client: PoolClient
+): Promise<ScrapedBusinessDedupCandidate[]> {
+  const tableName = getTableName();
+  const result = await client.query<{
+    id: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+  }>(`SELECT id, name, address, phone FROM ${tableName}`);
+  return result.rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    address: r.address ?? "",
+    phone: r.phone ?? undefined,
+  }));
+}
+
+/**
  * Find the most recent scraped businesses for display
  * (e.g. the homepage "Featured Businesses" section).
  * Returns the latest `limit` businesses by created_at, newest first.

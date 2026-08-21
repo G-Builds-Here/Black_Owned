@@ -21,6 +21,7 @@ export interface PendingImportBusiness {
   source_data: Record<string, unknown>;
   job_id: string | undefined;
   rejection_reason: string | null;
+  duplicate_status: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -62,6 +63,7 @@ export async function initializePendingImportSchema(client: any): Promise<void> 
       source_data JSONB,
       job_id UUID,
       rejection_reason TEXT,
+      duplicate_status VARCHAR(20) NOT NULL DEFAULT 'new',
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     );
@@ -71,6 +73,24 @@ export async function initializePendingImportSchema(client: any): Promise<void> 
   await client.query(`
     ALTER TABLE pending_import_businesses
     ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+  `);
+
+  // Idempotent upgrade for databases created before duplicate_status existed
+  // (matches migrations/postgresql/006_add_duplicate_status_to_pending_import_businesses.sql)
+  await client.query(`
+    ALTER TABLE pending_import_businesses
+    ADD COLUMN IF NOT EXISTS duplicate_status VARCHAR(20) NOT NULL DEFAULT 'new';
+  `);
+
+  await client.query(`
+    ALTER TABLE pending_import_businesses
+    DROP CONSTRAINT IF EXISTS pending_import_businesses_duplicate_status_check;
+  `);
+
+  await client.query(`
+    ALTER TABLE pending_import_businesses
+    ADD CONSTRAINT pending_import_businesses_duplicate_status_check
+    CHECK (duplicate_status IN ('new', 'potential_duplicate', 'skipped'));
   `);
 
   await client.query(`
@@ -83,6 +103,10 @@ export async function initializePendingImportSchema(client: any): Promise<void> 
 
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_pending_import_job_id ON pending_import_businesses(job_id);
+  `);
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_pending_import_duplicate_status ON pending_import_businesses(duplicate_status);
   `);
 }
 

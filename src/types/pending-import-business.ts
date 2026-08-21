@@ -22,6 +22,7 @@ export interface PendingImportBusiness {
   status: PendingImportStatus;
   source: ScraperSource;
   sourceData: Record<string, unknown> | null;
+  duplicateStatus: string;
   createdAt: Date;
   updatedAt: Date;
 }
