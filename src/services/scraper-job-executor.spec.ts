@@ -3,12 +3,17 @@
  *
  * AC: LOC-0073-AC1 - Complete scrape job flow with mock data
  *
+ * Runs against the live PostgreSQL database. It is excluded from the default
+ * jest run (see jest.config.js testPathIgnorePatterns); run it with:
+ *   npx jest --forceExit "src/services/scraper-job-executor.spec.ts" --testPathIgnorePatterns "^$"
+ *
  * Tests the complete job lifecycle:
  * - Job created with pending status
  * - Job transitions to running
  * - Scraper executes and returns results
  * - Scraped data is stored in database
  * - Job transitions to completed with business count
+ * - Cancelled jobs are terminal and can never be overwritten
  */
 
 import { getPool } from "../lib/db/user-repository";
@@ -17,6 +22,7 @@ import {
   createScrapeJob,
   findScrapeJobById,
   updateScrapeJobStatus,
+  cancelScrapeJob,
 } from "../lib/db/scrape-job-repository";
 import {
   initializeScrapedBusinessSchema,
@@ -25,11 +31,27 @@ import {
 import { executeScrapeJob, executeScrapeJobById } from "./scraper-job-executor";
 import { CreateScrapeJobInput } from "../types/scrape-job";
 
-// Mock the scraper to avoid actual network calls
+// Mock the scraper to avoid actual network calls. The scrape implementation
+// is controlled per test through mockScrape, and the available sources are
+// controlled through mockedScraper.getAvailableSources.
 jest.mock("./business-scraper", () => ({
-  getScraper: jest.fn().mockReturnValue({
-    source: "google-maps",
-    scrape: jest.fn().mockResolvedValue({
+  getScraper: jest.fn(),
+  getAvailableSources: jest.fn(),
+}));
+
+const mockedScraper = jest.requireMock("./business-scraper") as {
+  getScraper: jest.Mock;
+  getAvailableSources: jest.Mock;
+};
+
+const mockScrape = jest.fn();
+
+describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
+  const testPrefix = `scraperjob-exec-${Date.now()}`;
+  let client: ReturnType<typeof getPool>["connect"];
+
+  function defaultScrapeResult() {
+    return {
       businesses: [
         {
           name: "Test Business 1",
@@ -54,20 +76,15 @@ jest.mock("./business-scraper", () => ({
       query: "test query",
       location: "Test City",
       timestamp: new Date(),
-    }),
-  }),
-}));
-
-describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
-  const testPrefix = `scraperjob-exec-${Date.now()}`;
-  let client: ReturnType<typeof getPool>["connect"];
+    };
+  }
 
   async function cleanup(): Promise<void> {
     client = await getPool().connect();
     try {
-      // Clean up test jobs
+      // Clean up test jobs (every test query carries the unique prefix)
       await client.query(
-        "DELETE FROM scrape_jobs WHERE source LIKE $1",
+        "DELETE FROM scrape_jobs WHERE query LIKE $1",
         [`%${testPrefix}%`]
       );
     } finally {
@@ -87,6 +104,20 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     await cleanup();
   });
 
+  beforeEach(() => {
+    mockScrape.mockReset();
+    mockScrape.mockResolvedValue(defaultScrapeResult());
+    mockedScraper.getScraper.mockReturnValue({
+      source: "google-maps",
+      scrape: mockScrape,
+    });
+    mockedScraper.getAvailableSources.mockReturnValue([
+      "google-maps",
+      "yelp",
+      "facebook",
+    ]);
+  });
+
   describe("executeScrapeJob - Complete Flow", () => {
     it("AC1: Creates job with pending status", async () => {
       client = await getPool().connect();
@@ -94,8 +125,8 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-pending`,
-          query: "pending test",
+          source: "google-maps",
+          query: `${testPrefix}-pending`,
           location: "Test City",
         };
 
@@ -115,8 +146,8 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-transition`,
-          query: "transition test",
+          source: "google-maps",
+          query: `${testPrefix}-transition`,
           location: "Test City",
         };
 
@@ -129,7 +160,7 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         expect(result.jobId).toBeDefined();
 
         // Verify job is in database with completed status
-        const job = await findScrapeJobById(client, result.jobId);
+        const job = await findScrapeJobById(client, result.jobId!);
         expect(job).toBeDefined();
         expect(job?.status).toBe("completed");
         expect(job?.businessCount).toBe(2); // Mock returns 2 businesses
@@ -145,8 +176,8 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         await initializeScrapedBusinessSchema(client);
 
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-stored`,
-          query: "stored test",
+          source: "google-maps",
+          query: `${testPrefix}-stored`,
           location: "Test City",
         };
 
@@ -157,7 +188,7 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         // Verify businesses were stored
         const businesses = await findScrapedBusinessesByJobId(
           client,
-          result.jobId
+          result.jobId!
         );
 
         expect(businesses.length).toBe(2);
@@ -183,8 +214,8 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         await initializeScrapedBusinessSchema(client);
 
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-count`,
-          query: "count test",
+          source: "google-maps",
+          query: `${testPrefix}-count`,
           location: "Test City",
         };
 
@@ -194,7 +225,7 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         expect(result.businessCount).toBe(2);
 
         // Verify job has correct business count
-        const job = await findScrapeJobById(client, result.jobId);
+        const job = await findScrapeJobById(client, result.jobId!);
         expect(job?.businessCount).toBe(2);
       } finally {
         client.release();
@@ -202,23 +233,16 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     });
 
     it("AC1: Handles scraper errors gracefully", async () => {
-      // Mock scraper that throws an error
-      jest.mock("./business-scraper", () => ({
-        getScraper: jest.fn().mockReturnValue({
-          source: "google-maps",
-          scrape: jest.fn().mockRejectedValue(
-            new Error("Network timeout")
-          ),
-        }),
-      }));
+      // Scraper rejects: the job must be marked failed in the database
+      mockScrape.mockRejectedValue(new Error("Network timeout"));
 
       client = await getPool().connect();
       try {
         await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-error`,
-          query: "error test",
+          source: "google-maps",
+          query: `${testPrefix}-error`,
           location: "Test City",
         };
 
@@ -229,7 +253,7 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         expect(result.error).toContain("Network timeout");
 
         // Verify job is marked as failed
-        const job = await findScrapeJobById(client, result.jobId);
+        const job = await findScrapeJobById(client, result.jobId!);
         expect(job?.status).toBe("failed");
         expect(job?.errorMessage).toContain("Network timeout");
       } finally {
@@ -238,27 +262,22 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
     });
 
     it("AC1: Empty results handled correctly", async () => {
-      // Mock scraper that returns empty results
-      jest.mock("./business-scraper", () => ({
-        getScraper: jest.fn().mockReturnValue({
-          source: "google-maps",
-          scrape: jest.fn().mockResolvedValue({
-            businesses: [],
-            source: "google-maps",
-            query: "empty test",
-            location: "Test City",
-            timestamp: new Date(),
-          }),
-        }),
-      }));
+      // Scraper returns empty results
+      mockScrape.mockResolvedValue({
+        businesses: [],
+        source: "google-maps",
+        query: "empty test",
+        location: "Test City",
+        timestamp: new Date(),
+      });
 
       client = await getPool().connect();
       try {
         await initializeScrapeJobSchema(client);
 
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-empty`,
-          query: "empty test",
+          source: "google-maps",
+          query: `${testPrefix}-empty`,
           location: "Test City",
         };
 
@@ -269,9 +288,120 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
         expect(result.businessCount).toBe(0);
 
         // Verify job is completed with zero businesses
-        const job = await findScrapeJobById(client, result.jobId);
+        const job = await findScrapeJobById(client, result.jobId!);
         expect(job?.status).toBe("completed");
         expect(job?.businessCount).toBe(0);
+      } finally {
+        client.release();
+      }
+    });
+
+    it("leaves the job failed in the database for an invalid source", async () => {
+      mockedScraper.getAvailableSources.mockReturnValue(["google-maps"]);
+
+      client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const input = {
+          source: `${testPrefix}-invalid-source`,
+          query: `${testPrefix}-invalid`,
+          location: "Test City",
+        } as unknown as CreateScrapeJobInput;
+
+        const result = await executeScrapeJob(client, input);
+
+        expect(result.success).toBe(false);
+        expect(result.finalStatus).toBe("failed");
+        expect(result.error).toContain("Invalid source");
+        expect(mockScrape).not.toHaveBeenCalled();
+
+        // The job must not be left stuck in running
+        const job = await findScrapeJobById(client, result.jobId!);
+        expect(job?.status).toBe("failed");
+        expect(job?.errorMessage).toContain("Invalid source");
+      } finally {
+        client.release();
+      }
+    });
+  });
+
+  describe("Cancellation semantics", () => {
+    it("never overwrites a cancelled job (repository guard)", async () => {
+      client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const input: CreateScrapeJobInput = {
+          source: "google-maps",
+          query: `${testPrefix}-cancel-guard`,
+          location: "Test City",
+        };
+        const job = await createScrapeJob(client, input);
+        await updateScrapeJobStatus(client, job.id, "running");
+
+        const cancelled = await cancelScrapeJob(job.id);
+        expect(cancelled?.status).toBe("cancelled");
+
+        // A late completion must be a no-op
+        const lateUpdate = await updateScrapeJobStatus(
+          client,
+          job.id,
+          "completed",
+          5
+        );
+        expect(lateUpdate).toBeUndefined();
+
+        const current = await findScrapeJobById(client, job.id);
+        expect(current?.status).toBe("cancelled");
+      } finally {
+        client.release();
+      }
+    });
+
+    it("returns cancelled when the job is cancelled while the scraper is running", async () => {
+      const uniqueQuery = `${testPrefix}-cancelled-during`;
+      // The scraper cancels the job (by looking it up via its unique query)
+      // before it resolves, simulating a user-initiated cancel mid-scrape.
+      mockScrape.mockImplementation(async () => {
+        const cancelClient = await getPool().connect();
+        try {
+          const found = await cancelClient.query(
+            "SELECT id FROM scrape_jobs WHERE query = $1",
+            [uniqueQuery]
+          );
+          await cancelScrapeJob(found.rows[0].id);
+        } finally {
+          cancelClient.release();
+        }
+        return {
+          businesses: [],
+          source: "google-maps",
+          query: uniqueQuery,
+          location: "Test City",
+          timestamp: new Date(),
+        };
+      });
+
+      client = await getPool().connect();
+      try {
+        await initializeScrapeJobSchema(client);
+
+        const input: CreateScrapeJobInput = {
+          source: "google-maps",
+          query: uniqueQuery,
+          location: "Test City",
+        };
+
+        const result = await executeScrapeJob(client, input);
+
+        expect(result.success).toBe(false);
+        expect(result.finalStatus).toBe("cancelled");
+        expect(result.jobId).toBeDefined();
+        expect(mockScrape).toHaveBeenCalled();
+
+        const job = await findScrapeJobById(client, result.jobId!);
+        expect(job?.status).toBe("cancelled");
       } finally {
         client.release();
       }
@@ -286,8 +416,8 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
         // Create a pending job
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-byid`,
-          query: "by id test",
+          source: "google-maps",
+          query: `${testPrefix}-byid`,
           location: "Test City",
         };
 
@@ -310,13 +440,13 @@ describe("Scraper Job Executor - Integration (LOC-0073-AC1)", () => {
 
         // Create and complete a job
         const input: CreateScrapeJobInput = {
-          source: `${testPrefix}-notpending`,
-          query: "not pending test",
+          source: "google-maps",
+          query: `${testPrefix}-notpending`,
           location: "Test City",
         };
 
         const job = await createScrapeJob(client, input);
-        await updateScrapeJobStatus(job.id, "completed", 5);
+        await updateScrapeJobStatus(client, job.id, "completed", 5);
 
         // Try to execute already completed job
         const result = await executeScrapeJobById(client, job.id);

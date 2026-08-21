@@ -145,7 +145,7 @@ export async function findScrapedBusinessesByJobId(
 ): Promise<ScrapedBusiness[]> {
   const tableName = getTableName();
   const result = await client.query<ScrapedBusiness>(
-    `SELECT * FROM ${tableName} WHERE scrape_job_id = $1 ORDER BY created_at DESC`,
+    `SELECT * FROM ${tableName} WHERE scrape_job_id = $1 ORDER BY created_at, name`,
     [jobId]
   );
   return result.rows.map(rowToScrapedBusiness);

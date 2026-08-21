@@ -454,7 +454,7 @@ describe("Pending Import Business Repository", () => {
           `INSERT INTO scrape_jobs (source, query, location, status, business_count, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
            RETURNING id`,
-          ["google-maps", "test query", "test location", "importing", 0]
+          ["google-maps", "test query", "test location", "running", 0]
         );
         jobId = jobResult.rows[0].id;
 

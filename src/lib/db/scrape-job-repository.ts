@@ -145,7 +145,10 @@ export async function deleteScrapeJob(
 }
 
 /**
- * Update scrape job status
+ * Update scrape job status. Terminal states (completed, failed, cancelled)
+ * are final: any update to a job already in a terminal state is a no-op and
+ * this function returns undefined, so a cancelled job can never be
+ * resurrected by a late completion or failure write.
  */
 export async function updateScrapeJobStatus(
   client: PoolClient,
@@ -156,19 +159,35 @@ export async function updateScrapeJobStatus(
 ): Promise<ScrapeJob | undefined> {
   const tableName = getTableName();
 
-  // Lifecycle timestamps: started_at is stamped on the first transition to
-  // running, completed_at on any terminal transition (completed/failed/cancelled)
+  // Lifecycle timestamps are computed here: started_at on the first transition
+  // to running, completed_at on any terminal transition. The status parameter
+  // must be used only in the assignment — comparing it against literals in
+  // CASE expressions makes the server deduce two different types for the same
+  // parameter and reject the statement (42P08). COALESCE keeps the previous
+  // count when no count is supplied, which also satisfies live tables where
+  // business_count is NOT NULL.
+  const now = new Date();
+  const isTerminal =
+    status === "completed" || status === "failed" || status === "cancelled";
   const result = await client.query<ScrapeJob>(
     `UPDATE ${tableName}
      SET status = $2,
-         business_count = $3,
+         business_count = COALESCE($3, business_count),
          error_message = $4,
-         started_at = COALESCE(started_at, CASE WHEN $2 = 'running' THEN NOW() END),
-         completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() END,
+         started_at = COALESCE(started_at, $5),
+         completed_at = $6,
          updated_at = NOW()
      WHERE id = $1
+       AND status NOT IN ('completed', 'failed', 'cancelled')
      RETURNING *`,
-    [id, status, resultCount ?? null, errorMessage ?? null]
+    [
+      id,
+      status,
+      resultCount ?? null,
+      errorMessage ?? null,
+      status === "running" ? now : null,
+      isTerminal ? now : null,
+    ]
   );
   return result.rows[0] ? rowToScrapeJob(result.rows[0]) : undefined;
 }
