@@ -190,8 +190,11 @@ Status as of 2026-08-21 — owner ruling 2026-08-20: "yes all of those will need
 | Seed data: real password hashes + live schema | #67 |
 | README, construction docs, blueprint updated to match reality | #69 |
 | Ticket hygiene (`~/.claude/tickets`) | #52 |
-| Migrate 10 verified Black-owned businesses from `black_wall_street` | #49 |
 
 ### SearXNG integration note (2026-08-21)
 
 Owner's SearXNG metasearch container verified live: `GET http://192.168.68.50:8888/search?q={query}&format=json` returns 200 with 20–26 merged results per page (`pageno` for depth; `engines=`, `categories=`, `time_range=` all honored). Upstream engines observed: `google cse`, `duckduckgo`, `brave`, `startpage`, `bing news` — with per-engine circuit-breaking visible in `unresponsive_engines` (documented suspension durations: 429 → 1h, CAPTCHA/access-denied → 24h, Cloudflare CAPTCHA → 15 days). Results are web hits (`url`, `title`, `content`, `engine`, `engines`, `score`), not structured business records — top hits for target queries are directories/listicles. Design consequence: two-stage pipeline — SearXNG discovery, then fetch + extract structured fields into `scraped_businesses` (`source='searxng'`).
+
+### #49 outcome (2026-08-22)
+
+Original source (`black_wall_street/businesses_scraper_output.json`, 10 "verified" businesses) **rejected as fabricated**: sequential `555-…` phone suffixes, one shared `certification_id` (`NBCC-1-1100`) across records with contradicting certifying bodies, and 6/10 websites dead, mismatched to a different business, or pointing at the app's own dev preview. Replacement (owner-approved option 1): 10 real Atlanta Black-owned businesses discovered via SearXNG + verified directories (The Infatuation, Atlanta Parent, BuyBlack.org), each candidate's own website verified live and name-matching before import. Imported idempotently into `pending_import_businesses` (`source='manual'`, status `pending_review` — the app's curation gate, `duplicate_status='new'`; directory URL, ownership evidence, address/phone in `source_data`). Category spread: Food & Dining ×2, Retail & Fashion ×2, Entertainment ×2, Health & Wellness ×2, Personal Services ×1, Professional Services ×1. Re-running the import inserts 0 rows.

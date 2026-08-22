@@ -103,3 +103,27 @@ Format per item: **Today** (what the system does) → **Failure mode** (what bre
 11. **Configurable budget.** **Today:** `MAX_CONCURRENT_AGENTS` is a constant in `check-agent-progress.py`. **Failure mode:** tuning concurrency requires editing tool source. **Fix:** expose it as an env var and document it in the dupin SKILL. **DONE 2026-08-21:** owner asked "will that even work" — answer: a plain env var only reaches a tool if it's in the Claude Code process's environment (Windows: setx + restart, or an inline `MAX_CONCURRENT_AGENTS=8 $UB ...` prefix per call); an `export` in one Bash call does NOT persist to the next. So the loader is two-tier: env `MAX_CONCURRENT_AGENTS` (highest) → `BASE_DIR/pipeline.json` `{"max_concurrent_agents": N}` (instant, persistent, no restart) → 5. Clamped to 1–16 so a typo can't mass over-dispatch. 4 unit tests pass; live scan reported `concurrency.max: 5`. Documented in dupin SKILL 3a.
 12. **Merge-gate consistency check.** **Today:** the 6-check merge gate doesn't verify the qa/commit handoff's `Repo Root`/worktree matches the claimed AC's story; off-convention worktrees and branch names have passed in real runs. **Failure mode:** work from the wrong tree gets merged under an AC. **Fix:** add the story/worktree match check to the gate. **DONE 2026-08-21:** the dupin SKILL merge gate is now a 7-check gate — check 7 `worktree_story_match`: the commit/qa handoff's `Repo Root`/worktree must be this AC's worktree (`<repo>/.worktrees/{STORY_KEY}-AC<n>`), not the main repo and not another story's tree.
 13. **Document the `status: complete` machine marker** in the gotham-reference handoff contract — it is by design (`make-handoff.py` L417-419) but undocumented, so it reads as schema drift. **DONE 2026-08-21:** gotham-reference § Handoff Format now states the marker is machine-inserted — `make-handoff` auto-appends it when `Status` is any completion value (`complete`/`done`/`passed`/`pass`/`success`), normalizing synonyms so scanners never treat a finished handoff as missing; a handoff carrying it is complete by design, not drift.
+
+---
+
+## 4. Case study: why the per-AC worktree flow drifted the Black_Owned repo — verdict recorded 2026-08-22 (#68)
+
+Owner hypothesis, **confirmed [HIGH]**: the per-AC worktree flow (Dupin convention `.worktrees/{STORY_KEY}-AC<n>`) was the primary cause of the design drift documented in `Black_Owned/docs/design-drift-audit-2026-08-20.md`. The deeper failure: each AC merged from its own stale snapshot, and no integration verification ran against the integrated tree between merges.
+
+| Finding class (Black_Owned audit) | Attributed cause |
+|---|---|
+| Three competing `scrape_jobs` schemas, dual schema sources of truth (runtime `CREATE TABLE IF NOT EXISTS` vs migrations), split status enums, `chat_messages` vs `messages`, dead/orphan routes, port-9000 collision | Independent per-AC worktrees each creating the same seam from its own assumption; merges never compared them |
+| QA spec pinning a broken nats healthcheck | The spec validated the worktree's snapshot, not the integrated system |
+| Blueprint/README drift (ClickHouse-centric docs vs Postgres reality) | Docs not updated in the same merge as the behavior change; predates and amplifies the above |
+| Fabricated `pending_import` source data (#49 rejection, 2026-08-22) | Data provenance — unrelated to worktrees |
+| Unbuilt features (chat, claim wizard, dashboards) | Scope never built — not parallelism |
+
+**Mechanism:** (1) ACs branched at different moments, so two ACs could each "create" the same table/enum without either seeing the other; (2) merges were per-AC and mechanical — the full suite never ran against the integrated tree, so conflicts surfaced only at audit time; (3) runtime `CREATE TABLE IF NOT EXISTS` bootstraps were a *symptom* — worktrees could not trust shared DB state, so every module bootstrapped its own; (4) worktrees make forking divergent copies of compose/env cheap — that is how the port collision and the healthcheck drift happened.
+
+**Fix protocol (binding for all follow-up work in this repo, and for future Dupin epics on it):**
+1. **Merge discipline at seams.** Work touching shared seams (migrations, shared types, compose, API routes) is serialized — one AC at a time. Worktrees only for disjoint slices.
+2. **Integration is the gate.** Per-AC unit tests are necessary, insufficient: after every merge the full gate (tsc + full jest + live-stack e2e where relevant) must pass before the next AC starts.
+3. **Structural single-sourcing (done 2026-08-21):** migrations own schema (Fix 7), one status enum (Fix 2), one `scrape_jobs` table (Fix 6); contract specs pin the seams.
+4. **Assert behavior, not implementation strings.** Boundary specs assert outcomes ("a healthcheck is defined", "the health endpoint returns ok"), not exact command text; live behavior belongs in e2e against the running stack. Applied to the nats compose spec 2026-08-22 (it previously pinned the broken probe, then the good one — both are implementation strings).
+5. **Drift audit as a scheduled gate** after every epic; blueprint/README updated in the same merge as the behavior change.
+6. **Worktrees where they are harmless** (isolated UI/component work); never for shared schema/config.
