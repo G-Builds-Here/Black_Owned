@@ -127,7 +127,7 @@
 
 ## 6. Seed, config, and hygiene
 
-- **[MED] Port 9000 double-bind** (see §2).
+- **DONE 2026-08-22 (#61, 8ee6578): Port 9000 double-bind.** MinIO host ports remapped `9000/9001` → `9002/9003` in `docker-compose.yml`; `e2e/docker-compose.spec.ts` healthUrl/ports updated to 9002/9003; `MINIO_PORT=9002` added to `.env` (host app defaulted to 9000, i.e. the ClickHouse native protocol); `scripts/provision-minio.sh` comment updated. ClickHouse keeps its canonical host port 9000 (`clickhouse/loc-0032-ac2-docker-compose.test.ts:107` unchanged and still correct). Verified live: both containers healthy, host 9000 serves ClickHouse, 9002/9003 serve MinIO.
 - **[MED] Compose secrets inline** (LOC-0056 AC4) — `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`, full `DATABASE_URL` hardcoded; no `${VAR}` interpolation.
 - **[MED] Seed passwords are placeholders** — `$2b$10$placeholder_...` while comments document `AdminTestPass123!`; documented credentials cannot authenticate. Seed also targets the dead schema and self-labels "LOC-0058".
 - **[MED] CI coverage** (LOC-0055 AC3) — no tarpaulin/llvm-cov/gcovr in either workflow.
@@ -181,7 +181,6 @@ Status as of 2026-08-21 — owner ruling 2026-08-20: "yes all of those will need
 | Facebook scraper login handling (LOC-0063 AC5) | #58 |
 | Search autocomplete + URL filter write-back | #59 |
 | Active Jobs tab: pending visibility, 5s polling, Review Results nav (LOC-0072) | #60 |
-| Port 9000 collision in compose (ClickHouse vs MinIO) | #61 |
 | `moderateReview` mutation + NATS `verification.approved/rejected` events | #62 |
 | Auth/role checks on admin surface routes | #63 |
 | Dead/orphan routes cleanup + gate business-importer + dead migration columns | #64 |
