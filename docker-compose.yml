@@ -73,11 +73,16 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: black-owned-nats
+    # WebSocket transport on 8081 so the browser chat client (nats.ws) can
+    # subscribe to live chat/notification subjects (see nats/nats.conf).
+    command: ["nats-server", "-c", "/config/nats.conf"]
     ports:
       - "4222:4222"
       - "8222:8222"
+      - "8081:8081"
     volumes:
       - nats-data:/data
+      - ./nats/nats.conf:/config/nats.conf:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
       interval: 10s

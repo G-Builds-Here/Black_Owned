@@ -80,6 +80,7 @@ function ChatPageInner() {
   const queueRef = useRef<QueuedMessage[]>([]);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const flushRef = useRef<() => void>(() => {});
+  const activeIdRef = useRef<string | null>(null);
 
   // Session gate + list load + NATS connect (once).
   useEffect(() => {
@@ -153,6 +154,7 @@ function ChatPageInner() {
 
   // Thread load + mark-read when the active conversation changes.
   useEffect(() => {
+    activeIdRef.current = activeId ?? null;
     if (!activeId) {
       setMessages([]);
       return;
@@ -241,7 +243,14 @@ function ChatPageInner() {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === payload.conversationId
-          ? { ...c, lastMessage: payload.body ?? c.lastMessage, lastMessageAt: payload.createdAt ?? c.lastMessageAt }
+          ? {
+              ...c,
+              lastMessage: payload.body ?? c.lastMessage,
+              lastMessageAt: payload.createdAt ?? c.lastMessageAt,
+              // the open thread reads as it happens (the thread subscription
+              // keeps its badge at 0); every other conversation gains a read
+              unreadCount: c.id === activeIdRef.current ? c.unreadCount : c.unreadCount + 1,
+            }
           : c
       )
     );

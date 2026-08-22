@@ -20,6 +20,14 @@ let connection: NatsConnection | null = null;
 let online = false;
 const listeners = new Set<StatusListener>();
 
+/**
+ * Subject -> handlers registered via subscribeChat. Kept independently of
+ * the live connection so that subscriptions created before the socket is
+ * up (or after a close) are established the moment a connection exists.
+ */
+const subjectHandlers = new Map<string, Set<(payload: unknown) => void>>();
+const activeSubjects = new Map<string, Subscription>();
+
 function setOnline(value: boolean) {
   if (value === online) return;
   online = value;
@@ -46,6 +54,10 @@ export async function connectChatNats(): Promise<boolean> {
     return false;
   }
   setOnline(true);
+  // Establish any subjects registered before the socket was up.
+  for (const subject of subjectHandlers.keys()) {
+    ensureSubject(subject);
+  }
   (async () => {
     for await (const status of connection!.status()) {
       if (status.type === Events.Disconnect) {
@@ -75,29 +87,60 @@ export function onConnectionChange(listener: StatusListener): () => void {
   };
 }
 
+/** Fan out a decoded payload to every handler registered on a subject. */
+function deliver(subject: string, payload: unknown): void {
+  const handlers = subjectHandlers.get(subject);
+  if (!handlers) return;
+  handlers.forEach((handler) => {
+    try {
+      handler(payload);
+    } catch {
+      // one handler's error must not break the others
+    }
+  });
+}
+
 /**
- * Subscribe to a subject with a JSON callback. Returns an unsubscribe
- * function; a no-op when the socket is not connected.
+ * Open the real NATS subscription for a subject, once per subject.
+ * No-op when the socket is not connected yet — connectChatNats() re-runs
+ * this for every registered subject once the socket is up, and the
+ * nats client re-sends its subscriptions automatically on reconnect.
+ */
+function ensureSubject(subject: string): void {
+  if (!connection || connection.isClosed()) return;
+  if (activeSubjects.has(subject)) return;
+  const sub: Subscription = connection.subscribe(subject);
+  activeSubjects.set(subject, sub);
+  (async () => {
+    for await (const msg of sub) {
+      try {
+        deliver(subject, JSON.parse(msg.string()));
+      } catch {
+        // ignore malformed payloads
+      }
+    }
+  })().catch(() => activeSubjects.delete(subject));
+}
+
+/**
+ * Subscribe to a subject with a JSON callback. The handler stays registered
+ * even before the socket connects — it is wired up as soon as a connection
+ * exists. Returns an unsubscribe function.
  */
 export function subscribeChat(
   subject: string,
   onMessage: (payload: unknown) => void
 ): () => void {
-  if (!connection || connection.isClosed()) {
-    return () => {};
+  let handlers = subjectHandlers.get(subject);
+  if (!handlers) {
+    handlers = new Set();
+    subjectHandlers.set(subject, handlers);
   }
-  const sub: Subscription = connection.subscribe(subject);
-  (async () => {
-    for await (const msg of sub) {
-      try {
-        onMessage(JSON.parse(msg.string()));
-      } catch {
-        // ignore malformed payloads
-      }
-    }
-  })().catch(() => {});
+  handlers.add(onMessage);
+  ensureSubject(subject);
   return () => {
-    sub.unsubscribe();
+    handlers!.delete(onMessage);
+    if (handlers!.size === 0) subjectHandlers.delete(subject);
   };
 }
 
@@ -107,5 +150,6 @@ export async function closeChatNats(): Promise<void> {
     await connection.close();
     connection = null;
   }
+  activeSubjects.clear();
   setOnline(false);
 }

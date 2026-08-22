@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { ChatButton } from './ChatButton';
 
 export interface Business {
   id: string;
@@ -155,13 +156,7 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
             >
               ← Back to Directory
             </a>
-            {business.verified && (
-              <button
-                className="inline-flex items-center justify-center px-4 py-2 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors font-medium"
-              >
-                Contact Business
-              </button>
-            )}
+            <ChatButton businessId={business.id} />
           </div>
         </div>
       </div>

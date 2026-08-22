@@ -6,6 +6,27 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BusinessDetail, Business } from './BusinessDetail';
 
+const mockRouter = { push: jest.fn(), replace: jest.fn() };
+jest.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+}));
+
+const mockGetSession = jest.fn();
+jest.mock('@/lib/auth/client-session', () => ({
+  getSession: () => mockGetSession(),
+  authHeaders: () => ({ Authorization: 'Bearer access' }),
+  clearSession: jest.fn(),
+}));
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockGetSession.mockReturnValue({
+    accessToken: 'access',
+    refreshToken: 'refresh',
+    user: { id: 'u-1', email: 'user@example.com', name: 'User' },
+  });
+});
+
 const mockBusiness: Business = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   name: 'Soul Food Kitchen',
@@ -172,19 +193,7 @@ describe('BusinessDetail', () => {
       expect(backLink).toHaveAttribute('href', '/directory');
     });
 
-    it('shows contact button for verified businesses', () => {
-      render(
-        <BusinessDetail
-          business={mockBusiness}
-          loading={false}
-          error={null}
-        />
-      );
-
-      expect(screen.getByRole('button', { name: /contact business/i })).toBeInTheDocument();
-    });
-
-    it('does not show contact button for unverified businesses', () => {
+    it('shows chat button for signed-in users (verification is not required)', () => {
       const unverifiedBusiness: Business = {
         ...mockBusiness,
         verified: false,
@@ -198,7 +207,21 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.queryByRole('button', { name: /contact business/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument();
+    });
+
+    it('does not show chat button for signed-out visitors', () => {
+      mockGetSession.mockReturnValue(null);
+
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: /chat/i })).not.toBeInTheDocument();
     });
 
     it('displays status as verified or unverified', () => {

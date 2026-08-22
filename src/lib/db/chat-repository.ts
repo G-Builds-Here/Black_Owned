@@ -87,7 +87,7 @@ export async function listConversationsForUser(
             AND m2.is_read = FALSE
           GROUP BY m2.conversation_id
        ) u ON u.conversation_id = c.id
-      WHERE c.user_id = $1
+      WHERE c.user_id = $1 OR b.owner_id = $1
       ORDER BY COALESCE(lm.created_at, c.created_at) DESC`,
     [userId]
   );
@@ -228,8 +228,10 @@ export async function addMessage(
   params: { conversationId: string; businessId: string; senderUserId: string; body: string }
 ): Promise<MessageRow> {
   const result = await client.query(
+    // Unread until the other party opens the thread (markConversationRead
+    // flips it); the sender's own unread count excludes their messages.
     `INSERT INTO ${messageTable()} (conversation_id, business_id, sender_user_id, body, is_read)
-     VALUES ($1, $2, $3, $4, TRUE)
+     VALUES ($1, $2, $3, $4, FALSE)
      RETURNING id, sender_user_id, body, is_read, created_at`,
     [params.conversationId, params.businessId, params.senderUserId, params.body]
   );
