@@ -48,7 +48,7 @@ interface PendingRow {
   id: string;
   name: string;
   description: string | null;
-  category_id: string;
+  category: string;
   source: string;
   source_data: Record<string, unknown> | null;
   created_at: Date | string;
@@ -58,7 +58,7 @@ interface CanonicalRow {
   id: string;
   name: string;
   description: string | null;
-  category_id: string;
+  category: string;
   verification_status: string;
   created_at: Date | string;
 }
@@ -75,15 +75,23 @@ export async function fetchDirectoryItems(
 ): Promise<DirectoryBusiness[]> {
   const schema = process.env.POSTGRES_SCHEMA;
   const tableName = schema ? `${schema}.businesses` : "businesses";
+  const categoryTable = schema ? `${schema}.categories` : "categories";
 
+  // category_id is stored as the category UUID (text); resolve the display
+  // name via the categories table, falling back to the raw id.
   const [pendingResult, canonicalResult] = await Promise.all([
     client.query(
-      `SELECT id, name, description, category_id, source, source_data, created_at
-       FROM pending_import_businesses WHERE status = 'approved'`
+      `SELECT p.id, p.name, p.description, COALESCE(c.name, p.category_id) AS category,
+              p.source, p.source_data, p.created_at
+       FROM pending_import_businesses p
+       LEFT JOIN ${categoryTable} c ON c.id::text = p.category_id
+       WHERE p.status = 'approved'`
     ),
     client.query(
-      `SELECT id, name, description, category_id, verification_status, created_at
-       FROM ${tableName}`
+      `SELECT b.id, b.name, b.description, COALESCE(c.name, b.category_id) AS category,
+              b.verification_status, b.created_at
+       FROM ${tableName} b
+       LEFT JOIN ${categoryTable} c ON c.id::text = b.category_id`
     ),
   ]);
 
@@ -92,7 +100,7 @@ export async function fetchDirectoryItems(
     return {
       id: row.id,
       name: row.name,
-      category: row.category_id,
+      category: row.category,
       rating: typeof sd.rating === "number" ? sd.rating : null,
       reviewCount: typeof sd.reviewCount === "number" ? sd.reviewCount : null,
       location: typeof sd.address === "string" ? sd.address : "",
@@ -108,7 +116,7 @@ export async function fetchDirectoryItems(
   const canonicalItems: DirectoryBusiness[] = (canonicalResult.rows as CanonicalRow[]).map((row) => ({
     id: row.id,
     name: row.name,
-    category: row.category_id,
+    category: row.category,
     rating: null,
     reviewCount: null,
     location: "",

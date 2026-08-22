@@ -31,85 +31,7 @@ import {
 import { findScrapedBusinessById } from "../db/scraped-business-repository";
 import { getPool } from "../db/user-repository";
 import { Business } from "../../types/business";
-import { createGoogleMapsScraper } from "../../services/google-maps-scraper";
-
-/**
- * Mock business data for search
- */
-const MOCK_BUSINESSES = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-  {
-    id: '4',
-    name: 'Heritage Wellness Center',
-    category: 'Health & Wellness',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Chicago, IL',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
-    tags: ['Wellness', 'Massage', 'Holistic'],
-  },
-  {
-    id: '5',
-    name: 'Golden Era Barbershop',
-    category: 'Personal Services',
-    rating: 4.7,
-    reviewCount: 312,
-    location: 'Houston, TX',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
-    tags: ['Barber', 'Grooming', 'Community'],
-  },
-  {
-    id: '6',
-    name: 'Rhythm & Blues Records',
-    category: 'Entertainment',
-    rating: 4.6,
-    reviewCount: 78,
-    location: 'New Orleans, LA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
-    tags: ['Music', 'Vinyl', 'Audio'],
-  },
-];
+import { fetchDirectoryItems, type DirectoryBusiness } from "@/app/api/directory/route";
 
 /**
  * Convert User record to GraphQL User type
@@ -337,10 +259,45 @@ export async function business(
 }
 
 /**
+ * Shape of a business as returned by the public search resolver
+ * (mirrors the GraphQL `Business` type).
+ */
+export interface SearchBusiness {
+  id: string;
+  name: string;
+  category: string;
+  rating: number;
+  reviewCount: number;
+  location: string;
+  isVerified: boolean;
+  imageUrl: string;
+  description: string;
+  tags: string[];
+}
+
+/**
+ * Map a real directory item to the search business shape
+ */
+export function toSearchBusiness(item: DirectoryBusiness): SearchBusiness {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    rating: item.rating ?? 0,
+    reviewCount: item.reviewCount ?? 0,
+    location: item.location || "",
+    isVerified: item.isVerified,
+    imageUrl: "",
+    description: item.description ?? "",
+    tags: [],
+  };
+}
+
+/**
  * Calculate relevance score for a business based on query match
  * Higher scores for matches in more prominent fields (name > description > category/location > tags)
  */
-function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: string): number {
+function calculateRelevanceScore(business: SearchBusiness, query: string): number {
   if (!query) return 0;
 
   const normalizedQuery = query.toLowerCase();
@@ -456,24 +413,15 @@ export async function updateBusiness(
 }
 
 /**
- * Convert scraped business to internal format
- */
-function scrapedBusinessToInternal(scraped: typeof MOCK_BUSINESSES[0]): typeof MOCK_BUSINESSES[0] {
-  return {
-    ...scraped,
-    id: scraped.id || `scraped-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-  };
-}
-
-/**
- * Search businesses resolver with pagination, relevance ranking, and caching
- * Uses Google Maps scraper for live search results
+ * Search businesses resolver with pagination, relevance ranking, and caching.
+ * Backed by the real public directory data (approved pending businesses +
+ * canonical businesses) — the same source /api/directory serves.
  */
 export async function searchBusinesses(
   _parent: unknown,
   args: { query: string; page?: number; pageSize?: number }
 ): Promise<{
-  businesses: unknown[];
+  businesses: SearchBusiness[];
   total: number;
   page: number;
   pageSize: number;
@@ -486,7 +434,7 @@ export async function searchBusinesses(
   const cached = await getCachedResponse("searchBusinesses", { query, page, pageSize });
   if (cached) {
     return cached as {
-      businesses: unknown[];
+      businesses: SearchBusiness[];
       total: number;
       page: number;
       pageSize: number;
@@ -495,86 +443,42 @@ export async function searchBusinesses(
     };
   }
 
-  const normalizedQuery = query.toLowerCase().trim();
+  const normalizedQuery = (query ?? "").toLowerCase().trim();
 
-  // If query is empty, return all businesses with no ranking
-  if (!normalizedQuery) {
-    const total = MOCK_BUSINESSES.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = MOCK_BUSINESSES.slice(startIndex, endIndex);
-
-    // Calculate facets for all businesses
-    const categoryCounts: Record<string, number> = {};
-    for (const business of MOCK_BUSINESSES) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-    }
-    const facets = Object.entries(categoryCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const result = {
-      businesses: paginatedBusinesses,
-      total,
-      page,
-      pageSize,
-      totalPages,
-      facets,
-    };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
-  }
+  const pool = getPool();
+  const client = await pool.connect();
 
   try {
-    // Use Google Maps scraper for live search
-    const scraper = createGoogleMapsScraper();
+    // Real directory data: approved pending businesses + canonical businesses
+    const items = await fetchDirectoryItems(client);
+    const all = items.map(toSearchBusiness);
 
-    const scrapedResult = await scraper.scrape(normalizedQuery, "");
+    // Empty query: return all businesses (directory order)
+    // Non-empty query: rank by relevance, drop zero-score rows
+    const ranked = !normalizedQuery
+      ? all
+      : all
+          .map((business) => ({
+            business,
+            score: calculateRelevanceScore(business, normalizedQuery),
+          }))
+          .filter((item) => item.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map((item) => item.business);
 
-    const scrapedBusinesses = scrapedResult.businesses.map((scraped, index) => ({
-      id: `scraped-${index}-${Date.now()}`,
-      name: scraped.name,
-      category: "Professional Services",
-      rating: scraped.rating ?? 0,
-      reviewCount: scraped.reviewCount ?? 0,
-      location: scraped.address,
-      isVerified: true,
-      imageUrl: "",
-      description: scraped.website ? `Verified business. Website: ${scraped.website}` : "Verified business",
-      tags: [],
-    }));
-
-    // Convert scraped businesses to internal format
-    const formattedBusinesses = scrapedBusinesses.map((scraped, index) => ({
-      id: `scraped-${index}-${Date.now()}`,
-      name: scraped.name,
-      category: scraped.category,
-      rating: scraped.rating,
-      reviewCount: scraped.reviewCount,
-      location: scraped.location,
-      isVerified: true, // Scraped businesses are from Google Maps
-      imageUrl: scraped.imageUrl,
-      description: scraped.description,
-      tags: scraped.tags,
-    }));
-
-    // Calculate facets from scraped results
     const categoryCounts: Record<string, number> = {};
-    for (const business of formattedBusinesses) {
+    for (const business of ranked) {
       categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
     }
     const facets = Object.entries(categoryCounts)
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
-    // Paginate results
-    const total = formattedBusinesses.length;
+    const total = ranked.length;
     const totalPages = Math.ceil(total / pageSize) || 0;
     const startIndex = (page - 1) * pageSize;
     const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = formattedBusinesses.slice(startIndex, endIndex);
+    const paginatedBusinesses = ranked.slice(startIndex, endIndex);
 
     const result = {
       businesses: paginatedBusinesses,
@@ -587,45 +491,8 @@ export async function searchBusinesses(
 
     await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
     return result;
-  } catch (error) {
-    console.error("Google Maps scraper failed, falling back to mock data:", error);
-
-    // Fallback to mock data if scraper fails
-    const scoredBusinesses = MOCK_BUSINESSES
-      .map((business) => ({
-        business,
-        score: calculateRelevanceScore(business, normalizedQuery),
-      }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    const categoryCounts: Record<string, number> = {};
-    for (const { business } of scoredBusinesses) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-    }
-    const facets = Object.entries(categoryCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const total = scoredBusinesses.length;
-    const totalPages = Math.ceil(total / pageSize) || 0;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = scoredBusinesses
-      .slice(startIndex, endIndex)
-      .map((item) => item.business);
-
-    const result = {
-      businesses: paginatedBusinesses,
-      total,
-      page,
-      pageSize,
-      totalPages,
-      facets,
-    };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
+  } finally {
+    client.release();
   }
 }
 

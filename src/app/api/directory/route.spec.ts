@@ -20,7 +20,7 @@ const pendingRow = {
   id: "pend-1",
   name: "Soul Kitchen",
   description: "Approved from review",
-  category_id: "food-dining",
+  category: "Food & Dining",
   source: "yelp",
   source_data: {
     source: "yelp",
@@ -38,7 +38,7 @@ const canonicalRow = {
   id: "biz-1",
   name: "Corner Store",
   description: "Owner submitted",
-  category_id: "retail",
+  category: "Retail & Fashion",
   verification_status: "verified",
   created_at: new Date("2026-08-10T00:00:00Z"),
 };
@@ -206,7 +206,7 @@ describe("GET /api/directory", () => {
     // unverified canonical
     expect(byId["biz-2"].isVerified).toBe(false);
 
-    expect(json.data.facets.categories).toEqual(["food-dining", "retail"]);
+    expect(json.data.facets.categories).toEqual(["Food & Dining", "Retail & Fashion"]);
     expect(json.data.facets.locations).toEqual(["Harlem, NY"]);
   });
 

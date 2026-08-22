@@ -32,9 +32,6 @@ module.exports = {
     "src/lib/db/user-management-repository\\.spec\\.ts$",
     "src/qa/scraper-e2e\\.spec\\.ts$",
     "src/services/scraper-job-executor\\.spec\\.ts$",
-    // Valkey/Redis-bound — searchBusinesses drives the live scraper and writes
-    // through a real getValkey() cache (real OOM responses + an open handle):
-    "src/lib/graphql/search-resolvers\\.spec\\.ts$",
     // Orphaned spec — no env/DB dependency. It imports BusinessReviewPage
     // from ./page, but src/app/admin/reviews/ holds only this spec (no page
     // component exists yet; the API route /api/admin/reviews/job/[jobId] does).

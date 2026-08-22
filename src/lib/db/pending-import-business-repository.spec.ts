@@ -297,6 +297,10 @@ describe("Pending Import Business Repository", () => {
       try {
         await client.query("BEGIN");
 
+        // Real rows may already exist in the shared dev database; assert
+        // relative to the pre-insert baseline instead of an absolute count.
+        const baseline = await countByStatus(client, "pending_review");
+
         await insertPendingBusiness(client, {
           name: "Pending Business 1",
           description: "Test 1",
@@ -315,7 +319,7 @@ describe("Pending Import Business Repository", () => {
 
         const results = await findPendingByStatus(client, "pending_review");
 
-        expect(results.length).toBe(2);
+        expect(results.length).toBe(baseline + 2);
         expect(results[0].status).toBe("pending_review");
         expect(results[1].status).toBe("pending_review");
 
@@ -346,6 +350,10 @@ describe("Pending Import Business Repository", () => {
       try {
         await client.query("BEGIN");
 
+        // Real rows may already exist in the shared dev database; assert
+        // relative to the pre-insert baseline instead of an absolute count.
+        const baseline = await countByStatus(client, "pending_review");
+
         await insertPendingBusiness(client, {
           name: "Count Test 1",
           description: "Test",
@@ -363,7 +371,7 @@ describe("Pending Import Business Repository", () => {
         });
 
         const count = await countByStatus(client, "pending_review");
-        expect(count).toBe(2);
+        expect(count).toBe(baseline + 2);
 
         await client.query("ROLLBACK");
       } finally {
