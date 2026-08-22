@@ -74,21 +74,6 @@ export async function findScrapeJobById(
 }
 
 /**
- * Delete a scrape job by ID, returning the deleted row (or undefined if absent)
- */
-export async function deleteScrapeJob(
-  client: PoolClient,
-  id: string
-): Promise<ScrapeJob | undefined> {
-  const tableName = getTableName();
-  const result = await client.query<ScrapeJob>(
-    `DELETE FROM ${tableName} WHERE id = $1 RETURNING *`,
-    [id]
-  );
-  return result.rows[0] ? rowToScrapeJob(result.rows[0]) : undefined;
-}
-
-/**
  * Update scrape job status. Terminal states (completed, failed, cancelled)
  * are final: any update to a job already in a terminal state is a no-op and
  * this function returns undefined, so a cancelled job can never be
