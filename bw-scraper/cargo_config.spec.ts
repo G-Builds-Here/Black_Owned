@@ -179,12 +179,12 @@ describe('Cargo Configuration', () => {
 
     it('should define api feature with axum dependency', () => {
       const features = scraperCargo.features as Record<string, unknown>;
-      expect(features.api).toEqual(['axum']);
+      expect(features.api).toEqual(['axum', 'tokio/net']);
     });
 
-    it('should set default features to include both scraper and api', () => {
+    it('should set default features to include scraper, api, and importer', () => {
       const features = scraperCargo.features as Record<string, unknown>;
-      expect(features.default).toEqual(['scraper', 'api']);
+      expect(features.default).toEqual(['scraper', 'api', 'importer']);
     });
 
     it('should mark axum as optional dependency', () => {

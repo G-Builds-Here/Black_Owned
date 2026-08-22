@@ -6,7 +6,7 @@
 node_modules
 .next
 package*.json
-*.lock
+package-lock.json
 npm-debug.log
 
 # IDE
@@ -17,7 +17,6 @@ npm-debug.log
 
 # Build artifacts
 target/
-Cargo.lock
 
 # Test and coverage
 coverage/

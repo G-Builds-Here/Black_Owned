@@ -6,7 +6,7 @@ use anyhow::Result;
 use tracing::info;
 
 /// Health check result
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct HealthStatus {
     pub service: String,
@@ -54,7 +54,13 @@ pub async fn check_nats(nats_url: &str) -> Result<HealthStatus> {
 
 /// Check Redis connection
 pub fn check_redis(redis_url: &str) -> Result<HealthStatus> {
-    match redis::Client::open(redis_url) {
+    // redis-rs only accepts the redis(s):// schemes; valkey:// is the same
+    // RESP protocol, so normalize before parsing.
+    let url = redis_url
+        .strip_prefix("valkey://")
+        .map(|rest| format!("redis://{rest}"))
+        .unwrap_or_else(|| redis_url.to_string());
+    match redis::Client::open(url.as_str()) {
         Ok(_client) => {
             info!("Redis client created successfully");
             Ok(HealthStatus {

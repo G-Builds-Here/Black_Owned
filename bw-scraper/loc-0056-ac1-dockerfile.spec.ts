@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 describe('LOC-0056-AC1 Dockerfile Validation', () => {
-  const dockerfilePath = path.join(__dirname, 'Dockerfile');
+  const dockerfilePath = path.join(__dirname, '..', 'Dockerfile');
   let dockerfileContent: string;
 
   beforeAll(() => {

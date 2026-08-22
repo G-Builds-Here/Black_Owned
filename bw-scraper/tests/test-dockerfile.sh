@@ -5,7 +5,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# bw-scraper/tests -> bw-scraper -> repo root (the Docker build context is the
+# Cargo workspace, so the tested Dockerfile is the root one).
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 DOCKERFILE="$PROJECT_ROOT/Dockerfile"
 IMAGE_NAME="bw-scraper-test"
 MAX_IMAGE_SIZE_MB=200

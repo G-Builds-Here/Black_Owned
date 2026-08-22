@@ -28,7 +28,7 @@ const SERVICES = [
   },
   {
     name: 'black-owned-nats',
-    healthCommand: 'nats-server -sl ping localhost:4222',
+    healthCommand: 'wget -qO- http://localhost:8222/healthz',
     ports: [4222, 8222]
   },
   {

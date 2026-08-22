@@ -1,47 +1,40 @@
-//! Configuration module for bw-scraper
+//! Environment-driven configuration for bw-scraper.
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
 
-/// Application configuration loaded from environment variables
-#[derive(Debug, Clone, Deserialize)]
+/// User-provided SearXNG metasearch instance.
+pub const DEFAULT_SEARXNG_URL: &str = "http://192.168.68.50:8888";
+
+#[derive(Debug, Clone)]
 pub struct Config {
-    /// PostgreSQL connection string
     pub database_url: String,
-    /// NATS server URL
-    pub nats_url: String,
-    /// Redis connection string
-    pub redis_url: String,
-    /// ClickHouse server URL
-    pub clickhouse_url: String,
-    /// Log level (debug, info, warn, error)
-    #[serde(default = "default_log_level")]
+    pub searxng_url: String,
+    pub host: String,
+    pub port: u16,
+    pub nats_url: Option<String>,
+    pub redis_url: Option<String>,
+    pub clickhouse_url: Option<String>,
     pub log_level: String,
 }
 
-fn default_log_level() -> String {
-    "info".to_string()
-}
-
 impl Config {
-    /// Load configuration from environment variables
+    /// Read configuration from the environment. Only `DATABASE_URL` is
+    /// required; optional services degrade out of the health report.
     pub fn from_env() -> Result<Self> {
-        let database_url = std::env::var("DATABASE_URL")
-            .context("DATABASE_URL environment variable not set")?;
-        let nats_url = std::env::var("NATS_URL")
-            .context("NATS_URL environment variable not set")?;
-        let redis_url = std::env::var("REDIS_URL")
-            .context("REDIS_URL environment variable not set")?;
-        let clickhouse_url = std::env::var("CLICKHOUSE_URL")
-            .context("CLICKHOUSE_URL environment variable not set")?;
-        let log_level = std::env::var("LOG_LEVEL").unwrap_or_else(|_| default_log_level());
-
         Ok(Self {
-            database_url,
-            nats_url,
-            redis_url,
-            clickhouse_url,
-            log_level,
+            database_url: std::env::var("DATABASE_URL")
+                .context("DATABASE_URL must be set")?,
+            searxng_url: std::env::var("SEARXNG_URL")
+                .unwrap_or_else(|_| DEFAULT_SEARXNG_URL.to_string()),
+            host: std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
+            port: std::env::var("PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(8080),
+            nats_url: std::env::var("NATS_URL").ok(),
+            redis_url: std::env::var("REDIS_URL").ok(),
+            clickhouse_url: std::env::var("CLICKHOUSE_URL").ok(),
+            log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
         })
     }
 }
