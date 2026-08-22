@@ -305,9 +305,6 @@ export default function BusinessReviewPage() {
                 ]}
                 position="bottom-end"
               />
-              <Button variant="secondary" size="sm">
-                Export List
-              </Button>
               <Button
                 variant="primary"
                 size="sm"
