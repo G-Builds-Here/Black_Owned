@@ -175,6 +175,24 @@ export async function updateNameById(
 }
 
 /**
+ * Update business description by ID (owner verification).
+ * `description: null` clears the description.
+ */
+export async function updateDescriptionById(
+  client: PoolClient,
+  id: string,
+  description: string | null,
+  ownerId: string
+): Promise<Business | undefined> {
+  const tableName = getTableName();
+  const result = await client.query<Business>(
+    `UPDATE ${tableName} SET description = $1, updated_at = NOW() WHERE id = $2 AND owner_id = $3 RETURNING *`,
+    [description, id, ownerId]
+  );
+  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+}
+
+/**
  * Find all business names (dedup candidate pool for the import route).
  * The live businesses table carries no address/phone columns, so name only.
  */
