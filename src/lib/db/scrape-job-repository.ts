@@ -122,20 +122,21 @@ export async function updateScrapeJobStatus(
 }
 
 /**
- * Find all scrape jobs with optional status filter
+ * Find all scrape jobs with optional status filter (single status or list)
  */
 export async function findScrapeJobs(
   client: PoolClient,
-  status?: ScrapeJobStatus,
+  status?: ScrapeJobStatus | ScrapeJobStatus[],
   limit?: number
 ): Promise<ScrapeJob[]> {
   const tableName = getTableName();
+  const statuses = status ? (Array.isArray(status) ? status : [status]) : undefined;
 
-  if (status) {
+  if (statuses && statuses.length > 0) {
     const whereClause = limit
-      ? `WHERE status = $1 ORDER BY created_at DESC LIMIT $2`
-      : `WHERE status = $1 ORDER BY created_at DESC`;
-    const params = limit ? [status, limit] : [status];
+      ? `WHERE status = ANY($1) ORDER BY created_at DESC LIMIT $2`
+      : `WHERE status = ANY($1) ORDER BY created_at DESC`;
+    const params = limit ? [statuses, limit] : [statuses];
 
     const result = await client.query<ScrapeJob>(
       `SELECT * FROM ${tableName} ${whereClause}`,

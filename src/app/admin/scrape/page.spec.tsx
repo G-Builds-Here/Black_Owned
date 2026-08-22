@@ -212,7 +212,7 @@ describe('ScrapeJobPage', () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/scrape-jobs?status=running',
+        '/api/scrape-jobs?status=pending,running',
         expect.objectContaining({ headers: {} })
       );
     });
@@ -236,7 +236,7 @@ describe('ScrapeJobPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: /active jobs/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/no active jobs at the moment/i)).toBeInTheDocument();
+      expect(screen.getByText(/no pending or running jobs at the moment/i)).toBeInTheDocument();
     });
   });
 
@@ -260,7 +260,7 @@ describe('ScrapeJobPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/no active jobs at the moment/i)).toBeInTheDocument();
+      expect(screen.getByText(/no pending or running jobs at the moment/i)).toBeInTheDocument();
     });
   });
 
@@ -276,7 +276,7 @@ describe('ScrapeJobPage', () => {
 
     // Wait for the first fetch to fully settle so the Refresh button is enabled
     await waitFor(() => {
-      expect(screen.getByText(/no active jobs at the moment/i)).toBeInTheDocument();
+      expect(screen.getByText(/no pending or running jobs at the moment/i)).toBeInTheDocument();
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
@@ -285,5 +285,24 @@ describe('ScrapeJobPage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('navigates to the review results page from the Active Jobs tab', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: [] }),
+    });
+
+    render(<ScrapeJobPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /active jobs/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/no pending or running jobs at the moment/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /review results/i }));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/admin/reviews');
   });
 });

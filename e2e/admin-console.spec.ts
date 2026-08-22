@@ -12,6 +12,7 @@ import {
   BASE_URL,
   type E2ESession,
   E2E_PASSWORD,
+  RUN_SUFFIX,
   loginUser,
   newSession,
   psql,
@@ -28,7 +29,7 @@ beforeAll(async () => {
   admin = await newSession('e2e-admin-console');
   promoteAdmin(admin.email);
   admin = await loginUser(admin.email, E2E_PASSWORD);
-  await warmRoutes(['/admin', '/admin/users', '/admin/scrape']);
+  await warmRoutes(['/admin', '/admin/users', '/admin/scrape', '/admin/reviews']);
 }, 120_000);
 
 afterAll(() => {
@@ -69,4 +70,33 @@ test('scraping console renders with job creation and active jobs', async ({ page
   await expect(page.getByRole('heading', { name: 'Scraping Console' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Create New Scrape Job' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Active Scrape Jobs' })).toBeVisible();
+});
+
+test('active jobs tab shows pending and running jobs, auto-refreshes, and links to review results', async ({ page }) => {
+  const qA = `e2e-active-a-${RUN_SUFFIX}`;
+  const qB = `e2e-active-b-${RUN_SUFFIX}`;
+  const qC = `e2e-active-c-${RUN_SUFFIX}`;
+
+  psql(`INSERT INTO scrape_jobs (source, query, location, status) VALUES ('Google Maps', '${qA}', 'E2E, GA', 'pending')`);
+  psql(`INSERT INTO scrape_jobs (source, query, location, status) VALUES ('Google Maps', '${qB}', 'E2E, GA', 'running')`);
+
+  try {
+    await seedSession(page, admin);
+    await page.goto(`${BASE_URL}/admin/scrape`);
+    await page.getByRole('tab', { name: /Active Jobs/ }).click();
+
+    await expect(page.getByText(`Query: ${qA}`)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(`Query: ${qB}`)).toBeVisible();
+
+    // Polling: a pending job created while the tab is open must appear
+    // without a manual refresh (5s interval).
+    psql(`INSERT INTO scrape_jobs (source, query, location, status) VALUES ('Google Maps', '${qC}', 'E2E, GA', 'pending')`);
+    await expect(page.getByText(`Query: ${qC}`)).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Review Results' }).click();
+    await expect(page).toHaveURL(/\/admin\/reviews\/?$/);
+    await expect(page.getByRole('heading', { name: 'Business Review Queue' })).toBeVisible({ timeout: 15_000 });
+  } finally {
+    psql(`DELETE FROM scrape_jobs WHERE query IN ('${qA}', '${qB}', '${qC}')`);
+  }
 });

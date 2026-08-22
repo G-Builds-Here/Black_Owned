@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/ui/Navigation';
 import { getSession, clearSession, authHeaders } from '@/lib/auth/client-session';
@@ -28,6 +28,7 @@ export default function ScrapeJobPage() {
   const [activeJobs, setActiveJobs] = useState<ScrapeJob[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const router = useRouter();
+  const isFetchingJobsRef = useRef(false);
 
   useEffect(() => {
     const session = getSession();
@@ -99,9 +100,13 @@ export default function ScrapeJobPage() {
   };
 
   const fetchActiveJobs = async () => {
+    if (isFetchingJobsRef.current) {
+      return;
+    }
+    isFetchingJobsRef.current = true;
     setIsLoadingJobs(true);
     try {
-      const response = await fetch('/api/scrape-jobs?status=running', {
+      const response = await fetch('/api/scrape-jobs?status=pending,running', {
         headers: authHeaders(),
       });
       if (response.status === 401) {
@@ -117,14 +122,18 @@ export default function ScrapeJobPage() {
     } catch (error) {
       console.error('Error fetching active jobs:', error);
     } finally {
+      isFetchingJobsRef.current = false;
       setIsLoadingJobs(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === 'active') {
-      fetchActiveJobs();
+    if (activeTab !== 'active') {
+      return;
     }
+    fetchActiveJobs();
+    const interval = setInterval(fetchActiveJobs, 5000);
+    return () => clearInterval(interval);
   }, [activeTab]);
 
   const getStatusBadge = (status: ScrapeJobStatus) => {
@@ -269,14 +278,23 @@ export default function ScrapeJobPage() {
           <Card variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-neutral-800">Active Scrape Jobs</h2>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={fetchActiveJobs}
-                isLoading={isLoadingJobs}
-              >
-                Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => router.push('/admin/reviews')}
+                >
+                  Review Results
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={fetchActiveJobs}
+                  isLoading={isLoadingJobs}
+                >
+                  Refresh
+                </Button>
+              </div>
             </div>
 
             {isLoadingJobs ? (
@@ -285,7 +303,7 @@ export default function ScrapeJobPage() {
               </div>
             ) : activeJobs.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-neutral-500">No active jobs at the moment</p>
+                <p className="text-neutral-500">No pending or running jobs at the moment</p>
               </div>
             ) : (
               <div className="space-y-4">

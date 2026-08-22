@@ -336,6 +336,37 @@ describe("Scrape Jobs API Route", () => {
       expect(json.data[0].status).toBe("pending");
     });
 
+    it("filters jobs by multiple comma-separated statuses", async () => {
+      findScrapeJobs.mockResolvedValueOnce([]);
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs?status=pending,running");
+      const response = await GET(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(findScrapeJobs).toHaveBeenCalledWith(expect.anything(), ["pending", "running"]);
+    });
+
+    it.each(["bogus", "pending,bogus", "PENDING", ","])(
+      "returns 400 VALIDATION for an invalid status filter (%p)",
+      async (status) => {
+        const request = new NextRequest(
+          `http://localhost:3000/api/scrape-jobs?status=${encodeURIComponent(status)}`
+        );
+        const response = await GET(request);
+        const json = await response.json();
+
+        expect(response.status).toBe(400);
+        expect(json.success).toBe(false);
+        expect(json.error).toBe(
+          "Invalid status filter. Valid statuses: pending, running, completed, failed, cancelled"
+        );
+        expect(json.code).toBe("VALIDATION");
+        expect(findScrapeJobs).not.toHaveBeenCalled();
+      }
+    );
+
     it("returns 500 on database error", async () => {
       findScrapeJobs.mockRejectedValueOnce(new Error("Database connection failed"));
 
