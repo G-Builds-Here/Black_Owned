@@ -40,6 +40,22 @@ export async function getNatsClient(): Promise<Client> {
 }
 
 /**
+ * Publish an arbitrary JSON payload to a subject. Returns true on success,
+ * false when NATS is unreachable (callers may still have persisted the data
+ * and only the real-time hop was lost).
+ */
+export async function publishJson(subject: string, payload: unknown): Promise<boolean> {
+  try {
+    const nc = await getNatsClient();
+    await nc.publish(subject, new TextEncoder().encode(JSON.stringify(payload)));
+    return true;
+  } catch (error) {
+    console.error(`Failed to publish to NATS subject ${subject}:`, error);
+    return false;
+  }
+}
+
+/**
  * Close NATS connection
  */
 export async function closeNatsConnection(): Promise<void> {
