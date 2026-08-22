@@ -51,16 +51,47 @@ export function getPool(): Pool {
 
 
 /**
+ * Raw users row shape (Postgres snake_case columns)
+ */
+interface UserRow {
+  id: string;
+  email: string;
+  password_hash: string;
+  name: string;
+  role: UserRole;
+  status: UserStatus;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Map a raw row to the camelCase User shape. Without this, auth paths read
+ * `passwordHash`/`createdAt` off the raw row and get undefined.
+ */
+function toUser(row: UserRow): User {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    name: row.name,
+    role: row.role,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
  * Find user by email
  */
 export async function findByEmail(email: string): Promise<User | null> {
   const client = await getPool().connect();
   try {
-    const result = await client.query<User>(
+    const result = await client.query<UserRow>(
       "SELECT * FROM users WHERE email = $1",
       [email.toLowerCase()]
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? toUser(result.rows[0]) : null;
   } finally {
     client.release();
   }
@@ -72,11 +103,11 @@ export async function findByEmail(email: string): Promise<User | null> {
 export async function findById(id: string): Promise<User | null> {
   const client = await getPool().connect();
   try {
-    const result = await client.query<User>(
+    const result = await client.query<UserRow>(
       "SELECT * FROM users WHERE id = $1",
       [id]
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? toUser(result.rows[0]) : null;
   } finally {
     client.release();
   }
@@ -94,13 +125,13 @@ export async function create(
 ): Promise<User> {
   const client = await getPool().connect();
   try {
-    const result = await client.query<User>(
+    const result = await client.query<UserRow>(
       `INSERT INTO users (email, password_hash, name, role, status)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [email.toLowerCase(), passwordHash, name, role, status]
     );
-    return result.rows[0];
+    return toUser(result.rows[0]);
   } finally {
     client.release();
   }
@@ -174,10 +205,10 @@ export async function getPaginatedUsers(
       ORDER BY created_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
-    const usersResult = await client.query<User>(usersQuery, [...values, pageSize, offset]);
+    const usersResult = await client.query<UserRow>(usersQuery, [...values, pageSize, offset]);
 
     return {
-      users: usersResult.rows,
+      users: usersResult.rows.map(toUser),
       total,
       page,
       pageSize,
@@ -197,14 +228,14 @@ export async function updateUserRole(
 ): Promise<User | null> {
   const client = await getPool().connect();
   try {
-    const result = await client.query<User>(
+    const result = await client.query<UserRow>(
       `UPDATE users
        SET role = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
        RETURNING *`,
       [newRole, userId]
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? toUser(result.rows[0]) : null;
   } finally {
     client.release();
   }
