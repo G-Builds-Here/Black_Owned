@@ -7,6 +7,12 @@ export interface SearchBarProps {
   onSearch?: (query: string, filters: string[]) => void;
   categories?: string[];
   placeholder?: string;
+  /** Up to five autocomplete suggestions for the current input */
+  suggestions?: string[];
+  /** Called when the user picks a suggestion from the dropdown */
+  onSuggestionSelect?: (value: string) => void;
+  /** Called on every keystroke with the raw input value (before submit) */
+  onQueryChange?: (query: string) => void;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -26,9 +32,23 @@ export function SearchBar({
   onSearch = () => {},
   categories = DEFAULT_CATEGORIES,
   placeholder = 'Search for businesses...',
+  suggestions = [],
+  onSuggestionSelect,
+  onQueryChange,
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const hasSuggestions = showSuggestions && suggestions.length > 0;
+
+  const handleSuggestionSelect = (value: string) => {
+    setQuery(value);
+    setShowSuggestions(false);
+    if (onSuggestionSelect) {
+      onSuggestionSelect(value);
+    }
+  };
 
   const handleFilterToggle = (category: string) => {
     setSelectedFilters((prev) =>
@@ -56,12 +76,43 @@ export function SearchBar({
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowSuggestions(true);
+            if (onQueryChange) onQueryChange(e.target.value);
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setShowSuggestions(false)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           placeholder={placeholder}
           className="w-full px-6 py-4 pr-32 text-lg bg-white rounded-xl shadow-lg border-2 border-transparent focus:border-heritage-ochre focus:outline-none transition-colors"
           aria-label="Search businesses"
+          aria-expanded={hasSuggestions}
+          aria-autocomplete="list"
         />
+        {hasSuggestions && (
+          <ul
+            role="listbox"
+            aria-label="Search suggestions"
+            className="absolute left-0 right-0 top-full mt-1 z-20 bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden"
+          >
+            {suggestions.map((suggestion) => (
+              <li key={suggestion} role="option" aria-selected={false}>
+                <button
+                  type="button"
+                  // mousedown fires before the input blur, so the pick wins the race
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSuggestionSelect(suggestion);
+                  }}
+                  className="w-full text-left px-6 py-3 text-base text-neutral-700 hover:bg-neutral-100 transition-colors"
+                >
+                  {suggestion}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
           <Button
             variant="ghost"

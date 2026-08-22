@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
@@ -84,10 +84,22 @@ function sortDirectory(items: DirectoryBusiness[], sort: SortOption): DirectoryB
 
 function DirectoryContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
+  // Seed filters from the URL so shared links restore the active filters
   const [filters, setFilters] = useState<FilterOption>(() => {
+    const next: FilterOption = {};
     const category = searchParams.get('category');
-    return category ? { category } : {};
+    const location = searchParams.get('location');
+    const minRatingRaw = searchParams.get('minRating');
+    const verifiedOnly = searchParams.get('verifiedOnly');
+    if (category) next.category = category;
+    if (location) next.location = location;
+    if (minRatingRaw && !Number.isNaN(Number(minRatingRaw))) {
+      next.minRating = Number(minRatingRaw);
+    }
+    if (verifiedOnly === 'true') next.verifiedOnly = true;
+    return next;
   });
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
@@ -121,8 +133,28 @@ function DirectoryContent() {
     fetchDirectory();
   }, [fetchDirectory]);
 
+  // Write filters back to the URL so the current view is shareable and
+  // survives a reload. Uses replace (not push) so filter tweaks don't pile
+  // up history entries.
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
+
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const setOrDelete = (key: string, value: string | null) => {
+      if (value === null || value === '') {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    };
+    setOrDelete('category', newFilters.category ?? null);
+    setOrDelete('location', newFilters.location ?? null);
+    setOrDelete('minRating', newFilters.minRating ? String(newFilters.minRating) : null);
+    setOrDelete('verifiedOnly', newFilters.verifiedOnly ? 'true' : null);
+
+    const query = params.toString();
+    router.replace(query ? `/directory?${query}` : '/directory', { scroll: false });
   };
 
   const handleSortChange = (newSort: SortOption) => {
@@ -284,7 +316,7 @@ function DirectoryContent() {
                 {activeTab === 'all' && (
                   <button
                     onClick={() => {
-                      setFilters({});
+                      handleFilterChange({});
                       setSort('relevance');
                     }}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"

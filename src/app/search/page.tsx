@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
@@ -64,6 +64,8 @@ export default function SearchPage() {
   const [totalResults, setTotalResults] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const suggestRequestRef = useRef(0);
 
   // Debounce the search query
   useEffect(() => {
@@ -120,6 +122,29 @@ export default function SearchPage() {
     }
   }, [debouncedQuery, page, performSearch]);
 
+  // Fetch up to five autocomplete suggestions for the debounced query
+  useEffect(() => {
+    const term = debouncedQuery.trim();
+    if (term.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const requestId = ++suggestRequestRef.current;
+    fetch(`/api/directory/suggest?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
+      .then(async (res) => {
+        const body = await res.json();
+        if (requestId !== suggestRequestRef.current) return;
+        if (res.ok && body.success) {
+          setSuggestions(body.data.suggestions || []);
+        } else {
+          setSuggestions([]);
+        }
+      })
+      .catch(() => {
+        if (requestId === suggestRequestRef.current) setSuggestions([]);
+      });
+  }, [debouncedQuery]);
+
   const handleSearch = (searchQuery: string) => {
     setQuery(searchQuery);
   };
@@ -152,7 +177,10 @@ export default function SearchPage() {
         {/* Search Bar */}
         <SearchBar
           onSearch={handleSearch}
+          onQueryChange={handleSearch}
           placeholder="Search by name, category, or location..."
+          suggestions={suggestions}
+          onSuggestionSelect={(value) => setQuery(value)}
         />
 
         {/* Results */}
