@@ -152,7 +152,7 @@ Status as of 2026-08-21 — owner ruling 2026-08-20: "yes all of those will need
 8. **Cancel semantics** — executor checks for cancellation before each step; never overwrite `cancelled`; add `"cancelled"` to the status type. — **DONE 2026-08-21 (49a1b2e)**
 9. **Admin dashboard** — real data from the review queue + jobs, or remove the page (LOC-0044/0048). — **DONE 2026-08-21 (ecc2692)**
 10. **Auth on the admin surface** — scrape-jobs + pending-businesses + admin routes (all "when an admin…" ACs). — **PENDING (task #63)**
-11. **Ticket hygiene** — update statuses from `backlog`, de-duplicate LOC-0049, populate or remove `bugs/`. — **PENDING (task #52)**
+11. **Ticket hygiene** — update statuses from `backlog`, de-duplicate LOC-0049, populate or remove `bugs/`. — **DONE 2026-08-22:** LOC-0049 removed (byte-identical copy of LOC-0048; backed up to `~/.claude/backups/2026-08-22/`, LOC-0050's `Blocking` repointed to LOC-0048); LOC-0066/0068/0070/0071 → `done`, LOC-0067/0069/0072/0073/0075 → `active` (code exists, follow-up tasks open), LOC-0074 stays `backlog` (genuinely unbuilt, task #53); `bugs/` kept as the `.prefix`-only placeholder (no bug reports to populate). Note: LOC-0031…0065 carry the same `backlog` drift (audit verdicts: most IMPLEMENTED) — follow-up sweep recommended.
 
 ---
 
@@ -189,7 +189,6 @@ Status as of 2026-08-21 — owner ruling 2026-08-20: "yes all of those will need
 | CI coverage tooling (LOC-0055 AC3) | #66 |
 | Seed data: real password hashes + live schema | #67 |
 | README, construction docs, blueprint updated to match reality | #69 |
-| Ticket hygiene (`~/.claude/tickets`) | #52 |
 
 ### SearXNG integration note (2026-08-21)
 
