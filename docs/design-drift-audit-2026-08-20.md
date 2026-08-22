@@ -114,8 +114,7 @@
 
 - **[HIGH] Mock data served live:**
   - `/api/analytics/scrape-jobs` + `/recent` — hardcoded zeros / empty arrays
-  - `MOCK_BUSINESSES` (`src/lib/graphql/resolvers.ts:40`) backs the public search resolvers **and** the scraper-failure fallback
-  - `src/app/search/page.tsx:23` filters the same hardcoded `MOCK_BUSINESSES`
+  - ~~`MOCK_BUSINESSES` backed the public search resolvers, the scraper-failure fallback, and the search page~~ — **DONE 2026-08-22 (#57, a2965d1):** the `/search` page and GraphQL `searchBusinesses` now both use `fetchDirectoryItems` (approved pending + canonical businesses), the same real-data seam `/api/directory` serves; category UUIDs resolve to display names via a `categories` join
   - `src/app/admin/page.tsx:7` mock constants + `console.log` handlers
 - **[HIGH] `/api/jobs` is an in-memory store** — `job-repository.ts:63` "TODO: Integrate with actual database connection".
 - **[MED] Dead/orphan routes** (no client or server caller — verify before deleting): `/api/jobs`, `/api/businesses` main CRUD, `/api/businesses/export` (the reviews-page "Export List" button has no onClick), `/api/admin/scrape-jobs`, `/api/admin/reviews/job/[jobId]`, most `/api/scrape-jobs/[id]` sub-routes, `/api/scraper/*`, `/api/pending-businesses/import` (non-job variant).
@@ -177,7 +176,6 @@ Status as of 2026-08-21 — owner ruling 2026-08-20: "yes all of those will need
 | Owner dashboard + 3-step claim wizard (LOC-0043) | #55 |
 | E2E suites: approval workflow, admin console, claim wizard, chat (LOC-0053/0074) | #53 |
 | `/api/jobs` in-memory store → DB or retire | #54 |
-| Remove `MOCK_BUSINESSES` from search + graphql resolvers | #57 |
 | Facebook scraper login handling (LOC-0063 AC5) | #58 |
 | Search autocomplete + URL filter write-back | #59 |
 | Active Jobs tab: pending visibility, 5s polling, Review Results nav (LOC-0072) | #60 |
