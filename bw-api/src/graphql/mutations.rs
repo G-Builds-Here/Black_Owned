@@ -224,7 +224,7 @@ impl MutationRoot {
         .map_err(|e| Error::new(format!("Database error: {:?}", e)))?;
 
         if existing {
-            return Err(Error::new("A review for this business by this user already exists"));
+            return Err(Error::new("You have already reviewed this business"));
         }
 
         let id = Uuid::new_v4();
