@@ -210,11 +210,11 @@ describe("POST /api/pending-businesses/import", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.total).toBe(1);
-    expect(json.succeeded).toBe(1);
-    expect(json.failed).toBe(0);
-    expect(json.results[0].success).toBe(true);
-    expect(json.results[0].businessId).toBe("test-business-id");
+    expect(json.data.total).toBe(1);
+    expect(json.data.succeeded).toBe(1);
+    expect(json.data.failed).toBe(0);
+    expect(json.data.results[0].success).toBe(true);
+    expect(json.data.results[0].businessId).toBe("test-business-id");
   });
 
   it("should successfully import multiple businesses in a single transaction", async () => {
@@ -295,10 +295,10 @@ describe("POST /api/pending-businesses/import", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.total).toBe(3);
-    expect(json.succeeded).toBe(3);
-    expect(json.failed).toBe(0);
-    expect(json.results).toHaveLength(3);
+    expect(json.data.total).toBe(3);
+    expect(json.data.succeeded).toBe(3);
+    expect(json.data.failed).toBe(0);
+    expect(json.data.results).toHaveLength(3);
   });
 
   it("should handle empty batch gracefully", async () => {
@@ -327,9 +327,9 @@ describe("POST /api/pending-businesses/import", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.total).toBe(0);
-    expect(json.succeeded).toBe(0);
-    expect(json.failed).toBe(0);
+    expect(json.data.total).toBe(0);
+    expect(json.data.succeeded).toBe(0);
+    expect(json.data.failed).toBe(0);
   });
 
   it("should handle undefined description", async () => {
@@ -383,7 +383,7 @@ describe("POST /api/pending-businesses/import", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.succeeded).toBe(1);
+    expect(json.data.succeeded).toBe(1);
   });
 
   it("should record import count when jobId is provided", async () => {
@@ -449,7 +449,7 @@ describe("POST /api/pending-businesses/import", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.succeeded).toBe(2);
+    expect(json.data.succeeded).toBe(2);
 
     // Verify importNormalizedBusinesses was called with jobId
     expect(importNormalizedBusinesses).toHaveBeenCalledWith(
@@ -547,9 +547,9 @@ describe("POST /api/pending-businesses/import", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.total).toBe(50);
-    expect(json.succeeded).toBe(50);
-    expect(json.failed).toBe(0);
+    expect(json.data.total).toBe(50);
+    expect(json.data.succeeded).toBe(50);
+    expect(json.data.failed).toBe(0);
   });
 
   it("should return 400 when businesses array is empty string", async () => {
@@ -727,7 +727,7 @@ describe("POST /api/pending-businesses/import", () => {
 
       expect(response.status).toBe(200);
       expect(json.success).toBe(true);
-      expect(json.succeeded).toBe(1);
+      expect(json.data.succeeded).toBe(1);
     });
 
     it("should log warnings when business data has warnings but passes validation", async () => {

@@ -113,13 +113,15 @@ export async function POST(
       if (scraped.length === 0) {
         return NextResponse.json({
           success: true,
-          jobId,
-          total: 0,
-          imported: 0,
-          skipped: 0,
-          duplicates: [],
-          results: [],
-          errors: [],
+          data: {
+            jobId,
+            total: 0,
+            imported: 0,
+            skipped: 0,
+            duplicates: [],
+            results: [],
+            errors: [],
+          },
         });
       }
 
@@ -230,13 +232,15 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        jobId,
-        total: result.total,
-        imported: result.succeeded,
-        skipped,
-        duplicates,
-        results: result.results,
-        errors: result.errors,
+        data: {
+          jobId,
+          total: result.total,
+          imported: result.succeeded,
+          skipped,
+          duplicates,
+          results: result.results,
+          errors: result.errors,
+        },
       });
     } finally {
       client.release();

@@ -84,7 +84,7 @@ describe('Recent Scrape Jobs API', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(Array.isArray(data)).toBe(true);
     expect(data).toEqual([]);
@@ -148,7 +148,7 @@ describe('Recent Scrape Jobs API', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('application/json');
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data).toEqual([
       {
@@ -186,7 +186,7 @@ describe('Recent Scrape Jobs API', () => {
     });
 
     const response = await GET(createRequest());
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data[0].businessCount).toBeNull();
     expect(data[0].status).toBe('pending');

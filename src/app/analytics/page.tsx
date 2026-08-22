@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, Badge, Navigation } from '@/components/ui';
+import { authHeaders } from '@/lib/auth/client-session';
 
 interface ScrapeJobStats {
   totalJobs: number;
@@ -41,10 +42,13 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/analytics/scrape-jobs?days=${periodDays}`);
+      const response = await fetch(`/api/analytics/scrape-jobs?days=${periodDays}`, {
+        headers: authHeaders(),
+      });
+      if (response.status === 401) throw new Error('Authentication required');
       if (!response.ok) throw new Error('Failed to fetch stats');
-      const data = await response.json();
-      setStats(data);
+      const body = await response.json();
+      setStats(body.data ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -54,10 +58,13 @@ export default function AnalyticsPage() {
 
   const fetchRecentJobs = async () => {
     try {
-      const response = await fetch('/api/analytics/scrape-jobs/recent?limit=10');
+      const response = await fetch('/api/analytics/scrape-jobs/recent?limit=10', {
+        headers: authHeaders(),
+      });
+      if (response.status === 401) throw new Error('Authentication required');
       if (!response.ok) throw new Error('Failed to fetch recent jobs');
-      const data = await response.json();
-      setRecentJobs(data);
+      const body = await response.json();
+      setRecentJobs(Array.isArray(body?.data) ? body.data : []);
     } catch (err) {
       console.error('Failed to fetch recent jobs:', err);
     }

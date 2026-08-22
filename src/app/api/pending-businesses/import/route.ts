@@ -191,6 +191,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
+        error: "Invalid JSON in request body",
         errors: [{ field: "body", error: "Invalid JSON in request body" }],
       },
       { status: 400 }
@@ -204,6 +205,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
+        error: "Import request validation failed",
         errors: validation.errors,
       },
       { status: 400 }
@@ -220,6 +222,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
+        error: "Business data validation failed",
         errors: [
           {
             field: "business_data",
@@ -257,11 +260,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       success: true,
-      total: result.total,
-      succeeded: result.succeeded,
-      failed: result.failed,
-      results: result.results,
-      errors: result.errors,
+      data: {
+        total: result.total,
+        succeeded: result.succeeded,
+        failed: result.failed,
+        results: result.results,
+        errors: result.errors,
+      },
     });
   } catch (error) {
     // Rollback transaction on error
@@ -290,6 +295,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       {
         success: false,
+        error: "Batch import transaction failed",
         errors: [
           {
             field: "transaction",

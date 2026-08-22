@@ -101,7 +101,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data).toEqual({
       totalJobs: 0,
@@ -134,7 +134,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data.periodDays).toBe(days);
     expect(mockClient.query.mock.calls[0][1]).toEqual([days]);
@@ -157,7 +157,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(createRequest());
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data.totalJobs).toBe(10);
     expect(data.successfulJobs).toBe(8);
@@ -172,7 +172,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(createRequest());
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data.importRate).toBe(25);
   });
@@ -182,7 +182,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(createRequest());
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data.importRate).toBe(0);
   });
@@ -204,7 +204,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(createRequest());
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data.avgDurationSeconds).toBe(123);
     expect(data.minDurationSeconds).toBe(10);
@@ -261,7 +261,7 @@ describe('Scrape Jobs Stats API', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()).data;
 
     expect(data).toHaveProperty('totalJobs');
     expect(data).toHaveProperty('successfulJobs');

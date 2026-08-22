@@ -233,7 +233,6 @@ describe("Business Approve API", () => {
 
       expect(response.status).toBe(200);
       expect(json.success).toBe(true);
-      expect(json.message).toBe("Business approved successfully");
       expect(json.data).toEqual({
         id: validUuid,
         name: businessName,

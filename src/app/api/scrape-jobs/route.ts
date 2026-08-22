@@ -114,7 +114,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         {
           success: true,
           data: job,
-          message: "Scrape job created successfully",
         },
         { status: 201 }
       );

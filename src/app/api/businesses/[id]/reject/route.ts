@@ -133,7 +133,6 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: "Business rejected successfully",
         data: {
           id: result.rows[0].id,
           name: result.rows[0].name,

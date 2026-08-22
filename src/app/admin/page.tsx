@@ -167,8 +167,8 @@ export default function AdminConsole() {
         return;
       }
       if (!response.ok) throw new Error('Failed to load dashboard data');
-      const body: DashboardData = await response.json();
-      setData(body);
+      const body = await response.json();
+      setData(body.data);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       setDashboardError('Could not load dashboard data');
@@ -193,8 +193,8 @@ export default function AdminConsole() {
           return;
         }
         if (!response.ok) throw new Error('Failed to load review queue');
-        const body: PendingBusiness[] = await response.json();
-        if (!cancelled) setQueue(Array.isArray(body) ? body : []);
+        const body = await response.json();
+        if (!cancelled) setQueue(Array.isArray(body?.data) ? body.data : []);
       } catch (error) {
         console.error('Failed to load review queue:', error);
         if (!cancelled) setQueueError('Failed to load the review queue');

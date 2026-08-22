@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     if (isNaN(limit) || limit < 1 || limit > 100) {
       return NextResponse.json(
-        { error: 'Invalid limit parameter. Must be between 1 and 100.' },
+        { success: false, error: 'Invalid limit parameter. Must be between 1 and 100.' },
         { status: 400 }
       );
     }
@@ -65,14 +65,14 @@ export async function GET(request: NextRequest) {
         createdAt: r.created_at,
       }));
 
-      return NextResponse.json(jobs);
+      return NextResponse.json({ success: true, data: jobs });
     } finally {
       client.release();
     }
   } catch (error) {
     console.error('Error fetching recent scrape jobs:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }

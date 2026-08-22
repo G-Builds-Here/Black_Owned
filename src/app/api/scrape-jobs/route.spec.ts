@@ -129,7 +129,6 @@ describe("Scrape Jobs API Route", () => {
       expect(json.data.query).toBe("software engineer");
       expect(json.data.location).toBe("New York, NY");
       expect(json.data.status).toBe("pending");
-      expect(json.message).toBe("Scrape job created successfully");
     });
 
     it("returns 400 when source is missing", async () => {

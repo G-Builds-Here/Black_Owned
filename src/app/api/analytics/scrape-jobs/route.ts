@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     if (isNaN(days) || days < 1 || days > 365) {
       return NextResponse.json(
-        { error: 'Invalid days parameter. Must be between 1 and 365.' },
+        { success: false, error: 'Invalid days parameter. Must be between 1 and 365.' },
         { status: 400 }
       );
     }
@@ -116,14 +116,14 @@ export async function GET(request: NextRequest) {
         maxDurationSeconds: row.max_duration != null ? Math.round(row.max_duration) : null,
       };
 
-      return NextResponse.json(stats);
+      return NextResponse.json({ success: true, data: stats });
     } finally {
       client.release();
     }
   } catch (error) {
     console.error('Error fetching scrape job stats:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }

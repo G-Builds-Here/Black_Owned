@@ -1,7 +1,7 @@
 /**
  * Business Review Page Tests
  *
- * The page loads its queue from GET /api/pending-businesses (bare JSON array).
+ * The page loads its queue from GET /api/pending-businesses ({success, data} envelope).
  * These tests mock fetch and verify mapping, filtering, empty/error states,
  * and the detail modal.
  */
@@ -60,7 +60,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('renders the page header', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: [] }) });
     render(<BusinessReviewPage />);
     expect(
       await screen.findByRole('heading', { name: /Business Review Queue/i })
@@ -68,7 +68,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('displays pending businesses fetched from the API as cards', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     expect(await screen.findByText('Soul Food Kitchen')).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('shows the count of businesses pending review', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     await screen.findByText('Soul Food Kitchen');
@@ -88,7 +88,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('shows "No rating" when a business has no rating', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     await screen.findByText('Afro Threads');
@@ -98,7 +98,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('displays the submitted date on each card', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     await screen.findByText('Soul Food Kitchen');
@@ -107,7 +107,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('filters businesses when search query is entered', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     const searchInput = await screen.findByPlaceholderText(/Search by name, address, or source/i);
@@ -118,7 +118,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('shows empty state when no businesses match search', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     const searchInput = await screen.findByPlaceholderText(/Search by name, address, or source/i);
@@ -128,7 +128,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('shows empty state when the API returns no pending businesses', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => [] });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: [] }) });
     render(<BusinessReviewPage />);
 
     await screen.findByText(/No businesses pending review/i);
@@ -149,7 +149,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('opens the detail modal when clicking a business card', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     const card = await screen.findByText('Soul Food Kitchen');
@@ -162,7 +162,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('displays business fields in the detail modal', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     fireEvent.click(await screen.findByText('Soul Food Kitchen'));
@@ -180,7 +180,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('shows N/A for missing phone and website', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     fireEvent.click(await screen.findByText('Afro Threads'));
@@ -191,7 +191,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('shows approve, reject and close buttons in the detail modal', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     fireEvent.click(await screen.findByText('Soul Food Kitchen'));
@@ -205,7 +205,7 @@ describe('BusinessReviewPage', () => {
   });
 
   it('closes the detail modal when clicking the close button', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => pendingRows });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
     render(<BusinessReviewPage />);
 
     fireEvent.click(await screen.findByText('Soul Food Kitchen'));
@@ -222,7 +222,7 @@ describe('BusinessReviewPage', () => {
     const decisionFetch = (decisionResult: { success: boolean; error?: string }) => {
       mockFetch.mockImplementation((url: string) => {
         if (url === '/api/pending-businesses') {
-          return Promise.resolve({ ok: true, json: async () => pendingRows });
+          return Promise.resolve({ ok: true, json: async () => ({ success: true, data: pendingRows }) });
         }
         if (url.endsWith('/approve') || url.endsWith('/reject')) {
           return Promise.resolve({ ok: true, json: async () => decisionResult });
@@ -232,7 +232,7 @@ describe('BusinessReviewPage', () => {
     };
 
     it('approves a business via POST /api/businesses/[id]/approve and removes it from the queue', async () => {
-      decisionFetch({ success: true, message: 'Business approved successfully' });
+      decisionFetch({ success: true });
       render(<BusinessReviewPage />);
 
       fireEvent.click(await screen.findByText('Soul Food Kitchen'));
@@ -281,7 +281,7 @@ describe('BusinessReviewPage', () => {
     });
 
     it('rejects a business via POST /api/businesses/[id]/reject with the reason in the body', async () => {
-      decisionFetch({ success: true, message: 'Business rejected successfully' });
+      decisionFetch({ success: true });
       render(<BusinessReviewPage />);
 
       fireEvent.click(await screen.findByText('Afro Threads'));

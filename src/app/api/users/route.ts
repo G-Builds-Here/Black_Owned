@@ -194,7 +194,6 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       data: updatedUser,
-      message: "Role updated successfully",
     });
   } catch (error) {
     console.error("Error updating user role:", error);
@@ -292,7 +291,6 @@ export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> 
     return NextResponse.json({
       success: true,
       data: updatedUser,
-      message: "Status updated successfully",
     });
   } catch (error) {
     console.error("Error updating user status:", error);

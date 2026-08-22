@@ -13,14 +13,17 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        totalJobs: 0,
-        successfulJobs: 0,
-        failedJobs: 0,
-        totalItemsScraped: 0,
-        totalBusinessesScraped: 0,
-        totalBusinessesImported: 0,
-        importRate: 0,
-        periodDays: 30,
+        success: true,
+        data: {
+          totalJobs: 0,
+          successfulJobs: 0,
+          failedJobs: 0,
+          totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
+          periodDays: 30,
+        },
       }),
     });
 
@@ -34,14 +37,17 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        totalJobs: 0,
-        successfulJobs: 0,
-        failedJobs: 0,
-        totalItemsScraped: 0,
-        totalBusinessesScraped: 0,
-        totalBusinessesImported: 0,
-        importRate: 0,
-        periodDays: 30,
+        success: true,
+        data: {
+          totalJobs: 0,
+          successfulJobs: 0,
+          failedJobs: 0,
+          totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
+          periodDays: 30,
+        },
       }),
     });
 
@@ -77,7 +83,7 @@ describe('AnalyticsPage', () => {
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => mockStats,
+      json: async () => ({ success: true, data: mockStats }),
     });
 
     render(<AnalyticsPage />);
@@ -97,19 +103,22 @@ describe('AnalyticsPage', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          totalBusinessesScraped: 0,
-          totalBusinessesImported: 0,
-          importRate: 0,
-          periodDays: 30,
+          success: true,
+          data: {
+            totalJobs: 0,
+            successfulJobs: 0,
+            failedJobs: 0,
+            totalItemsScraped: 0,
+            totalBusinessesScraped: 0,
+            totalBusinessesImported: 0,
+            importRate: 0,
+            periodDays: 30,
+          },
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [],
+        json: async () => ({ success: true, data: [] }),
       });
 
     render(<AnalyticsPage />);
@@ -134,19 +143,22 @@ describe('AnalyticsPage', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          totalBusinessesScraped: 0,
-          totalBusinessesImported: 0,
-          importRate: 0,
-          periodDays: 7,
+          success: true,
+          data: {
+            totalJobs: 0,
+            successfulJobs: 0,
+            failedJobs: 0,
+            totalItemsScraped: 0,
+            totalBusinessesScraped: 0,
+            totalBusinessesImported: 0,
+            importRate: 0,
+            periodDays: 7,
+          },
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [],
+        json: async () => ({ success: true, data: [] }),
       });
 
     (global.fetch as jest.Mock).mockImplementation(fetchMock);
@@ -155,7 +167,8 @@ describe('AnalyticsPage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('days=30')
+        expect.stringContaining('days=30'),
+        expect.objectContaining({ headers: {} })
       );
     });
 
@@ -166,7 +179,8 @@ describe('AnalyticsPage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('days=7')
+        expect.stringContaining('days=7'),
+        expect.objectContaining({ headers: {} })
       );
     });
   });
@@ -201,11 +215,11 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => mockStats,
+        json: async () => ({ success: true, data: mockStats }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => mockJobs,
+        json: async () => ({ success: true, data: mockJobs }),
       });
 
     render(<AnalyticsPage />);
@@ -235,11 +249,11 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => mockStats,
+        json: async () => ({ success: true, data: mockStats }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [],
+        json: async () => ({ success: true, data: [] }),
       });
 
     render(<AnalyticsPage />);

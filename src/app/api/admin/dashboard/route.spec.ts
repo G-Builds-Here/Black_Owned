@@ -105,8 +105,8 @@ describe('GET /api/admin/dashboard', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.periodDays).toBe(30);
-    expect(body.counts).toEqual({
+    expect(body.data.periodDays).toBe(30);
+    expect(body.data.counts).toEqual({
       totalBusinesses: 10,
       newBusinesses: 3,
       totalUsers: 4,
@@ -115,7 +115,7 @@ describe('GET /api/admin/dashboard', () => {
       pendingJobs: 1,
       runningJobs: 1,
     });
-    expect(body.jobStats).toEqual({
+    expect(body.data.jobStats).toEqual({
       totalJobs: 8,
       successfulJobs: 5,
       failedJobs: 2,
@@ -123,8 +123,8 @@ describe('GET /api/admin/dashboard', () => {
       avgDurationSeconds: 12,
       periodDays: 30,
     });
-    expect(body.reviewQueue).toEqual([]);
-    expect(body.recentJobs).toEqual([]);
+    expect(body.data.reviewQueue).toEqual([]);
+    expect(body.data.recentJobs).toEqual([]);
     expect(mockClient.query).toHaveBeenCalledTimes(2);
     expect(mockClient.release).toHaveBeenCalled();
   });
@@ -138,7 +138,7 @@ describe('GET /api/admin/dashboard', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.periodDays).toBe(7);
+    expect(body.data.periodDays).toBe(7);
     expect(mockClient.query).toHaveBeenNthCalledWith(1, expect.anything(), [7]);
     expect(mockClient.query).toHaveBeenNthCalledWith(2, expect.anything(), [7]);
   });
@@ -181,8 +181,8 @@ describe('GET /api/admin/dashboard', () => {
     const response = await GET(makeRequest('/api/admin/dashboard'));
     const body = await response.json();
 
-    expect(body.reviewQueue).toHaveLength(5);
-    expect(body.reviewQueue[0]).toEqual({
+    expect(body.data.reviewQueue).toHaveLength(5);
+    expect(body.data.reviewQueue[0]).toEqual({
       id: 'id-0',
       name: 'Business 0',
       address: '123 St 0',
@@ -212,9 +212,9 @@ describe('GET /api/admin/dashboard', () => {
     const response = await GET(makeRequest('/api/admin/dashboard'));
     const body = await response.json();
 
-    expect(body.reviewQueue[0].address).toBe('N/A');
-    expect(body.reviewQueue[0].source).toBe('unknown');
-    expect(body.reviewQueue[0].rating).toBeNull();
+    expect(body.data.reviewQueue[0].address).toBe('N/A');
+    expect(body.data.reviewQueue[0].source).toBe('unknown');
+    expect(body.data.reviewQueue[0].rating).toBeNull();
   });
 
   it('surfaces the most recent scrape jobs', async () => {
@@ -232,7 +232,7 @@ describe('GET /api/admin/dashboard', () => {
     const body = await response.json();
 
     expect(findScrapeJobs).toHaveBeenCalledWith(mockClient, undefined, 5);
-    expect(body.recentJobs).toEqual(jobs);
+    expect(body.data.recentJobs).toEqual(jobs);
   });
 
   it('reports null average duration when no jobs completed in the window', async () => {
@@ -245,7 +245,7 @@ describe('GET /api/admin/dashboard', () => {
     const response = await GET(makeRequest('/api/admin/dashboard'));
     const body = await response.json();
 
-    expect(body.jobStats.avgDurationSeconds).toBeNull();
+    expect(body.data.jobStats.avgDurationSeconds).toBeNull();
   });
 
   it('returns 500 when a query fails and still releases the client', async () => {

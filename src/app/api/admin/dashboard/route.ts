@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     if (isNaN(days) || days < 1 || days > 365) {
       return NextResponse.json(
-        { error: 'Invalid days parameter. Must be between 1 and 365.' },
+        { success: false, error: 'Invalid days parameter. Must be between 1 and 365.' },
         { status: 400 }
       );
     }
@@ -120,26 +120,29 @@ export async function GET(request: NextRequest) {
       const recentJobs = await findScrapeJobs(client, undefined, 5);
 
       return NextResponse.json({
-        periodDays: days,
-        counts: {
-          totalBusinesses: Number(counts.total_businesses),
-          newBusinesses: Number(counts.new_businesses),
-          totalUsers: Number(counts.total_users),
-          usersToday: Number(counts.users_today),
-          pendingReviews: Number(counts.pending_reviews),
-          pendingJobs: Number(counts.pending_jobs),
-          runningJobs: Number(counts.running_jobs),
-        },
-        jobStats: {
-          totalJobs: Number(agg.total_jobs),
-          successfulJobs: Number(agg.successful_jobs),
-          failedJobs: Number(agg.failed_jobs),
-          totalItemsScraped: Number(agg.total_items_scraped),
-          avgDurationSeconds: agg.avg_duration != null ? Math.round(agg.avg_duration) : null,
+        success: true,
+        data: {
           periodDays: days,
+          counts: {
+            totalBusinesses: Number(counts.total_businesses),
+            newBusinesses: Number(counts.new_businesses),
+            totalUsers: Number(counts.total_users),
+            usersToday: Number(counts.users_today),
+            pendingReviews: Number(counts.pending_reviews),
+            pendingJobs: Number(counts.pending_jobs),
+            runningJobs: Number(counts.running_jobs),
+          },
+          jobStats: {
+            totalJobs: Number(agg.total_jobs),
+            successfulJobs: Number(agg.successful_jobs),
+            failedJobs: Number(agg.failed_jobs),
+            totalItemsScraped: Number(agg.total_items_scraped),
+            avgDurationSeconds: agg.avg_duration != null ? Math.round(agg.avg_duration) : null,
+            periodDays: days,
+          },
+          reviewQueue,
+          recentJobs,
         },
-        reviewQueue,
-        recentJobs,
       });
     } finally {
       client.release();
@@ -147,7 +150,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error building admin dashboard:', error);
     return NextResponse.json(
-      { error: 'Failed to build dashboard' },
+      { success: false, error: 'Failed to build dashboard' },
       { status: 500 }
     );
   }

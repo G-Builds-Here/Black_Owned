@@ -152,9 +152,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.imported).toBe(2);
-    expect(json.skipped).toBe(0);
-    expect(json.duplicates).toEqual([]);
+    expect(json.data.imported).toBe(2);
+    expect(json.data.skipped).toBe(0);
+    expect(json.data.duplicates).toEqual([]);
 
     expect(importNormalizedBusinesses).toHaveBeenCalledWith(
       expect.any(Object),
@@ -191,9 +191,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     const json = await response.json();
 
     expect(json.success).toBe(true);
-    expect(json.imported).toBe(1);
-    expect(json.skipped).toBe(1);
-    expect(json.duplicates).toEqual([
+    expect(json.data.imported).toBe(1);
+    expect(json.data.skipped).toBe(1);
+    expect(json.data.duplicates).toEqual([
       { name: "Soul Kitchen", matchedName: "soul kitchen", matchSource: "queue" },
     ]);
 
@@ -233,9 +233,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     const response = await POST(makeRequest(), makeContext(JOB_ID));
     const json = await response.json();
 
-    expect(json.imported).toBe(0);
-    expect(json.skipped).toBe(1);
-    expect(json.duplicates).toEqual([
+    expect(json.data.imported).toBe(0);
+    expect(json.data.skipped).toBe(1);
+    expect(json.data.duplicates).toEqual([
       {
         name: "Soul Kitchen Bar Grill & Events",
         matchedName: "Soul Kitchen Bar Grill and Events",
@@ -277,9 +277,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     const response = await POST(makeRequest(), makeContext(JOB_ID));
     const json = await response.json();
 
-    expect(json.imported).toBe(0);
-    expect(json.skipped).toBe(1);
-    expect(json.duplicates).toEqual([
+    expect(json.data.imported).toBe(0);
+    expect(json.data.skipped).toBe(1);
+    expect(json.data.duplicates).toEqual([
       { name: "Bluebird Coffee", matchedName: "Bluebird Cafe", matchSource: "queue" },
     ]);
   });
@@ -297,9 +297,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     const response = await POST(makeRequest(), makeContext(JOB_ID));
     const json = await response.json();
 
-    expect(json.imported).toBe(1);
-    expect(json.skipped).toBe(1);
-    expect(json.duplicates).toEqual([
+    expect(json.data.imported).toBe(1);
+    expect(json.data.skipped).toBe(1);
+    expect(json.data.duplicates).toEqual([
       { name: "Corner Grocery", matchedName: "Corner Grocery", matchSource: "directory" },
     ]);
 
@@ -340,9 +340,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     const response = await POST(makeRequest(), makeContext(JOB_ID));
     const json = await response.json();
 
-    expect(json.imported).toBe(1);
-    expect(json.skipped).toBe(1);
-    expect(json.duplicates).toEqual([
+    expect(json.data.imported).toBe(1);
+    expect(json.data.skipped).toBe(1);
+    expect(json.data.duplicates).toEqual([
       { name: "Dup Diner", matchedName: "Dup Diner", matchSource: "scraped" },
     ]);
 
@@ -383,8 +383,8 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
 
     const defaultResponse = await POST(makeRequest(), makeContext(JOB_ID));
     const defaultJson = await defaultResponse.json();
-    expect(defaultJson.imported).toBe(1);
-    expect(defaultJson.skipped).toBe(0);
+    expect(defaultJson.data.imported).toBe(1);
+    expect(defaultJson.data.skipped).toBe(0);
 
     process.env.DUPLICATE_NAME_THRESHOLD = "0.5";
     (importNormalizedBusinesses as jest.Mock).mockResolvedValue({
@@ -397,9 +397,9 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
 
     const loweredResponse = await POST(makeRequest(), makeContext(JOB_ID));
     const loweredJson = await loweredResponse.json();
-    expect(loweredJson.imported).toBe(0);
-    expect(loweredJson.skipped).toBe(1);
-    expect(loweredJson.duplicates).toEqual([
+    expect(loweredJson.data.imported).toBe(0);
+    expect(loweredJson.data.skipped).toBe(1);
+    expect(loweredJson.data.duplicates).toEqual([
       {
         name: "Blackbird Cafe",
         matchedName: "Blackbird Cafes",
@@ -441,8 +441,8 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     const json = await response.json();
 
     // ~0.69 name similarity stays below the 0.8 default -> not deduped
-    expect(json.skipped).toBe(0);
-    expect(json.duplicates).toEqual([]);
+    expect(json.data.skipped).toBe(0);
+    expect(json.data.duplicates).toEqual([]);
     const normalized = (importNormalizedBusinesses as jest.Mock).mock.calls[0][1];
     expect(normalized).toHaveLength(1);
   });
@@ -485,8 +485,8 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
 
     expect(response.status).toBe(200);
     expect(json.success).toBe(true);
-    expect(json.total).toBe(0);
-    expect(json.duplicates).toEqual([]);
+    expect(json.data.total).toBe(0);
+    expect(json.data.duplicates).toEqual([]);
     expect(importNormalizedBusinesses).not.toHaveBeenCalled();
   });
 

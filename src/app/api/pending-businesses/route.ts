@@ -54,11 +54,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       };
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
     console.error("Error fetching pending businesses:", error);
     return NextResponse.json(
-      { error: "Failed to fetch pending businesses" },
+      { success: false, error: "Failed to fetch pending businesses" },
       { status: 500 }
     );
   } finally {

@@ -108,8 +108,9 @@ export default function BusinessReviewPage() {
           return;
         }
         if (response.ok) {
-          const data: PendingBusinessApiResponse[] = await response.json();
-          setBusinesses((Array.isArray(data) ? data : []).map(toReviewBusiness));
+          const body = await response.json();
+          const rows: PendingBusinessApiResponse[] = Array.isArray(body?.data) ? body.data : [];
+          setBusinesses(rows.map(toReviewBusiness));
         } else {
           setLoadError('Failed to load pending businesses');
         }

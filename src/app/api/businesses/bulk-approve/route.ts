@@ -131,7 +131,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         return NextResponse.json({
           success: true,
-          message: `${updateResult.rows.length} businesses approved successfully`,
           data: {
             approvedCount: updateResult.rows.length,
             approvedBusinesses: updateResult.rows.map((row: { id: string; name: string; status: string }) => ({
