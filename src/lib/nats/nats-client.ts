@@ -26,7 +26,12 @@ function getNatsUrl(): string {
  */
 export async function getNatsClient(): Promise<Client> {
   if (natsClient) {
-    return natsClient;
+    if (!natsClient.isClosed()) {
+      return natsClient;
+    }
+    // Reconnect attempts were exhausted (e.g. NATS was down/restarted): the
+    // cached client is permanently closed and must be replaced.
+    natsClient = null;
   }
 
   const url = getNatsUrl();

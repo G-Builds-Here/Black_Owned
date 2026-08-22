@@ -3,7 +3,8 @@
  */
 
 function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  // Same-origin by default: the Next app hosts the resolvers at /api/graphql.
+  return process.env.NEXT_PUBLIC_API_URL || '';
 }
 
 export interface GraphQLResponse<T> {
@@ -34,7 +35,7 @@ export async function graphqlQuery<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}/graphql`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/graphql`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

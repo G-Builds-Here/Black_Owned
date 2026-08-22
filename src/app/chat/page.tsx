@@ -174,8 +174,11 @@ function ChatPageInner() {
         const body = await res.json();
         if (cancelled) return;
         const rows: ThreadMessage[] = (body.data?.messages ?? []).slice().reverse();
+        // A late history response must not clobber local entries the server
+        // has not seen yet (optimistic messages still in flight).
+        const serverIds = new Set(rows.map((m) => m.id));
+        setMessages((prev) => [...rows, ...prev.filter((m) => !serverIds.has(m.id))]);
         knownIdsRef.current = new Set(rows.map((m) => m.id));
-        setMessages(rows);
         setThreadLoading(false);
       })
       .catch(() => {
