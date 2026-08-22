@@ -49,17 +49,13 @@ CREATE TABLE IF NOT EXISTS pending_import_businesses (
   source_data JSONB,
   job_id UUID,
   rejection_reason TEXT,
-  duplicate_status VARCHAR(20) NOT NULL DEFAULT 'new',
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  CONSTRAINT pending_import_businesses_duplicate_status_check
-    CHECK (duplicate_status IN ('new', 'potential_duplicate', 'skipped'))
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_pending_import_status ON pending_import_businesses(status);
 CREATE INDEX IF NOT EXISTS idx_pending_import_name ON pending_import_businesses(name);
 CREATE INDEX IF NOT EXISTS idx_pending_import_job_id ON pending_import_businesses(job_id);
-CREATE INDEX IF NOT EXISTS idx_pending_import_duplicate_status ON pending_import_businesses(duplicate_status);
 
 CREATE TABLE IF NOT EXISTS scrape_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

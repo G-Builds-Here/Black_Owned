@@ -21,7 +21,6 @@ export interface PendingImportBusiness {
   source_data: Record<string, unknown>;
   job_id: string | undefined;
   rejection_reason: string | null;
-  duplicate_status: string;
   created_at: Date;
   updated_at: Date;
 }
