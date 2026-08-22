@@ -32,12 +32,6 @@ module.exports = {
     "src/lib/db/user-management-repository\\.spec\\.ts$",
     "src/qa/scraper-e2e\\.spec\\.ts$",
     "src/services/scraper-job-executor\\.spec\\.ts$",
-    // Orphaned spec — no env/DB dependency. It imports BusinessReviewPage
-    // from ./page, but src/app/admin/reviews/ holds only this spec (no page
-    // component exists yet; the API route /api/admin/reviews/job/[jobId] does).
-    // Excluded so the unit runner isn't blocked on a missing SUT; re-include
-    // once the review page component lands.
-    "src/app/admin/reviews/page\\.job-filter\\.spec\\.tsx$",
   ],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.spec.ts"],
   coverageDirectory: "coverage",
