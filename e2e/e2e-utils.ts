@@ -20,6 +20,7 @@ export interface E2ESession {
   password: string;
   name: string;
   id: string;
+  role: string;
   accessToken: string;
   refreshToken: string;
 }
@@ -89,6 +90,7 @@ export async function loginUser(email: string, password: string): Promise<E2ESes
     password,
     name: body.user?.name ?? email,
     id: body.user?.id ?? '',
+    role: body.user?.role ?? 'user',
     accessToken: body.tokens.accessToken,
     refreshToken: body.tokens.refreshToken,
   };
@@ -143,7 +145,7 @@ export async function seedSession(page: Page, session: E2ESession): Promise<void
       localStorage.setItem(key, JSON.stringify({
         accessToken: s.accessToken,
         refreshToken: s.refreshToken,
-        user: { id: s.id, email: s.email, name: s.name },
+        user: { id: s.id, email: s.email, name: s.name, role: s.role },
       }));
     },
     [SESSION_KEY, session] as const

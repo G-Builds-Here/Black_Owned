@@ -9,6 +9,17 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BusinessReviewPage from './page';
 
+const mockRouter = {
+  push: jest.fn(),
+  replace: jest.fn(),
+  back: jest.fn(),
+  refresh: jest.fn(),
+};
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+}));
+
 const pendingRows = [
   {
     id: 'b-1',

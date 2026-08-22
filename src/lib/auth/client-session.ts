@@ -11,6 +11,7 @@ export interface ClientUser {
   id: string;
   email: string;
   name: string;
+  role?: string;
   createdAt?: string;
 }
 

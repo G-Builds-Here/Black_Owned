@@ -10,6 +10,18 @@ jest.mock('@/components/ui/Navigation', () => ({
   Navigation: () => <nav data-testid="navigation">Navigation</nav>,
 }));
 
+// The page guard uses next/navigation useRouter — mock it so renders don't throw
+const mockRouter = {
+  push: jest.fn(),
+  replace: jest.fn(),
+  back: jest.fn(),
+  refresh: jest.fn(),
+};
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+}));
+
 // Mock fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -199,7 +211,10 @@ describe('ScrapeJobPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: /active jobs/i }));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/scrape-jobs?status=running');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/scrape-jobs?status=running',
+        expect.objectContaining({ headers: {} })
+      );
     });
 
     await waitFor(() => {

@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/ui/Navigation';
+import { getSession, clearSession, authHeaders } from '@/lib/auth/client-session';
 import { Card, Badge, Button, Tabs, Input, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Dropdown, DropdownItem, Modal } from '@/components/ui';
 
 /**
@@ -83,11 +85,28 @@ export default function BusinessReviewPage() {
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [decisionResult, setDecisionResult] = useState<{ success: boolean; message: string } | null>(null);
+  const router = useRouter();
+
+  React.useEffect(() => {
+    const session = getSession();
+    if (!session) {
+      router.replace('/login');
+      return;
+    }
+    if (session.user.role !== 'admin') {
+      router.replace('/owner');
+    }
+  }, [router]);
 
   React.useEffect(() => {
     const fetchBusinesses = async () => {
       try {
-        const response = await fetch('/api/pending-businesses');
+        const response = await fetch('/api/pending-businesses', { headers: authHeaders() });
+        if (response.status === 401) {
+          clearSession();
+          router.replace('/login');
+          return;
+        }
         if (response.ok) {
           const data: PendingBusinessApiResponse[] = await response.json();
           setBusinesses((Array.isArray(data) ? data : []).map(toReviewBusiness));
@@ -147,7 +166,7 @@ export default function BusinessReviewPage() {
     try {
       const response = await fetch('/api/businesses/bulk-approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ businessIds: Array.from(selectedBusinessIds) }),
       });
 
@@ -202,6 +221,7 @@ export default function BusinessReviewPage() {
     try {
       const response = await fetch(`/api/businesses/${business.id}/approve`, {
         method: 'POST',
+        headers: authHeaders(),
       });
       const result = await response.json();
       if (result.success) {
@@ -233,7 +253,7 @@ export default function BusinessReviewPage() {
     try {
       const response = await fetch(`/api/businesses/${business.id}/reject`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ reason }),
       });
       const result = await response.json();

@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/ui/Navigation';
+import { getSession, clearSession, authHeaders } from '@/lib/auth/client-session';
 import { Card, Badge, Button, Input, Tabs, TabPanel } from '@/components/ui';
 import { ScrapeJob, ScrapeJobStatus, CreateScrapeJobInput } from '@/types/scrape-job';
 
@@ -25,6 +27,18 @@ export default function ScrapeJobPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [activeJobs, setActiveJobs] = useState<ScrapeJob[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const session = getSession();
+    if (!session) {
+      router.replace('/login');
+      return;
+    }
+    if (session.user.role !== 'admin') {
+      router.replace('/owner');
+    }
+  }, [router]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -60,6 +74,7 @@ export default function ScrapeJobPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders(),
         },
         body: JSON.stringify(formData),
       });
@@ -86,7 +101,14 @@ export default function ScrapeJobPage() {
   const fetchActiveJobs = async () => {
     setIsLoadingJobs(true);
     try {
-      const response = await fetch('/api/scrape-jobs?status=running');
+      const response = await fetch('/api/scrape-jobs?status=running', {
+        headers: authHeaders(),
+      });
+      if (response.status === 401) {
+        clearSession();
+        router.replace('/login');
+        return;
+      }
       const result = await response.json();
 
       if (result.success) {

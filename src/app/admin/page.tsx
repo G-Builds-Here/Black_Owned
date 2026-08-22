@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/ui/Navigation';
+import { getSession, clearSession, authHeaders } from '@/lib/auth/client-session';
 import { Card, Badge, Button, TabPanel, Input, Dropdown, Tabs, TabContent, UserTable } from '@/components/ui';
 
 interface DashboardCounts {
@@ -120,6 +122,7 @@ function formatDuration(seconds: number | null): string {
 }
 
 export default function AdminConsole() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'reviews' | 'jobs' | 'users'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('week');
 
@@ -140,11 +143,29 @@ export default function AdminConsole() {
   const [rejectReason, setRejectReason] = useState('');
   const [actionMessage, setActionMessage] = useState<{ success: boolean; message: string } | null>(null);
 
+  useEffect(() => {
+    const session = getSession();
+    if (!session) {
+      router.replace('/login');
+      return;
+    }
+    if (session.user.role !== 'admin') {
+      router.replace('/owner');
+    }
+  }, [router]);
+
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setDashboardError(null);
     try {
-      const response = await fetch(`/api/admin/dashboard?days=${PERIOD_DAYS[selectedPeriod]}`);
+      const response = await fetch(`/api/admin/dashboard?days=${PERIOD_DAYS[selectedPeriod]}`, {
+        headers: authHeaders(),
+      });
+      if (response.status === 401) {
+        clearSession();
+        router.replace('/login');
+        return;
+      }
       if (!response.ok) throw new Error('Failed to load dashboard data');
       const body: DashboardData = await response.json();
       setData(body);
@@ -154,7 +175,7 @@ export default function AdminConsole() {
     } finally {
       setLoading(false);
     }
-  }, [selectedPeriod]);
+  }, [selectedPeriod, router]);
 
   useEffect(() => {
     loadDashboard();
@@ -165,7 +186,12 @@ export default function AdminConsole() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch('/api/pending-businesses');
+        const response = await fetch('/api/pending-businesses', { headers: authHeaders() });
+        if (response.status === 401) {
+          clearSession();
+          router.replace('/login');
+          return;
+        }
         if (!response.ok) throw new Error('Failed to load review queue');
         const body: PendingBusiness[] = await response.json();
         if (!cancelled) setQueue(Array.isArray(body) ? body : []);
@@ -186,7 +212,12 @@ export default function AdminConsole() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch('/api/scrape-jobs');
+        const response = await fetch('/api/scrape-jobs', { headers: authHeaders() });
+        if (response.status === 401) {
+          clearSession();
+          router.replace('/login');
+          return;
+        }
         if (!response.ok) throw new Error('Failed to load jobs');
         const body = await response.json();
         if (!cancelled) setJobs(Array.isArray(body?.data) ? body.data : []);
@@ -207,7 +238,10 @@ export default function AdminConsole() {
     setBusyId(business.id);
     setActionMessage(null);
     try {
-      const response = await fetch(`/api/businesses/${business.id}/approve`, { method: 'POST' });
+      const response = await fetch(`/api/businesses/${business.id}/approve`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
       const result = await response.json();
       if (result.success) {
         setActionMessage({ success: true, message: `${business.name} approved` });
@@ -235,7 +269,7 @@ export default function AdminConsole() {
     try {
       const response = await fetch(`/api/businesses/${business.id}/reject`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ reason: rejectReason.trim() }),
       });
       const result = await response.json();
