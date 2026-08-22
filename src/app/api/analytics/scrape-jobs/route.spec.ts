@@ -1,7 +1,29 @@
 import { GET } from './route';
 import { getPool } from '@/lib/db/user-repository';
+import { NextResponse } from 'next/server';
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from '@/lib/auth/jwt-middleware';
 
 jest.mock('@/lib/db/user-repository');
+
+jest.mock('@/lib/auth/jwt-middleware', () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: 'u-admin', email: 'admin@example.com', role: 'admin' },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: 'NO_AUTH_HEADER',
+  errorMessage: 'Authorization header is required',
+  statusCode: 401,
+};
 
 // Mock NextRequest to provide searchParams
 class MockNextRequest {
@@ -57,6 +79,20 @@ describe('Scrape Jobs Stats API', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: 'unauthenticated' }, { status: 401 })
+    );
+  });
+
+  it('returns 401 when the request is not authenticated as admin', async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const request = createRequest();
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.success).toBe(false);
   });
 
   it('returns default 30-day stats when no days parameter provided', async () => {

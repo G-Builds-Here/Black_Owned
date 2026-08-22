@@ -13,6 +13,25 @@ jest.mock("@/lib/db/user-repository", () => ({
   getPool: jest.fn(),
 }));
 
+jest.mock("@/lib/auth/jwt-middleware", () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const { createAuthMiddleware, createAuthErrorResponse } = require("@/lib/auth/jwt-middleware");
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: "u-admin", email: "admin@example.com", role: "admin" },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: "NO_AUTH_HEADER",
+  errorMessage: "Authorization header is required",
+  statusCode: 401,
+};
+
 describe("Business Approve API", () => {
   const mockPool = {
     connect: jest.fn(),
@@ -25,8 +44,24 @@ describe("Business Approve API", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: "unauthenticated" }, { status: 401 })
+    );
     (getPool as jest.Mock).mockReturnValue(mockPool);
     mockPool.connect.mockResolvedValue(mockClient);
+  });
+
+  it("returns 401 when the request is not authenticated as admin", async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const mockRequest = {} as unknown as Request;
+    const context = { params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }) };
+
+    const response = await POST(mockRequest, context);
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json.success).toBe(false);
   });
 
   describe("POST /api/businesses/[id]/approve", () => {

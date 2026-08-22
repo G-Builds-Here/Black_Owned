@@ -9,6 +9,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
 import { importNormalizedBusinesses } from "@/lib/db/pending-import-business-repository";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 import { ScraperSource } from "@/types/scraper-result";
 import { validateBusinessData, BusinessValidationInput } from "@/lib/utils/business-data-validator";
 
@@ -170,6 +174,12 @@ function validateImportRequest(body: unknown): { valid: boolean; errors: Validat
  * Import normalized businesses with transaction support and error handling
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   const client = await getPool().connect();
 
   // Parse request body

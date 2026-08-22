@@ -2,7 +2,7 @@
  * Scrape Jobs API Route Tests
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST, GET } from "./route";
 
 // Mock the database modules
@@ -19,6 +19,25 @@ jest.mock("@/lib/db/scrape-job-repository", () => ({
 
 const { createScrapeJob, findScrapeJobs } = require("@/lib/db/scrape-job-repository");
 
+jest.mock("@/lib/auth/jwt-middleware", () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const { createAuthMiddleware, createAuthErrorResponse } = require("@/lib/auth/jwt-middleware");
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: "u-admin", email: "admin@example.com", role: "admin" },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: "NO_AUTH_HEADER",
+  errorMessage: "Authorization header is required",
+  statusCode: 401,
+};
+
 describe("Scrape Jobs API Route", () => {
   const mockPool = {
     connect: jest.fn(),
@@ -31,6 +50,11 @@ describe("Scrape Jobs API Route", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: "unauthenticated" }, { status: 401 })
+    );
 
     // Setup mock pool
     (require("@/lib/db/user-repository").getPool as jest.Mock).mockReturnValue(mockPool);
@@ -72,6 +96,14 @@ describe("Scrape Jobs API Route", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("returns 401 when the request is not authenticated as admin", async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const request = new NextRequest("http://localhost:3000/api/scrape-jobs");
+    const response = await GET(request);
+    expect(response.status).toBe(401);
+    expect((await response.json()).success).toBe(false);
   });
 
   describe("POST /api/scrape-jobs", () => {

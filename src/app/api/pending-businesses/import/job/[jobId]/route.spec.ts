@@ -2,7 +2,7 @@
  * POST /api/pending-businesses/import/job/[jobId] tests
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
 import { findScrapeJobById } from "@/lib/db/scrape-job-repository";
 import {
@@ -15,6 +15,10 @@ import {
 import {
   findBusinessNames,
 } from "@/lib/db/business-repository";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 import { POST } from "./route";
 
 jest.mock("@/lib/db/user-repository", () => ({
@@ -37,6 +41,23 @@ jest.mock("@/lib/db/pending-import-business-repository", () => ({
 jest.mock("@/lib/db/business-repository", () => ({
   findBusinessNames: jest.fn(),
 }));
+
+jest.mock("@/lib/auth/jwt-middleware", () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: "u-admin", email: "admin@example.com", role: "admin" },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: "NO_AUTH_HEADER",
+  errorMessage: "Authorization header is required",
+  statusCode: 401,
+};
 
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -90,6 +111,10 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: "unauthenticated" }, { status: 401 })
+    );
     mockClient = {
       query: jest.fn(),
       release: jest.fn(),
@@ -110,6 +135,15 @@ describe("POST /api/pending-businesses/import/job/[jobId]", () => {
     });
     delete process.env.DUPLICATE_NAME_THRESHOLD;
     delete process.env.DUPLICATE_ADDRESS_THRESHOLD;
+  });
+
+  it("returns 401 when the request is not authenticated as admin", async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const response = await POST(makeRequest(), makeContext(JOB_ID));
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json.success).toBe(false);
   });
 
   it("should import all scraped businesses when none exist anywhere", async () => {

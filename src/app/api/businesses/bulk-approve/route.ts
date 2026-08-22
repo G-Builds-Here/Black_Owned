@@ -6,6 +6,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 
 /**
  * Validate UUID format
@@ -25,6 +29,12 @@ function isValidUuid(id: string): boolean {
  * }
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const body = await request.json();
     const { businessIds } = body;

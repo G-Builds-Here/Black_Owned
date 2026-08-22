@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/user-repository';
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from '@/lib/auth/jwt-middleware';
 
 export interface ScrapeJobStats {
   totalJobs: number;
@@ -23,6 +27,12 @@ export interface ScrapeJobStats {
  * downstream tables that scrape jobs feed into.
  */
 export async function GET(request: NextRequest) {
+  const requireAdmin = createAuthMiddleware(['admin']);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '30', 10);

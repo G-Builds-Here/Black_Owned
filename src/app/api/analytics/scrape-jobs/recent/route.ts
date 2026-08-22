@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/user-repository';
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from '@/lib/auth/jwt-middleware';
 
 export interface RecentScrapeJob {
   id: string;
@@ -20,6 +24,12 @@ export interface RecentScrapeJob {
  * Returns the most recent scrape jobs (newest first) in the live schema shape.
  */
 export async function GET(request: NextRequest) {
+  const requireAdmin = createAuthMiddleware(['admin']);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '10', 10);

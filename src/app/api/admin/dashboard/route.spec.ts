@@ -11,6 +11,10 @@ import { GET } from './route';
 import { getPool } from '@/lib/db/user-repository';
 import { findScrapeJobs } from '@/lib/db/scrape-job-repository';
 import { findPendingByStatus } from '@/lib/db/pending-import-business-repository';
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from '@/lib/auth/jwt-middleware';
 
 jest.mock('@/lib/db/user-repository', () => ({
   getPool: jest.fn(),
@@ -23,6 +27,23 @@ jest.mock('@/lib/db/scrape-job-repository', () => ({
 jest.mock('@/lib/db/pending-import-business-repository', () => ({
   findPendingByStatus: jest.fn(),
 }));
+
+jest.mock('@/lib/auth/jwt-middleware', () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: 'u-admin', email: 'admin@example.com', role: 'admin' },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: 'NO_AUTH_HEADER',
+  errorMessage: 'Authorization header is required',
+  statusCode: 401,
+};
 
 function makeRequest(url: string): NextRequest {
   return { nextUrl: new URL(url, 'http://localhost') } as unknown as NextRequest;
@@ -57,9 +78,22 @@ describe('GET /api/admin/dashboard', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: 'unauthenticated' }, { status: 401 })
+    );
     (getPool as jest.Mock).mockReturnValue(mockPool);
     (findScrapeJobs as jest.Mock).mockResolvedValue([]);
     (findPendingByStatus as jest.Mock).mockResolvedValue([]);
+  });
+
+  it('returns 401 when the request is not authenticated as admin', async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const response = await GET(makeRequest('/api/admin/dashboard'));
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.success).toBe(false);
   });
 
   it('returns live counts and job stats for the default 30-day period', async () => {

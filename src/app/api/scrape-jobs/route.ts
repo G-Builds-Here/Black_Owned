@@ -9,12 +9,22 @@ import {
   createScrapeJob,
 } from "@/lib/db/scrape-job-repository";
 import { validateScrapeJobInput } from "@/types/scrape-job";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 
 /**
  * GET /api/scrape-jobs
  * List scrape jobs (optional: filter by status)
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || undefined;
@@ -54,6 +64,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * Create a new scrape job
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const body = await request.json();
     const { source, query, location } = body;

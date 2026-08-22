@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/user-repository';
 import { findScrapeJobs } from '@/lib/db/scrape-job-repository';
 import { findPendingByStatus } from '@/lib/db/pending-import-business-repository';
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from '@/lib/auth/jwt-middleware';
 
 export interface DashboardCounts {
   totalBusinesses: number;
@@ -41,6 +45,12 @@ export interface DashboardReviewItem {
  * recent scrape jobs.
  */
 export async function GET(request: NextRequest) {
+  const requireAdmin = createAuthMiddleware(['admin']);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const days = parseInt(request.nextUrl.searchParams.get('days') || '30', 10);
 

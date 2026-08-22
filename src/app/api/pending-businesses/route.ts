@@ -5,9 +5,13 @@
  * Response includes: name, address, source, rating
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
 import { findPendingByStatus } from "@/lib/db/pending-import-business-repository";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 
 export interface PendingBusinessResponse {
   id: string;
@@ -22,7 +26,13 @@ export interface PendingBusinessResponse {
   sourceData?: Record<string, unknown>;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   const client = await getPool().connect();
 
   try {

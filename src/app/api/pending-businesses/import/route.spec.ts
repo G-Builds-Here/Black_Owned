@@ -4,7 +4,7 @@
  * Tests for the batch import endpoint for normalized businesses.
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST } from "./route";
 
 // Mock the database module
@@ -25,6 +25,25 @@ const { getPool } = require("@/lib/db/user-repository");
 const { importNormalizedBusinesses } = require("@/lib/db/pending-import-business-repository");
 const { validateBusinessData } = require("@/lib/utils/business-data-validator");
 
+jest.mock("@/lib/auth/jwt-middleware", () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const { createAuthMiddleware, createAuthErrorResponse } = require("@/lib/auth/jwt-middleware");
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: "u-admin", email: "admin@example.com", role: "admin" },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: "NO_AUTH_HEADER",
+  errorMessage: "Authorization header is required",
+  statusCode: 401,
+};
+
 describe("POST /api/pending-businesses/import", () => {
   const mockPool = {
     connect: jest.fn(),
@@ -37,8 +56,27 @@ describe("POST /api/pending-businesses/import", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: "unauthenticated" }, { status: 401 })
+    );
     getPool.mockReturnValue(mockPool);
     mockPool.connect.mockResolvedValue(mockClient);
+  });
+
+  it("returns 401 when the request is not authenticated as admin", async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const request = new NextRequest("http://localhost/api/pending-businesses/import", {
+      method: "POST",
+      body: JSON.stringify({ businesses: [] }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json.success).toBe(false);
   });
 
   it("should reject request without businesses array", async () => {

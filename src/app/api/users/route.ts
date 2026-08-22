@@ -20,12 +20,22 @@ import {
 } from "@/types/user-management";
 import { requireRole, AuthenticatedUser } from "@/lib/auth/auth-middleware";
 import { verifyTokenSafe } from "@/lib/auth/auth-service";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 
 /**
  * GET /api/users
  * List users with pagination and optional email search
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     // Initialize schema on first request
 
