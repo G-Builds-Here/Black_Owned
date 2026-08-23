@@ -167,15 +167,15 @@ Status as of 2026-08-21 — owner ruling 2026-08-20: "yes all of those will need
 - **§4 "Chat messages vs schema"** — resolved by 39cd004: ClickHouse `003_create_chat_messages.sql` creates `chat_messages` with exactly the columns `chat_consumer.rs:112` inserts (the CH `001` `messages` table is the separate user-to-user spec table).
 - **§5 "Dead migration columns"** — resolved by #64 (13c315f): `duplicate_status` dropped from the `001` snapshot, dead `006` deleted, `012` drop migration applied live; the type-only reference in `pending-import-business-repository.ts` removed.
 
-### Remaining findings → task map
+### Findings → task map (all resolved)
 
-| Finding area | Task |
-|---|---|
-| Rust stack: main.rs /health, real scrapers replacing fabricated rows (`scraper.rs:145-201`), real ETL + importer, nested `bw-scraper/bw-scraper/` orphan, Dockerfile, compose secrets (SearXNG discovery) | #48 |
-| Chat feature (LOC-0042) | #56 |
-| Owner dashboard + 3-step claim wizard (LOC-0043) | #55 |
-| E2E suites: approval workflow, admin console, claim wizard, chat (LOC-0053/0074) | #53 |
-| `/api/jobs` in-memory store → DB or retire | #54 |
+| Finding area | Task | Status |
+|---|---|---|
+| Rust stack: main.rs /health, real scrapers replacing fabricated rows (`scraper.rs:145-201`), real ETL + importer, nested `bw-scraper/bw-scraper/` orphan, Dockerfile, compose secrets (SearXNG discovery) | #48 | Done 2026-08-22 — Rust stack builds, `cargo test --workspace` green (bw-api test-infra defects fixed 2026-08-23, commit 54c3f17, with CI coverage switched to `--workspace`) |
+| Chat feature (LOC-0042) | #56 | Done 2026-08-22 — see #56 outcome below |
+| Owner dashboard + 3-step claim wizard (LOC-0043) | #55 | Done 2026-08-22 — see #55 outcome below |
+| E2E suites: approval workflow, admin console, claim wizard, chat (LOC-0053/0074) | #53 | Done 2026-08-22 — see #53 outcome below |
+| `/api/jobs` in-memory store → DB or retire | #54 | Done 2026-08-22 — closed via #64's "retire" option (route deleted, 4d2070d) |
 
 ### SearXNG integration note (2026-08-21)
 
