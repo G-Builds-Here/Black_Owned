@@ -21,7 +21,19 @@ async fn create_test_pool() -> sqlx::PgPool {
 }
 
 /// Setup test database schema
+///
+/// Statements are executed individually: PostgreSQL rejects multiple
+/// commands in a single prepared statement (error 42601).
+///
+/// DDL is serialized with a session advisory lock: concurrent
+/// `CREATE TABLE IF NOT EXISTS` from parallel test backends can race on
+/// the `pg_type` catalog index and fail with a duplicate key error.
 async fn setup_test_schema(pool: &sqlx::PgPool) {
+    sqlx::query("SELECT pg_advisory_lock(42424242)")
+        .execute(pool)
+        .await
+        .expect("Failed to acquire schema DDL lock");
+
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS businesses (
@@ -33,7 +45,14 @@ async fn setup_test_schema(pool: &sqlx::PgPool) {
             address TEXT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create test schema");
 
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS reviews (
             id UUID PRIMARY KEY,
             business_id UUID NOT NULL REFERENCES businesses(id),
@@ -43,7 +62,14 @@ async fn setup_test_schema(pool: &sqlx::PgPool) {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             UNIQUE(business_id, user_id)
         );
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create test schema");
 
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS categories (
             id UUID PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
@@ -54,6 +80,11 @@ async fn setup_test_schema(pool: &sqlx::PgPool) {
     .execute(pool)
     .await
     .expect("Failed to create test schema");
+
+    sqlx::query("SELECT pg_advisory_unlock(42424242)")
+        .execute(pool)
+        .await
+        .expect("Failed to release schema DDL lock");
 }
 
 /// Create a test schema with database connection
@@ -63,6 +94,17 @@ async fn create_test_schema() -> Schema<QueryRoot, MutationRoot, EmptySubscripti
 
     Schema::build(QueryRoot, MutationRoot, EmptySubscription)
         .data(pool)
+        .finish()
+}
+
+/// Create a test schema with a given authenticated user
+async fn create_test_schema_as(user_id: &Uuid) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+    let pool = create_test_pool().await;
+    setup_test_schema(&pool).await;
+
+    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+        .data(pool)
+        .data(crate::middleware::UserId(user_id.to_string()))
         .finish()
 }
 
@@ -97,11 +139,13 @@ async fn test_submit_review_success() {
             r#"
             mutation {{
                 submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "Great business!") {{
-                    id
-                    businessId
-                    userId
-                    rating
-                    comment
+                    review {{
+                        id
+                        businessId
+                        userId
+                        rating
+                        comment
+                    }}
                 }}
             }}
             "#
@@ -113,7 +157,7 @@ async fn test_submit_review_success() {
     assert!(response.errors.is_empty(), "GraphQL errors: {:?}", response.errors);
 
     let data: serde_json::Value = response.data.into_json().unwrap();
-    let review = data.get("submitReview").unwrap();
+    let review = data.get("submitReview").unwrap().get("review").unwrap();
 
     assert_eq!(review.get("rating").unwrap(), 5);
     assert_eq!(review.get("comment").unwrap(), "Great business!");
@@ -151,9 +195,11 @@ async fn test_submit_review_duplicate_rejected() {
             r#"
             mutation {{
                 submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "First review") {{
-                    id
-                    rating
-                    comment
+                    review {{
+                        id
+                        rating
+                        comment
+                    }}
                 }}
             }}
             "#
@@ -169,9 +215,11 @@ async fn test_submit_review_duplicate_rejected() {
             r#"
             mutation {{
                 submitReview(businessId: "{business_id}", userId: "{user_id}", rating: 5, comment: "First review") {{
-                    id
-                    rating
-                    comment
+                    review {{
+                        id
+                        rating
+                        comment
+                    }}
                 }}
             }}
             "#
@@ -217,8 +265,10 @@ async fn test_rating_aggregation() {
                 r#"
                 mutation {{
                     submitReview(businessId: "{business_id}", userId: "{user_id}", rating: {}, comment: "Review") {{
-                        id
-                        rating
+                        review {{
+                            id
+                            rating
+                        }}
                     }}
                 }}
                 "#,
@@ -341,11 +391,10 @@ async fn test_business_rating_avg_none_when_no_reviews() {
 
 #[tokio::test]
 async fn test_update_business_owner_success() {
-    let schema = create_test_schema().await;
-
     let business_id = Uuid::new_v4();
     let category_id = Uuid::new_v4();
     let owner_id = Uuid::new_v4();
+    let schema = create_test_schema_as(&owner_id).await;
 
     sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
         .bind(category_id)
@@ -393,12 +442,11 @@ async fn test_update_business_owner_success() {
 
 #[tokio::test]
 async fn test_update_business_not_owner_rejected() {
-    let schema = create_test_schema().await;
-
     let business_id = Uuid::new_v4();
     let category_id = Uuid::new_v4();
     let owner_id = Uuid::new_v4();
     let non_owner_id = Uuid::new_v4();
+    let schema = create_test_schema_as(&non_owner_id).await;
 
     sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
         .bind(category_id)
@@ -440,7 +488,8 @@ async fn test_update_business_not_owner_rejected() {
 
 #[tokio::test]
 async fn test_update_business_not_found_returns_null() {
-    let schema = create_test_schema().await;
+    let caller_id = Uuid::new_v4();
+    let schema = create_test_schema_as(&caller_id).await;
 
     let non_existent_id = Uuid::new_v4();
 
@@ -469,11 +518,10 @@ async fn test_update_business_not_found_returns_null() {
 
 #[tokio::test]
 async fn test_update_business_partial_fields() {
-    let schema = create_test_schema().await;
-
     let business_id = Uuid::new_v4();
     let category_id = Uuid::new_v4();
     let owner_id = Uuid::new_v4();
+    let schema = create_test_schema_as(&owner_id).await;
 
     sqlx::query("INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)")
         .bind(category_id)

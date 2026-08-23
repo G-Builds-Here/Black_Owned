@@ -112,11 +112,9 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
 
-      # bw-api is excluded until its pre-existing compile errors are fixed
-      # (task #71); switch to --workspace once it builds.
       - name: Run cargo llvm-cov
         run: |
-          cargo llvm-cov --all-targets -p bw-types -p bw-ingestion -p bw_scraper > coverage-summary.txt
+          cargo llvm-cov --all-targets --workspace > coverage-summary.txt
           cat coverage-summary.txt
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/black_owned_test

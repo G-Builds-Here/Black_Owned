@@ -75,7 +75,6 @@ impl BusinessApi {
             verified: false,
             address: None,
             created_at: chrono::Utc::now(),
-            address: None,
             phone: None,
             website: None,
             category: None,

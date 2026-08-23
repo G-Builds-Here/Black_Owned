@@ -22,7 +22,7 @@ pub struct AuthConfig {
 }
 
 /// In-memory store for authenticated user sessions
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AuthStore {
     /// Map of valid tokens to user IDs
     valid_tokens: RwLock<std::collections::HashMap<String, String>>,
@@ -91,7 +91,8 @@ where
         let auth_header = req
             .headers()
             .get(header::AUTHORIZATION)
-            .and_then(|h| h.to_str().ok());
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
 
         let mut inner = self.inner.clone();
         let store = self.store.clone();
@@ -100,6 +101,7 @@ where
         Box::pin(async move {
             // Extract token from Bearer header
             let token = auth_header
+                .as_deref()
                 .and_then(|auth| auth.strip_prefix("Bearer "))
                 .map(|s| s.to_string());
 

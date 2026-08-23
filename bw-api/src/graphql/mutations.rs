@@ -17,19 +17,6 @@ use crate::middleware::UserId;
 /// Mutation root for GraphQL API
 pub struct MutationRoot;
 
-/// Extract user ID from JWT token in Authorization header
-fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
-    let auth_header = ctx
-        .data::<axum::Extension<axum_extra::headers::Authorization<axum_extra::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string());
-
-    auth_header
-        .ok_or_else(|| Error::new("Authorization header is required"))
-        .and_then(|token| {
-            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
-        })
-}
-
 #[Object]
 impl MutationRoot {
     /// Create a new business
@@ -52,8 +39,8 @@ impl MutationRoot {
 
         // Extract user ID from JWT token
         let user_id = match ctx.data::<UserId>() {
-            Some(uid) => uid.0.clone(),
-            None => return Err(Error::new("Unauthorized: User not authenticated")),
+            Ok(uid) => uid.0.clone(),
+            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
         };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
@@ -93,6 +80,11 @@ impl MutationRoot {
             verified: result.5,
             address: result.6,
             created_at: result.7,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         }))
     }
 
@@ -112,8 +104,8 @@ impl MutationRoot {
 
         // Extract user ID from JWT token
         let user_id = match ctx.data::<UserId>() {
-            Some(uid) => uid.0.clone(),
-            None => return Err(Error::new("Unauthorized: User not authenticated")),
+            Ok(uid) => uid.0.clone(),
+            Err(_) => return Err(Error::new("Unauthorized: User not authenticated")),
         };
 
         let user_uuid = Uuid::parse_str(&user_id).map_err(|e| {
@@ -181,6 +173,11 @@ impl MutationRoot {
                 verified: v,
                 address: addr,
                 created_at: ca,
+                phone: None,
+                website: None,
+                category: None,
+                rating: None,
+                review_count: None,
             })
         }))
     }
@@ -230,7 +227,7 @@ impl MutationRoot {
         let id = Uuid::new_v4();
 
         let result =
-            sqlx::query_as::<_, (Uuid, Uuid, Uuid, i8, String, chrono::DateTime<Utc>)>(
+            sqlx::query_as::<_, (Uuid, Uuid, Uuid, i16, String, chrono::DateTime<Utc>)>(
                 r#"
                 INSERT INTO reviews (id, business_id, user_id, rating, comment, created_at)
                 VALUES ($1, $2, $3, $4, $5, $6)
@@ -240,7 +237,7 @@ impl MutationRoot {
             .bind(id)
             .bind(business_uuid)
             .bind(user_uuid)
-            .bind(rating as i8)
+            .bind(rating as i16)
             .bind(&comment)
             .bind(Utc::now())
             .fetch_one(db)
@@ -289,6 +286,12 @@ impl MutationRoot {
             address: business_row.4,
             created_at: business_row.5,
             owner_id: business_row.6,
+            description: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         };
 
         let mut gql_business: GQLBusiness = business.into();
