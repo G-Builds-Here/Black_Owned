@@ -193,6 +193,7 @@ describe("updateBusiness resolver", () => {
       name: mockNewName,
       categoryId: "food-dining",
       verified: false,
+      socialUrls: null,
       createdAt: {
         timestamp: expect.any(Number),
       },

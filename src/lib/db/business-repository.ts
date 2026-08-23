@@ -6,6 +6,7 @@
 
 import { PoolClient } from "pg";
 import { Business } from "../../types/business";
+import { SocialUrls } from "../../services/social-discovery";
 
 /**
  * Get business table name (with schema if configured)
@@ -34,6 +35,7 @@ function rowToBusiness(row: unknown): Business {
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
+    socialUrls: r.social_urls as SocialUrls | null | undefined,
   };
 }
 

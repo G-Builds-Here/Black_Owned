@@ -4,6 +4,8 @@
  * Defines the data structures for business profiles.
  */
 
+import type { SocialUrls } from "../services/social-discovery";
+
 /**
  * Verification status for a business
  */
@@ -21,6 +23,7 @@ export interface Business {
   verificationStatus: VerificationStatus;
   createdAt: Date;
   updatedAt: Date;
+  socialUrls?: SocialUrls | null;
 }
 
 /**

@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { ChatButton } from './ChatButton';
+import { SocialMediaSection } from './SocialMediaSection';
+import { SocialUrls } from '@/services/social-discovery';
 
 export interface Business {
   id: string;
@@ -11,6 +13,7 @@ export interface Business {
   createdAt: {
     timestamp: number;
   };
+  socialUrls?: SocialUrls | null;
 }
 
 export interface BusinessDetailProps {
@@ -147,6 +150,8 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
               </p>
             </div>
           </div>
+
+          <SocialMediaSection business={business} />
 
           {/* Action Buttons */}
           <div className="flex gap-3 mt-8 pt-6 border-t border-neutral-200">

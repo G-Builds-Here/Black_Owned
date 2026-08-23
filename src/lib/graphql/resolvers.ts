@@ -31,6 +31,7 @@ import {
 import { findScrapedBusinessById } from "../db/scraped-business-repository";
 import { getPool } from "../db/user-repository";
 import { Business } from "../../types/business";
+import { SocialUrls } from "../../services/social-discovery";
 import { fetchDirectoryItems, type DirectoryBusiness } from "@/app/api/directory/route";
 
 /**
@@ -203,6 +204,7 @@ export async function business(
   name: string;
   categoryId: string;
   verified: boolean;
+  socialUrls: SocialUrls | null;
   createdAt: { timestamp: number };
 } | null> {
   const { id } = args;
@@ -237,6 +239,7 @@ export async function business(
         name: row.name,
         categoryId: row.category_id,
         verified: true,
+        socialUrls: null,
         createdAt: { timestamp: Math.floor(createdAt.getTime() / 1000) },
       };
     }
@@ -249,6 +252,7 @@ export async function business(
         name: scraped.name,
         categoryId: scraped.category || "other",
         verified: false,
+        socialUrls: null,
         createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
       };
     }
@@ -347,6 +351,7 @@ function businessToGraphqlBusiness(business: Business) {
     name: business.name,
     categoryId: business.categoryId,
     verified: business.verificationStatus === 'verified',
+    socialUrls: business.socialUrls ?? null,
     createdAt: {
       timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },

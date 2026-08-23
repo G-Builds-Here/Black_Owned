@@ -53,6 +53,7 @@ describe("business(id:) resolver", () => {
       name: "Canonical Biz",
       categoryId: "food-dining",
       verified: true,
+      socialUrls: null,
       createdAt: { timestamp: Math.floor(new Date("2026-01-15T00:00:00Z").getTime() / 1000) },
     });
     // Should not query pending or scraped when canonical is found
@@ -80,6 +81,7 @@ describe("business(id:) resolver", () => {
       name: "Pending Biz",
       categoryId: "retail",
       verified: true,
+      socialUrls: null,
       createdAt: { timestamp: Math.floor(new Date("2026-02-20T00:00:00Z").getTime() / 1000) },
     });
     expect(findScrapedBusinessById).not.toHaveBeenCalled();
@@ -116,6 +118,7 @@ describe("business(id:) resolver", () => {
       name: "Scraped Biz",
       categoryId: "restaurants",
       verified: false,
+      socialUrls: null,
       createdAt: { timestamp: Math.floor(new Date("2026-03-01T00:00:00Z").getTime() / 1000) },
     });
   });

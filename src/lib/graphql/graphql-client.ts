@@ -2,6 +2,8 @@
  * GraphQL Client for frontend API calls
  */
 
+import { SocialUrls } from '../../services/social-discovery';
+
 function getApiBaseUrl(): string {
   // Same-origin by default: the Next app hosts the resolvers at /api/graphql.
   return process.env.NEXT_PUBLIC_API_URL || '';
@@ -22,6 +24,7 @@ export interface Business {
   createdAt: {
     timestamp: number;
   };
+  socialUrls?: SocialUrls | null;
 }
 
 export interface BusinessQueryResponse {
@@ -74,6 +77,7 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
         name
         categoryId
         verified
+        socialUrls
         createdAt {
           timestamp
         }
