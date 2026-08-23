@@ -100,6 +100,89 @@ jobs:
           NATS_URL: nats://localhost:4222
           VALKEY_URL: valkey://localhost:6379
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: black_owned_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      nats:
+        image: nats:2.10-alpine
+        ports:
+          - 4222:4222
+        options: >-
+          --health-cmd "nats-server -sl ping localhost:4222"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      valkey:
+        image: valkey/valkey:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: llvm-tools
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+
+      # bw-api is excluded until its pre-existing compile errors are fixed
+      # (task #71); switch to --workspace once it builds.
+      - name: Run cargo llvm-cov
+        run: |
+          cargo llvm-cov --all-targets -p bw_scraper > coverage-summary.txt
+          cat coverage-summary.txt
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/black_owned_test
+          NATS_URL: nats://localhost:4222
+          VALKEY_URL: valkey://localhost:6379
+
+      - name: Add coverage summary to job summary
+        run: cat coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-bw-scraper
+          path: |
+            target/llvm-cov/
+            coverage-summary.txt
+          retention-days: 14
+
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
