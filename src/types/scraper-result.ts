@@ -208,6 +208,15 @@ export interface ScraperOptions {
   maxPages?: number;
   delayBetweenPagesMs?: number;
   includeDuplicates?: boolean;
+  /**
+   * Credentials for platforms that gate content behind a login wall. Scrapers
+   * that support authenticated scraping detect a login prompt and log in with
+   * these; when absent, scraping stays anonymous.
+   */
+  credentials?: {
+    email: string;
+    password: string;
+  };
 }
 
 /**
