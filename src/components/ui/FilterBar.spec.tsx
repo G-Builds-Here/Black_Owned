@@ -2,124 +2,70 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import FilterBar, { FilterOption, SortOption } from './FilterBar';
+import FilterBar from './FilterBar';
 
 // Current component notes (source of truth: FilterBar.tsx):
-// - No data-testid on the root; the root div is container.firstChild with
-//   bg-white rounded-lg shadow-sm border border-neutral-200, and the padded
-//   control row is its first child (p-3 flex flex-wrap gap-2 items-center).
-// - The filters are Dropdown triggers labeled "Category", "Location",
-//   "Rating", and the current sort label (default "Sort by").
+// - No card chrome: the root div IS the control row (flex flex-wrap
+//   items-center gap-2 p-3). The sticky white band is owned by the page.
+// - Tabs render as a segmented pill control - "All Businesses (N)" /
+//   "Saved (N)" - only when savedCount + onTabChange are provided.
+// - A rounded search input (aria-label "Search businesses") renders when
+//   onSearchChange is provided.
+// - The filters are pill-styled Dropdown triggers labeled "Location",
+//   "Category", "Rating", and the current sort label (default "Sort by").
 // - The verified toggle is a Button labeled "All" (inactive) / "✓" (active).
-// - The clear button is labeled "Clear" (not "Clear All") and appears only
-//   when filters are active. The old active-filter summary (with per-filter
-//   remove buttons) was removed in the redesign.
+// - The Clear button appears only when a filter or search text is active.
 
 describe('FilterBar', () => {
   const mockCategories = ['Food & Dining', 'Professional Services', 'Retail'];
   const mockLocations = ['New York', 'Los Angeles', 'Chicago'];
-
-  const filterBarRoot = (container: HTMLElement) => container.firstChild as HTMLElement;
-  const filterRow = (container: HTMLElement) =>
-    (filterBarRoot(container).querySelector('.p-3') as HTMLElement);
-
-  it('renders category filter label', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    expect(screen.getByText(/category/i)).toBeInTheDocument();
-  });
+  const base = {
+    categories: mockCategories,
+    locations: mockLocations,
+    onFilterChange: jest.fn(),
+    onSortChange: jest.fn(),
+  };
 
   it('renders location filter label', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} />);
     expect(screen.getByText(/location/i)).toBeInTheDocument();
   });
 
+  it('renders category filter label', () => {
+    render(<FilterBar {...base} />);
+    expect(screen.getByText(/category/i)).toBeInTheDocument();
+  });
+
   it('renders rating filter label', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} />);
     expect(screen.getByText('Rating')).toBeInTheDocument();
   });
 
   it('renders sort by label', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} />);
     expect(screen.getByText(/sort by/i)).toBeInTheDocument();
   });
 
   it('renders verification toggle button', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    expect(screen.getByText(/all/i)).toBeInTheDocument();
+    render(<FilterBar {...base} />);
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
   });
 
   it('toggles verified only filter', () => {
     const handleFilterChange = jest.fn();
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={handleFilterChange}
-        onSortChange={jest.fn()}
-      />
-    );
-    fireEvent.click(screen.getByText(/all/i));
+    render(<FilterBar {...base} onFilterChange={handleFilterChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
     expect(handleFilterChange).toHaveBeenCalledWith({ verifiedOnly: true });
   });
 
   it('shows the checkmark when verified-only filter is active', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-        currentFilters={{ verifiedOnly: true }}
-      />
-    );
+    render(<FilterBar {...base} currentFilters={{ verifiedOnly: true }} />);
     expect(screen.getByText('✓')).toBeInTheDocument();
   });
 
   it('calls onFilterChange when category is selected', () => {
     const handleFilterChange = jest.fn();
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={handleFilterChange}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} onFilterChange={handleFilterChange} />);
     // Open the category dropdown (trigger shows the current value or "Category")
     fireEvent.click(screen.getByRole('button', { name: 'Category' }));
     // Select a category
@@ -129,14 +75,7 @@ describe('FilterBar', () => {
 
   it('calls onFilterChange when location is selected', () => {
     const handleFilterChange = jest.fn();
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={handleFilterChange}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} onFilterChange={handleFilterChange} />);
     // Open the location dropdown
     fireEvent.click(screen.getByRole('button', { name: 'Location' }));
     // Select a location
@@ -146,14 +85,7 @@ describe('FilterBar', () => {
 
   it('calls onFilterChange when rating is selected', () => {
     const handleFilterChange = jest.fn();
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={handleFilterChange}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} onFilterChange={handleFilterChange} />);
     // Open the rating dropdown
     fireEvent.click(screen.getByRole('button', { name: 'Rating' }));
     // Select a rating
@@ -163,14 +95,7 @@ describe('FilterBar', () => {
 
   it('calls onSortChange when sort option is selected', () => {
     const handleSortChange = jest.fn();
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={handleSortChange}
-      />
-    );
+    render(<FilterBar {...base} onSortChange={handleSortChange} />);
     // Open the sort dropdown
     fireEvent.click(screen.getByRole('button', { name: /sort by/i }));
     // Select a sort option
@@ -181,10 +106,7 @@ describe('FilterBar', () => {
   it('shows clear button when filters are active', () => {
     render(
       <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
+        {...base}
         currentFilters={{ category: 'Food & Dining' }}
       />
     );
@@ -192,14 +114,7 @@ describe('FilterBar', () => {
   });
 
   it('does not show clear button when no filters are active', () => {
-    render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
+    render(<FilterBar {...base} />);
     expect(screen.queryByText(/clear/i)).not.toBeInTheDocument();
   });
 
@@ -208,12 +123,11 @@ describe('FilterBar', () => {
     const handleSortChange = jest.fn();
     render(
       <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
+        {...base}
         onFilterChange={handleFilterChange}
         onSortChange={handleSortChange}
         currentFilters={{ category: 'Food & Dining' }}
-        currentSort="relevance"
+        currentSort="rating"
       />
     );
     fireEvent.click(screen.getByText(/clear/i));
@@ -221,95 +135,54 @@ describe('FilterBar', () => {
     expect(handleSortChange).toHaveBeenCalledWith('relevance');
   });
 
-  it('has rounded border', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    expect(filterBarRoot(container)).toHaveClass('rounded-lg');
+  it('renders the search input when onSearchChange is provided', () => {
+    render(<FilterBar {...base} onSearchChange={jest.fn()} />);
+    expect(screen.getByLabelText('Search businesses')).toBeInTheDocument();
   });
 
-  it('has shadow', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    expect(filterBarRoot(container)).toHaveClass('shadow-sm');
+  it('calls onSearchChange when the search input is typed', () => {
+    const onSearchChange = jest.fn();
+    render(<FilterBar {...base} onSearchChange={onSearchChange} />);
+    fireEvent.change(screen.getByLabelText('Search businesses'), {
+      target: { value: 'soul' },
+    });
+    expect(onSearchChange).toHaveBeenCalledWith('soul');
   });
 
-  it('has border', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    const filterBar = filterBarRoot(container);
-    expect(filterBar).toHaveClass('border');
-    expect(filterBar).toHaveClass('border-neutral-200');
+  it('shows clear when search text is active', () => {
+    render(<FilterBar {...base} search="soul" onSearchChange={jest.fn()} />);
+    expect(screen.getByText(/clear/i)).toBeInTheDocument();
   });
 
-  it('has padding on the control row', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    const row = filterRow(container);
-    expect(row).toHaveClass('p-3');
-  });
-
-  it('has flex layout', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    const row = filterRow(container);
-    expect(row).toHaveClass('flex');
-    expect(row).toHaveClass('flex-wrap');
-    expect(row).toHaveClass('gap-2');
-  });
-
-  it('shows results count when provided', () => {
+  it('renders segmented tabs when savedCount and onTabChange are provided', () => {
     render(
       <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
+        {...base}
+        savedCount={5}
+        activeTab="all"
+        onTabChange={jest.fn()}
+        filteredCount={13}
       />
     );
-    // The directory page shows the count, not the FilterBar itself
-    // This test verifies the FilterBar structure
-    expect(screen.getByText(/category/i)).toBeInTheDocument();
+    expect(screen.getByText('All Businesses (13)')).toBeInTheDocument();
+    expect(screen.getByText('Saved (5)')).toBeInTheDocument();
   });
 
-  it('has white background', () => {
-    const { container } = render(
-      <FilterBar
-        categories={mockCategories}
-        locations={mockLocations}
-        onFilterChange={jest.fn()}
-        onSortChange={jest.fn()}
-      />
-    );
-    expect(filterBarRoot(container)).toHaveClass('bg-white');
+  it('omits tabs and search when optional props are missing', () => {
+    render(<FilterBar {...base} />);
+    expect(screen.queryByText(/all businesses/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Search businesses')).not.toBeInTheDocument();
+  });
+
+  it('is a single control row with no card chrome', () => {
+    const { container } = render(<FilterBar {...base} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveClass('flex');
+    expect(root).toHaveClass('flex-wrap');
+    expect(root).toHaveClass('items-center');
+    expect(root).toHaveClass('gap-2');
+    expect(root).not.toHaveClass('rounded-lg');
+    expect(root).not.toHaveClass('shadow-sm');
+    expect(root).not.toHaveClass('border');
   });
 });

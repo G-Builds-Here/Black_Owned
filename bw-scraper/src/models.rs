@@ -14,5 +14,7 @@ pub struct ScrapedBusinessRecord {
     pub category: Option<String>,
     pub rating: Option<f64>,
     pub review_count: Option<i32>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
     pub source_id: String,
 }

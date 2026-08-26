@@ -21,9 +21,31 @@ export interface Business {
   description: string | undefined;
   categoryId: string;
   verificationStatus: VerificationStatus;
+  location?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  website?: string | null;
+  imageUrl?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  tags?: string[] | null;
   createdAt: Date;
   updatedAt: Date;
   socialUrls?: SocialUrls | null;
+  locations?: BusinessLocation[] | null;
+}
+
+/**
+ * A physical location of a business (multi-location support).
+ * The primary location mirrors businesses.location/lat/lng.
+ */
+export interface BusinessLocation {
+  id: string;
+  label?: string | null;
+  address: string;
+  lat?: number | null;
+  lng?: number | null;
+  isPrimary: boolean;
 }
 
 /**

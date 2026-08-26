@@ -68,14 +68,23 @@ describe("deriveLocation", () => {
     expect(deriveLocation("123 Main St, Harlem, NY")).toBe("Harlem, NY");
   });
 
-  it("should return the address unchanged when it has two or fewer parts", () => {
-    expect(deriveLocation("123 Main St, Harlem")).toBe("123 Main St, Harlem");
+  it("should keep a bare City, ST value as the place", () => {
+    expect(deriveLocation("Atlanta, GA")).toBe("Atlanta, GA");
   });
 
-  it("should return empty string for empty input", () => {
-    expect(deriveLocation(null)).toBe("");
-    expect(deriveLocation(undefined)).toBe("");
-    expect(deriveLocation("")).toBe("");
+  it("should strip the ZIP code when deriving the place", () => {
+    expect(deriveLocation("302 Auburn Ave NE, Atlanta, GA 30303")).toBe("Atlanta, GA");
+  });
+
+  it("should return null for street addresses without a City, ST shape", () => {
+    expect(deriveLocation("1648 Memorial Dr SE D")).toBeNull();
+    expect(deriveLocation("123 Main St, Harlem")).toBeNull();
+  });
+
+  it("should return null for empty input", () => {
+    expect(deriveLocation(null)).toBeNull();
+    expect(deriveLocation(undefined)).toBeNull();
+    expect(deriveLocation("")).toBeNull();
   });
 });
 
@@ -140,6 +149,11 @@ describe("filterDirectoryItems", () => {
     expect(result.map((i) => i.id)).toEqual(["1"]);
   });
 
+  it("should not match raw street address text via the location filter", () => {
+    const result = filterDirectoryItems(items, { location: "main st" });
+    expect(result.map((i) => i.id)).toEqual([]);
+  });
+
   it("should exclude businesses without a rating when minRating is set", () => {
     const result = filterDirectoryItems(items, { minRating: 4 });
     expect(result.map((i) => i.id)).toEqual(["1"]);
@@ -167,6 +181,7 @@ describe("buildDirectoryFacets", () => {
       { id: "1", name: "A", category: "retail", location: "1 St, Harlem, NY", rating: null, reviewCount: null, isVerified: true, description: null, website: null, phone: null, source: null, createdAt: "2026-01-01T00:00:00.000Z" },
       { id: "2", name: "B", category: "food-dining", location: "2 St, Harlem, NY", rating: null, reviewCount: null, isVerified: true, description: null, website: null, phone: null, source: null, createdAt: "2026-01-01T00:00:00.000Z" },
       { id: "3", name: "C", category: "retail", location: "", rating: null, reviewCount: null, isVerified: true, description: null, website: null, phone: null, source: null, createdAt: "2026-01-01T00:00:00.000Z" },
+      { id: "4", name: "D", category: "retail", location: "1648 Memorial Dr SE D", rating: null, reviewCount: null, isVerified: true, description: null, website: null, phone: null, source: null, createdAt: "2026-01-01T00:00:00.000Z" },
     ]);
 
     expect(facets.categories).toEqual(["food-dining", "retail"]);

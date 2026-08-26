@@ -27,48 +27,37 @@ const socialUrls: SocialUrls = {
 };
 
 describe('SocialMediaSection', () => {
-  it('renders the Follow Us heading and a card per platform', () => {
+  it('renders a compact chip per platform', () => {
     render(<SocialMediaSection business={{ name: 'Maple Street Bakery', socialUrls }} />);
-    expect(screen.getByRole('heading', { name: 'Follow Us' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Follow Maple Street Bakery' })).toBeInTheDocument();
     expect(screen.getByText('Instagram')).toBeInTheDocument();
     expect(screen.getByText('YouTube')).toBeInTheDocument();
     expect(screen.getByText('Twitter / X')).toBeInTheDocument();
-    expect(screen.getByText('@maple_bakery')).toBeInTheDocument();
+    expect(screen.getByText('maple_bakery')).toBeInTheDocument();
   });
 
-  it('renders the confidence and source in the card header', () => {
+  it('links each chip to the platform URL in a new tab', () => {
     render(<SocialMediaSection business={{ name: 'Maple Street Bakery', socialUrls }} />);
-    expect(screen.getByText('95%')).toBeInTheDocument();
-    expect(screen.getByText('google search')).toBeInTheDocument();
-    // both the youtube and twitter fixtures use the direct_probe source
-    expect(screen.getAllByText('direct probe')).toHaveLength(2);
+    const ig = screen.getByRole('link', { name: /instagram/i });
+    expect(ig).toHaveAttribute('href', 'https://instagram.com/maple_bakery');
+    expect(ig).toHaveAttribute('target', '_blank');
+    expect(ig).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('renders an iframe for youtube', () => {
+  it('exposes confidence and source in the tooltip', () => {
+    render(<SocialMediaSection business={{ name: 'Maple Street Bakery', socialUrls }} />);
+    const ig = screen.getByRole('link', { name: /instagram/i });
+    expect(ig).toHaveAttribute('title', expect.stringContaining('95%'));
+    expect(ig).toHaveAttribute('title', expect.stringContaining('google search'));
+  });
+
+  it('renders no embeds or iframes', () => {
     const { container } = render(
       <SocialMediaSection business={{ name: 'Maple Street Bakery', socialUrls }} />
     );
-    const iframe = container.querySelector('iframe');
-    expect(iframe?.getAttribute('src')).toBe(
-      'https://www.youtube.com/embed/maplebakery/videos'
-    );
-  });
-
-  it('renders an instagram placeholder permalink blockquote', () => {
-    const { container } = render(
-      <SocialMediaSection business={{ name: 'Maple Street Bakery', socialUrls }} />
-    );
-    const blockquote = container.querySelector('blockquote.instagram-media');
-    expect(blockquote?.getAttribute('data-instgrm-permalink')).toBe(
-      'https://instagram.com/maple_bakery/'
-    );
-  });
-
-  it('renders a link card (no embed) for twitter', () => {
-    render(<SocialMediaSection business={{ name: 'Maple Street Bakery', socialUrls }} />);
-    const link = screen.getByRole('link', { name: /Visit Twitter \/ X Profile/i });
-    expect(link).toHaveAttribute('href', 'https://twitter.com/maplebakery');
-    expect(screen.getByText(/Follow Maple Street Bakery on Twitter \/ X/)).toBeInTheDocument();
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.querySelector('blockquote')).toBeNull();
+    expect(container.querySelector('script')).toBeNull();
   });
 
   it('renders nothing when socialUrls is empty', () => {

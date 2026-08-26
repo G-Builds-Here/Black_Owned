@@ -9,6 +9,15 @@ function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || '';
 }
 
+export interface BusinessLocation {
+  id: string;
+  label?: string | null;
+  address: string;
+  lat?: number | null;
+  lng?: number | null;
+  isPrimary: boolean;
+}
+
 export interface GraphQLResponse<T> {
   data?: T;
   errors?: Array<{
@@ -20,11 +29,24 @@ export interface Business {
   id: string;
   name: string;
   categoryId: string;
+  category?: string | null;
+  description?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  imageUrl?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  tags?: string[] | null;
+  source?: string | null;
   verified: boolean;
+  socialUrls?: SocialUrls | null;
   createdAt: {
     timestamp: number;
   };
-  socialUrls?: SocialUrls | null;
+  locations: BusinessLocation[];
 }
 
 export interface BusinessQueryResponse {
@@ -76,6 +98,26 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
         id
         name
         categoryId
+        category
+        description
+        location
+        phone
+        website
+        rating
+        reviewCount
+        imageUrl
+        lat
+        lng
+        tags
+        source
+        locations {
+          id
+          label
+          address
+          lat
+          lng
+          isPrimary
+        }
         verified
         socialUrls
         createdAt {

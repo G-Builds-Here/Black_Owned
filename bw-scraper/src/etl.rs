@@ -1,6 +1,7 @@
 //! Snippet-level extraction: turn raw SearXNG web hits into business
 //! records, rejecting directory/listicle pages.
 
+use std::sync::LazyLock;
 use std::sync::OnceLock;
 
 use regex::Regex;
@@ -29,6 +30,7 @@ impl EtlPipeline {
             .content
             .as_deref()
             .and_then(extract_us_phone);
+        let coords = extract_google_maps_coords(&result.url);
         Some(ScrapedBusinessRecord {
             name,
             address: None,
@@ -37,6 +39,8 @@ impl EtlPipeline {
             category: None,
             rating: None,
             review_count: None,
+            lat: coords.map(|c| c.0),
+            lng: coords.map(|c| c.1),
             source_id: stable_source_id(&result.url),
         })
     }
@@ -109,6 +113,20 @@ fn extract_us_phone(snippet: &str) -> Option<String> {
     phone_regex().find(snippet).map(|m| m.as_str().to_string())
 }
 
+/// Google Maps place URLs embed coordinates in their data fragment:
+/// `...!3d<lat>!4d<lng>...`.
+static MAPS_URL_COORDS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new("!3d(-?\\d+(?:\\.\\d+)?)!4d(-?\\d+(?:\\.\\d+)?)").unwrap()
+});
+
+/// Extract (lat, lng) when the result URL is a Google Maps place URL, else None.
+fn extract_google_maps_coords(url: &str) -> Option<(f64, f64)> {
+    let caps = MAPS_URL_COORDS.captures(url)?;
+    let lat = caps.get(1)?.as_str().parse().ok()?;
+    let lng = caps.get(2)?.as_str().parse().ok()?;
+    Some((lat, lng))
+}
+
 /// Stable, deterministic id so re-scrapes can dedupe by `source_id`.
 /// FNV-1a 64 (std's DefaultHasher is per-process seeded and not stable).
 fn stable_source_id(url: &str) -> String {
@@ -169,6 +187,33 @@ mod tests {
             ))
             .expect("business-like result should transform");
         assert!(record.phone.is_none());
+    }
+
+    #[test]
+    fn extracts_coords_from_google_maps_url() {
+        let url = "https://www.google.com/maps/place/Zeke%27s+Kitchen+%26+Bar/data=!4m7!3m6!1s0x88f51bb124850d29:0x2d3b6823e4feddcb!8m2!3d33.8455382!4d-84.5043073!16s%2Fg%2F11s0wf2y_s?authuser=0&hl=en";
+        let record = EtlPipeline::new()
+            .transform(&result(
+                url,
+                "Zeke's Kitchen & Bar",
+                None,
+            ))
+            .expect("business-like result should transform");
+        assert_eq!(record.lat, Some(33.8455382));
+        assert_eq!(record.lng, Some(-84.5043073));
+    }
+
+    #[test]
+    fn coords_are_none_for_non_maps_urls() {
+        let record = EtlPipeline::new()
+            .transform(&result(
+                "https://example-eats.com/",
+                "Example Eats",
+                None,
+            ))
+            .expect("business-like result should transform");
+        assert_eq!(record.lat, None);
+        assert_eq!(record.lng, None);
     }
 
     #[test]

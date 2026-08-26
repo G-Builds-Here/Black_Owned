@@ -38,6 +38,8 @@ export interface ScrapedBusiness {
   rating?: number;
   reviewCount?: number;
   sourceId?: string;
+  lat?: number;
+  lng?: number;
   createdAt: Date;
 }
 
@@ -71,6 +73,8 @@ function rowToScrapedBusiness(row: unknown): ScrapedBusiness {
     rating: (r.rating as number | null) ?? undefined,
     reviewCount: (r.review_count as number | null) ?? undefined,
     sourceId: (r.source_id as string) ?? undefined,
+    lat: (r.lat as number | null) ?? undefined,
+    lng: (r.lng as number | null) ?? undefined,
     createdAt: new Date(r.created_at as string),
   };
 }

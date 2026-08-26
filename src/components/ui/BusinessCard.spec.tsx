@@ -8,10 +8,8 @@ import BusinessCard, { Business } from './BusinessCard';
 // - The card wrapper is Card's root div (no testids): rounded-xl shadow-soft
 //   flex flex-col cursor-pointer (variant "elevated", clickable).
 // - The verified badge renders a "✓" glyph (no "verified" text).
-// - The image frame is a fixed-width w-40 column (no aspect-video, no
-//   hover-scale on the img); rating sits in a div with aria-label
-//   "Rating: <n> out of 5 stars".
-
+// - The image is a left w-40 column (OpenDoor-style horizontal card; the
+//   placeholder shows a 🏪 emoji when imageUrl is empty); rating sits in a
 describe('BusinessCard', () => {
   const mockBusiness: Business = {
     id: '1',
@@ -157,7 +155,7 @@ describe('BusinessCard', () => {
     expect(cardRoot(container)).toHaveClass('flex-col');
   });
 
-  it('has fixed-width image column', () => {
+  it('has a left image column', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
     const imageContainer = container.querySelector('.bg-neutral-200') as HTMLElement;
     expect(imageContainer).toHaveClass('w-40');

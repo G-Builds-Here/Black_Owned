@@ -85,8 +85,8 @@ impl PostgresImporter {
             match sqlx::query(
                 r#"INSERT INTO scraped_businesses
                    (scrape_job_id, source, name, address, phone, website, category,
-                    rating, review_count, source_id, created_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())"#,
+                    rating, review_count, lat, lng, source_id, created_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())"#,
             )
             .bind(job_id)
             .bind(source)
@@ -95,8 +95,10 @@ impl PostgresImporter {
             .bind(&record.phone)
             .bind(&record.website)
             .bind(&record.category)
-            .bind(record.rating)
-            .bind(record.review_count)
+                .bind(record.rating)
+                .bind(record.review_count)
+                .bind(record.lat)
+                .bind(record.lng)
             .bind(&record.source_id)
             .execute(&self.pool)
             .await

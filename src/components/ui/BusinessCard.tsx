@@ -87,23 +87,23 @@ export default function BusinessCard({
       variant="elevated"
       padding="none"
       clickable
-      className="h-full"
+      className="h-full overflow-hidden"
       as={enableLink ? Link : 'div'}
       href={enableLink ? `/business/${business.id}` : undefined}
     >
       <div className="flex h-full">
-        {/* Image - Left side */}
-        <div className="relative w-40 flex-shrink-0 overflow-hidden bg-neutral-200">
+        {/* Image - left column */}
+        <div className="relative w-40 flex-shrink-0 self-stretch min-h-[132px] overflow-hidden bg-neutral-200">
           {business.imageUrl ? (
             <img
               src={business.imageUrl}
               alt={`Business photo for ${business.name}`}
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover"
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-neutral-400">
-              <span className="text-4xl">🏪</span>
+            <div className="flex h-full w-full items-center justify-center text-neutral-400">
+              <span className="text-3xl">🏪</span>
             </div>
           )}
 
@@ -119,21 +119,23 @@ export default function BusinessCard({
           )}
         </div>
 
-        {/* Content - Right side */}
+        {/* Content */}
         <div className="flex flex-col flex-grow p-3">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-lg font-semibold text-neutral-900 line-clamp-1">{business.name}</h3>
+          <h3 className="text-lg font-semibold text-neutral-900 line-clamp-1">
+            {business.name}
+          </h3>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {renderStars(business.rating)}
             <Badge variant="primary" size="sm">{business.category}</Badge>
           </div>
-
-          {renderStars(business.rating)}
 
           <p className="text-sm text-neutral-700 mt-1 flex items-center gap-1">
             <span aria-hidden="true">📍</span>
             {business.location}
           </p>
 
-          <p className="text-sm text-neutral-700 mt-2 line-clamp-2 flex-grow">
+          <p className="text-sm text-neutral-500 mt-2 line-clamp-2">
             {business.description}
           </p>
 

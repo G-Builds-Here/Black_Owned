@@ -5,7 +5,7 @@
  */
 
 import { PoolClient } from "pg";
-import { Business } from "../../types/business";
+import { Business, BusinessLocation } from "../../types/business";
 import { SocialUrls } from "../../services/social-discovery";
 
 /**
@@ -14,6 +14,14 @@ import { SocialUrls } from "../../services/social-discovery";
 function getTableName(): string {
   const schema = process.env.POSTGRES_SCHEMA;
   return schema ? `${schema}.businesses` : "businesses";
+}
+
+/**
+ * Get business_locations table name (with schema if configured)
+ */
+function getLocationsTableName(): string {
+  const schema = process.env.POSTGRES_SCHEMA;
+  return schema ? `${schema}.business_locations` : "business_locations";
 }
 
 /**
@@ -33,15 +41,19 @@ function rowToBusiness(row: unknown): Business {
     description: r.description as string | undefined,
     categoryId: r.category_id as string,
     verificationStatus: r.verification_status as "unverified" | "pending" | "verified",
+    location: (r.location as string | null | undefined) ?? null,
+    rating: r.rating != null ? Number(r.rating) : null,
+    reviewCount: r.review_count != null ? Number(r.review_count) : null,
+    website: (r.website as string | null | undefined) ?? null,
+    imageUrl: (r.image_url as string | null | undefined) ?? null,
+    lat: (r.lat as number | null | undefined) ?? null,
+    lng: (r.lng as number | null | undefined) ?? null,
+    tags: (r.tags as string[] | null | undefined) ?? null,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
     socialUrls: r.social_urls as SocialUrls | null | undefined,
   };
 }
-
-/**
- * Create a new business
- */
 export async function createBusiness(
   client: PoolClient,
   ownerId: string,
@@ -141,7 +153,43 @@ export async function findBusinessById(
     `SELECT * FROM ${tableName} WHERE id = $1`,
     [id]
   );
-  return result.rows[0] ? rowToBusiness(result.rows[0]) : undefined;
+  if (!result.rows[0]) return undefined;
+  const business = rowToBusiness(result.rows[0]);
+  business.locations = await findBusinessLocations(client, id);
+  return business;
+}
+
+/**
+ * Find all physical locations for a business.
+ * Primary location first, then any secondary locations.
+ */
+export async function findBusinessLocations(
+  client: PoolClient,
+  businessId: string
+): Promise<BusinessLocation[]> {
+  const tableName = getLocationsTableName();
+  const result = await client.query<{
+    id: string;
+    label: string | null;
+    address: string;
+    lat: number | null;
+    lng: number | null;
+    is_primary: boolean;
+  }>(
+    `SELECT id, label, address, lat, lng, is_primary
+     FROM ${tableName}
+     WHERE business_id = $1
+     ORDER BY is_primary DESC, created_at ASC`,
+    [businessId]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    address: row.address,
+    lat: row.lat,
+    lng: row.lng,
+    isPrimary: row.is_primary,
+  }));
 }
 
 /**

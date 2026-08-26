@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
+import { MapView, MapPin } from '@/components/ui/MapView';
 
 /**
  * Shape of a /api/directory business item
@@ -22,6 +23,10 @@ interface DirectoryBusiness {
   website: string | null;
   phone: string | null;
   source: string | null;
+  imageUrl?: string | null;
+  tags?: string[] | null;
+  lat?: number | null;
+  lng?: number | null;
   createdAt: string;
 }
 
@@ -31,14 +36,17 @@ interface DirectoryFacets {
 }
 
 /**
- * Derive a neighborhood/city ("Harlem, NY") from a full street address.
- * Matches the server-side deriveLocation used for location facets.
+ * Derive a place ("City, ST") from a location string.
+ * Must match the server-side deriveLocation (route.ts) so client filters
+ * agree with API facets. Returns null when no City, ST shape is present.
  */
-function deriveLocation(address: string): string {
-  if (!address) return '';
+function deriveLocation(address: string): string | null {
+  if (!address) return null;
   const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length <= 2) return address;
-  return parts.slice(-2).join(', ');
+  if (parts.length < 2) return null;
+  const stateMatch = parts[parts.length - 1].match(/^([A-Za-z]{2})(?:\s+\d{5})?$/);
+  if (!stateMatch) return null;
+  return `${parts[parts.length - 2]}, ${stateMatch[1]}`;
 }
 
 /**
@@ -53,9 +61,9 @@ function toCardBusiness(item: DirectoryBusiness): Business {
     reviewCount: item.reviewCount ?? 0,
     location: item.location,
     isVerified: item.isVerified,
-    imageUrl: '',
+    imageUrl: item.imageUrl ?? '',
     description: item.description || (item.website ? `Website: ${item.website}` : ''),
-    tags: [],
+    tags: item.tags ?? [],
   };
 }
 
@@ -101,6 +109,8 @@ function DirectoryContent() {
     if (verifiedOnly === 'true') next.verifiedOnly = true;
     return next;
   });
+  // Free-text search (name, location, category, tags); synced to the URL
+  const [search, setSearch] = useState<string>(() => searchParams.get('search') ?? '');
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
   const [showMap, setShowMap] = useState(true);
@@ -133,12 +143,10 @@ function DirectoryContent() {
     fetchDirectory();
   }, [fetchDirectory]);
 
-  // Write filters back to the URL so the current view is shareable and
-  // survives a reload. Uses replace (not push) so filter tweaks don't pile
-  // up history entries.
-  const handleFilterChange = (newFilters: FilterOption) => {
-    setFilters(newFilters);
-
+  // Write filters + search back to the URL so the current view is shareable
+  // and survives a reload. Uses replace (not push) so tweaks don't pile up
+  // history entries.
+  const pushUrl = (f: FilterOption, s: string) => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const setOrDelete = (key: string, value: string | null) => {
@@ -148,13 +156,24 @@ function DirectoryContent() {
         params.set(key, value);
       }
     };
-    setOrDelete('category', newFilters.category ?? null);
-    setOrDelete('location', newFilters.location ?? null);
-    setOrDelete('minRating', newFilters.minRating ? String(newFilters.minRating) : null);
-    setOrDelete('verifiedOnly', newFilters.verifiedOnly ? 'true' : null);
+    setOrDelete('category', f.category ?? null);
+    setOrDelete('location', f.location ?? null);
+    setOrDelete('minRating', f.minRating ? String(f.minRating) : null);
+    setOrDelete('verifiedOnly', f.verifiedOnly ? 'true' : null);
+    setOrDelete('search', s || null);
 
     const query = params.toString();
     router.replace(query ? `/directory?${query}` : '/directory', { scroll: false });
+  };
+
+  const handleFilterChange = (newFilters: FilterOption) => {
+    setFilters(newFilters);
+    pushUrl(newFilters, search);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    pushUrl(filters, value);
   };
 
   const handleSortChange = (newSort: SortOption) => {
@@ -201,11 +220,25 @@ function DirectoryContent() {
   const filteredDirectory = useMemo(() => {
     let result = directory;
 
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.name.toLowerCase().includes(q) ||
+          b.location.toLowerCase().includes(q) ||
+          b.category.toLowerCase().includes(q) ||
+          (b.tags ?? []).some((t) => t.toLowerCase().includes(q))
+      );
+    }
+
     if (filters.category) {
       result = result.filter((b) => b.category === filters.category);
     }
     if (filters.location) {
-      result = result.filter((b) => deriveLocation(b.location) === filters.location);
+      result = result.filter((b) => {
+        const loc = deriveLocation(b.location);
+        return loc !== null && loc === filters.location;
+      });
     }
     if (filters.minRating) {
       result = result.filter((b) => b.rating !== null && b.rating >= filters.minRating!);
@@ -215,7 +248,7 @@ function DirectoryContent() {
     }
 
     return result;
-  }, [directory, filters]);
+  }, [directory, filters, search]);
 
   const sortedDirectory = useMemo(
     () => sortDirectory(filteredDirectory, sort),
@@ -227,13 +260,20 @@ function DirectoryContent() {
     [directory, savedBusinesses]
   );
 
-  const displayBusinesses: Business[] =
-    activeTab === 'all'
-      ? sortedDirectory.map(toCardBusiness)
-      : savedDirectory.map(toCardBusiness);
+  const listSource = activeTab === 'all' ? sortedDirectory : savedDirectory;
+
+  const displayBusinesses: Business[] = listSource.map(toCardBusiness);
+
+  const mapPins = useMemo<MapPin[]>(
+    () =>
+      listSource
+        .filter((b) => b.lat != null && b.lng != null)
+        .map((b) => ({ id: b.id, name: b.name, lat: b.lat as number, lng: b.lng as number })),
+    [listSource]
+  );
 
   return (
-    <main className="min-h-screen bg-neutral-50">
+    <main className="min-h-screen bg-neutral-50 flex flex-col">
       {/* Navigation */}
       <Navigation
         onNavigate={(section) => {
@@ -242,34 +282,46 @@ function DirectoryContent() {
       />
 
       {/* Page Header */}
-      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold mb-4">Business Directory</h1>
-          <p className="text-xl text-neutral-100 max-w-3xl">
-            Discover Black-owned businesses in your area. Filter by category, rating, and location
-            to find exactly what you need.
+      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white py-10">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <p className="text-xs uppercase tracking-widest text-white/70 mb-2">
+            Black-owned businesses in
+          </p>
+          <h1 className="text-4xl sm:text-5xl font-bold">
+            {filters.location || "All areas"}
+          </h1>
+          <p className="mt-3 text-lg text-neutral-100">
+            {displayBusinesses.length} {displayBusinesses.length === 1 ? 'place' : 'places'}
+            {filters.category ? ` · ${filters.category}` : ''}
           </p>
         </div>
       </section>
 
+      {/* Filter Row - full width sticky band, single row like OpenTable */}
+      <div className="sticky top-16 z-30 border-b border-neutral-200 bg-white">
+        <div className="px-4 sm:px-6 lg:px-8 py-2.5">
+          <FilterBar
+            categories={facets.categories}
+            locations={facets.locations}
+            onFilterChange={handleFilterChange}
+            onSortChange={handleSortChange}
+            currentSort={sort}
+            currentFilters={filters}
+            savedCount={savedBusinesses.size}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            filteredCount={sortedDirectory.length}
+            search={search}
+            onSearchChange={handleSearchChange}
+          />
+        </div>
+      </div>
+
       {/* Main Content - Split View */}
-      <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-full">
+      <section className="relative flex h-[calc(100vh-310px)] min-h-[480px] overflow-hidden">
         {/* Business List - Left Side */}
         <div className={`${showMap ? 'lg:w-[40%]' : 'w-full'} overflow-y-auto`}>
           <div className="p-4 space-y-4">
-            {/* Filter Bar with Tabs */}
-            <FilterBar
-              categories={facets.categories}
-              locations={facets.locations}
-              onFilterChange={handleFilterChange}
-              onSortChange={handleSortChange}
-              currentSort={sort}
-              currentFilters={filters}
-              savedCount={savedBusinesses.size}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              filteredCount={sortedDirectory.length}
-            />
 
             {/* Business List - Horizontal Cards */}
             {loading ? (
@@ -289,7 +341,7 @@ function DirectoryContent() {
                 </button>
               </div>
             ) : displayBusinesses.length > 0 ? (
-              <div className="space-y-4">
+              <div className={showMap ? 'space-y-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
                 {displayBusinesses.map((business) => (
                   <BusinessCard
                     key={business.id}
@@ -339,31 +391,15 @@ function DirectoryContent() {
 
         {/* Map Panel - Right Side */}
         {showMap && (
-          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 bg-neutral-100 relative">
+          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 relative">
             {/* Map Toggle Button */}
             <button
               onClick={() => setShowMap(false)}
-              className="absolute top-4 right-4 z-10 bg-white px-3 py-2 rounded-lg shadow-md text-sm font-medium hover:bg-neutral-50"
+              className="absolute top-4 right-4 z-[1001] bg-white px-3 py-2 rounded-lg shadow-md text-sm font-medium hover:bg-neutral-50"
             >
               Hide Map ×
             </button>
-            {/* Placeholder Map */}
-            <div className="w-full h-full flex items-center justify-center text-neutral-400">
-              <div className="text-center">
-                <div className="text-6xl mb-4">🗺️</div>
-                <p className="text-lg font-medium">Map View</p>
-                <p className="text-sm mt-2">Business locations will appear here</p>
-                {displayBusinesses.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                    {displayBusinesses.map((b) => (
-                      <div key={b.id} className="bg-white px-3 py-1 rounded-full text-sm shadow-sm">
-                        {b.location || b.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <MapView pins={mapPins} />
           </div>
         )}
 

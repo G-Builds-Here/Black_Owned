@@ -111,7 +111,7 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getByText(/soul food kitchen/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /soul food kitchen/i })).toBeInTheDocument();
     });
 
     it('displays verified badge for verified businesses', () => {
@@ -152,7 +152,7 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getByText(/food dining/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/food dining/i)).not.toHaveLength(0);
     });
 
     it('displays formatted date', () => {
@@ -165,10 +165,10 @@ describe('BusinessDetail', () => {
       );
 
       // Should show a formatted date (format depends on locale)
-      expect(screen.getByText(/joined:/i)).toBeInTheDocument();
+      expect(screen.getByText(/listed since/i)).toBeInTheDocument();
     });
 
-    it('displays business ID', () => {
+    it('does not display the raw business ID', () => {
       render(
         <BusinessDetail
           business={mockBusiness}
@@ -177,7 +177,7 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getByText(/550e8400-e29b-41d4-a716-446655440000/i)).toBeInTheDocument();
+      expect(screen.queryByText(/550e8400-e29b-41d4-a716-446655440000/i)).not.toBeInTheDocument();
     });
 
     it('shows back to directory link', () => {
@@ -233,7 +233,7 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getAllByText(/verified/i)).toHaveLength(2); // "Verified Business" badge + "Verified" status
+      expect(screen.getByText(/verified business/i)).toBeInTheDocument();
 
       rerender(
         <BusinessDetail
@@ -244,6 +244,7 @@ describe('BusinessDetail', () => {
       );
 
       expect(screen.getByText(/unverified/i)).toBeInTheDocument();
+      expect(screen.queryByText(/verified business/i)).not.toBeInTheDocument();
     });
   });
 
@@ -262,7 +263,7 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getByText(/professional services/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/professional services/i)).not.toHaveLength(0);
     });
 
     it('handles category IDs without dashes', () => {
@@ -279,7 +280,7 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getByText(/Retail/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Retail/i)).not.toHaveLength(0);
     });
   });
 
@@ -301,7 +302,127 @@ describe('BusinessDetail', () => {
       );
 
       // Should contain some date format
-      expect(screen.getByText(/joined:/i)).toBeInTheDocument();
+      expect(screen.getByText(/listed since/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('OpenTable-style profile', () => {
+    const richBusiness: Business = {
+      ...mockBusiness,
+      category: 'Food & Dining',
+      description: 'Authentic soul food.',
+      location: '123 Main St, Harlem, NY',
+      phone: '555-0100',
+      website: 'https://soulkitchen.example',
+      rating: 4.5,
+      reviewCount: 88,
+      tags: ['Southern', 'Family-Friendly'],
+      verified: false,
+    };
+
+    it('shows rating, reviews, location, contact and about', () => {
+      render(
+        <BusinessDetail
+          business={richBusiness}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.getByText(/4\.5/)).toBeInTheDocument();
+      expect(screen.getByText(/88 reviews/)).toBeInTheDocument();
+      expect(screen.getByText(/123 Main St, Harlem, NY/)).toBeInTheDocument();
+      expect(screen.getByText(/authentic soul food/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /website/i })).toHaveAttribute(
+        'href',
+        'https://soulkitchen.example'
+      );
+      expect(screen.getByRole('link', { name: /555-0100/i })).toHaveAttribute('href', 'tel:555-0100');
+      expect(screen.getByText(/southern/i)).toBeInTheDocument();
+    });
+
+    it('offers a claim CTA for unverified businesses and hides it when verified', () => {
+      const { rerender } = render(
+        <BusinessDetail
+          business={richBusiness}
+          loading={false}
+          error={null}
+        />
+      );
+
+      const claim = screen.getByRole('link', { name: /claim this business/i });
+      expect(claim).toHaveAttribute('href', '/business/claim');
+
+      rerender(
+        <BusinessDetail
+          business={{ ...richBusiness, verified: true }}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.queryByRole('link', { name: /claim this business/i })).not.toBeInTheDocument();
+    });
+
+    it('prefers the resolved category name over the id', () => {
+      render(
+        <BusinessDetail
+          business={richBusiness}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.getAllByText(/food & dining/i)).not.toHaveLength(0);
+    });
+  });
+
+  describe('Multiple locations', () => {
+    const multiBusiness: Business = {
+      ...mockBusiness,
+      locations: [
+        {
+          id: 'loc-1',
+          label: 'Smyrna',
+          address: '4454 S Cobb Dr SE Ste. 101, Smyrna, GA 30080',
+          lat: 33.846956,
+          lng: -84.505185,
+          isPrimary: true,
+        },
+        {
+          id: 'loc-2',
+          label: 'Midtown',
+          address: '1016 Howell Mill Rd, Ste A, Atlanta, GA 30318',
+          lat: 33.782548,
+          lng: -84.411627,
+          isPrimary: false,
+        },
+      ],
+    };
+
+    it('lists every location address', () => {
+      render(
+        <BusinessDetail
+          business={multiBusiness}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.getByText(/4454 S Cobb Dr SE/i)).toBeInTheDocument();
+      expect(screen.getByText(/1016 Howell Mill Rd/i)).toBeInTheDocument();
+    });
+
+    it('shows a Locations heading with the location count', () => {
+      render(
+        <BusinessDetail
+          business={multiBusiness}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.getByRole('heading', { name: /locations/i })).toBeInTheDocument();
     });
   });
 });

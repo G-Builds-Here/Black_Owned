@@ -30,18 +30,25 @@ export interface DirectoryBusiness {
   website: string | null;
   phone: string | null;
   source: string | null;
+  imageUrl?: string | null;
+  tags?: string[] | null;
+  lat?: number | null;
+  lng?: number | null;
   createdAt: string;
 }
 
 /**
- * Derive a neighborhood/city ("Harlem, NY") from a full street address.
- * Used for location facets and the location filter.
+ * Derive a place ("City, ST") from a location string.
+ * Returns null when the value is not a recognizable "City, ST" shape —
+ * raw street addresses must not leak into the location filter or facets.
  */
-export function deriveLocation(address: string | null | undefined): string {
-  if (!address) return "";
+export function deriveLocation(address: string | null | undefined): string | null {
+  if (!address) return null;
   const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
-  if (parts.length <= 2) return address;
-  return parts.slice(-2).join(", ");
+  if (parts.length < 2) return null;
+  const stateMatch = parts[parts.length - 1].match(/^([A-Za-z]{2})(?:\s+\d{5})?$/);
+  if (!stateMatch) return null;
+  return `${parts[parts.length - 2]}, ${stateMatch[1]}`;
 }
 
 interface PendingRow {
@@ -52,6 +59,8 @@ interface PendingRow {
   source: string;
   source_data: Record<string, unknown> | null;
   created_at: Date | string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 interface CanonicalRow {
@@ -60,7 +69,15 @@ interface CanonicalRow {
   description: string | null;
   category: string;
   verification_status: string;
+  location: string | null;
+  rating: string | number | null;
+  review_count: number | null;
+  website: string | null;
+  image_url: string | null;
+  tags: string[] | null;
   created_at: Date | string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 function toCreatedAt(value: Date | string): string {
@@ -82,14 +99,15 @@ export async function fetchDirectoryItems(
   const [pendingResult, canonicalResult] = await Promise.all([
     client.query(
       `SELECT p.id, p.name, p.description, COALESCE(c.name, p.category_id) AS category,
-              p.source, p.source_data, p.created_at
+              p.source, p.source_data, p.created_at, p.lat, p.lng
        FROM pending_import_businesses p
        LEFT JOIN ${categoryTable} c ON c.id::text = p.category_id
        WHERE p.status = 'approved'`
     ),
     client.query(
       `SELECT b.id, b.name, b.description, COALESCE(c.name, b.category_id) AS category,
-              b.verification_status, b.created_at
+              b.verification_status, b.location, b.rating, b.review_count,
+              b.website, b.image_url, b.tags, b.created_at, b.lat, b.lng
        FROM ${tableName} b
        LEFT JOIN ${categoryTable} c ON c.id::text = b.category_id`
     ),
@@ -109,6 +127,10 @@ export async function fetchDirectoryItems(
       website: typeof sd.website === "string" ? sd.website : null,
       phone: typeof sd.phone === "string" ? sd.phone : null,
       source: row.source,
+      imageUrl: null,
+      tags: [],
+      lat: row.lat ?? null,
+      lng: row.lng ?? null,
       createdAt: toCreatedAt(row.created_at),
     };
   });
@@ -117,14 +139,18 @@ export async function fetchDirectoryItems(
     id: row.id,
     name: row.name,
     category: row.category,
-    rating: null,
-    reviewCount: null,
-    location: "",
+    rating: row.rating != null ? Number(row.rating) : null,
+    reviewCount: row.review_count != null ? Number(row.review_count) : null,
+    location: row.location ?? "",
     isVerified: row.verification_status === "verified",
     description: row.description,
-    website: null,
+    website: row.website ?? null,
     phone: null,
     source: null,
+    imageUrl: row.image_url ?? null,
+    tags: row.tags ?? [],
+    lat: row.lat ?? null,
+    lng: row.lng ?? null,
     createdAt: toCreatedAt(row.created_at),
   }));
 
@@ -160,7 +186,10 @@ export function filterDirectoryItems(
 
   if (location) {
     const q = location.toLowerCase();
-    result = result.filter((item) => deriveLocation(item.location).toLowerCase().includes(q));
+    result = result.filter((item) => {
+      const loc = deriveLocation(item.location);
+      return loc !== null && loc.toLowerCase().includes(q);
+    });
   }
 
   if (minRating !== undefined && !Number.isNaN(minRating)) {

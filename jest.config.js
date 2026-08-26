@@ -41,5 +41,6 @@ module.exports = {
   moduleNameMapper: {
     "^next/server$": "<rootDir>/__mocks__/next-server.ts",
     "^@/(.*)$": "<rootDir>/src/$1",
+    "\\.(css|less|scss)$": "<rootDir>/__mocks__/style-mock.js",
   },
 };

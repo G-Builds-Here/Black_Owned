@@ -30,8 +30,9 @@ import {
 } from "../db/business-repository";
 import { findScrapedBusinessById } from "../db/scraped-business-repository";
 import { getPool } from "../db/user-repository";
-import { Business } from "../../types/business";
+import { Business, BusinessLocation } from "../../types/business";
 import { SocialUrls } from "../../services/social-discovery";
+import type { PoolClient } from "pg";
 import { fetchDirectoryItems, type DirectoryBusiness } from "@/app/api/directory/route";
 
 /**
@@ -203,6 +204,19 @@ export async function business(
   id: string;
   name: string;
   categoryId: string;
+  category?: string;
+  description?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  imageUrl?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  tags?: string[];
+  source?: string | null;
+  locations: BusinessLocation[];
   verified: boolean;
   socialUrls: SocialUrls | null;
   createdAt: { timestamp: number };
@@ -215,12 +229,12 @@ export async function business(
     // 1. Canonical business
     const canonical = await findBusinessById(client, id);
     if (canonical) {
-      return businessToGraphqlBusiness(canonical);
+      return businessToGraphqlBusiness(canonical, await resolveCategoryName(client, canonical.categoryId));
     }
 
     // 2. Approved pending import (passed review)
     const pendingResult = await client.query(
-      `SELECT id, name, category_id, created_at
+      `SELECT id, name, category_id, description, created_at, source_data, lat, lng
        FROM pending_import_businesses
        WHERE id = $1 AND status = 'approved'`,
       [id]
@@ -230,17 +244,33 @@ export async function business(
         id: string;
         name: string;
         category_id: string;
+        description: string | null;
         created_at: Date | string;
+        lat: number | null;
+        lng: number | null;
+        source_data: Record<string, unknown> | null;
       };
+      const sd = row.source_data || {};
       const createdAt =
         row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
       return {
         id: row.id,
         name: row.name,
         categoryId: row.category_id,
+        category: await resolveCategoryName(client, row.category_id),
+        description: row.description ?? null,
+        location: typeof sd.address === "string" ? sd.address : null,
+        phone: typeof sd.phone === "string" ? sd.phone : null,
+        website: typeof sd.website === "string" ? sd.website : null,
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+        rating: typeof sd.rating === "number" ? sd.rating : null,
+        reviewCount: typeof sd.reviewCount === "number" ? sd.reviewCount : null,
+        source: typeof sd.source === "string" ? sd.source : null,
         verified: true,
         socialUrls: null,
         createdAt: { timestamp: Math.floor(createdAt.getTime() / 1000) },
+        locations: [],
       };
     }
 
@@ -251,9 +281,20 @@ export async function business(
         id: scraped.id,
         name: scraped.name,
         categoryId: scraped.category || "other",
+        category: await resolveCategoryName(client, scraped.category || "other"),
+        description: null,
+        location: scraped.address || null,
+        phone: scraped.phone ?? null,
+        lat: scraped.lat ?? null,
+        lng: scraped.lng ?? null,
+        website: scraped.website ?? null,
+        rating: scraped.rating ?? null,
+        reviewCount: scraped.reviewCount ?? null,
+        source: scraped.source,
         verified: false,
         socialUrls: null,
         createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
+        locations: [],
       };
     }
 
@@ -342,14 +383,47 @@ function calculateRelevanceScore(business: SearchBusiness, query: string): numbe
   return score;
 }
 
+const CATEGORY_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a category display name by UUID. Skips non-UUID ids (slugs like
+ * "food-dining") so callers can fall back to slug formatting.
+ */
+async function resolveCategoryName(
+  client: PoolClient,
+  categoryId: string
+): Promise<string | undefined> {
+  if (!CATEGORY_UUID_RE.test(categoryId)) return undefined;
+  const schema = process.env.POSTGRES_SCHEMA;
+  const table = schema ? `${schema}.categories` : "categories";
+  const result = await client.query<{ name: string }>(
+    `SELECT name FROM ${table} WHERE id::text = $1`,
+    [categoryId]
+  );
+  return result.rows[0]?.name;
+}
+
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: Business) {
+function businessToGraphqlBusiness(business: Business, categoryName?: string) {
   return {
     id: business.id,
     name: business.name,
     categoryId: business.categoryId,
+    category: categoryName,
+    description: business.description ?? null,
+    location: business.location ?? null,
+    phone: null,
+    website: business.website ?? null,
+    rating: business.rating ?? null,
+    reviewCount: business.reviewCount ?? null,
+    imageUrl: business.imageUrl ?? null,
+    lat: business.lat ?? null,
+    lng: business.lng ?? null,
+    tags: business.tags ?? [],
+    source: null,
+    locations: business.locations ?? [],
     verified: business.verificationStatus === 'verified',
     socialUrls: business.socialUrls ?? null,
     createdAt: {
