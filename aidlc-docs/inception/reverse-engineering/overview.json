@@ -1,0 +1,38 @@
+{
+  "artifact": "overview.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "What This System Does",
+      "content": "Black Owned is a public directory platform connecting consumers with Black-owned businesses. Users browse and search a business directory (by category, location, rating), and business owners claim listings through a 3-step wizard, submit verification documents (MinIO presigned upload), and view per-business traffic analytics. Admins review claims and scraped imports, moderate reviews, and manage users. Listings are seeded and expanded by scraping pipelines (SearXNG meta-search in Rust, Playwright scrapers in TypeScript) whose candidates are promoted into the directory through an admin import queue.",
+      "type": "prose"
+    },
+    {
+      "heading": "Why the Project Is Structured This Way",
+      "content": "[ASSUMED \u2014 inferred from code layout and service boundaries]\n\n- **Browser-facing app (Next.js)**: one process owns the entire HTTP surface (directory UI, REST + GraphQL API, admin/owner consoles, live chat). Keeping routing, UI, and API in one App-Router codebase avoids a separate BFF layer at this scale.\n- **Rust scraper worker (bw-scraper)**: discovery/ETL is heavy, rate-limited, flaky network work (SearXNG paging, robots.txt checks, user-agent rotation) with its own analytics sink (ClickHouse). Isolating it as a standalone axum service deploys as a slim Docker image and keeps the web process responsive.\n- **One-shot `tsx` scripts** (`import-scraped-businesses.ts`, `run-social-discovery.ts`, `run-featured-scrape.ts`, `scripts/*.mjs`): backfill/seed jobs that only need a live `DATABASE_URL`, not a long-running service.\n- **Rust library crates** (`bw-ingestion`, `bw-types`): shared ETL/email/cache logic. [ASSUMED] `bw-ingestion` started life as the service that created the `reviews` table (per migration 013, the Rust `bw-api` was \"retired\"); it is now a library with no in-repo consumer \u2014 see findings.",
+      "type": "prose"
+    },
+    {
+      "heading": "Entry Points",
+      "content": "| Entry point | Project | How it runs |\n|---|---|---|\n| `src/app/page.tsx` + ~30 API routes | web app | `npm run dev` / `npm run build && npm start` (port 3000) |\n| `bw-scraper/src/main.rs` | Rust worker | `cargo run -p bw_scraper` or compose service (port 8080) |\n| `import-scraped-businesses.ts` | root | `npx -y tsx import-scraped-businesses.ts` |\n| `run-social-discovery.ts` | root | `npx tsx run-social-discovery.ts [--all\\|--business <id>]` |\n| `run-featured-scrape.ts` | root | `npx tsx run-featured-scrape.ts` |\n| `scripts/migrate-postgres.mjs` | root | `npm run migrate` |\n| `scripts/geocode-locations.mjs` | root | `npm run geocode` |",
+      "type": "table"
+    },
+    {
+      "heading": "Key External Dependencies",
+      "content": "PostgreSQL (system of record), Valkey (refresh tokens + GraphQL cache), NATS (chat events + cache invalidation, browser via WebSocket 8081), MinIO (presigned uploads), ClickHouse (analytics \u2014 currently dormant), SearXNG (meta-search for discovery; default URL is a developer LAN IP \u2014 see findings). Details: `dependencies.md`.",
+      "type": "prose"
+    },
+    {
+      "heading": "Build & Test Commands",
+      "content": "- Web: `npm install`, `npm run dev` / `build` / `start`, `npm test` (Jest, no infra needed), `npm run lint`, `npm run migrate`, `npx playwright test` (E2E, needs compose stack)\n- Rust: `cargo test` (workspace), `cargo test -p bw_scraper <filter>`, `cargo clippy --all-targets -- -D warnings -W clippy::pedantic`, `cargo llvm-cov`\n- Infra: `docker compose up -d` (postgres 15, nats 2.10, clickhouse 23.8, valkey 7.2, minio, bw-scraper)\n\nFull detail: `technology-stack.md`, `test-infrastructure.md`.",
+      "type": "list"
+    }
+  ],
+  "summary": "Business purpose, structure rationale, and entry points for the Black_Owned repo.",
+  "primary_consumers": [
+    "luke",
+    "damian"
+  ]
+}

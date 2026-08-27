@@ -1,0 +1,40 @@
+{
+  "artifact": "architecture.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Components",
+      "content": "| Component | Project | Responsibility |\n|---|---|---|\n| `src/app` (pages + `api/**/route.ts`) | web app | entire HTTP surface: 31 API routes + ~20 pages (directory, search, business detail, owner claim wizard, admin console, chat, auth) |\n| `src/lib` | web app | service layer: `db/` repositories, `auth/` JWT + role middleware, `valkey/`, `nats/`, `minio/`, `chat/` (browser WS client), `graphql/` (resolvers + regex mini-parser + 30s Valkey cache) |\n| `src/services` | web app | Playwright scrapers (google-maps/yelp/facebook), scraper-job-executor, duplicate-detection, social-discovery, image-service \u2014 executor is invoked **only by tests** (see findings H3) |\n| `src/components` | web app | UI: `ui/` primitives, `admin/`, `business/` |\n| `bw-scraper` | Rust | active discovery worker: SearXNG \u2192 ETL \u2192 `scraped_businesses`; owns `scrape_jobs` lifecycle rows; axum /health + POST /scrape on :8080 |\n| `bw-ingestion` | Rust | library only: ETL pipelines, NATS chat/email consumers, image pipeline, cache invalidation \u2014 no binary, no in-repo consumer |\n| `bw-api` | Rust | retired axum/GraphQL service (created `reviews` table per migration 013); still a workspace member; currently not compiling |\n| `bw-types` | Rust | shared domain types (used by bw-api + bw-ingestion only) |\n| one-shot scripts | root | `import-scraped-businesses.ts` (scraped \u2192 businesses promotion), `run-*.ts`, `scripts/*.mjs` |\n| `docker-compose.yml` | infra | postgres, nats, clickhouse, valkey, minio, bw-scraper |",
+      "type": "table"
+    },
+    {
+      "heading": "Cross-Boundary Calls",
+      "content": "- **web app \u2194 Postgres** \u2014 direct `pg` Pool, the primary data channel; every route. Tables: users, businesses, categories, pending_import_businesses, scrape_jobs, scraped_businesses, business_views, conversations, messages, reviews, business_locations.\n- **web app \u2194 bw-scraper** \u2014 **no HTTP calls at all.** Verified: nothing in `src/` fetches `:8080`. The only coupling is shared Postgres: both write `scrape_jobs`, both touch `scraped_businesses`, with no claim/lock protocol (finding H3).\n- **bw-scraper \u2194 SearXNG** \u2014 outbound HTTP (`SEARXNG_URL`).\n- **web app \u2194 Valkey** \u2014 refresh tokens (`refresh:{token}`) + GraphQL query cache (30s TTL).\n- **web app \u2194 NATS (4222)** \u2014 publish `role_changed` (admin role PATCH), subscribe `cache.invalidate` \u2192 delete Valkey keys.\n- **browser \u2194 NATS WebSocket (8081)** \u2014 live chat + notifications via nats.ws.\n- **web app \u2194 MinIO** \u2014 presigned PUT URLs for owner verification documents.\n- **ClickHouse** \u2014 provisioned + health-checked + schema present (ReplacingMergeTree mirror), **zero writers** \u2014 dormant.",
+      "type": "list"
+    },
+    {
+      "heading": "Core Data Flow (directory content pipeline)",
+      "content": "```\nSearXNG \u2500\u2500(bw-scraper, Rust)\u2500\u2500\u25ba scraped_businesses \u2500\u2500(admin import / one-shot script)\u2500\u2500\u25ba pending_import_businesses (pending_review)\n                                                                                          \u2502\nGoogle Maps/Yelp/Facebook \u2500\u2500(src/services Playwright, test-only executor)\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n                                                                                          \u25bc\n                                          businesses (status: unverified \u2192 pending_review \u2192 approved/rejected)\n                                                                                          \u2502\n                                  claim wizard (owner) + verification doc (MinIO) \u25c4\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n                                                                                          \u25bc\n                                            admin approval / bulk-approve \u2500\u2500\u25ba verified listings in /directory\n```\n\nDirectory merge: `approved` rows in `pending_import_businesses` are also served as directory content until promoted into `businesses` \u2014 the queue table doubles as live content (finding M5).",
+      "type": "code"
+    },
+    {
+      "heading": "On-Site Reviews",
+      "content": "Write path is shipped: POST /api/reviews (authenticated), admin moderation via /api/reviews/[id]/moderate (soft-hide), location-scoped via `location_id`. External Google reviews (aggregate count + snippets) are still the gap this epic addresses \u2014 no S1 enrichment pipeline exists yet.",
+      "type": "prose"
+    },
+    {
+      "heading": "Why These Boundaries",
+      "content": "[ASSUMED] Single Postgres as system of record keeps the directory queryable in one place at the cost of two uncoordinated writers on the scrape pipeline. NATS was chosen for chat fan-out (browser WS relay) and cross-cutting cache invalidation rather than polling. Valkey holds refresh tokens (survival across process restarts, revocable) instead of stateless-only JWTs.",
+      "type": "prose"
+    }
+  ],
+  "summary": "Component boundaries, data flows, and cross-boundary calls.",
+  "primary_consumers": [
+    "luke",
+    "lucius",
+    "damian",
+    "alfred"
+  ]
+}
