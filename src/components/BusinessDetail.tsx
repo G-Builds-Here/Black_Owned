@@ -1,12 +1,18 @@
 'use client';
 
 import React from 'react';
+import { useEffect, useState } from 'react';
+import { getSession, clearSession, authHeaders, type ClientSession } from '@/lib/auth/client-session';
 import { ChatButton } from './ChatButton';
 import { SocialMediaSection } from './SocialMediaSection';
 import { Navigation } from './ui/Navigation';
 import { SocialUrls } from '@/services/social-discovery';
-import MapView from './ui/MapView';
+import dynamic from 'next/dynamic';
 import { SimilarBusinesses } from './SimilarBusinesses';
+
+// MapView pulls in Leaflet, which touches `window` at module scope — load
+// it client-only so server-side rendering of this page never evaluates it.
+const MapView = dynamic(() => import('./ui/MapView'), { ssr: false });
 
 export interface Business {
   id: string;
@@ -19,6 +25,10 @@ export interface Business {
   website?: string | null;
   rating?: number | null;
   reviewCount?: number | null;
+  menuUrl?: string | null;
+  ratingSource?: string | null;
+  siteReviewCount?: number | null;
+  siteRating?: number | null;
   imageUrl?: string | null;
   tags?: string[] | null;
   verified: boolean;
@@ -30,6 +40,7 @@ export interface Business {
   lat?: number | null;
   lng?: number | null;
   locations?: BusinessLocation[] | null;
+  siteReviews?: SiteReview[] | null;
 }
 
 export interface BusinessLocation {
@@ -41,10 +52,22 @@ export interface BusinessLocation {
   isPrimary: boolean;
 }
 
+export interface SiteReview {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  locationLabel?: string | null;
+  createdAt: {
+    timestamp: number;
+  };
+}
+
 export interface BusinessDetailProps {
   business: Business | null;
   loading: boolean;
   error: string | null;
+  onReviewsSubmitted?: () => void;
 }
 
 /**
@@ -53,7 +76,18 @@ export interface BusinessDetailProps {
  * Shows loading state while fetching, error state if fetch fails,
  * and business details (name, category, verified status) on success.
  */
-export function BusinessDetail({ business, loading, error }: BusinessDetailProps) {
+export function BusinessDetail({ business, loading, error, onReviewsSubmitted }: BusinessDetailProps) {
+  const [heroImgFailed, setHeroImgFailed] = useState(false);
+  const [session, setSession] = useState<ClientSession | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewLocationId, setReviewLocationId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSession(getSession());
+  }, []);
   if (loading) {
     return (
       <main className="min-h-screen bg-neutral-50">
@@ -121,16 +155,6 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
     );
   }
 
-  // Format timestamp to readable date
-  const formatDate = (timestamp: number): string => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
   // Format category ID to readable category name
   const formatCategory = (categoryId: string): string => {
     // In a real app, this would fetch the category name from the categories API
@@ -147,8 +171,14 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
       : formatCategory(business.categoryId);
   const rating = business.rating ?? null;
   const reviewCount = business.reviewCount ?? 0;
+  const siteReviewCount = business.siteReviewCount ?? 0;
+  const siteRating = business.siteRating ?? null;
+  const ratingSourceLabel = (business.ratingSource ?? 'google')
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   const description = business.description ?? '';
   const tags = business.tags ?? [];
+  const siteReviews = business.siteReviews ?? [];
 
   // Multi-location: prefer the locations table; fall back to the legacy
   // single lat/lng pin carried on the business row itself.
@@ -168,6 +198,52 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
       lat: l.lat as number,
       lng: l.lng as number,
     }));
+
+  const submitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business || !authHeaders().Authorization || reviewRating === 0 || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          rating: reviewRating,
+          comment: reviewComment,
+          locationId: reviewLocationId || undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { success?: boolean; error?: string }
+        | null;
+      if (res.status === 401) {
+        clearSession();
+        setSession(null);
+        return;
+      }
+      if (!res.ok || data?.success !== true) {
+        setSubmitError(
+          data && typeof data.error === 'string'
+            ? data.error
+            : 'Something went wrong. Please try again.'
+        );
+        return;
+      }
+      setReviewRating(0);
+      setReviewComment('');
+      setReviewLocationId('');
+      onReviewsSubmitted?.();
+    } catch {
+      setSubmitError('Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-neutral-50">
@@ -193,11 +269,12 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
 
         {/* Hero */}
         <div className="relative h-64 overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-700 sm:h-80 lg:h-96">
-          {business.imageUrl ? (
+          {business.imageUrl && !heroImgFailed ? (
             <img
               src={business.imageUrl}
               alt={`Photo of ${business.name}`}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain px-6 py-4"
+              onError={() => setHeroImgFailed(true)}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center">
@@ -244,33 +321,29 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
                   {rating.toFixed(1)}
                 </div>
                 <div className="text-sm text-neutral-500">
-                  {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
+                  {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'} on {ratingSourceLabel}
                 </div>
+              </div>
+            )}
+            {siteReviewCount > 0 && (
+              <div className="text-right text-sm text-neutral-600">
+                {siteReviewCount} {siteReviewCount === 1 ? 'review' : 'reviews'} on this site
+                {siteRating != null && (
+                  <span className="text-heritage-ochre"> · ★ {siteRating.toFixed(1)}</span>
+                )}
               </div>
             )}
             <ChatButton businessId={business.id} />
           </div>
         </div>
 
-        {/* Facts + actions */}
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+        {/* Category + actions */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="flex flex-col justify-center rounded-xl border border-neutral-200 bg-white p-3">
             <p className="text-xs uppercase tracking-wide text-neutral-500">Category</p>
             <p className="mt-0.5 text-sm font-semibold text-neutral-900">{categoryLabel}</p>
           </div>
-          <div className="flex flex-col justify-center rounded-xl border border-neutral-200 bg-white p-3">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Listed</p>
-            <p className="mt-0.5 text-sm font-semibold text-neutral-900">
-              Listed since {formatDate(business.createdAt.timestamp)}
-            </p>
-          </div>
-          <div className="flex flex-col justify-center rounded-xl border border-neutral-200 bg-white p-3">
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Source</p>
-            <p className="mt-0.5 text-sm font-semibold capitalize text-neutral-900">
-              {(business.source ?? 'manual').replace(/[_-]/g, ' ')}
-            </p>
-          </div>
-          <div className="col-span-2 flex flex-col justify-center gap-2 rounded-xl border border-neutral-200 bg-white p-3 sm:col-span-1">
+          <div className="flex flex-col justify-center gap-2 rounded-xl border border-neutral-200 bg-white p-3">
             {!business.verified && (
               <a
                 href="/business/claim"
@@ -302,7 +375,7 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
               </p>
             )}
 
-            {(business.phone || business.website) && (
+            {(business.phone || business.website || business.menuUrl) && (
               <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-neutral-600">
                 {business.phone && (
                   <a href={`tel:${business.phone}`} className="hover:text-neutral-900">
@@ -317,6 +390,16 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
                     className="text-heritage-ochre hover:underline"
                   >
                     Website
+                  </a>
+                )}
+                {business.menuUrl && (
+                  <a
+                    href={business.menuUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-heritage-ochre hover:underline"
+                  >
+                    Menu
                   </a>
                 )}
               </div>
@@ -337,6 +420,106 @@ export function BusinessDetail({ business, loading, error }: BusinessDetailProps
                 </div>
               </div>
             )}
+          </section>
+
+          <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-6">
+            <h2 className="mb-3 text-lg font-semibold text-neutral-900">Reviews</h2>
+            {siteReviews.length > 0 ? (
+              <ul className="space-y-4">
+                {siteReviews.map((review) => (
+                  <li key={review.id} className="border-b border-neutral-100 pb-4 last:border-b-0 last:pb-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                      <span className="text-heritage-ochre" aria-hidden="true">
+                        {'★'.repeat(review.rating)}
+                        {'☆'.repeat(5 - review.rating)}
+                      </span>
+                      <span className="font-semibold text-neutral-900">{review.reviewerName}</span>
+                      {review.locationLabel && (
+                        <span className="text-neutral-500">· {review.locationLabel}</span>
+                      )}
+                      <span className="ml-auto text-xs text-neutral-500">
+                        {new Date(review.createdAt.timestamp * 1000).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-sm leading-relaxed text-neutral-700">{review.comment}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-neutral-500">No reviews on this site yet.</p>
+            )}
+
+            <div className="mt-6 border-t border-neutral-200 pt-5">
+              {session?.accessToken ? (
+                <form onSubmit={submitReview}>
+                  <h3 className="text-sm font-semibold text-neutral-900">Write a review</h3>
+                  <div className="mt-3 flex items-center gap-1" aria-label="Star rating">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                        aria-pressed={reviewRating === n}
+                        onClick={() => setReviewRating(n)}
+                        className={`text-2xl transition-colors ${
+                          n <= reviewRating
+                            ? 'text-heritage-ochre'
+                            : 'text-neutral-300 hover:text-neutral-400'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    required
+                    placeholder="What was your experience?"
+                    className="mt-3 w-full rounded-lg border border-neutral-300 p-3 text-sm focus:border-heritage-ochre focus:outline-none"
+                  />
+                  {locationItems.length >= 2 && (
+                    <select
+                      value={reviewLocationId}
+                      onChange={(e) => setReviewLocationId(e.target.value)}
+                      className="mt-3 w-full rounded-lg border border-neutral-300 bg-white p-2 text-sm"
+                    >
+                      <option value="">Overall business</option>
+                      {locationItems.map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.label ? `${loc.label} — ${loc.address}` : loc.address}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {submitError && (
+                    <p role="alert" className="mt-2 text-sm text-red-600">
+                      {submitError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={submitting || reviewRating === 0}
+                    className="mt-3 rounded-lg bg-heritage-ochre px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-heritage-ochre/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? 'Posting…' : 'Post review'}
+                  </button>
+                </form>
+              ) : (
+                <p className="text-sm text-neutral-600">
+                  <a href="/login" className="font-medium text-heritage-ochre hover:underline">
+                    Sign in
+                  </a>{' '}
+                  to write a review.
+                </p>
+              )}
+            </div>
           </section>
 
           {(locationItems.length > 0 || mapPins.length > 0) && (

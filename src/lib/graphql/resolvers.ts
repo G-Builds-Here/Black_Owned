@@ -27,12 +27,23 @@ import {
 import {
   findBusinessById,
   updateNameById,
+  findSiteReviewStats,
+  findSiteReviews,
 } from "../db/business-repository";
 import { findScrapedBusinessById } from "../db/scraped-business-repository";
 import { getPool } from "../db/user-repository";
 import { Business, BusinessLocation } from "../../types/business";
 import { SocialUrls } from "../../services/social-discovery";
 import type { PoolClient } from "pg";
+
+interface SiteReviewGql {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  locationLabel: string | null;
+  createdAt: { timestamp: number };
+}
 import { fetchDirectoryItems, type DirectoryBusiness } from "@/app/api/directory/route";
 
 /**
@@ -208,9 +219,14 @@ export async function business(
   description?: string | null;
   location?: string | null;
   phone?: string | null;
+  menuUrl?: string | null;
   website?: string | null;
   rating?: number | null;
   reviewCount?: number | null;
+  ratingSource?: string;
+  siteReviewCount: number;
+  siteRating: number | null;
+  siteReviews: SiteReviewGql[];
   imageUrl?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -229,7 +245,17 @@ export async function business(
     // 1. Canonical business
     const canonical = await findBusinessById(client, id);
     if (canonical) {
-      return businessToGraphqlBusiness(canonical, await resolveCategoryName(client, canonical.categoryId));
+      const reviewStats = await findSiteReviewStats(client, id);
+      const siteReviews: SiteReviewGql[] = (await findSiteReviews(client, id)).map((review) => ({
+        ...review,
+        createdAt: { timestamp: Math.floor(review.createdAt.getTime() / 1000) },
+      }));
+      return {
+        ...businessToGraphqlBusiness(canonical, await resolveCategoryName(client, canonical.categoryId)),
+        siteReviewCount: reviewStats.count,
+        siteRating: reviewStats.average,
+        siteReviews,
+      };
     }
 
     // 2. Approved pending import (passed review)
@@ -271,6 +297,11 @@ export async function business(
         socialUrls: null,
         createdAt: { timestamp: Math.floor(createdAt.getTime() / 1000) },
         locations: [],
+        menuUrl: null,
+        ratingSource: "google",
+        siteReviewCount: 0,
+        siteRating: null,
+        siteReviews: [],
       };
     }
 
@@ -295,6 +326,11 @@ export async function business(
         socialUrls: null,
         createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
         locations: [],
+        menuUrl: null,
+        ratingSource: "google",
+        siteReviewCount: 0,
+        siteRating: null,
+        siteReviews: [],
       };
     }
 
@@ -414,7 +450,12 @@ function businessToGraphqlBusiness(business: Business, categoryName?: string) {
     category: categoryName,
     description: business.description ?? null,
     location: business.location ?? null,
-    phone: null,
+    phone: business.phone ?? null,
+    menuUrl: business.menuUrl ?? null,
+    ratingSource: business.ratingSource ?? "google",
+    siteReviewCount: 0,
+    siteRating: null,
+    siteReviews: [],
     website: business.website ?? null,
     rating: business.rating ?? null,
     reviewCount: business.reviewCount ?? null,
@@ -483,9 +524,19 @@ export async function updateBusiness(
       };
     }
 
+    const reviewStats = await findSiteReviewStats(client, args.id);
+    const siteReviews: SiteReviewGql[] = (await findSiteReviews(client, args.id)).map((review) => ({
+      ...review,
+      createdAt: { timestamp: Math.floor(review.createdAt.getTime() / 1000) },
+    }));
     return {
       success: true,
-      business: businessToGraphqlBusiness(updatedBusiness),
+      business: {
+        ...businessToGraphqlBusiness(updatedBusiness),
+        siteReviewCount: reviewStats.count,
+        siteRating: reviewStats.average,
+        siteReviews,
+      },
     };
   } finally {
     client.release();

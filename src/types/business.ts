@@ -33,6 +33,9 @@ export interface Business {
   updatedAt: Date;
   socialUrls?: SocialUrls | null;
   locations?: BusinessLocation[] | null;
+  phone?: string | null;
+  menuUrl?: string | null;
+  ratingSource?: string | null;
 }
 
 /**

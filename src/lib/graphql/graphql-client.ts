@@ -33,9 +33,14 @@ export interface Business {
   description?: string | null;
   location?: string | null;
   phone?: string | null;
+  menuUrl?: string | null;
   website?: string | null;
   rating?: number | null;
   reviewCount?: number | null;
+  ratingSource?: string | null;
+  siteReviewCount: number;
+  siteRating: number | null;
+  siteReviews: SiteReview[];
   imageUrl?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -47,6 +52,17 @@ export interface Business {
     timestamp: number;
   };
   locations: BusinessLocation[];
+}
+
+export interface SiteReview {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  locationLabel?: string | null;
+  createdAt: {
+    timestamp: number;
+  };
 }
 
 export interface BusinessQueryResponse {
@@ -103,8 +119,22 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
         location
         phone
         website
+        menuUrl
         rating
         reviewCount
+        ratingSource
+        siteReviewCount
+        siteRating
+        siteReviews {
+          id
+          rating
+          comment
+          reviewerName
+          locationLabel
+          createdAt {
+            timestamp
+          }
+        }
         imageUrl
         lat
         lng

@@ -52,6 +52,9 @@ function rowToBusiness(row: unknown): Business {
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
     socialUrls: r.social_urls as SocialUrls | null | undefined,
+    phone: (r.phone as string | null | undefined) ?? null,
+    menuUrl: (r.menu_url as string | null | undefined) ?? null,
+    ratingSource: (r.rating_source as string | null | undefined) ?? 'google',
   };
 }
 export async function createBusiness(
@@ -189,6 +192,76 @@ export async function findBusinessLocations(
     lat: row.lat,
     lng: row.lng,
     isPrimary: row.is_primary,
+  }));
+}
+
+/**
+ * Aggregate on-site reviews for a business (visible reviews only).
+ * Kept separate from the scraped rating/review_count aggregate so the
+ * detail page can show "reviews on this site" and "X reviews on Google"
+ * as distinct numbers.
+ */
+export async function findSiteReviewStats(
+  client: PoolClient,
+  businessId: string
+): Promise<{ count: number; average: number | null }> {
+  const result = await client.query<{ count: string; average: number | null }>(
+    `SELECT count(*)::text AS count, avg(rating)::float8 AS average
+     FROM reviews
+     WHERE business_id = $1 AND visible = TRUE`,
+    [businessId]
+  );
+  const row = result.rows[0];
+  if (!row) return { count: 0, average: null };
+  return {
+    count: Number(row.count),
+    average: row.average != null ? Number(row.average) : null,
+  };
+}
+
+export interface SiteReviewRow {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  locationLabel: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Visible reviews for a business, newest first, with the reviewer's name
+ * and (when the review targeted a specific branch) the location label.
+ */
+export async function findSiteReviews(
+  client: PoolClient,
+  businessId: string
+): Promise<SiteReviewRow[]> {
+  const result = await client.query<{
+    id: string;
+    rating: number;
+    comment: string;
+    reviewer_name: string;
+    location_label: string | null;
+    created_at: Date;
+  }>(
+    `SELECT r.id, r.rating, r.comment,
+            u.name AS reviewer_name,
+            l.label AS location_label,
+            r.created_at
+     FROM reviews r
+     JOIN users u ON u.id = r.user_id
+     LEFT JOIN business_locations l ON l.id = r.location_id
+     WHERE r.business_id = $1 AND r.visible = TRUE
+     ORDER BY r.created_at DESC`,
+    [businessId]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    rating: Number(row.rating),
+    comment: row.comment,
+    reviewerName: row.reviewer_name,
+    locationLabel: row.location_label,
+    createdAt: row.created_at,
   }));
 }
 

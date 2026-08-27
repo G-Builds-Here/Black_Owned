@@ -29,6 +29,8 @@ jest.mock("../auth/auth-service", () => ({
 jest.mock("../db/business-repository", () => ({
   findById: jest.fn(),
   updateNameById: jest.fn(),
+  findSiteReviewStats: jest.fn().mockResolvedValue({ count: 0, average: null }),
+  findSiteReviews: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock valkey-client
@@ -206,6 +208,11 @@ describe("updateBusiness resolver", () => {
       verified: false,
       socialUrls: null,
       locations: [],
+      menuUrl: null,
+      ratingSource: "google",
+      siteReviewCount: 0,
+      siteRating: null,
+      siteReviews: [],
       createdAt: {
         timestamp: expect.any(Number),
       },

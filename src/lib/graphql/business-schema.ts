@@ -25,9 +25,14 @@ export const businessTypeDefs = `#graphql
     location: String
     phone: String
     website: String
+    menuUrl: String
     rating: Float
     reviewCount: Int
+    ratingSource: String
     imageUrl: String
+    siteReviewCount: Int!
+    siteRating: Float
+    siteReviews: [Review!]!
     lat: Float
     lng: Float
     tags: [String!]
@@ -41,6 +46,15 @@ export const businessTypeDefs = `#graphql
     success: Boolean!
     business: Business
     error: String
+  }
+
+  type Review {
+    id: ID!
+    rating: Int!
+    comment: String!
+    reviewerName: String!
+    locationLabel: String
+    createdAt: DateTimeUtc!
   }
 
   input CreateBusinessInput {

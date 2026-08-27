@@ -6,7 +6,15 @@ import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
-import { MapView, MapPin } from '@/components/ui/MapView';
+import dynamic from 'next/dynamic';
+import type { MapPin } from '@/components/ui/MapView';
+
+// MapView pulls in Leaflet, which touches `window` at module scope — load
+// it client-only so server-side rendering of this page never evaluates it.
+const MapView = dynamic(
+  () => import('@/components/ui/MapView').then((m) => m.default),
+  { ssr: false }
+);
 
 /**
  * Shape of a /api/directory business item

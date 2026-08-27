@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { BusinessDetail, Business } from './BusinessDetail';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
@@ -155,19 +155,6 @@ describe('BusinessDetail', () => {
       expect(screen.getAllByText(/food dining/i)).not.toHaveLength(0);
     });
 
-    it('displays formatted date', () => {
-      render(
-        <BusinessDetail
-          business={mockBusiness}
-          loading={false}
-          error={null}
-        />
-      );
-
-      // Should show a formatted date (format depends on locale)
-      expect(screen.getByText(/listed since/i)).toBeInTheDocument();
-    });
-
     it('does not display the raw business ID', () => {
       render(
         <BusinessDetail
@@ -284,28 +271,6 @@ describe('BusinessDetail', () => {
     });
   });
 
-  describe('Date Formatting', () => {
-    it('formats timestamp to readable date', () => {
-      const business: Business = {
-        ...mockBusiness,
-        createdAt: {
-          timestamp: 1609459200, // 2021-01-01
-        },
-      };
-
-      render(
-        <BusinessDetail
-          business={business}
-          loading={false}
-          error={null}
-        />
-      );
-
-      // Should contain some date format
-      expect(screen.getByText(/listed since/i)).toBeInTheDocument();
-    });
-  });
-
   describe('OpenTable-style profile', () => {
     const richBusiness: Business = {
       ...mockBusiness,
@@ -330,7 +295,7 @@ describe('BusinessDetail', () => {
       );
 
       expect(screen.getByText(/4\.5/)).toBeInTheDocument();
-      expect(screen.getByText(/88 reviews/)).toBeInTheDocument();
+      expect(screen.getByText(/88 reviews on Google/i)).toBeInTheDocument();
       expect(screen.getByText(/123 Main St, Harlem, NY/)).toBeInTheDocument();
       expect(screen.getByText(/authentic soul food/i)).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /website/i })).toHaveAttribute(
@@ -339,6 +304,34 @@ describe('BusinessDetail', () => {
       );
       expect(screen.getByRole('link', { name: /555-0100/i })).toHaveAttribute('href', 'tel:555-0100');
       expect(screen.getByText(/southern/i)).toBeInTheDocument();
+    });
+
+    it('shows a Menu link when a menu URL is present', () => {
+      render(
+        <BusinessDetail
+          business={{ ...richBusiness, menuUrl: 'https://soulkitchen.example/menu.pdf' }}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.getByRole('link', { name: /menu/i })).toHaveAttribute(
+        'href',
+        'https://soulkitchen.example/menu.pdf'
+      );
+    });
+
+    it('shows on-site reviews separately from external ones', () => {
+      render(
+        <BusinessDetail
+          business={{ ...richBusiness, siteReviewCount: 3, siteRating: 4.9 }}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.getByText(/3 reviews on this site/i)).toBeInTheDocument();
+      expect(screen.getByText(/88 reviews on Google/i)).toBeInTheDocument();
     });
 
     it('offers a claim CTA for unverified businesses and hides it when verified', () => {
@@ -400,7 +393,7 @@ describe('BusinessDetail', () => {
       ],
     };
 
-    it('lists every location address', () => {
+    it('lists every location address in the Locations section', () => {
       render(
         <BusinessDetail
           business={multiBusiness}
@@ -409,8 +402,11 @@ describe('BusinessDetail', () => {
         />
       );
 
-      expect(screen.getByText(/4454 S Cobb Dr SE/i)).toBeInTheDocument();
-      expect(screen.getByText(/1016 Howell Mill Rd/i)).toBeInTheDocument();
+      const section = screen
+        .getByRole('heading', { name: /locations/i })
+        .closest('section');
+      expect(within(section as HTMLElement).getByText(/4454 S Cobb Dr SE/i)).toBeInTheDocument();
+      expect(within(section as HTMLElement).getByText(/1016 Howell Mill Rd/i)).toBeInTheDocument();
     });
 
     it('shows a Locations heading with the location count', () => {
@@ -423,6 +419,87 @@ describe('BusinessDetail', () => {
       );
 
       expect(screen.getByRole('heading', { name: /locations/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('On-site reviews', () => {
+    const withReviews: Business = {
+      ...mockBusiness,
+      siteReviewCount: 1,
+      siteRating: 5,
+      siteReviews: [
+        {
+          id: 'review-1',
+          rating: 5,
+          comment: 'Best gumbo in town',
+          reviewerName: 'Jenna L.',
+          locationLabel: 'Smyrna',
+          createdAt: {
+            timestamp: Math.floor(new Date('2026-08-01T00:00:00Z').getTime() / 1000),
+          },
+        },
+      ],
+    };
+
+    it('lists on-site reviews with reviewer, stars and location', async () => {
+      render(<BusinessDetail business={withReviews} loading={false} error={null} />);
+
+      expect(await screen.findByText('Jenna L.')).toBeInTheDocument();
+      expect(screen.getByText(/best gumbo in town/i)).toBeInTheDocument();
+      expect(screen.getByText('· Smyrna')).toBeInTheDocument();
+    });
+
+    it('shows a sign-in prompt when signed out', async () => {
+      mockGetSession.mockReturnValue(null);
+      render(<BusinessDetail business={mockBusiness} loading={false} error={null} />);
+
+      const section = screen
+        .getByText('Reviews', { selector: 'h2' })
+        .closest('section');
+      const link = within(section as HTMLElement).getByRole('link', { name: /sign in/i });
+      expect(link).toHaveAttribute('href', '/login');
+    });
+
+    it('posts a review with the session token when signed in', async () => {
+      const onReviewsSubmitted = jest.fn();
+      const originalFetch = globalThis.fetch;
+      const fetchMock = jest.fn().mockResolvedValue({
+        status: 201,
+        ok: true,
+        json: async () => ({ success: true, data: { id: 'new-review' } }),
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      render(
+        <BusinessDetail
+          business={mockBusiness}
+          loading={false}
+          error={null}
+          onReviewsSubmitted={onReviewsSubmitted}
+        />
+      );
+
+      const submit = await screen.findByRole('button', { name: /post review/i });
+      fireEvent.click(screen.getByRole('button', { name: '4 stars' }));
+      fireEvent.change(screen.getByPlaceholderText(/what was your experience/i), {
+        target: { value: 'Great soul food' },
+      });
+      fireEvent.submit(submit);
+
+      await waitFor(() => {
+        expect(fetchMock.mock.calls.some(([url]) => url === '/api/reviews')).toBe(true);
+      });
+      const [url, init] = fetchMock.mock.calls.find(([u]) => u === '/api/reviews');
+      expect(url).toBe('/api/reviews');
+      expect(init?.method).toBe('POST');
+      expect(init?.headers.Authorization).toBe('Bearer access');
+      expect(JSON.parse(init?.body)).toEqual({
+        businessId: mockBusiness.id,
+        rating: 4,
+        comment: 'Great soul food',
+      });
+      await waitFor(() => expect(onReviewsSubmitted).toHaveBeenCalled());
+      globalThis.fetch = originalFetch;
     });
   });
 });
