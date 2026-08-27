@@ -6,6 +6,7 @@
 pub mod api;
 pub mod config;
 pub mod connectors;
+pub mod enrichment;
 pub mod etl;
 pub mod importer;
 pub mod models;
