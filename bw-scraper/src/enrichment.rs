@@ -857,4 +857,187 @@ mod tests {
             .await
             .expect("user cleanup");
     }
+
+    // AC3: Reruns are idempotent — a fully enriched row must report every
+    // target field as skipped and produce nothing to write.
+    #[test]
+    fn test_plan_rerun_fully_enriched_row_skips_all_fields() {
+        let mut row = empty_row("b-5");
+        let place = fixture_place();
+        row.phone = place.phone.clone();
+        row.website = place.website.clone();
+        row.description = place.description.clone();
+        row.rating = place.rating;
+        row.review_count = place.review_count;
+        row.social_urls = place
+            .social_urls
+            .as_ref()
+            .map(|v| serde_json::to_value(v).expect("SocialUrl serializes"));
+
+        let plan = plan_fill_empty(&row, &place);
+
+        assert!(
+            plan.apply.is_empty(),
+            "fully enriched row must produce no writes, got {:?}",
+            plan.apply
+        );
+        let skipped: Vec<&str> = plan.skipped.iter().copied().collect();
+        assert_eq!(
+            skipped,
+            vec!["phone", "website", "description", "rating", "review_count", "social"]
+        );
+    }
+
+    /// Column-level snapshot of every column enrichment may write, read back
+    /// as text so a stray UPDATE on rerun — even one writing an identical
+    /// value — is detectable through `updated_at`.
+    async fn row_snapshot(
+        pool: &PgPool,
+        business_id: Uuid,
+    ) -> Vec<(String, Option<String>)> {
+        let row = sqlx::query(
+            r#"SELECT phone, website, description, rating::text AS rating,
+                      review_count::text AS review_count, rating_source,
+                      social_urls::text AS social_urls, updated_at::text AS updated_at
+               FROM businesses WHERE id = $1"#,
+        )
+        .bind(business_id)
+        .fetch_one(pool)
+        .await
+        .expect("row snapshot reads back");
+        let cols = [
+            "phone",
+            "website",
+            "description",
+            "rating",
+            "review_count",
+            "rating_source",
+            "social_urls",
+            "updated_at",
+        ];
+        cols.iter()
+            .map(|c| {
+                (
+                    c.to_string(),
+                    row.try_get::<Option<String>, _>(c).expect("column reads back"),
+                )
+            })
+            .collect()
+    }
+
+    // AC3: b-5 is fully enriched by a previous run; running the engine again
+    // reports every target field skipped, applies zero UPDATEs, and leaves
+    // rating_source 'google'.
+    #[tokio::test]
+    async fn test_rerun_is_idempotent_all_fields_skipped() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        // Idempotent cleanup of residue from prior runs.
+        sqlx::query(
+            "DELETE FROM businesses WHERE name = 'Enrichment Test Business 5'",
+        )
+        .execute(&pool)
+        .await
+        .expect("cleanup delete");
+
+        let email = format!("enrich-test-{}@example.com", Uuid::new_v4());
+        let user_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO users (email, password_hash, name, role)
+                 VALUES ($1, 'test', 'Enrich Test', 'admin')
+                 RETURNING id",
+            )
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .expect("seed user inserts");
+            row.get::<Uuid, _>("id")
+        };
+
+        let business_id: Uuid = {
+            let row = sqlx::query(
+                r#"INSERT INTO businesses
+                   (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
+                   VALUES ($1, 'Enrichment Test Business 5', NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
+                   RETURNING id"#,
+            )
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .expect("seed business b-5 inserts");
+            row.get::<Uuid, _>("id")
+        };
+
+        let place = fixture_place();
+
+        // Run 1 (previous run): fully enriches b-5.
+        let (applied1, skipped1) =
+            apply_fill_empty(&pool, business_id, &place)
+                .await
+                .expect("first run applies on the compose Postgres");
+        let fields1: Vec<&str> = applied1.iter().map(|a| a.field).collect();
+        assert_eq!(
+            fields1,
+            vec!["phone", "website", "description", "rating", "review_count", "social"]
+        );
+        assert!(
+            skipped1.is_empty(),
+            "first run: nothing should skip, got {skipped1:?}"
+        );
+
+        let before = row_snapshot(&pool, business_id).await;
+
+        // Run 2 (rerun): same business, same place JSON.
+        let (applied2, skipped2) =
+            apply_fill_empty(&pool, business_id, &place)
+                .await
+                .expect("second run completes on the compose Postgres");
+
+        // Every target field is reported skipped…
+        assert_eq!(
+            skipped2,
+            vec!["phone", "website", "description", "rating", "review_count", "social"]
+        );
+        // …and zero UPDATE statements apply (no field reports as applied).
+        assert!(
+            applied2.is_empty(),
+            "rerun must apply zero fields, got {applied2:?}"
+        );
+
+        // Row is byte-identical after the rerun — no value, timestamp, or
+        // source change.
+        let after = row_snapshot(&pool, business_id).await;
+        assert_eq!(
+            after, before,
+            "rerun must leave the enriched row untouched"
+        );
+        let rating_source = after
+            .iter()
+            .find(|(k, _)| k == "rating_source")
+            .map(|(_, v)| v.clone())
+            .flatten();
+        assert_eq!(
+            rating_source.as_deref(),
+            Some("google"),
+            "rating_source must remain 'google' after the rerun"
+        );
+
+        // Cleanup: remove seeded rows (compose dev DB, kept tidy).
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
 }
