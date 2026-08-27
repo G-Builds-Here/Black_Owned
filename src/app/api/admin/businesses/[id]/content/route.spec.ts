@@ -302,3 +302,66 @@ describe('PATCH /api/admin/businesses/[id]/content (LOC-0080 AC2)', () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 });
+
+describe('PATCH /api/admin/businesses/[id]/content (LOC-0080 AC3)', () => {
+  // Gherkin alias "b-10": its description was set by an enrichment run
+  // (LOC-0077). Manual admin writes must replace that value — the write
+  // path carries no fill-empty rule.
+  const B10_ID = '7a2f3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d';
+
+  it('replaces an enrichment-set description with the manual value', async () => {
+    mockClient.query.mockResolvedValue({
+      rows: [b9Row({ id: B10_ID, description: 'Manual override by admin' })],
+    });
+
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${B10_ID}/content`, {
+        description: 'Manual override by admin',
+      }),
+      makeContext(B10_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    // The returned row carries the manual value, not the pipeline value.
+    expect(body.data.business.description).toBe('Manual override by admin');
+
+    // Unconditional overwrite: a fill-empty guard would surface as
+    // COALESCE(...), an IS NULL predicate, or a pre-read in the SQL —
+    // the exact statement pins the write path against all of those.
+    const [sql, params] = mockClient.query.mock.calls[0];
+    expect(sql).toBe(
+      'UPDATE businesses SET description = $2, updated_at = NOW() ' +
+        'WHERE id = $1 RETURNING id, name, website, phone, menu_url, ' +
+        'image_url, description, social_urls'
+    );
+    expect(params).toEqual([B10_ID, 'Manual override by admin']);
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it('does not block a manual write because the field is already filled', async () => {
+    // The enrichment run left a non-null description; saving a new one
+    // must succeed exactly as it would for an empty field. UPDATE ...
+    // RETURNING yields the post-update row, so the mocked result carries
+    // the manual value — the pipeline value is gone.
+    mockClient.query.mockResolvedValue({
+      rows: [
+        b9Row({ id: B10_ID, description: 'Replaced by an admin' }),
+      ],
+    });
+
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${B10_ID}/content`, {
+        description: 'Replaced by an admin',
+      }),
+      makeContext(B10_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    const [sql, params] = mockClient.query.mock.calls[0];
+    expect(sql).toContain('UPDATE businesses SET description = $2');
+    expect(params).toEqual([B10_ID, 'Replaced by an admin']);
+    expect(body.data.business.description).toBe('Replaced by an admin');
+  });
+});
