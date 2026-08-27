@@ -1,0 +1,12 @@
+{
+  "name": "Southern Kitchen & Bar",
+  "phone": "+15551234567",
+  "website": "https://example.com",
+  "description": "Southern kitchen and bar",
+  "rating": 4.5,
+  "review_count": 214,
+  "social": [
+    { "platform": "instagram", "url": "https://www.instagram.com/southernkitchenbar" },
+    { "platform": "facebook", "url": "https://www.facebook.com/southernkitchenbar" }
+  ]
+}
