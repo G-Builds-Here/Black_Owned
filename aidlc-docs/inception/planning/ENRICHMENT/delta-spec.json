@@ -1,0 +1,78 @@
+{
+  "c3_components": {
+    "containers": {
+      "bw-scraper": {
+        "components": {
+          "add": [
+            {
+              "id": "enrichment-engine",
+              "name": "EnrichmentEngine",
+              "c4_type": "Component",
+              "description": "Fetches the Google Maps place JSON for a business's source_id (share-link URL), parses name/phone/website/description/rating/review_count/photos/social, and applies fill-empty UPDATEs to businesses; sets rating_source='google'. Reuses robots.rs, rate_limiter.rs, user_agent_rotator.rs. Idempotent and rerunnable.",
+              "technology": "Rust module (reqwest + sqlx 0.7)",
+              "path": "bw-scraper/src/enrichment.rs"
+            },
+            {
+              "id": "enrich-endpoint",
+              "name": "POST /enrich",
+              "c4_type": "Component",
+              "description": "axum route on the existing :8080 worker; accepts {business_ids?: uuid[], limit?, dry_run?}, runs EnrichmentEngine, returns a per-business report (field, previous, applied). Unauthenticated, matching /scrape (internal LAN service).",
+              "technology": "axum handler",
+              "path": "bw-scraper/src/api.rs"
+            }
+          ]
+        }
+      },
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {
+              "id": "admin-enrichment-trigger",
+              "name": "Admin enrichment trigger",
+              "c4_type": "Component",
+              "description": "Admin-only POST /api/admin/enrichment (createAuthMiddleware(['admin'])) that forwards to bw-scraper POST /enrich and displays the per-business report in the admin console.",
+              "technology": "Next.js 16 route + admin console UI",
+              "path": "src/app/api/admin/enrichment/route.ts"
+            },
+            {
+              "id": "admin-content-editor",
+              "name": "Admin content editor",
+              "c4_type": "Component",
+              "description": "Admin-only form + PATCH /api/admin/businesses/[id]/content to manually fix website/phone/menu_url/image_url/description/social_urls per business (manual override writes regardless of fill-empty rule).",
+              "technology": "Next.js 16 route + admin console UI",
+              "path": "src/app/api/admin/businesses/[id]/content/route.ts"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "relationships": {
+    "c2": {
+      "add": [
+        {
+          "source": "black-owned-frontend",
+          "target": "bw-scraper",
+          "label": "POST /enrich (admin trigger)",
+          "technology": "HTTP localhost:8080"
+        },
+        {
+          "source": "bw-scraper",
+          "target": "postgres",
+          "label": "Writes enriched business fields (fill-empty)",
+          "technology": "SQL via sqlx"
+        }
+      ]
+    },
+    "c3": {
+      "add": [
+        {
+          "source": "enrich-endpoint",
+          "target": "enrichment-engine",
+          "label": "Runs",
+          "technology": "in-process"
+        }
+      ]
+    }
+  }
+}
