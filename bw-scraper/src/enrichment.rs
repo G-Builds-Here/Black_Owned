@@ -343,11 +343,13 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
 /// Each field write is guarded by the same emptiness predicate the plan
 /// used, so a concurrent fill between plan and write loses the race
 /// instead of clobbering: the affected-rows count decides applied vs
-/// skipped.
+/// skipped. With `dry_run` the plan is reported as the fields that would
+/// apply and zero UPDATE statements are issued.
 pub async fn apply_fill_empty(
     pool: &PgPool,
     business_id: Uuid,
     place: &PlaceData,
+    dry_run: bool,
 ) -> Result<(Vec<AppliedField>, Vec<&'static str>), String> {
     let row = load_business(pool, business_id).await?;
     let plan = plan_fill_empty(&row, place);
@@ -358,6 +360,14 @@ pub async fn apply_fill_empty(
     let mut skipped: Vec<&'static str> = plan.skipped.clone();
 
     for planned in &plan.apply {
+        if dry_run {
+            // Report what would apply without issuing any UPDATE.
+            applied.push(AppliedField {
+                field: planned.field,
+                previous: previous_value(&row, planned.field),
+            });
+            continue;
+        }
         let affected =
             update_field(pool, business_id, planned.field, &planned.value).await?;
         if affected {
@@ -494,8 +504,14 @@ impl EnrichmentEngine {
     }
 
     /// Enrich one business end-to-end: resolve its Google share-link,
-    /// fetch the place JSON, and apply fill-empty updates.
-    pub async fn enrich(&mut self, pool: &PgPool, business_id: Uuid) -> EnrichResult {
+    /// fetch the place JSON, and apply fill-empty updates. `dry_run`
+    /// reports the fields that would apply without writing.
+    pub async fn enrich(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        dry_run: bool,
+    ) -> EnrichResult {
         let with_error = |name: String, error: String| EnrichResult {
             business_id,
             business_name: name,
@@ -531,7 +547,7 @@ impl EnrichmentEngine {
             Err(e) => return with_error(name, e),
         };
 
-        match apply_fill_empty(pool, business_id, &place).await {
+        match apply_fill_empty(pool, business_id, &place, dry_run).await {
             Ok((applied, skipped)) => EnrichResult {
                 business_id,
                 business_name: name,
@@ -551,10 +567,11 @@ impl EnrichmentEngine {
         &mut self,
         pool: &PgPool,
         business_ids: &[Uuid],
+        dry_run: bool,
     ) -> Vec<EnrichResult> {
         let mut results = Vec::with_capacity(business_ids.len());
         for business_id in business_ids {
-            results.push(self.enrich(pool, *business_id).await);
+            results.push(self.enrich(pool, *business_id, dry_run).await);
         }
         results
     }
@@ -772,7 +789,7 @@ mod tests {
         };
 
         let (applied, skipped) =
-            apply_fill_empty(&pool, business_id, &place)
+            apply_fill_empty(&pool, business_id, &place, false)
                 .await
                 .expect("apply succeeds on the compose Postgres");
 
@@ -840,7 +857,7 @@ mod tests {
             ..PlaceData::default()
         };
         let (applied2, skipped2) =
-            apply_fill_empty(&pool, business_id2, &place2)
+            apply_fill_empty(&pool, business_id2, &place2, false)
                 .await
                 .expect("apply succeeds for the partial row");
 
@@ -1061,7 +1078,7 @@ mod tests {
         .expect("seed b-5 source");
 
         // b-3 fails first; b-1 and b-5 must still process to completion.
-        let report = engine.enrich_batch(&pool, &[b3_id, b1_id, b5_id]).await;
+        let report = engine.enrich_batch(&pool, &[b3_id, b1_id, b5_id], false).await;
 
         assert_eq!(report.len(), 3, "run report must include every business in the batch");
 
@@ -1213,7 +1230,7 @@ mod tests {
         .await
         .expect("seed b-4 source");
 
-        let report = engine.enrich_batch(&pool, &[b4_id]).await;
+        let report = engine.enrich_batch(&pool, &[b4_id], false).await;
 
         assert_eq!(report.len(), 1, "run report must include the business");
         let entry = &report[0];
@@ -1384,7 +1401,7 @@ mod tests {
 
         // Run 1 (previous run): fully enriches b-5.
         let (applied1, skipped1) =
-            apply_fill_empty(&pool, business_id, &place)
+            apply_fill_empty(&pool, business_id, &place, false)
                 .await
                 .expect("first run applies on the compose Postgres");
         let fields1: Vec<&str> = applied1.iter().map(|a| a.field).collect();
@@ -1401,7 +1418,7 @@ mod tests {
 
         // Run 2 (rerun): same business, same place JSON.
         let (applied2, skipped2) =
-            apply_fill_empty(&pool, business_id, &place)
+            apply_fill_empty(&pool, business_id, &place, false)
                 .await
                 .expect("second run completes on the compose Postgres");
 
