@@ -488,7 +488,7 @@ impl EnrichmentEngine {
             .map_err(|e| format!("fetch failed: {e}"))?;
         let status = response.status();
         if !status.is_success() {
-            return Err(format!("fetch failed: HTTP {status}"));
+            return Err(format!("fetch failed: HTTP {}", status.as_u16()));
         }
         response.text().await.map_err(|e| format!("fetch failed: {e}"))
     }
@@ -543,11 +543,28 @@ impl EnrichmentEngine {
             Err(e) => with_error(name, e),
         }
     }
+
+    /// Enrich a batch of businesses. Each business is processed
+    /// independently; a per-business failure is recorded on that entry's
+    /// `error` and the remaining businesses still process to completion.
+    pub async fn enrich_batch(
+        &mut self,
+        pool: &PgPool,
+        business_ids: &[Uuid],
+    ) -> Vec<EnrichResult> {
+        let mut results = Vec::with_capacity(business_ids.len());
+        for business_id in business_ids {
+            results.push(self.enrich(pool, *business_id).await);
+        }
+        results
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use crate::rate_limiter::RateLimiterConfig;
 
     const FIXTURE_PLACE_JSON: &str =
         include_str!("../tests/fixtures/place-json/southern_kitchen.json");
@@ -851,6 +868,395 @@ mod tests {
             .execute(&pool)
             .await
             .expect("business cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    fn ac2_test_engine(proxy_port: u16) -> EnrichmentEngine {
+        let http = reqwest::Client::builder()
+            .timeout(Duration::from_secs(20))
+            .proxy(
+                reqwest::Proxy::http(format!("http://127.0.0.1:{proxy_port}"))
+                    .expect("stub proxy builds"),
+            )
+            .build()
+            .expect("test client builds");
+        EnrichmentEngine {
+            http,
+            limiter: RateLimiter::with_config(RateLimiterConfig {
+                min_delay_ms: 0,
+                max_jitter_ms: 0,
+            }),
+            rotator: UserAgentRotator::new(),
+            robots: RobotsChecker::new("BlackOwnedBot"),
+        }
+    }
+
+    /// Minimal blocking HTTP/1.1 stub: replies 500 when the request line
+    /// contains `fail_marker`, otherwise 200 with `success_body`.
+    fn ac2_start_http_stub(fail_marker: &str, success_body: &str) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind AC2 stub listener");
+        let port = listener.local_addr().expect("AC2 stub address").port();
+        let fail_marker = fail_marker.to_string();
+        let success_body = success_body.to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut stream = match stream {
+                    Ok(stream) => stream,
+                    Err(_) => break,
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                if request_line.contains(fail_marker.as_str()) {
+                    let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.flush();
+                } else {
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        success_body.len(),
+                        success_body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.flush();
+                }
+            }
+        });
+        port
+    }
+
+    // AC2: a non-success place-JSON fetch becomes the exact run-report error.
+    #[tokio::test]
+    async fn test_fetch_place_json_reports_http_500() {
+        let port = ac2_start_http_stub("/fail", "{}");
+        let mut engine = ac2_test_engine(port);
+
+        let err = engine
+            .fetch_place_json("http://maps.google.test/maps/fail?cid=ac2")
+            .await
+            .expect_err("HTTP 500 must be reported as an error");
+
+        assert_eq!(err, "fetch failed: HTTP 500");
+    }
+
+    // AC2 scenario 1: a per-business HTTP failure is isolated in the run
+    // report while the remaining businesses still process to completion.
+    #[tokio::test]
+    async fn test_enrich_batch_isolates_per_business_fetch_failure() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        sqlx::query(
+            "DELETE FROM businesses WHERE name IN ('AC2 Batch Business 1', 'AC2 Batch Business 3', 'AC2 Batch Business 5')",
+        )
+        .execute(&pool)
+        .await
+        .expect("cleanup businesses");
+        sqlx::query(
+            "DELETE FROM scraped_businesses WHERE name IN ('AC2 Batch Business 1', 'AC2 Batch Business 3', 'AC2 Batch Business 5')",
+        )
+        .execute(&pool)
+        .await
+        .expect("cleanup scraped businesses");
+
+        let stub_port = ac2_start_http_stub("/fail", FIXTURE_PLACE_JSON);
+        let mut engine = ac2_test_engine(stub_port);
+
+        let email = format!("ac2-batch-{}@example.com", Uuid::new_v4());
+        let user_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO users (email, password_hash, name, role)
+                 VALUES ($1, 'test', 'AC2 Batch', 'admin')
+                 RETURNING id",
+            )
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .expect("seed user inserts");
+            row.get::<Uuid, _>("id")
+        };
+
+        let job_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO scrape_jobs (source, query, location)
+                 VALUES ('ac2-test', 'ac2 batch', 'Test')
+                 RETURNING id",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("seed scrape job");
+            row.get::<Uuid, _>("id")
+        };
+
+        let seed_business = |name: &str| {
+            let name = name.to_string();
+            let pool_ref = &pool;
+            async move {
+                let row = sqlx::query(
+                    r#"INSERT INTO businesses
+                       (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
+                       VALUES ($1, $2, NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
+                       RETURNING id"#,
+                )
+                .bind(user_id)
+                .bind(&name)
+                .fetch_one(pool_ref)
+                .await
+                .expect("seed business inserts");
+                row.get::<Uuid, _>("id")
+            }
+        };
+        let b1_id = seed_business("AC2 Batch Business 1").await;
+        let b3_id = seed_business("AC2 Batch Business 3").await;
+        let b5_id = seed_business("AC2 Batch Business 5").await;
+
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', 'AC2 Batch Business 1', 'http://maps.google.test/maps/ok?cid=ac2-one')",
+        )
+        .bind(job_id)
+        .execute(&pool)
+        .await
+        .expect("seed b-1 source");
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', 'AC2 Batch Business 3', 'http://maps.google.test/maps/fail?cid=ac2-three')",
+        )
+        .bind(job_id)
+        .execute(&pool)
+        .await
+        .expect("seed b-3 source");
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', 'AC2 Batch Business 5', 'http://maps.google.test/maps/ok?cid=ac2-five')",
+        )
+        .bind(job_id)
+        .execute(&pool)
+        .await
+        .expect("seed b-5 source");
+
+        // b-3 fails first; b-1 and b-5 must still process to completion.
+        let report = engine.enrich_batch(&pool, &[b3_id, b1_id, b5_id]).await;
+
+        assert_eq!(report.len(), 3, "run report must include every business in the batch");
+
+        let failed = &report[0];
+        assert_eq!(failed.business_id, b3_id);
+        assert_eq!(failed.error.as_deref(), Some("fetch failed: HTTP 500"));
+        assert!(failed.applied.is_empty(), "failed fetch must apply nothing");
+
+        let b1 = &report[1];
+        assert_eq!(b1.business_id, b1_id);
+        assert!(b1.error.is_none(), "b-1 must not error even though b-3 failed first");
+        assert_eq!(b1.applied.len(), 6, "fully empty b-1 must apply every fixture field");
+
+        let b5 = &report[2];
+        assert_eq!(b5.business_id, b5_id);
+        assert!(b5.error.is_none(), "business after the failure must still process to completion");
+        assert_eq!(b5.applied.len(), 6, "fully empty b-5 must apply every fixture field");
+
+        // b-3's row is unchanged.
+        let unchanged = sqlx::query(
+            r#"SELECT phone, website, description, rating::text, review_count,
+                      social_urls::text
+               FROM businesses WHERE id = $1"#,
+        )
+        .bind(b3_id)
+        .fetch_one(&pool)
+        .await
+        .expect("b-3 row reads back");
+        assert!(unchanged.get::<Option<String>, _>("phone").is_none());
+        assert!(unchanged.get::<Option<String>, _>("website").is_none());
+        assert!(unchanged.get::<Option<String>, _>("description").is_none());
+        assert_eq!(
+            unchanged.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
+            Some(0.0)
+        );
+        assert_eq!(unchanged.get::<Option<i32>, _>("review_count"), Some(0));
+        assert!(unchanged.get::<Option<String>, _>("social_urls").is_none());
+
+        // b-1 actually landed on the row.
+        let enriched = sqlx::query(
+            "SELECT phone, rating::text, review_count FROM businesses WHERE id = $1",
+        )
+        .bind(b1_id)
+        .fetch_one(&pool)
+        .await
+        .expect("b-1 row reads back");
+        assert_eq!(
+            enriched.get::<Option<String>, _>("phone").as_deref(),
+            Some("+15551234567")
+        );
+        assert_eq!(
+            enriched.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
+            Some(4.5)
+        );
+        assert_eq!(enriched.get::<Option<i32>, _>("review_count"), Some(214));
+
+        // Cleanup: seeded rows only.
+        sqlx::query("DELETE FROM businesses WHERE id = ANY($1)")
+            .bind(vec![b1_id, b3_id, b5_id])
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    // AC2 scenario 2: a business whose source is not a Google share link is
+    // reported as skipped with a reason, no error raised.
+    #[tokio::test]
+    async fn test_enrich_batch_reports_no_enrichment_source_without_error() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        sqlx::query("DELETE FROM businesses WHERE name = 'AC2 Batch Business 4'")
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE name = 'AC2 Batch Business 4'")
+            .execute(&pool)
+            .await
+            .expect("cleanup scraped business");
+
+        let mut engine = EnrichmentEngine::new();
+
+        let email = format!("ac2-nosrc-{}@example.com", Uuid::new_v4());
+        let user_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO users (email, password_hash, name, role)
+                 VALUES ($1, 'test', 'AC2 NoSource', 'admin')
+                 RETURNING id",
+            )
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .expect("seed user inserts");
+            row.get::<Uuid, _>("id")
+        };
+
+        let job_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO scrape_jobs (source, query, location)
+                 VALUES ('ac2-test', 'ac2 no source', 'Test')
+                 RETURNING id",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("seed scrape job");
+            row.get::<Uuid, _>("id")
+        };
+
+        let b4_id: Uuid = {
+            let row = sqlx::query(
+                r#"INSERT INTO businesses
+                   (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
+                   VALUES ($1, 'AC2 Batch Business 4', NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
+                   RETURNING id"#,
+            )
+            .bind(user_id)
+            .fetch_one(&pool)
+            .await
+            .expect("seed business inserts");
+            row.get::<Uuid, _>("id")
+        };
+
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'searxng', 'AC2 Batch Business 4', 'https://searxng.example/result/ac2-four')",
+        )
+        .bind(job_id)
+        .execute(&pool)
+        .await
+        .expect("seed b-4 source");
+
+        let report = engine.enrich_batch(&pool, &[b4_id]).await;
+
+        assert_eq!(report.len(), 1, "run report must include the business");
+        let entry = &report[0];
+        assert_eq!(entry.business_id, b4_id);
+        assert_eq!(entry.business_name, "AC2 Batch Business 4");
+        assert_eq!(entry.reason, Some("no enrichment source"));
+        assert!(entry.error.is_none(), "ineligible source must not raise an error");
+        assert!(entry.applied.is_empty());
+
+        let row = sqlx::query(
+            r#"SELECT phone, website, description, rating::text, review_count,
+                      social_urls::text
+               FROM businesses WHERE id = $1"#,
+        )
+        .bind(b4_id)
+        .fetch_one(&pool)
+        .await
+        .expect("b-4 row reads back");
+        assert!(row.get::<Option<String>, _>("phone").is_none());
+        assert!(row.get::<Option<String>, _>("website").is_none());
+        assert!(row.get::<Option<String>, _>("description").is_none());
+        assert_eq!(
+            row.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
+            Some(0.0)
+        );
+        assert_eq!(row.get::<Option<i32>, _>("review_count"), Some(0));
+        assert!(row.get::<Option<String>, _>("social_urls").is_none());
+
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(b4_id)
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped business cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
         sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(user_id)
             .execute(&pool)
