@@ -34,6 +34,8 @@ pub struct PlaceData {
     pub review_count: Option<i32>,
     /// Social links from the place JSON `social` array.
     pub social_urls: Option<Vec<SocialUrl>>,
+    /// Photo URLs from the place JSON `photos` array, in document order.
+    pub photos: Option<Vec<String>>,
 }
 
 /// One social link ({platform, url}) carried by a place JSON.
@@ -54,6 +56,7 @@ pub struct BusinessRow {
     pub rating: Option<f64>,
     pub review_count: Option<i32>,
     pub menu_url: Option<String>,
+    pub image_url: Option<String>,
     pub social_urls: Option<serde_json::Value>,
 }
 
@@ -144,6 +147,7 @@ pub fn parse_place_json(raw: &str) -> Result<PlaceData, String> {
         rating: first_number(obj, &["rating"]),
         review_count: first_int(obj, &["review_count", "reviewCount"]),
         social_urls: social_array(obj),
+        photos: photo_urls(obj),
     })
 }
 
@@ -205,6 +209,30 @@ fn social_array(
     (!links.is_empty()).then_some(links)
 }
 
+/// Photo URLs from the place JSON `photos` array, in document order.
+///
+/// Entries may be `{"uri": ...}` objects (Google's shape), `{"url": ...}`,
+/// or bare URL strings; entries without a usable URL and blank strings
+/// are dropped.
+fn photo_urls(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Vec<String>> {
+    let array = obj.get("photos").and_then(|v| v.as_array())?;
+    let urls: Vec<String> = array
+        .iter()
+        .filter_map(|entry| match entry {
+            serde_json::Value::String(s) => Some(s.trim().to_string()),
+            serde_json::Value::Object(o) => o
+                .get("uri")
+                .or_else(|| o.get("url"))
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .map(str::to_string),
+            _ => None,
+        })
+        .filter(|u| !u.is_empty())
+        .collect();
+    (!urls.is_empty()).then_some(urls)
+}
+
 /// Outcome of the menu-discovery pass for one business.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuOutcome {
@@ -217,6 +245,21 @@ pub enum MenuOutcome {
     /// `menu_url` is unchanged.
     FetchFailed(String),
     /// Pass did not run: no website, or `menu_url` already set.
+    NotApplicable,
+}
+
+/// Outcome of the photo-selection pass for one business.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PhotoOutcome {
+    /// The first photo URL passed the HEAD check (success status with an
+    /// `image/*` content type); `image_url` was written (or would be
+    /// written under `dry_run`).
+    Selected(String),
+    /// The first photo URL failed the HEAD check — 404, non-image
+    /// content type, or transport failure; `image_url` is unchanged.
+    CheckFailed(String),
+    /// Pass did not run: the place JSON carries no photos, or
+    /// `image_url` already has a value (fill-empty).
     NotApplicable,
 }
 
@@ -425,6 +468,7 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
                   rating::text AS rating,
                   review_count,
                   menu_url,
+                  image_url,
                   social_urls::text AS social_urls
            FROM businesses
            WHERE id = $1"#,
@@ -451,6 +495,7 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
         rating,
         review_count: row.get::<Option<i32>, _>("review_count"),
         menu_url: row.get::<Option<String>, _>("menu_url"),
+        image_url: row.get::<Option<String>, _>("image_url"),
         social_urls,
     })
 }
@@ -513,6 +558,7 @@ async fn update_field(
         "review_count" => "UPDATE businesses SET review_count = $2, updated_at = now() WHERE id = $1 AND (review_count IS NULL OR review_count = 0)",
         "social" => "UPDATE businesses SET social_urls = $2::jsonb, updated_at = now() WHERE id = $1 AND social_urls IS NULL",
         "menu_url" => "UPDATE businesses SET menu_url = $2, updated_at = now() WHERE id = $1 AND menu_url IS NULL",
+        "image_url" => "UPDATE businesses SET image_url = $2, updated_at = now() WHERE id = $1 AND image_url IS NULL",
         other => return Err(format!("unknown enrichment field: {other}")),
     };
 
@@ -564,6 +610,7 @@ fn previous_value(row: &BusinessRow, field: &str) -> Option<String> {
         "rating" => row.rating.filter(|v| *v > 0.0).map(|v| v.to_string()),
         "review_count" => row.review_count.filter(|v| *v > 0).map(|v| v.to_string()),
         "menu_url" => row.menu_url.clone().filter(|v| !v.trim().is_empty()),
+        "image_url" => row.image_url.clone().filter(|v| !v.trim().is_empty()),
         "social" => row
             .social_urls
             .as_ref()
@@ -649,6 +696,8 @@ impl EnrichmentEngine {
             Err(e) => return with_error(String::new(), e),
         };
 
+        let mut place: Option<PlaceData> = None;
+
         let mut result = if !is_google_share_link(&source, &source_id) {
             EnrichResult {
                 business_id,
@@ -665,12 +714,13 @@ impl EnrichmentEngine {
                 Err(e) => return with_error(name, e),
             };
 
-            let place = match parse_place_json(&raw) {
-                Ok(place) => place,
+            let parsed = match parse_place_json(&raw) {
+                Ok(parsed) => parsed,
                 Err(e) => return with_error(name, e),
             };
+            place = Some(parsed.clone());
 
-            match apply_fill_empty(pool, business_id, &place, dry_run).await {
+            match apply_fill_empty(pool, business_id, &parsed, dry_run).await {
                 Ok((applied, skipped)) => EnrichResult {
                     business_id,
                     business_name: name,
@@ -705,6 +755,33 @@ impl EnrichmentEngine {
             Err(error) => {
                 tracing::warn!(business_id = %business_id, "menu discovery error: {error}");
                 result.notes.push(format!("menu discovery failed: {error}"));
+            }
+        }
+
+        // Photo-selection pass: sibling of the menu pass, judged on the
+        // pre-run row so an image_url written by this run is not
+        // re-checked, and on this run's place JSON for the photo URLs.
+        if let Some(place) = place {
+            match self
+                .discover_photo_on_place(pool, business_id, &pre_run_row, &place, dry_run)
+                .await
+            {
+                Ok(PhotoOutcome::Selected(url)) => {
+                    tracing::info!(business_id = %business_id, image_url = %url, "photo selected");
+                    result.applied.push(AppliedField {
+                        field: "image_url",
+                        previous: None,
+                    });
+                }
+                Ok(PhotoOutcome::CheckFailed(detail)) => {
+                    tracing::warn!(business_id = %business_id, "photo check failed: {detail}");
+                    result.notes.push("photo url failed check".to_string());
+                }
+                Ok(PhotoOutcome::NotApplicable) => {}
+                Err(error) => {
+                    tracing::warn!(business_id = %business_id, "photo selection error: {error}");
+                    result.notes.push(format!("photo selection failed: {error}"));
+                }
             }
         }
 
@@ -763,6 +840,48 @@ impl EnrichmentEngine {
         Ok(String::from_utf8_lossy(&body).into_owned())
     }
 
+    /// HEAD-check a photo URL before `image_url` is written (stability
+    /// gate).
+    ///
+    /// Passes only when the server answers a success status with an
+    /// `image/*` content type. Google photo URLs are often time-limited,
+    /// so a failing check means skip, not retry.
+    pub async fn head_photo(&mut self, url: &str) -> Result<(), String> {
+        if !self.robots.is_allowed(url) {
+            return Err("photo head check blocked by robots.txt".to_string());
+        }
+        self.limiter.wait_before_request().await;
+        let user_agent = self.rotator.get_next_user_agent();
+        let response = self
+            .http
+            .head(url)
+            .timeout(Duration::from_secs(10))
+            .header("User-Agent", user_agent)
+            .send()
+            .await
+            .map_err(|e| format!("photo head check failed: {e}"))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("photo head check failed: HTTP {}", status.as_u16()));
+        }
+        let content_type = match response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+        {
+            Some(content_type) => content_type,
+            None => {
+                return Err("photo head check failed: no content type".to_string());
+            }
+        };
+        if !content_type.to_ascii_lowercase().starts_with("image/") {
+            return Err(format!(
+                "photo head check failed: non-image content type {content_type}"
+            ));
+        }
+        Ok(())
+    }
+
     /// Menu-discovery pass for one business (depth 1: homepage only).
     ///
     /// Runs only when the row has a non-empty website and an empty
@@ -814,6 +933,50 @@ impl EnrichmentEngine {
         }
         Ok(MenuOutcome::Found(url))
     }
+
+    /// Photo-selection pass against a pre-loaded row and a parsed place.
+    ///
+    /// Runs only when the place JSON carries a photos array and the
+    /// row's image_url is empty (fill-empty: an existing image_url is
+    /// never overwritten). The first photo URL is HEAD-checked; a failing
+    /// check leaves image_url unchanged.
+    async fn discover_photo_on_place(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        row: &BusinessRow,
+        place: &PlaceData,
+        dry_run: bool,
+    ) -> Result<PhotoOutcome, String> {
+        if row.image_url.clone().filter(|v| !v.trim().is_empty()).is_some() {
+            return Ok(PhotoOutcome::NotApplicable);
+        }
+        let photo = match place.photos.as_ref().and_then(|v| v.first()) {
+            Some(url) => url.clone(),
+            None => return Ok(PhotoOutcome::NotApplicable),
+        };
+
+        match self.head_photo(&photo).await {
+            Ok(()) => {
+                if !dry_run {
+                    let affected = update_field(
+                        pool,
+                        business_id,
+                        "image_url",
+                        &FieldValue::Text(photo.clone()),
+                    )
+                    .await?;
+                    if !affected {
+                        // Lost the race: image_url was filled between
+                        // read and write.
+                        return Ok(PhotoOutcome::NotApplicable);
+                    }
+                }
+                Ok(PhotoOutcome::Selected(photo))
+            }
+            Err(detail) => Ok(PhotoOutcome::CheckFailed(detail)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -839,6 +1002,7 @@ mod tests {
             rating: Some(0.0),
             review_count: Some(0),
             menu_url: None,
+            image_url: None,
             social_urls: None,
         }
     }
@@ -2115,5 +2279,484 @@ mod tests {
             err.starts_with("homepage fetch failed"),
             "unexpected error: {err}"
         );
+    }
+    // =====================================================================
+    // LOC-0081 AC2: photo selection with stability check
+    // =====================================================================
+
+    /// Place-JSON + photo stub: the place-JSON GET answers 200 with
+    /// `place_body(port)` (application/json); any request whose target
+    /// contains "/photos/" answers `photo_status` with
+    /// `photo_content_type` and no body (HEAD-style).
+    fn ac3_start_photo_stub(
+        place_body: Box<dyn Fn(u16) -> String + Send>,
+        photo_status: u16,
+        photo_content_type: &str,
+    ) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind AC3 stub listener");
+        let port = listener.local_addr().expect("AC3 stub address").port();
+        let photo_content_type = photo_content_type.to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut stream = match stream {
+                    Ok(stream) => stream,
+                    Err(_) => break,
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                if request_line.contains("/photos/") {
+                    let response = format!(
+                        "HTTP/1.1 {photo_status} Stub\r\nContent-Type: {photo_content_type}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.flush();
+                } else {
+                    let body = place_body(port);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.flush();
+                }
+            }
+        });
+        port
+    }
+
+    /// Seed a user, a business (image_url NULL or preset), a scrape job,
+    /// and a google_maps source row named after the business so
+    /// `resolve_source` finds it. Returns (user_id, business_id, job_id).
+    async fn ac3_seed_photo_business(pool: &PgPool, preset_image_url: Option<&str>) -> (Uuid, Uuid, Uuid) {
+        let name = format!("AC3 Photo Business {}", Uuid::new_v4());
+        let email = format!("ac3-photo-{}@example.com", Uuid::new_v4());
+        let user_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO users (email, password_hash, name, role)
+                 VALUES ($1, 'test', 'AC3 Photo', 'admin')
+                 RETURNING id",
+            )
+            .bind(&email)
+            .fetch_one(pool)
+            .await
+            .expect("seed user inserts");
+            row.get::<Uuid, _>("id")
+        };
+        let business_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO businesses (owner_id, name, category_id, image_url)
+                 VALUES ($1, $2, 'test-enrichment', $3)
+                 RETURNING id",
+            )
+            .bind(user_id)
+            .bind(&name)
+            .bind(preset_image_url)
+            .fetch_one(pool)
+            .await
+            .expect("seed business inserts");
+            row.get::<Uuid, _>("id")
+        };
+        let job_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO scrape_jobs (source, query, location)
+                 VALUES ('ac3-test', 'ac3 photo', 'Test')
+                 RETURNING id",
+            )
+            .fetch_one(pool)
+            .await
+            .expect("seed scrape job");
+            row.get::<Uuid, _>("id")
+        };
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', $2, 'http://maps.google.test/maps/place?cid=ac3-photo')",
+        )
+        .bind(job_id)
+        .bind(&name)
+        .execute(pool)
+        .await
+        .expect("seed source inserts");
+        (user_id, business_id, job_id)
+    }
+
+    async fn ac3_cleanup_photo_business(pool: &PgPool, user_id: Uuid, business_id: Uuid, job_id: Uuid) {
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .execute(pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    fn photo_place_json(port: u16) -> String {
+        format!(
+            r#"{{"photos": [{{"uri": "http://127.0.0.1:{port}/photos/first.jpg"}}, {{"uri": "http://127.0.0.1:{port}/photos/second.jpg"}}]}}"#
+        )
+    }
+
+    // Parse: the place JSON photos array becomes ordered photo URLs.
+
+    #[test]
+    fn test_parse_place_json_photos_array_extracts_urls_in_order() {
+        let place = parse_place_json(
+            r#"{"photos": [
+                 {"uri": "https://lh3.googleusercontent.com/a"},
+                 {"uri": "https://lh3.googleusercontent.com/b"}
+               ]}"#
+        )
+        .expect("parses");
+
+        let photos = place.photos.expect("photos array parsed");
+        assert_eq!(photos.len(), 2, "both photos must be kept in order");
+        assert_eq!(photos[0], "https://lh3.googleusercontent.com/a");
+        assert_eq!(photos[1], "https://lh3.googleusercontent.com/b");
+    }
+
+    #[test]
+    fn test_parse_place_json_photo_entries_accept_uri_url_and_bare_strings() {
+        let place = parse_place_json(
+            r#"{"photos": [
+                 "https://x.example/p1.jpg",
+                 {"uri": "https://x.example/p2.jpg"},
+                 {"url": "https://x.example/p3.jpg"},
+                 {"unrelated": true},
+                 "   "
+               ]}"#
+        )
+        .expect("parses");
+
+        let photos = place.photos.expect("photos array parsed");
+        assert_eq!(
+            photos,
+            vec![
+                "https://x.example/p1.jpg".to_string(),
+                "https://x.example/p2.jpg".to_string(),
+                "https://x.example/p3.jpg".to_string(),
+            ],
+            "non-URL entries and blank strings are dropped, order kept"
+        );
+    }
+
+    #[test]
+    fn test_parse_place_json_photos_missing_or_empty_stay_none() {
+        let place = parse_place_json(r#"{"phone": "+15550001111"}"#).expect("parses");
+        assert!(place.photos.is_none(), "no photos key -> None");
+
+        let place = parse_place_json(r#"{"photos": []}"#).expect("parses");
+        assert!(place.photos.is_none(), "empty array -> None");
+    }
+
+    // HEAD check: the stability gate for a photo URL.
+
+    #[tokio::test]
+    async fn test_head_photo_passes_on_success_with_image_content_type() {
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 200, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        engine
+            .head_photo(&format!("http://127.0.0.1:{port}/photos/p.jpg"))
+            .await
+            .expect("200 + image/* must pass the check");
+    }
+
+    #[tokio::test]
+    async fn test_head_photo_fails_on_http_404() {
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 404, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        let err = engine
+            .head_photo(&format!("http://127.0.0.1:{port}/photos/p.jpg"))
+            .await
+            .expect_err("404 must fail the check");
+        assert!(err.contains("HTTP 404"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
+    async fn test_head_photo_fails_on_non_image_content_type() {
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 200, "text/html");
+        let mut engine = ac2_test_engine(port);
+
+        let err = engine
+            .head_photo(&format!("http://127.0.0.1:{port}/photos/p.jpg"))
+            .await
+            .expect_err("non-image content type must fail the check");
+        assert!(
+            err.contains("non-image content type"),
+            "unexpected error: {err}"
+        );
+    }
+
+    // Enrichment run: the photo pass as a sibling of the menu pass.
+
+    /// AC2: a place JSON with photos and a NULL image_url lands the first
+    /// photo URL on the row after it passes the HEAD check.
+    #[tokio::test]
+    async fn test_enrich_sets_image_url_from_first_photo() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let port = ac3_start_photo_stub(Box::new(photo_place_json), 200, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(report.error.is_none(), "photo selection must not error: {:?}", report.error);
+
+        let fields: Vec<&str> = report.applied.iter().map(|a| a.field).collect();
+        assert_eq!(fields, vec!["image_url"], "only the photo write applies: {fields:?}");
+        assert!(
+            report.notes.is_empty(),
+            "a passing check must not log a skip: {:?}",
+            report.notes
+        );
+
+        let expected = format!("http://127.0.0.1:{port}/photos/first.jpg");
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("photo row reads back");
+        assert_eq!(
+            row.get::<Option<String>, _>("image_url").as_deref(),
+            Some(expected.as_str()),
+            "the first photo URL must land on the row"
+        );
+
+        ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
+    }
+
+    /// AC2 scenario: a first photo URL that 404s on HEAD keeps image_url
+    /// NULL and the run report logs the skip.
+    #[tokio::test]
+    async fn test_enrich_photo_404_keeps_image_url_null_and_logs_skip() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let port = ac3_start_photo_stub(Box::new(photo_place_json), 404, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(report.error.is_none(), "a failed check is a skip, not an error");
+        assert!(
+            report.applied.is_empty(),
+            "a failed check must apply nothing: {:?}",
+            report.applied
+        );
+        assert_eq!(
+            report.notes,
+            vec!["photo url failed check".to_string()],
+            "run report must log the skip"
+        );
+
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("photo row reads back");
+        assert!(
+            row.get::<Option<String>, _>("image_url").is_none(),
+            "image_url must stay NULL on a failed check"
+        );
+
+        ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
+    }
+
+    /// AC2 scenario: a first photo URL whose HEAD returns a non-image
+    /// content type keeps image_url NULL and logs the skip.
+    #[tokio::test]
+    async fn test_enrich_photo_non_image_content_type_keeps_image_url_null() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let port = ac3_start_photo_stub(Box::new(photo_place_json), 200, "text/html");
+        let mut engine = ac2_test_engine(port);
+
+        let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(report.error.is_none(), "a failed check is a skip, not an error");
+        assert!(report.applied.is_empty());
+        assert_eq!(report.notes, vec!["photo url failed check".to_string()]);
+
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("photo row reads back");
+        assert!(
+            row.get::<Option<String>, _>("image_url").is_none(),
+            "image_url must stay NULL for a non-image content type"
+        );
+
+        ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
+    }
+
+    /// Both passes honor dry_run: the photo write is reported, not written.
+    #[tokio::test]
+    async fn test_enrich_dry_run_reports_photo_without_writing() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let port = ac3_start_photo_stub(Box::new(photo_place_json), 200, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+
+        let report = engine.enrich(&pool, business_id, true).await;
+        assert!(report.error.is_none());
+        let fields: Vec<&str> = report.applied.iter().map(|a| a.field).collect();
+        assert_eq!(
+            fields,
+            vec!["image_url"],
+            "dry run must report the planned photo write"
+        );
+
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("photo row reads back");
+        assert!(
+            row.get::<Option<String>, _>("image_url").is_none(),
+            "dry run must issue zero UPDATEs"
+        );
+
+        ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
+    }
+
+    /// Fill-empty: a preset image_url is never overwritten — the pass is
+    /// not even applicable (no HEAD request, no skip note).
+    #[tokio::test]
+    async fn test_enrich_photo_not_applicable_when_image_url_set() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        // 404 photos: if the pass ran the check, a skip note would appear.
+        let port = ac3_start_photo_stub(Box::new(photo_place_json), 404, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        let preset = "https://example.com/preset.jpg";
+        let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, Some(preset)).await;
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(report.error.is_none());
+        assert!(
+            report.applied.iter().all(|a| a.field != "image_url"),
+            "preset image_url must not be rewritten: {:?}",
+            report.applied
+        );
+        assert!(
+            report.notes.is_empty(),
+            "pass must not run at all when image_url is set: {:?}",
+            report.notes
+        );
+
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("photo row reads back");
+        assert_eq!(
+            row.get::<Option<String>, _>("image_url").as_deref(),
+            Some(preset),
+            "preset image_url must survive the run"
+        );
+
+        ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
+    }
+
+    /// No photos in the place JSON: the pass is not applicable, no notes.
+    #[tokio::test]
+    async fn test_enrich_photo_not_applicable_when_place_has_no_photos() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let port = ac3_start_photo_stub(Box::new(|_| "{}".to_string()), 200, "image/jpeg");
+        let mut engine = ac2_test_engine(port);
+
+        let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(report.error.is_none());
+        assert!(report.applied.is_empty(), "no photos -> nothing applies");
+        assert!(
+            report.notes.is_empty(),
+            "no photos is not a skip worth logging: {:?}",
+            report.notes
+        );
+
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("photo row reads back");
+        assert!(row.get::<Option<String>, _>("image_url").is_none());
+
+        ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
     }
 }
