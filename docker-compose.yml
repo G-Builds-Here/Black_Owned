@@ -136,6 +136,7 @@ services:
       start_period: 5s
 
 volumes:
+  postgres-data:
   clickhouse-data:
   nats-data:
   minio-data:

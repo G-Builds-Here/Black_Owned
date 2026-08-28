@@ -45,6 +45,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       closeOnOutsideClick = true,
       minWidth = '160px',
       className = '',
+      triggerClassName = '',
       ...props
     },
     ref

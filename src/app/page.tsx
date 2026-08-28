@@ -3,6 +3,20 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button, Card, Badge, SearchBar, Navigation } from '@/components/ui';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+
+interface Business {
+  id: string;
+  name: string;
+  category: string;
+  rating: number;
+  reviewCount: number;
+  location: string;
+  isVerified: boolean;
+  imageUrl: string;
+  description: string;
+}
 
 interface FeaturedBusiness {
   id: string;
@@ -43,8 +57,10 @@ export default function Home() {
   }, []);
 
   const handleSearch = (query: string, filters: string[]) => {
-    console.log('Search:', { query, filters });
-    // TODO: Implement search logic
+    const params = new URLSearchParams();
+    if (query) params.set('search', query);
+    if (filters.length > 0) params.set('category', filters.join(','));
+    router.push(`/directory?${params.toString()}`);
   };
 
   const handleNavigate = (section: 'directory' | 'admin' | 'user' | 'home') => {
@@ -82,6 +98,34 @@ export default function Home() {
               </Link>
             </div>
 
+      {/* Hero Section */}
+      <section className="bg-gradient-to-br from-heritage-midnight via-heritage-royal to-heritage-forest text-white relative overflow-hidden">
+        {/* Afro-American Heritage inspired pattern - bold red, black, green geometric overlay */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Red layer - top left diagonal */}
+          <div className="absolute top-0 left-0 w-2/5 h-full" style={{
+            backgroundColor: '#BF0A30',
+            clipPath: 'polygon(0 0, 100% 0, 70% 100%, 0% 100%)'
+          }}></div>
+          {/* Green layer - bottom right diagonal */}
+          <div className="absolute bottom-0 right-0 w-1/2 h-3/4" style={{
+            backgroundColor: '#006B3F',
+            clipPath: 'polygon(30% 0%, 100% 0, 100% 100%, 0% 100%)'
+          }}></div>
+          {/* Black accent - full overlay */}
+          <div className="absolute inset-0 bg-black"></div>
+          {/* Geometric pattern overlay */}
+          <div className="absolute inset-0" style={{
+            backgroundImage: `
+              repeating-linear-gradient(30deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 80px),
+              repeating-linear-gradient(-30deg, transparent, transparent 40px, rgba(191,10,48,0.05) 40px, rgba(191,10,48,0.05) 80px),
+              repeating-linear-gradient(-30deg, transparent, transparent 40px, rgba(0,107,63,0.05) 40px, rgba(0,107,63,0.05) 80px)
+            `
+          }}></div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 relative z-10">
+          <div className="text-center">
             {/* Search Bar with Category Filters */}
             <SearchBar
               onSearch={handleSearch}
@@ -92,11 +136,26 @@ export default function Home() {
       </section>
 
       {/* Categories Section */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-white relative">
+        {/* Subtle Kente-inspired border */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-heritage-ochre via-heritage-gold to-heritage-forest" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-center mb-12">
-            Business Categories
-          </h2>
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">
+              Business Categories
+            </h2>
+            <p className="text-neutral-600 max-w-2xl mx-auto mb-8">
+              From Harlem to Atlanta, Lagos to Los Angeles — discover Black excellence across every sector.
+            </p>
+            <div className="flex flex-wrap justify-center gap-4">
+              <Button variant="primary" size="lg" onClick={() => router.push('/directory')}>
+                Explore Businesses
+              </Button>
+              <Button variant="tertiary" size="lg" onClick={() => router.push('/business/claim')}>
+                List Your Business
+              </Button>
+            </div>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {['Food & Dining', 'Professional Services', 'Retail & Fashion', 'Health & Wellness'].map((category) => (
               <Link key={category} href={`/directory?category=${encodeURIComponent(category)}`}>
@@ -205,8 +264,8 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-20 bg-neutral-800 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold mb-6">Join Our Community</h2>
-          <p className="text-xl text-neutral-300 mb-8">
+          <h2 className="text-4xl font-bold text-neutral-900 dark:text-white mb-6">Join Our Community</h2>
+          <p className="text-xl text-neutral-600 dark:text-neutral-300 mb-8">
             Whether you're a business owner looking to showcase your enterprise or a
             consumer seeking to support Black-owned businesses, you belong here.
           </p>
@@ -222,11 +281,68 @@ export default function Home() {
               </Button>
             </Link>
           </div>
+          {/* Contact Form */}
+          <div className="max-w-md mx-auto text-left">
+            <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-4">Send us a message</h3>
+            <form className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-200 mb-1">Name</label>
+                <input type="text" className="w-full px-4 py-2 rounded-lg bg-white dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 text-neutral-900 dark:text-white focus:border-heritage-ochre focus:outline-none" placeholder="Your name" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-200 mb-1">Email</label>
+                <input type="email" className="w-full px-4 py-2 rounded-lg bg-white dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 text-neutral-900 dark:text-white focus:border-heritage-ochre focus:outline-none" placeholder="your@email.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-200 mb-1">Message</label>
+                <textarea className="w-full px-4 py-2 rounded-lg bg-white dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600 text-neutral-900 dark:text-white focus:border-heritage-ochre focus:outline-none h-32" placeholder="How can we help?"></textarea>
+              </div>
+              <Button variant="primary" size="md" className="w-full">
+                Send Message
+              </Button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section id="faq" className="py-20 bg-neutral-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-bold text-center mb-8">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="font-semibold mb-2">How do I list my business?</h3>
+              <p className="text-neutral-600">Click "List Your Business" and fill out the application form. We review all submissions within 48 hours.</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="font-semibold mb-2">Is listing free?</h3>
+              <p className="text-neutral-600">Yes, basic listings are free. Verified badges and featured placements have optional fees.</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="font-semibold mb-2">How do I verify my business?</h3>
+              <p className="text-neutral-600">Submit your business license and tax ID through the admin dashboard. Verification typically takes 2-3 business days.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Privacy / Terms Section */}
+      <section id="privacy" className="py-12 bg-neutral-100 text-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-xl font-bold mb-4">Privacy Policy</h2>
+          <p className="text-neutral-600 mb-4">We respect your privacy and are committed to protecting your personal information. See our full privacy policy for details on how we collect, use, and safeguard your data.</p>
+        </div>
+      </section>
+
+      <section id="terms" className="py-12 bg-neutral-100 text-sm border-t border-neutral-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-xl font-bold mb-4">Terms of Service</h2>
+          <p className="text-neutral-600 mb-4">By using Black Owned, you agree to our terms of service. This includes guidelines for business listings, reviews, and community conduct.</p>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-neutral-950 text-neutral-400 py-12">
+      <footer className="bg-neutral-950 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8">
             <div>

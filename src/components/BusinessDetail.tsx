@@ -157,8 +157,6 @@ export function BusinessDetail({ business, loading, error, onReviewsSubmitted }:
 
   // Format category ID to readable category name
   const formatCategory = (categoryId: string): string => {
-    // In a real app, this would fetch the category name from the categories API
-    // For now, we'll display the ID as a fallback
     return categoryId
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

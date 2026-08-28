@@ -113,10 +113,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         {
           success: false,
-          error: "Only administrators can modify user roles",
-          code: "INSUFFICIENT_ROLE",
+          error: "userId and role are required",
         },
-        { status: 403 }
+        { status: 400 }
       );
     }
 
@@ -243,10 +242,9 @@ export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> 
       return NextResponse.json(
         {
           success: false,
-          error: "Only administrators can modify user status",
-          code: "INSUFFICIENT_ROLE",
+          error: "userId and status are required",
         },
-        { status: 403 }
+        { status: 400 }
       );
     }
 

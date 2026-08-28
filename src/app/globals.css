@@ -84,6 +84,24 @@
   box-sizing: border-box;
 }
 
+/* Reset text color on white/light background containers to prevent inheritance issues */
+@media (prefers-color-scheme: light) {
+  .bg-white > *,
+  .bg-neutral-50 > *,
+  .bg-neutral-100 > *,
+  .bg-neutral-200 > * {
+    color: var(--color-neutral-900) !important;
+  }
+}
+
+/* Footer text color - must be after the above rule to override */
+footer h4,
+footer p,
+footer a,
+footer li {
+  color: white !important;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
@@ -106,7 +124,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.2;
-  color: var(--color-neutral-900);
+  color: var(--color-neutral-900) !important;
   margin-top: 0;
 }
 

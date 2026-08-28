@@ -33,17 +33,17 @@ impl QueryRoot {
         })?;
 
         let limit = first.unwrap_or(10).min(100) as u64;
-        let after_cursor = after.as_ref().map(|c| c.parse::<i64>().unwrap_or(0));
+        let after_cursor = after.as_ref().and_then(|c| c.parse::<Uuid>().ok());
 
         let query = r#"
-            SELECT id, name, category_id, verified, created_at
+            SELECT id, name, category_id, verification_status, created_at, description, location
             FROM businesses
             WHERE ($1 IS NULL OR id > $1)
             ORDER BY id
             LIMIT $2
         "#;
 
-        let rows = sqlx::query_as::<_, (Uuid, String, Uuid, bool, chrono::DateTime<Utc>)>(query)
+        let rows = sqlx::query_as::<_, (Uuid, String, String, String, chrono::DateTime<Utc>, Option<String>, Option<String>)>(query)
             .bind(after_cursor)
             .bind(limit as i64)
             .fetch_all(db)
@@ -59,7 +59,9 @@ impl QueryRoot {
 
         let edges: Vec<_> = rows
             .into_iter()
-            .map(|(id, name, category_id, verified, created_at)| {
+            .map(|(id, name, category_id, verification_status, created_at, description, location)| {
+                let verified = verification_status == "verified";
+                let category_uuid = Uuid::parse_str(&category_id).unwrap_or_else(|_| Uuid::nil());
                 let business = Business {
                     id,
                     name,

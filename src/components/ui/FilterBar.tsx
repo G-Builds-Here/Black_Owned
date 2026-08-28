@@ -10,6 +10,7 @@ export type FilterOption = {
   minRating?: number;
   location?: string;
   verifiedOnly?: boolean;
+  showUnclaimedOnly?: boolean;
 };
 
 export interface FilterBarProps {
@@ -94,10 +95,26 @@ export default function FilterBar({
     onFilterChange(newFilters);
   };
 
-  const handleVerifiedToggle = () => {
-    const newFilters = { ...localFilters, verifiedOnly: !localFilters.verifiedOnly };
+  const handleStatusChange = (value: string) => {
+    const newFilters: FilterOption = { ...localFilters };
+    if (value === 'unclaimed') {
+      newFilters.showUnclaimedOnly = true;
+      delete newFilters.verifiedOnly;
+    } else if (value === 'verified') {
+      newFilters.verifiedOnly = true;
+      delete newFilters.showUnclaimedOnly;
+    } else {
+      delete newFilters.showUnclaimedOnly;
+      delete newFilters.verifiedOnly;
+    }
     setLocalFilters(newFilters);
     onFilterChange(newFilters);
+  };
+
+  const getDisplayStatus = (): string => {
+    if (localFilters.showUnclaimedOnly) return '📋 Unclaimed';
+    if (localFilters.verifiedOnly) return '✓ Verified';
+    return 'Status';
   };
 
   const handleSortChange = (sort: string) => {
@@ -116,7 +133,8 @@ export default function FilterBar({
     localFilters.category ||
     localFilters.minRating ||
     localFilters.location ||
-    localFilters.verifiedOnly;
+    localFilters.verifiedOnly ||
+    localFilters.showUnclaimedOnly;
 
   const showTabs = savedCount !== undefined && onTabChange;
 

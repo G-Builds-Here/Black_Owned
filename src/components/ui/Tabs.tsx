@@ -44,13 +44,13 @@ const variantStyles = {
     unselected: 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300',
   },
   pills: {
-    base: 'bg-neutral-100 p-1 rounded-lg inline-flex',
+    base: 'bg-neutral-100 p-1 rounded-lg inline-flex gap-1',
     tab: 'rounded-md px-4 py-2 text-sm font-medium transition-all',
     selected: 'bg-white text-neutral-900 shadow-sm',
     unselected: 'text-neutral-600 hover:text-neutral-900',
   },
   segmented: {
-    base: 'bg-neutral-100 p-1 rounded-lg inline-flex w-full',
+    base: 'bg-neutral-100 p-1 rounded-lg inline-flex w-full gap-1',
     tab: 'rounded-md py-2 text-sm font-medium transition-all flex-1 justify-center',
     selected: 'bg-white text-neutral-900 shadow-sm',
     unselected: 'text-neutral-600 hover:text-neutral-900',
