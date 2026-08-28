@@ -4,7 +4,8 @@
  * Covers POST /api/admin/enrichment: auth gate (401 unauthenticated,
  * 403 non-admin), verbatim body forwarding to bw-scraper POST /enrich at
  * SCRAPER_BASE_URL (default http://localhost:8080), report wrapping, and
- * worker failure envelopes (502 unreachable / 502 worker error).
+ * worker failure envelopes (502 unreachable / 502 worker error), and the
+ * LOC-0079-AC2 graceful-degradation contract (no stack trace, no unhandled 500).
  *
  * Unit class: global fetch is mocked; no live worker required.
  */
@@ -195,5 +196,32 @@ describe('POST /api/admin/enrichment', () => {
     expect(body.success).toBe(false);
     expect(body.code).toBe('ENRICHMENT_WORKER_UNREACHABLE');
     expect(body.error).toBe('Enrichment worker unreachable');
+  });
+
+  it('LOC-0079-AC2: unreachable worker degrades gracefully — friendly 502 envelope, no stack trace or unhandled 500', async () => {
+    jest.mocked(createAuthMiddleware).mockReturnValue(async () => AUTH_OK);
+    // Given: bw-scraper on :8080 is down — reject with a stack-carrying error
+    // to prove the stack cannot leak into the response.
+    mockFetch.mockRejectedValue(Object.assign(new TypeError('fetch failed'), {
+      stack: 'TypeError: fetch failed\n    at NodeClient.sendRequest (node_modules/undici/lib/client.js:123:11)\n    at POST (src/app/api/admin/enrichment/route.ts:74:28)',
+    }));
+
+    // When: admin triggers an enrichment run.
+    const res = await POST(makeRequest('{"limit": 10}'));
+
+    // Then: handled 502 — never an unhandled 500.
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    // Structured envelope only — nothing else may be present.
+    expect(body).toEqual({
+      success: false,
+      data: null,
+      error: 'Enrichment worker unreachable',
+      code: 'ENRICHMENT_WORKER_UNREACHABLE',
+    });
+    const rendered = JSON.stringify(body);
+    expect(rendered).not.toMatch(/at\s+\S+\(.+/); // no stack frames
+    expect(rendered).not.toContain('route.ts'); // no source paths
+    expect(rendered).not.toMatch(/\bTypeError\b/); // no error class names
   });
 });

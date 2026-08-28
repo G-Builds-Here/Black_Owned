@@ -1,5 +1,5 @@
 /**
- * Enrichment Panel Tests — LOC-0079 AC1 (trigger + report half)
+ * Enrichment Panel Tests — LOC-0079 AC1 (trigger + report) + AC2 (graceful degradation)
  *
  * Verifies the admin trigger POSTs the limit to /api/admin/enrichment and
  * renders the per-business report (applied, skipped, failed fields with
@@ -114,5 +114,31 @@ describe('EnrichmentPanel', () => {
       expect(screen.getByText('Alpha Kitchen')).toBeInTheDocument();
     });
     expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({ limit: 25 });
+  });
+
+  it('LOC-0079-AC2: unreachable worker degrades gracefully — error banner, no stack trace rendered', async () => {
+    // 502 envelope exactly as the route emits it when the worker is down.
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({
+        success: false,
+        code: 'ENRICHMENT_WORKER_UNREACHABLE',
+        error: 'Enrichment worker unreachable',
+      }),
+    });
+    render(<EnrichmentPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /enrich business content/i }));
+
+    // Then: the friendly banner with the exact message.
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Enrichment worker unreachable');
+    });
+    // And: no report, no stack-trace-like content anywhere in the DOM.
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    const rendered = document.body.textContent ?? '';
+    expect(rendered).not.toMatch(/at\s+\S+\(.+/);
+    expect(rendered).not.toMatch(/\bTypeError\b/);
   });
 });
