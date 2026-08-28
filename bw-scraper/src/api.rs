@@ -908,4 +908,146 @@ mod tests {
 
         cleanup_family(&pool, "AC1 QA Unfiltered").await;
     }
+
+    // AC2: targeted run respects ids. Given b-1, b-2, b-3 all eligible,
+    // POST /enrich naming only b-1 and b-2 processes exactly those two
+    // (summary counts reflect the two) and leaves b-3 untouched: no
+    // content field written, updated_at unchanged.
+    #[tokio::test]
+    async fn test_enrich_targeted_run_excludes_unlisted_ids() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP api enrich test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+        fixture_proxy_port();
+        cleanup_family(&pool, "AC2 Enrich Target").await;
+
+        let ids = seed_eligible(&pool, "AC2 Enrich Target", 3).await;
+        let (b1, b2, b3) = (ids[0], ids[1], ids[2]);
+
+        // Pre-state snapshot of the excluded business b-3: every content
+        // field the engine can write, plus updated_at.
+        let before_rows = sqlx::query(
+            r#"SELECT phone, website, description, rating::text AS rating,
+                      review_count, social_urls::text AS social_urls, updated_at
+               FROM businesses WHERE id = $1"#,
+        )
+        .bind(b3)
+        .fetch_one(&pool)
+        .await
+        .expect("snapshot b-3 pre-state");
+        let before = (
+            before_rows.get::<Option<String>, _>("phone"),
+            before_rows.get::<Option<String>, _>("website"),
+            before_rows.get::<Option<String>, _>("description"),
+            before_rows.get::<Option<String>, _>("rating"),
+            before_rows.get::<Option<i32>, _>("review_count"),
+            before_rows.get::<Option<String>, _>("social_urls"),
+            before_rows.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
+        );
+        assert!(before.0.is_none(), "seed rows start with empty phone");
+
+        let state = test_state(&pool);
+        let (status, Json(body)) = match enrich(
+            State(state),
+            Json(EnrichRequest {
+                business_ids: Some(vec![b1, b2]),
+                limit: None,
+                dry_run: None,
+            }),
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err((status, Json(body))) => {
+                cleanup_family(&pool, "AC2 Enrich Target").await;
+                panic!("enrich endpoint errored: {status} {body}");
+            }
+        };
+
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        // Only b-1 and b-2 appear in the report; b-3 does not.
+        let businesses = body
+            .get("businesses")
+            .and_then(|v| v.as_array())
+            .expect("businesses array");
+        assert_eq!(
+            businesses.len(),
+            2,
+            "report holds exactly the two requested businesses: {body}"
+        );
+        let reported_ids: std::collections::BTreeSet<String> = businesses
+            .iter()
+            .map(|e| {
+                e.get("id")
+                    .and_then(|v| v.as_str())
+                    .expect("report entry has id")
+                    .to_string()
+            })
+            .collect();
+        assert!(reported_ids.contains(&b1.to_string()), "b-1 in report: {body}");
+        assert!(reported_ids.contains(&b2.to_string()), "b-2 in report: {body}");
+        assert!(
+            !reported_ids.contains(&b3.to_string()),
+            "b-3 must not appear in the report: {body}"
+        );
+
+        // Summary counts reflect the two.
+        let summary = body
+            .get("summary")
+            .and_then(|v| v.as_object())
+            .expect("summary object");
+        assert_eq!(
+            summary.get("total").and_then(|v| v.as_i64()),
+            Some(2),
+            "summary total is the two requested: {body}"
+        );
+        assert_eq!(
+            summary.get("enriched").and_then(|v| v.as_i64()),
+            Some(2),
+            "{body}"
+        );
+        assert_eq!(summary.get("skipped").and_then(|v| v.as_i64()), Some(0), "{body}");
+        assert_eq!(summary.get("failed").and_then(|v| v.as_i64()), Some(0), "{body}");
+
+        // Both requested businesses were actually written...
+        let written: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM businesses WHERE id = ANY($1::uuid[]) AND phone IS NOT NULL",
+        )
+        .bind(vec![b1, b2])
+        .fetch_one(&pool)
+        .await
+        .expect("count written rows");
+        assert_eq!(written, 2, "both requested businesses were enriched");
+
+        // ...and b-3 remains unchanged: no field written, updated_at untouched.
+        let after_rows = sqlx::query(
+            r#"SELECT phone, website, description, rating::text AS rating,
+                      review_count, social_urls::text AS social_urls, updated_at
+               FROM businesses WHERE id = $1"#,
+        )
+        .bind(b3)
+        .fetch_one(&pool)
+        .await
+        .expect("snapshot b-3 post-state");
+        let after = (
+            after_rows.get::<Option<String>, _>("phone"),
+            after_rows.get::<Option<String>, _>("website"),
+            after_rows.get::<Option<String>, _>("description"),
+            after_rows.get::<Option<String>, _>("rating"),
+            after_rows.get::<Option<i32>, _>("review_count"),
+            after_rows.get::<Option<String>, _>("social_urls"),
+            after_rows.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
+        );
+        assert_eq!(
+            after, before,
+            "b-3 unchanged: no field written, updated_at untouched"
+        );
+
+        cleanup_family(&pool, "AC2 Enrich Target").await;
+    }
 }
