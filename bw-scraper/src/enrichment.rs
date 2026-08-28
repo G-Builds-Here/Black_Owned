@@ -505,7 +505,8 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
 /// Each field write is guarded by the same emptiness predicate the plan
 /// used, so a concurrent fill between plan and write loses the race
 /// instead of clobbering: the affected-rows count decides applied vs
-/// skipped.
+/// skipped. With `dry_run` the plan is reported as the fields that would
+/// apply and zero UPDATE statements are issued.
 pub async fn apply_fill_empty(
     pool: &PgPool,
     business_id: Uuid,
@@ -521,12 +522,16 @@ pub async fn apply_fill_empty(
     let mut skipped: Vec<&'static str> = plan.skipped.clone();
 
     for planned in &plan.apply {
-        // dry_run: report the plan as applied; zero UPDATEs are issued.
-        let affected = if dry_run {
-            true
-        } else {
-            update_field(pool, business_id, planned.field, &planned.value).await?
-        };
+        if dry_run {
+            // Report what would apply without issuing any UPDATE.
+            applied.push(AppliedField {
+                field: planned.field,
+                previous: previous_value(&row, planned.field),
+            });
+            continue;
+        }
+        let affected =
+            update_field(pool, business_id, planned.field, &planned.value).await?;
         if affected {
             applied.push(AppliedField {
                 field: planned.field,
@@ -632,13 +637,22 @@ const HOMEPAGE_BODY_CAP: usize = 500 * 1024;
 
 impl EnrichmentEngine {
     pub fn new() -> Self {
+        Self::with_limiter(RateLimiter::new())
+    }
+
+    /// Build the engine with an injected rate limiter. Production uses
+    /// [`EnrichmentEngine::new`]; tests inject a fast or known-delay
+    /// limiter so a bounded batch can run without the production
+    /// per-fetch delay, and so tests can prove every external fetch
+    /// waits on the limiter.
+    pub fn with_limiter(limiter: RateLimiter) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
             .expect("reqwest client builds with default settings");
         Self {
             http,
-            limiter: RateLimiter::new(),
+            limiter,
             rotator: UserAgentRotator::new(),
             robots: RobotsChecker::new("BlackOwnedBot"),
         }
@@ -669,9 +683,9 @@ impl EnrichmentEngine {
 
     /// Enrich one business end-to-end: resolve its Google share-link,
     /// fetch the place JSON, apply fill-empty updates, then run the
-    /// menu-discovery pass against the website as it stood before this
-    /// run (a website written by this run's place-JSON pass is picked up
-    /// on the next run).
+    /// menu-discovery and photo-selection passes against the pre-run
+    /// row (values written by this run are picked up on the next run).
+    /// `dry_run` reports the fields that would apply without writing.
     pub async fn enrich(&mut self, pool: &PgPool, business_id: Uuid, dry_run: bool) -> EnrichResult {
         let with_error = |name: String, error: String| EnrichResult {
             business_id,
