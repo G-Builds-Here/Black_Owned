@@ -468,13 +468,22 @@ pub struct EnrichmentEngine {
 
 impl EnrichmentEngine {
     pub fn new() -> Self {
+        Self::with_limiter(RateLimiter::new())
+    }
+
+    /// Build the engine with an injected rate limiter. Production uses
+    /// [`EnrichmentEngine::new`]; tests inject a fast or known-delay
+    /// limiter so a bounded batch can run without the production
+    /// per-fetch delay, and so tests can prove every external fetch
+    /// waits on the limiter.
+    pub fn with_limiter(limiter: RateLimiter) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
             .expect("reqwest client builds with default settings");
         Self {
             http,
-            limiter: RateLimiter::new(),
+            limiter,
             rotator: UserAgentRotator::new(),
             robots: RobotsChecker::new("BlackOwnedBot"),
         }

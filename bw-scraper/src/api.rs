@@ -188,6 +188,10 @@ async fn scrape(
 /// Default bound for an enrichment run when the client omits `limit`.
 const ENRICH_DEFAULT_LIMIT: i32 = 50;
 
+/// Upper bound for a single enrichment run; a request `limit` must fall
+/// inside 1..=ENRICH_MAX_LIMIT or the endpoint rejects it with 400.
+const ENRICH_MAX_LIMIT: i32 = 500;
+
 /// Eligible for enrichment: google_maps-sourced (joined by name, the
 /// same convention the engine resolves its share-link from) with at
 /// least one empty content field.
@@ -205,6 +209,12 @@ async fn enrich(
     Json(req): Json<EnrichRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let limit = req.limit.unwrap_or(ENRICH_DEFAULT_LIMIT);
+    if limit < 1 || limit > ENRICH_MAX_LIMIT {
+        return Err(err(
+            StatusCode::BAD_REQUEST,
+            format!("limit must be between 1 and {ENRICH_MAX_LIMIT}, got {limit}"),
+        ));
+    }
     let dry_run = req.dry_run.unwrap_or(false);
 
     let rows = match &req.business_ids {
@@ -273,6 +283,9 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use std::io::{Read, Write};
+    use axum::body::Body;
+    use axum::http::Request;
+    use crate::rate_limiter::RateLimiterConfig;
 
     const FIXTURE_PLACE_JSON: &str =
         include_str!("../tests/fixtures/place-json/southern_kitchen.json");
@@ -318,6 +331,15 @@ mod tests {
                         Err(_) => break,
                     }
                 }
+                // AC3 bookkeeping: record the distinct /ac3- fetch paths
+                // served. A transport-level retry re-sends the same path,
+                // so the distinct count stays exact under concurrent load
+                // and proves one logical fetch per business.
+                if let Some(path) = stub_request_path(&head) {
+                    if path.starts_with("/ac3-") {
+                        AC3_STUB_PATHS.lock().unwrap().insert(path);
+                    }
+                }
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
@@ -335,6 +357,41 @@ mod tests {
 
     fn fixture_proxy_port() -> u16 {
         *FIXTURE_STUB_PORT
+    }
+
+    /// AC3 bookkeeping: distinct `/ac3-` fetch paths the stub served.
+    /// Stays AC3-exclusive because no other test seeds that path prefix.
+    static AC3_STUB_PATHS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+
+    /// Path component of the first request line in a captured request head.
+    /// Proxy-routed requests arrive in absolute form
+    /// (`GET http://host/path HTTP/1.1`), so strip scheme+host to the path.
+    fn stub_request_path(head: &[u8]) -> Option<String> {
+        let text = String::from_utf8_lossy(head);
+        let first_line = text.lines().next()?;
+        let target = first_line.split_whitespace().nth(1)?;
+        let path = match target.rsplit_once("://") {
+            Some((_, rest)) => rest.find('/').map(|i| &rest[i..]).unwrap_or(""),
+            None => target,
+        };
+        Some(path.to_string())
+    }
+
+    /// Serializes the AC3 tests that assert on the shared fixture stub, so
+    /// one test's batch cannot queue behind another's and skew timing
+    /// assertions.
+    static AC3_STUB_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// AppState with an unconnected lazy pool — enough for handler paths
+    /// that reject the request before touching the database (AC3
+    /// validation tests are true unit tests: no compose Postgres needed).
+    fn lazy_state() -> AppState {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .connect_lazy("postgresql://localhost/test")
+            .expect("lazy pool builds");
+        test_state(&pool)
     }
 
     fn test_state(pool: &PgPool) -> AppState {
@@ -356,8 +413,26 @@ mod tests {
     }
 
     /// Seed `count` eligible businesses (google_maps source, every content
-    /// field empty) under `prefix`; returns their ids in seed order.
+    /// field empty) under `prefix` with the default fixture source_id;
+    /// returns their ids in seed order.
     async fn seed_eligible(pool: &PgPool, prefix: &str, count: i32) -> Vec<Uuid> {
+        seed_eligible_source(
+            pool,
+            prefix,
+            count,
+            |_i| "http://maps.google.test/maps/place.json".to_string(),
+        )
+        .await
+    }
+
+    /// Like `seed_eligible`, but with per-business source_ids so a test
+    /// can correlate the stub's observed fetch paths with businesses.
+    async fn seed_eligible_source(
+        pool: &PgPool,
+        prefix: &str,
+        count: i32,
+        source_id_for: impl Fn(i32) -> String,
+    ) -> Vec<Uuid> {
         let email = format!("ac1-enrich-{}@example.com", Uuid::new_v4());
         let user_id: Uuid = {
             let row = sqlx::query(
@@ -408,7 +483,7 @@ mod tests {
             )
             .bind(job_id)
             .bind(&name)
-            .bind("http://maps.google.test/maps/place.json")
+            .bind(source_id_for(i))
             .execute(pool)
             .await
             .expect("seed scraped_businesses row");
@@ -1049,5 +1124,195 @@ mod tests {
         );
 
         cleanup_family(&pool, "AC2 Enrich Target").await;
+    }
+
+    // AC3: POST /enrich {"limit": 0} -> 400 with an error describing the
+    // valid range. Validation runs before any DB access, so the lazy pool
+    // is never touched.
+    #[tokio::test]
+    async fn test_enrich_limit_zero_rejected_with_valid_range() {
+        let state = lazy_state();
+        let Err((status, Json(body))) = enrich(
+            State(state),
+            Json(EnrichRequest {
+                business_ids: None,
+                limit: Some(0),
+                dry_run: None,
+            }),
+        )
+        .await
+        else {
+            panic!("limit 0 must be rejected with 400, got Ok");
+        };
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "limit 0 is out of range: {body}"
+        );
+        let msg = body.get("error").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(
+            msg.contains("between 1 and 500"),
+            "error must describe the valid range: {body}"
+        );
+    }
+
+    // AC3: limits outside 1..=500 (negative or above the cap) are
+    // rejected with 400 before any selection happens.
+    #[tokio::test]
+    async fn test_enrich_limit_out_of_range_rejected() {
+        for limit in [i32::MIN, -1, 501, i32::MAX] {
+            let state = lazy_state();
+            let Err((status, Json(body))) = enrich(
+                State(state),
+                Json(EnrichRequest {
+                    business_ids: None,
+                    limit: Some(limit),
+                    dry_run: None,
+                }),
+            )
+            .await
+            else {
+                panic!("limit {limit} must be rejected with 400, got Ok");
+            };
+            assert_eq!(
+                status,
+                StatusCode::BAD_REQUEST,
+                "limit {limit} is out of range: {body}"
+            );
+        }
+    }
+
+    // AC3: the boundaries 1 and 500 pass validation. The lazy pool means
+    // the run then fails at selection (or, if a local `test` database
+    // happens to exist, succeeds empty) — anything but 400 proves the
+    // range check let the boundary values through.
+    #[tokio::test]
+    async fn test_enrich_limit_boundaries_pass_validation() {
+        for limit in [1, 500] {
+            let state = lazy_state();
+            let res = enrich(
+                State(state),
+                Json(EnrichRequest {
+                    business_ids: None,
+                    limit: Some(limit),
+                    dry_run: None,
+                }),
+            )
+            .await;
+            match res {
+                Ok((status, _)) => assert_eq!(status, StatusCode::OK, "limit {limit} accepted"),
+                Err((status, Json(body))) => assert_ne!(
+                    status,
+                    StatusCode::BAD_REQUEST,
+                    "limit {limit} passed validation but was rejected: {body}"
+                ),
+            }
+        }
+    }
+
+    // AC3: a malformed JSON body on POST /enrich is rejected with 400 by
+    // axum's Json extractor, before the handler runs.
+    #[tokio::test]
+    async fn test_enrich_malformed_json_returns_400() {
+        let state = lazy_state();
+        for body in ["{not json", "{'limit': oops}", "{\"limit\": 5"] {
+            let app = router(state.clone());
+            let req = Request::builder()
+                .method("POST")
+                .uri("/enrich")
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body))
+                .expect("request builds");
+            let res = tower::ServiceExt::oneshot(app, req)
+                .await
+                .expect("router responds");
+            assert_eq!(
+                res.status(),
+                StatusCode::BAD_REQUEST,
+                "malformed body must yield 400: {body}"
+            );
+        }
+    }
+
+    // AC3: every external fetch goes through the engine's rate limiter.
+    // An injected 100ms limiter must delay each fetch after the first,
+    // so 3 sequential fetches take >= 200ms — and far less than the
+    // production 2s minimum, proving the injected limiter is in the loop.
+    #[tokio::test]
+    async fn test_enrich_fetch_goes_through_rate_limiter() {
+        let _guard = AC3_STUB_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        fixture_proxy_port();
+        let mut engine = EnrichmentEngine::with_limiter(RateLimiter::with_config(
+            RateLimiterConfig {
+                min_delay_ms: 100,
+                max_jitter_ms: 0,
+            },
+        ));
+        let url = "http://maps.google.test/maps/place.json";
+        let t0 = std::time::Instant::now();
+        for _ in 0..3 {
+            let raw = engine
+                .fetch_place_json(url)
+                .await
+                .expect("fetch succeeds via the guarded path");
+            assert!(!raw.is_empty(), "fixture stub answers");
+        }
+        let elapsed = t0.elapsed();
+        assert!(
+            elapsed >= std::time::Duration::from_millis(200),
+            "3 fetches through a 100ms limiter must spend >= 200ms on limiter waits, took {elapsed:?}"
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(2),
+            "injected 100ms limiter used, not the production 2s one: {elapsed:?}"
+        );
+    }
+
+    // AC3: a 500-business run completes with every external fetch going
+    // through the engine's single guarded path (robots check + rate
+    // limiter + UA rotation — no direct reqwest call bypasses them). A
+    // zero-delay injected limiter keeps the run fast; the stub's distinct
+    // /ac3- path set proves one fetch per business.
+    #[tokio::test]
+    async fn test_enrich_500_run_all_fetches_go_through_guarded_path() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP api enrich test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+        let _guard = AC3_STUB_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        fixture_proxy_port();
+        cleanup_family(&pool, "AC3 Enrich 500").await;
+
+        let ids = seed_eligible_source(&pool, "AC3 Enrich 500", 500, |i| {
+            format!("http://maps.google.test/ac3-500-run/b{i}.json")
+        })
+        .await;
+        assert_eq!(ids.len(), 500, "500 eligible businesses seeded");
+
+        let mut engine = EnrichmentEngine::with_limiter(RateLimiter::with_config(
+            RateLimiterConfig {
+                min_delay_ms: 0,
+                max_jitter_ms: 0,
+            },
+        ));
+        let results = engine.enrich_batch(&pool, &ids, false).await;
+
+        let failed: Vec<_> = results.iter().filter(|r| r.error.is_some()).collect();
+        assert_eq!(results.len(), 500, "every seeded business is processed");
+        assert!(
+            failed.is_empty(),
+            "500-business run must complete without per-business errors: {failed:?}"
+        );
+        let paths = AC3_STUB_PATHS.lock().unwrap();
+        assert_eq!(
+            paths.len(),
+            500,
+            "one distinct fetch per business, all through the guarded engine path"
+        );
+
+        cleanup_family(&pool, "AC3 Enrich 500").await;
     }
 }
