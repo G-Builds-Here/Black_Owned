@@ -66,6 +66,22 @@ const FIXTURE = {
   rating: 4.8,
   review_count: 137,
 };
+// AC2 (idempotent re-run) fixture — distinct identity (host/port/cid/values)
+// so AC1 and AC2 stay independent when run serially in this file. The
+// website domain is IANA-reserved (.example never resolves), so the
+// post-enrichment menu-discovery pass fetches it once, fails at DNS, and
+// writes nothing: deterministic, zero other outbound traffic.
+const FIXTURE_2_PORT = 9978;
+const FIXTURE_2_HOST = 'maps.google.e2e-fixture-a';
+const FIXTURE_2_SOURCE_ID = `http://${FIXTURE_2_HOST}:${FIXTURE_2_PORT}/maps/preview/place?cid=e2e0082a`;
+
+const FIXTURE_2 = {
+  phone: '+15550128473',
+  website: 'https://ac2-fixture.example',
+  description: 'E2E AC2 idempotent fixture kitchen',
+  rating: 4.2,
+  review_count: 58,
+};
 
 const WORKER_CONTAINER = 'black-owned-bw-scraper';
 
@@ -81,6 +97,7 @@ interface EnrichFixture {
 let fixtureServer: http.Server | null = null;
 let admin: E2ESession;
 let biz: EnrichFixture;
+let fixtureServer2: http.Server | null = null;
 
 /** Host IPv4 as seen from inside the worker container. */
 function workerHostIpv4(): string {
@@ -117,11 +134,14 @@ function removeWorkerHostsEntry(host: string): void {
     { encoding: 'utf8' }
   );
 }
-/** Start the in-process place-JSON fixture server on the host. */
-function startFixtureServer(port: number): Promise<void> {
-  const { promise, resolve, reject } = Promise.withResolvers<void>();
-  const body = JSON.stringify(FIXTURE);
-  const server = http.createServer((req, res) => {
+/**
+ * Start an in-process fixture server on `port` that serves `fixture` as
+ * JSON on every path. The worker's Google share-link fetch lands here.
+ */
+function startFixtureServer(port: number, fixture: object): Promise<http.Server> {
+  const { promise, resolve, reject } = Promise.withResolvers<http.Server>();
+  const body = JSON.stringify(fixture);
+  const server = http.createServer((_req, res) => {
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
@@ -129,8 +149,7 @@ function startFixtureServer(port: number): Promise<void> {
     res.end(body);
   });
   server.once('error', reject);
-  server.listen(port, '0.0.0.0', () => resolve());
-  fixtureServer = server;
+  server.listen(port, '0.0.0.0', () => resolve(server));
   return promise;
 }
 
@@ -150,7 +169,9 @@ function psqlReturning(sql: string): string {
  * businesses, different source_ids).
  */
 function seedEnrichmentBusiness(name: string, sourceId: string): EnrichFixture {
-  const email = `e2e-enrich-${RUN_SUFFIX}@example.com`;
+  // Name-derived: multiple ACs seed distinct owner users in one serial
+  // file — a fixed email would hit users_email_key on the second seed.
+  const email = `e2e-enrich-${RUN_SUFFIX}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@example.com`;
   const ownerId = psqlReturning(
     `INSERT INTO users (email, password_hash, name, role) VALUES ('${email}', 'test', 'E2E Enrich Owner', 'user') RETURNING id::text`
   );
@@ -178,7 +199,7 @@ function cleanupEnrichmentBusiness(b: EnrichFixture | undefined): void {
 beforeAll(async () => {
   biz = seedEnrichmentBusiness(`Enrich E2E ${RUN_SUFFIX}`, FIXTURE_SOURCE_ID);
   setWorkerHostsEntry(workerHostIpv4(), FIXTURE_HOST);
-  await startFixtureServer(FIXTURE_PORT);
+  fixtureServer = await startFixtureServer(FIXTURE_PORT, FIXTURE);
   admin = await newSession('e2e-admin-enrich');
   promoteAdmin(admin.email);
   admin = await loginUser(admin.email, E2E_PASSWORD);
@@ -273,4 +294,115 @@ test('AC1: detail page renders enriched values with external and on-site review 
   // On-site review section: zero site reviews, displayed separately from
   // the Google count above.
   await expect(page.getByText('No reviews on this site yet.', { exact: true })).toBeVisible();
+});
+test.describe('AC2: idempotent re-run', () => {
+  let biz2: EnrichFixture;
+
+  beforeAll(async () => {
+    biz2 = seedEnrichmentBusiness(`Enrich E2E 2 ${RUN_SUFFIX}`, FIXTURE_2_SOURCE_ID);
+    setWorkerHostsEntry(workerHostIpv4(), FIXTURE_2_HOST);
+    fixtureServer2 = await startFixtureServer(FIXTURE_2_PORT, FIXTURE_2);
+    // /directory is already warmed by the root beforeAll.
+    await warmRoutes([`/business/${biz2.businessId}`]);
+  }, 180_000);
+
+  afterAll(async () => {
+    // Strict teardown: AC2's AC requires verified residue-free cleanup.
+    // If seeding itself failed, biz2 is undefined and there is nothing to verify.
+    removeWorkerHostsEntry(FIXTURE_2_HOST);
+    cleanupEnrichmentBusiness(biz2);
+    fixtureServer2?.close();
+    if (!biz2) return;
+
+    expect(psql(`SELECT count(*) FROM businesses WHERE name='${biz2.name}'`)).toBe('0');
+    expect(psql(`SELECT count(*) FROM scraped_businesses WHERE name='${biz2.name}'`)).toBe('0');
+    expect(psql(`SELECT count(*) FROM scrape_jobs WHERE id='${biz2.jobId}'`)).toBe('0');
+    expect(psql(`SELECT count(*) FROM users WHERE email='${biz2.email}'`)).toBe('0');
+    const hosts = execSync(`docker exec ${WORKER_CONTAINER} cat /etc/hosts`, { encoding: 'utf8' });
+    expect(hosts, 'worker /etc/hosts must not keep the AC2 fixture host').not.toContain(FIXTURE_2_HOST);
+  }, 120_000);
+
+  test('AC2: first enrichment run populates the seeded business', async () => {
+    const { status, body } = await apiJson('/api/admin/enrichment', {
+      method: 'POST',
+      body: { business_ids: [biz2.businessId] },
+      token: admin.accessToken,
+    });
+
+    expect(status, `first enrich endpoint: ${JSON.stringify(body).slice(0, 500)}`).toBe(200);
+    expect(body.success).toBe(true);
+    const report = body.data.report;
+    expect(report.summary).toEqual({ total: 1, enriched: 1, skipped: 0, failed: 0 });
+    const entry = report.businesses.find((b: { id: string }) => b.id === biz2.businessId);
+    expect(entry, `business entry missing from report: ${JSON.stringify(report.businesses)}`).toBeDefined();
+    expect(entry.error).toBeNull();
+    expect([...entry.applied].sort()).toEqual(['description', 'phone', 'rating', 'review_count', 'website']);
+    expect(entry.skipped).toEqual([]);
+
+    const row = psql(
+      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = ${FIXTURE_2.rating} THEN 'ok' ELSE rating::text END || '|' || review_count FROM businesses WHERE id='${biz2.businessId}'`
+    );
+    expect(row).toBe(
+      `${FIXTURE_2.phone}|${FIXTURE_2.website}|${FIXTURE_2.description}|ok|${FIXTURE_2.review_count}`
+    );
+  });
+
+  test('AC2: re-running enrichment skips every field and changes no data', async () => {
+    // Content fingerprint across every field the pipeline can write, plus
+    // updated_at: any write, even a lost-race no-op UPDATE, changes the hash.
+    const rowFingerprintSql = `SELECT md5(COALESCE(phone, '') || COALESCE(website, '') || COALESCE(description, '') || COALESCE(rating::text, '') || COALESCE(review_count::text, '') || COALESCE(menu_url, '') || COALESCE(image_url, '') || COALESCE(social_urls::text, '') || COALESCE(updated_at::text, '')) FROM businesses WHERE id='${biz2.businessId}'`;
+    const before = psqlReturning(rowFingerprintSql);
+    const scrapedBefore = psqlReturning(
+      `SELECT md5(name || source || COALESCE(source_id, '')) FROM scraped_businesses WHERE id='${biz2.scrapedId}'`
+    );
+
+    const { status, body } = await apiJson('/api/admin/enrichment', {
+      method: 'POST',
+      body: { business_ids: [biz2.businessId] },
+      token: admin.accessToken,
+    });
+
+    expect(status, `re-run enrich endpoint: ${JSON.stringify(body).slice(0, 500)}`).toBe(200);
+    expect(body.success).toBe(true);
+    const report = body.data.report;
+    // Summary is a per-BUSINESS classification (bw-scraper api.rs):
+    // failed = entry.error, skipped = entry.reason (e.g. "no enrichment
+    // source"), otherwise enriched — even when every field was skipped.
+    // Field-level idempotency is asserted below (empty applied, complete
+    // skipped) plus the byte-identical row and no-duplicate counts.
+    expect(report.summary).toEqual({ total: 1, enriched: 1, skipped: 0, failed: 0 });
+    const entry = report.businesses.find((b: { id: string }) => b.id === biz2.businessId);
+    expect(entry, `business entry missing from report: ${JSON.stringify(report.businesses)}`).toBeDefined();
+    expect(entry.error).toBeNull();
+    // Idempotency contract: nothing applied, every field the fixture
+    // provides is reported as skipped.
+    expect(entry.applied).toEqual([]);
+    expect([...entry.skipped].sort()).toEqual(['description', 'phone', 'rating', 'review_count', 'website']);
+
+    // Ground truth: the row is byte-identical and nothing was duplicated.
+    const after = psqlReturning(rowFingerprintSql);
+    expect(after, `business row changed: before=${before}, after=${after}`).toBe(before);
+    expect(psqlReturning(`SELECT md5(name || source || COALESCE(source_id, '')) FROM scraped_businesses WHERE id='${biz2.scrapedId}'`)).toBe(scrapedBefore);
+    expect(psql(`SELECT count(*) FROM businesses WHERE name='${biz2.name}'`)).toBe('1');
+    expect(psql(`SELECT count(*) FROM scraped_businesses WHERE name='${biz2.name}'`)).toBe('1');
+  });
+
+  test('AC2: directory and detail pages render enriched values without duplication', async ({ page }) => {
+    await page.goto(`${BASE_URL}/directory`);
+    const card = page.getByRole('link', { name: biz2.name });
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await page.locator('input[aria-label="Search businesses"]').fill(biz2.name);
+
+    // Card content rendered exactly once.
+    await expect(card.getByText(FIXTURE_2.description, { exact: true })).toHaveCount(1, { timeout: 15_000 });
+    await expect(card.getByRole('img', { name: `Rating: ${FIXTURE_2.rating} out of 5 stars` })).toHaveCount(1);
+    await expect(card.getByText(`(${FIXTURE_2.review_count})`, { exact: true })).toHaveCount(1);
+
+    await page.goto(`${BASE_URL}/business/${biz2.businessId}`);
+    // Detail content rendered exactly once.
+    await expect(page.getByText(FIXTURE_2.description, { exact: true })).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator(`a[href="tel:${FIXTURE_2.phone}"]`)).toHaveCount(1);
+    await expect(page.locator(`a[href="${FIXTURE_2.website}"]`)).toHaveCount(1);
+    await expect(page.getByText(`${FIXTURE_2.review_count} reviews on Google`, { exact: true })).toHaveCount(1);
+  });
 });
