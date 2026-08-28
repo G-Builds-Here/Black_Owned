@@ -218,6 +218,7 @@ function DirectoryContent() {
         console.log('Share cancelled');
       }
     } else {
+      // Fallback: copy to clipboard
       navigator.clipboard.writeText(`${window.location.href}?business=${businessId}`);
       alert('Link copied to clipboard!');
     }

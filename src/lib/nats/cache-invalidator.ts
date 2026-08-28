@@ -41,8 +41,7 @@ export async function subscribeToCacheInvalidation(): Promise<void> {
   cacheInvalidationSubscription = nc.subscribe("cache.invalidate", {
     callback: async (_err: any, msg: any) => {
       try {
-        const msgData = (msg as { data?: Uint8Array }).data;
-        const payload = Buffer.from(msgData ? msgData : "").toString("utf-8");
+        const payload = Buffer.from(msg.data).toString("utf-8");
         const event: CacheInvalidationEvent = JSON.parse(payload);
 
         if (!event.key) {

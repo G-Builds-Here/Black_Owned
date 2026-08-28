@@ -233,10 +233,8 @@ export default function SearchPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-neutral-950 text-white py-12 mt-16">
+      <footer className="bg-neutral-950 text-neutral-400 py-12 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Kente-inspired top border */}
-          <div className="h-1 bg-gradient-to-r from-heritage-ochre via-heritage-gold to-heritage-forest mb-8" />
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <h4 className="text-white font-semibold mb-4">Black Owned</h4>

@@ -3,15 +3,16 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import { BusinessDetail, Business as BusinessData } from '@/components/BusinessDetail';
+import { fetchBusinessById } from '@/lib/graphql/graphql-client';
 
 /**
  * Business Detail Page
  *
- * Fetches and displays a single business by ID from the GraphQL API.
+ * Fetches and displays a single business by ID using the GraphQL API.
+ * Shows loading, error, and not-found states appropriately.
  */
 export default function BusinessDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const businessId = useMemo(() => params?.id as string, [params]);
 
   const [business, setBusiness] = useState<BusinessData | null>(null);
@@ -42,33 +43,9 @@ export default function BusinessDetailPage() {
     loadBusiness();
   }, [businessId, loadBusiness]);
 
-  const handleBack = () => {
-    router.push('/directory');
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-neutral-500">Loading...</div>
-      </div>
-    );
-  }
-
-  if (error || !business) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-neutral-800 mb-4">Business Not Found</h1>
-          <p className="text-neutral-600 mb-6">{error}</p>
-          <button
-            onClick={handleBack}
-            className="px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90"
-          >
-            Back to Directory
-          </button>
-        </div>
-      </div>
-    );
+  // If businessId is invalid format, show not found
+  if (!businessId) {
+    notFound();
   }
 
   return (

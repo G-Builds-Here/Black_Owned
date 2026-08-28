@@ -634,7 +634,6 @@ dependencies = [
  "chrono",
  "futures",
  "http-body",
- "http-body-util",
  "hyper",
  "hyper-util",
  "jsonwebtoken",

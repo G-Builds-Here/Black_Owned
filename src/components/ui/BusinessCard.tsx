@@ -164,6 +164,6 @@ export default function BusinessCard({
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

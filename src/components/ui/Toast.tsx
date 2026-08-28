@@ -1,6 +1,6 @@
 'use client';
 
-import React, { HTMLAttributes, forwardRef, useEffect, useState, useCallback, createContext, useContext, useLayoutEffect } from 'react';
+import React, { HTMLAttributes, forwardRef, useEffect, useState, useCallback, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 
 export type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'info';
@@ -174,12 +174,6 @@ function ToastProvider({ children, position = 'top-right' }: ToastProviderProps)
 
   const clearToasts = useCallback(() => {
     setToasts([]);
-  }, []);
-
-  const [isMounted, setIsMounted] = useState(false);
-
-  useLayoutEffect(() => {
-    setIsMounted(true);
   }, []);
 
   return (

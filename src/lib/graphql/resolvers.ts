@@ -8,11 +8,9 @@ import {
 } from "../db/user-repository";
 import {
   hashPassword,
-  verifyPassword,
   generateTokenPair,
   verifyToken,
 } from "../auth/auth-service";
-import { JwtPayload } from "../../types/user";
 import {
   validatePassword,
   isValidEmail,
@@ -129,62 +127,6 @@ export async function submitVerification(
       error: error instanceof Error ? error.message : "Failed to generate presigned URLs",
     };
   }
-}
-
-/**
- * Login mutation resolver
- */
-export async function login(
-  _parent: unknown,
-  args: { email: string; password: string }
-): Promise<{
-  success: boolean;
-  user?: unknown;
-  tokens?: { accessToken: string; refreshToken: string };
-  error?: string;
-}> {
-  const { email, password } = args;
-
-  // Validate email format
-  if (!isValidEmail(email)) {
-    return {
-      success: false,
-      error: "Invalid email format",
-    };
-  }
-
-  // Normalize email to lowercase
-  const normalizedEmail = email.toLowerCase();
-
-  // Find user by email
-  const user = await findByEmail(normalizedEmail);
-  if (!user) {
-    return {
-      success: false,
-      error: "Invalid credentials",
-    };
-  }
-
-  // Verify password
-  const passwordValid = await verifyPassword(password, user.passwordHash);
-  if (!passwordValid) {
-    return {
-      success: false,
-      error: "Invalid credentials",
-    };
-  }
-
-  // Generate tokens
-  const tokens = generateTokenPair(user);
-
-  // Store refresh token in Valkey
-  await storeRefreshToken(tokens.refreshToken, user.id);
-
-  return {
-    success: true,
-    user: userToGraphqlUser(user),
-    tokens,
-  };
 }
 
 /**
@@ -528,12 +470,6 @@ function businessToGraphqlBusiness(business: Business, categoryName?: string) {
     createdAt: {
       timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },
-    description: business.description || null,
-    location: business.location || null,
-    rating: business.rating || 0,
-    reviewCount: business.reviewCount || 0,
-    imageUrl: business.imageUrl || null,
-    tags: business.tags || [],
   };
 }
 
@@ -623,7 +559,7 @@ export async function searchBusinesses(
   totalPages: number;
   facets: { category: string; count: number }[];
 }> {
-  const { query = "", page = 1, pageSize = 10 } = args;
+  const { query, page = 1, pageSize = 10 } = args;
 
   // Check cache first
   const cached = await getCachedResponse("searchBusinesses", { query, page, pageSize });
@@ -737,10 +673,9 @@ export async function createBusinessResolver(
     };
   }
 
-  const { getPool } = await import("../db/user-repository");
   const client = await getPool().connect();
   try {
-    const business = await createBusinessInDbInternal(
+    const business = await createBusinessInDb(
       client,
       userId,
       input.name.trim(),
@@ -772,7 +707,7 @@ export const createBusiness = createBusinessResolver;
 /**
  * Internal function to create a business in the database
  */
-async function createBusinessInDbInternal(
+async function createBusinessInDb(
   client: import("pg").PoolClient,
   ownerId: string,
   name: string,
@@ -790,27 +725,6 @@ async function createBusinessInDbInternal(
 }
 
 /**
- * Get single business by ID
- */
-export async function getBusiness(_parent: unknown, args: { id: string }) {
-  const { getPool } = await import("../db/user-repository");
-  const client = await getPool().connect();
-
-  try {
-    const { findBusinessById } = await import("../db/business-repository");
-    const business = await findBusinessById(client, args.id);
-
-    if (!business) {
-      return null;
-    }
-
-    return businessToGraphqlBusiness(business);
-  } finally {
-    client.release();
-  }
-}
-
-/**
  * Resolvers object
  */
 export const resolvers = {
@@ -820,7 +734,6 @@ export const resolvers = {
     searchBusinesses,
   },
   Mutation: {
-    login,
     register,
     createBusiness: createBusinessResolver,
     submitVerification,

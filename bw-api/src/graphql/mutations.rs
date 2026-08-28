@@ -281,9 +281,7 @@ impl MutationRoot {
         let business = Business {
             id: business_row.0,
             name: business_row.1,
-            description: None,
             category_id: business_row.2,
-            owner_id: business_row.5,
             verified: business_row.3,
             address: business_row.4,
             created_at: business_row.5,

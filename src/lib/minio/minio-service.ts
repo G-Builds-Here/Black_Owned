@@ -3,9 +3,6 @@
  *
  * Provides presigned URL generation for MinIO object storage operations.
  * Supports generating presigned PUT URLs for secure file uploads.
- *
- * NOTE: This is a stub implementation. Full MinIO integration requires
- * the @minio/client package which is not yet installed.
  */
 
 import * as Minio from "minio";
@@ -44,7 +41,6 @@ export interface PresignedUrlResult {
 
 /**
  * MinIO service class for handling presigned URL operations
- * Stub implementation - full version requires @minio/client
  */
 export class MinioService {
   private client: Minio.Client;
@@ -61,8 +57,14 @@ export class MinioService {
     });
   }
 
+  /**
+   * Generate a presigned PUT URL for uploading an object
+   *
+   * @param request - The presigned PUT request parameters
+   * @returns The presigned URL and metadata
+   */
   async generatePresignedPutUrl(
-    _request: PresignedPutRequest
+    request: PresignedPutRequest
   ): Promise<PresignedUrlResult> {
     const bucket = request.bucket || this.config.defaultBucket;
     const { objectName, expirySeconds, contentType } = request;
@@ -81,16 +83,40 @@ export class MinioService {
     };
   }
 
+  /**
+   * Generate multiple presigned PUT URLs for batch uploads
+   *
+   * @param bucket - The bucket name
+   * @param objectNames - Array of object names to generate URLs for
+   * @param expirySeconds - Expiry time in seconds (default: 900 = 15 minutes)
+   * @returns Array of presigned URL results
+   */
   async generatePresignedPutUrlsBatch(
-    _bucket: string,
-    _objectNames: string[],
-    _expirySeconds: number = 900
+    bucket: string,
+    objectNames: string[],
+    expirySeconds: number = 900
   ): Promise<PresignedUrlResult[]> {
-    throw new Error("MinIO service not fully implemented");
+    const promises = objectNames.map((objectName) =>
+      this.generatePresignedPutUrl({
+        bucket,
+        objectName,
+        expirySeconds,
+      })
+    );
+
+    return Promise.all(promises);
   }
 
-  async validateBucket(_bucket: string): Promise<boolean> {
-    return false;
+  /**
+   * Validate that a bucket exists and is accessible
+   */
+  async validateBucket(bucket: string): Promise<boolean> {
+    try {
+      const buckets = await this.client.listBuckets();
+      return buckets.some((b) => b.name === bucket);
+    } catch {
+      return false;
+    }
   }
 }
 

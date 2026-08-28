@@ -33,7 +33,6 @@ pub struct GQLBusiness {
     pub created_at: DateTimeUtc,
     pub rating_avg: Option<f64>,
     pub review_count: i32,
-    pub location: Option<String>,
 }
 
 impl From<Business> for GQLBusiness {
@@ -49,7 +48,6 @@ impl From<Business> for GQLBusiness {
             created_at: business.created_at.into(),
             rating_avg: None,
             review_count: 0,
-            location: business.location,
         }
     }
 }

@@ -187,7 +187,7 @@ function seedImages(
       const imageData = generateImagesForBusiness(
         business.id!,
         business.formattedName,
-        "restaurants"
+        business.category || "restaurants"
       );
       db.images.set(business.id!, imageData.images);
       created += imageData.images.length;
