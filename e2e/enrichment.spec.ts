@@ -406,3 +406,115 @@ test.describe('AC2: idempotent re-run', () => {
     await expect(page.getByText(`${FIXTURE_2.review_count} reviews on Google`, { exact: true })).toHaveCount(1);
   });
 });
+test.describe('AC3: partial-failure isolation', () => {
+  // Two businesses, one enrichment run: a valid fixture source (its own host
+  // + port + cid so AC1/AC2 stay independent) and a Google-shaped source
+  // that PASSES is_google_share_link() but is unreachable — the dead host is
+  // mapped into the worker's /etc/hosts, but nothing listens on the port, so
+  // the engine's fetch fails with connection-refused after DNS.
+  const AC3_FIX_PORT = 9979;
+  const AC3_FIX_HOST = 'maps.google.e2e-fixture-b';
+  const AC3_FIX_SOURCE_ID = `http://${AC3_FIX_HOST}:${AC3_FIX_PORT}/maps/preview/place?cid=e2e0082b`;
+  const AC3_DEAD_HOST = 'maps.google.e2e-fixture-dead';
+  const AC3_DEAD_PORT = 9981;
+  const AC3_DEAD_SOURCE_ID = `http://${AC3_DEAD_HOST}:${AC3_DEAD_PORT}/maps/preview/place?cid=e2e0082c`;
+
+  const FIXTURE_3 = {
+    phone: '+15550135798',
+    website: 'https://ac3-fixture.example',
+    description: 'E2E AC3 isolation fixture kitchen',
+    rating: 4.5,
+    review_count: 83,
+  };
+  // Pre-existing data on the failing business: gives the "existing data is
+  // unchanged" clause something to verify.
+  const DEAD_PRESET = {
+    phone: '+15550140021',
+    website: 'https://ac3-dead.example',
+    description: 'E2E AC3 pre-existing dead-source kitchen',
+  };
+
+  let goodBiz: EnrichFixture;
+  let badBiz: EnrichFixture;
+  let fixtureServer3: http.Server | null = null;
+  let badBefore: string;
+
+  beforeAll(async () => {
+    goodBiz = seedEnrichmentBusiness(`Enrich E2E 3 valid ${RUN_SUFFIX}`, AC3_FIX_SOURCE_ID);
+    badBiz = seedEnrichmentBusiness(`Enrich E2E 3 failing ${RUN_SUFFIX}`, AC3_DEAD_SOURCE_ID);
+    psql(
+      `UPDATE businesses SET phone='${DEAD_PRESET.phone}', website='${DEAD_PRESET.website}', description='${DEAD_PRESET.description}' WHERE id='${badBiz.businessId}'`
+    );
+    setWorkerHostsEntry(workerHostIpv4(), AC3_FIX_HOST);
+    setWorkerHostsEntry(workerHostIpv4(), AC3_DEAD_HOST);
+    fixtureServer3 = await startFixtureServer(AC3_FIX_PORT, FIXTURE_3);
+  }, 180_000);
+
+  afterAll(async () => {
+    // Strict teardown: verified residue-free cleanup for both businesses.
+    removeWorkerHostsEntry(AC3_FIX_HOST);
+    removeWorkerHostsEntry(AC3_DEAD_HOST);
+    cleanupEnrichmentBusiness(goodBiz);
+    cleanupEnrichmentBusiness(badBiz);
+    fixtureServer3?.close();
+    if (!goodBiz || !badBiz) return;
+
+    for (const b of [goodBiz, badBiz]) {
+      expect(psql(`SELECT count(*) FROM businesses WHERE name='${b.name}'`), `businesses residue for ${b.name}`).toBe('0');
+      expect(psql(`SELECT count(*) FROM scraped_businesses WHERE name='${b.name}'`), `scraped residue for ${b.name}`).toBe('0');
+    }
+    expect(psql(`SELECT count(*) FROM scrape_jobs WHERE id='${goodBiz.jobId}'`)).toBe('0');
+    expect(psql(`SELECT count(*) FROM scrape_jobs WHERE id='${badBiz.jobId}'`)).toBe('0');
+    expect(psql(`SELECT count(*) FROM users WHERE email='${goodBiz.email}'`)).toBe('0');
+    expect(psql(`SELECT count(*) FROM users WHERE email='${badBiz.email}'`)).toBe('0');
+    const hosts = execSync(`docker exec ${WORKER_CONTAINER} cat /etc/hosts`, { encoding: 'utf8' });
+    expect(hosts, 'worker /etc/hosts must not keep the AC3 fixture host').not.toContain(AC3_FIX_HOST);
+    expect(hosts, 'worker /etc/hosts must not keep the AC3 dead host').not.toContain(AC3_DEAD_HOST);
+  }, 120_000);
+
+  test('AC3: one run over a valid + a failing source enriches the valid one and reports an error for the failing one', async () => {
+    // Content fingerprint of the failing row (incl. updated_at) taken BEFORE
+    // the run — any write, even a lost-race no-op UPDATE, changes the hash.
+    const badFpSql = `SELECT md5(COALESCE(phone, '') || COALESCE(website, '') || COALESCE(description, '') || COALESCE(rating::text, '') || COALESCE(review_count::text, '') || COALESCE(menu_url, '') || COALESCE(image_url, '') || COALESCE(social_urls::text, '') || COALESCE(updated_at::text, '')) FROM businesses WHERE id='${badBiz.businessId}'`;
+    badBefore = psqlReturning(badFpSql);
+
+    const { status, body } = await apiJson('/api/admin/enrichment', {
+      method: 'POST',
+      body: { business_ids: [goodBiz.businessId, badBiz.businessId] },
+      token: admin.accessToken,
+    });
+
+    expect(status, `enrich endpoint: ${JSON.stringify(body).slice(0, 500)}`).toBe(200);
+    expect(body.success).toBe(true);
+    const report = body.data.report;
+    expect(report.summary).toEqual({ total: 2, enriched: 1, skipped: 0, failed: 1 });
+
+    const good = report.businesses.find((b: { id: string }) => b.id === goodBiz.businessId);
+    expect(good, `valid business entry missing: ${JSON.stringify(report.businesses)}`).toBeDefined();
+    expect(good.error).toBeNull();
+    expect([...good.applied].sort()).toEqual(['description', 'phone', 'rating', 'review_count', 'website']);
+    expect(good.skipped).toEqual([]);
+
+    const bad = report.businesses.find((b: { id: string }) => b.id === badBiz.businessId);
+    expect(bad, `failing business entry missing: ${JSON.stringify(report.businesses)}`).toBeDefined();
+    expect(bad.error, 'failing business must be reported with an error').not.toBeNull();
+    expect(bad.applied, 'no field may apply when the source is unreachable').toEqual([]);
+    expect(bad.skipped).toEqual([]);
+  });
+
+  test('AC3: failing business data is byte-identical and valid business holds fixture values (psql ground truth)', () => {
+    const badFpSql = `SELECT md5(COALESCE(phone, '') || COALESCE(website, '') || COALESCE(description, '') || COALESCE(rating::text, '') || COALESCE(review_count::text, '') || COALESCE(menu_url, '') || COALESCE(image_url, '') || COALESCE(social_urls::text, '') || COALESCE(updated_at::text, '')) FROM businesses WHERE id='${badBiz.businessId}'`;
+    expect(psqlReturning(badFpSql), `failing row changed: before=${badBefore}`).toBe(badBefore);
+
+    // Pre-set values survive byte-identical; no partial writes or clobbering.
+    const badRow = psql(
+      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN menu_url IS NULL AND image_url IS NULL AND rating = 0 AND review_count = 0 THEN 'untouched' ELSE 'modified' END FROM businesses WHERE id='${badBiz.businessId}'`
+    );
+    expect(badRow).toBe(`${DEAD_PRESET.phone}|${DEAD_PRESET.website}|${DEAD_PRESET.description}|untouched`);
+
+    const goodRow = psql(
+      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = ${FIXTURE_3.rating} THEN 'ok' ELSE rating::text END || '|' || review_count FROM businesses WHERE id='${goodBiz.businessId}'`
+    );
+    expect(goodRow).toBe(`${FIXTURE_3.phone}|${FIXTURE_3.website}|${FIXTURE_3.description}|ok|${FIXTURE_3.review_count}`);
+  });
+});
