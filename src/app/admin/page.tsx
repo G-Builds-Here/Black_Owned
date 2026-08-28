@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Navigation } from '@/components/ui/Navigation';
 import { getSession, clearSession, authHeaders } from '@/lib/auth/client-session';
 import { Card, Badge, Button, TabPanel, Input, Dropdown, Tabs, TabContent, UserTable } from '@/components/ui';
+import EnrichmentPanel from '@/components/admin/EnrichmentPanel';
 
 interface DashboardCounts {
   totalBusinesses: number;
@@ -123,7 +124,7 @@ function formatDuration(seconds: number | null): string {
 
 export default function AdminConsole() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'reviews' | 'jobs' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'reviews' | 'jobs' | 'users' | 'enrichment'>('dashboard');
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('week');
 
   const [data, setData] = useState<DashboardData | null>(null);
@@ -332,6 +333,7 @@ export default function AdminConsole() {
             { key: 'reviews', label: data ? `Review Queue (${data.counts.pendingReviews})` : 'Review Queue' },
             { key: 'jobs', label: 'Jobs' },
             { key: 'users', label: 'User Management' },
+            { key: 'enrichment', label: 'Enrichment' },
           ]}
           selectedKey={activeTab}
           onSelectionChange={(key) => setActiveTab(key as typeof activeTab)}
@@ -678,6 +680,11 @@ export default function AdminConsole() {
                 </div>
                 <UserTable adminUser="admin" />
               </Card>
+            </TabPanel>
+
+            {/* Enrichment Tab */}
+            <TabPanel value="enrichment" className="mt-4">
+              <EnrichmentPanel />
             </TabPanel>
           </TabContent>
         </Tabs>
