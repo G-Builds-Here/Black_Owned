@@ -1,9 +1,9 @@
 //! Integration tests for service connectivity in bw-scraper
 //!
 //! These tests verify that bw-scraper can connect to all required services:
-//! - PostgreSQL
+//! - `PostgreSQL`
 //! - NATS
-//! - ClickHouse
+//! - `ClickHouse`
 //! - Valkey/Redis
 
 use bw_scraper::connectors::{
@@ -11,7 +11,7 @@ use bw_scraper::connectors::{
     HealthStatus,
 };
 
-/// Test PostgreSQL health check with invalid connection string
+/// Test `PostgreSQL` health check with invalid connection string
 #[tokio::test]
 async fn test_postgres_invalid_url_returns_unhealthy() {
     let result = check_postgres("postgresql://invalid:5432/test").await.unwrap();
@@ -21,8 +21,8 @@ async fn test_postgres_invalid_url_returns_unhealthy() {
     assert!(result.message.contains("Connection failed"));
 }
 
-/// Test PostgreSQL health check with valid connection string
-/// This test requires PostgreSQL to be running on localhost:5432
+/// Test `PostgreSQL` health check with valid connection string
+/// This test requires `PostgreSQL` to be running on localhost:5432
 #[tokio::test]
 async fn test_postgres_valid_url_returns_healthy() {
     // Use environment variable if set, otherwise use default
@@ -33,7 +33,7 @@ async fn test_postgres_valid_url_returns_healthy() {
 
     assert_eq!(result.service, "PostgreSQL");
     // Test completes without panic - connection status depends on actual service availability
-    assert!(result.healthy || !result.healthy); // Either outcome is valid
+    assert!(!result.message.is_empty(), "health status must carry a message");
 }
 
 /// Test NATS health check with invalid connection string
@@ -57,7 +57,7 @@ async fn test_nats_valid_url_returns_healthy() {
 
     assert_eq!(result.service, "NATS");
     // Test completes without panic - connection status depends on actual service availability
-    assert!(result.healthy || !result.healthy); // Either outcome is valid
+    assert!(!result.message.is_empty(), "health status must carry a message");
 }
 
 /// Test Redis health check with invalid connection string
@@ -83,10 +83,10 @@ async fn test_redis_valid_url_returns_healthy() {
 
     assert_eq!(result.service, "Redis");
     // Test completes without panic - connection status depends on actual service availability
-    assert!(result.healthy || !result.healthy); // Either outcome is valid
+    assert!(!result.message.is_empty(), "health status must carry a message");
 }
 
-/// Test ClickHouse health check with invalid connection string
+/// Test `ClickHouse` health check with invalid connection string
 #[tokio::test]
 async fn test_clickhouse_invalid_url_returns_unhealthy() {
     let result = check_clickhouse("clickhouse://invalid:8123").unwrap();
@@ -96,8 +96,8 @@ async fn test_clickhouse_invalid_url_returns_unhealthy() {
     assert!(result.message.contains("configured") || result.message.contains("Connection"));
 }
 
-/// Test ClickHouse health check with valid connection string
-/// This test requires ClickHouse to be running on localhost:8123
+/// Test `ClickHouse` health check with valid connection string
+/// This test requires `ClickHouse` to be running on localhost:8123
 #[tokio::test]
 async fn test_clickhouse_valid_url_returns_healthy() {
     let clickhouse_url = std::env::var("CLICKHOUSE_URL")
@@ -107,10 +107,10 @@ async fn test_clickhouse_valid_url_returns_healthy() {
 
     assert_eq!(result.service, "ClickHouse");
     // Test completes without panic - connection status depends on actual service availability
-    assert!(result.healthy || !result.healthy); // Either outcome is valid
+    assert!(!result.message.is_empty(), "health status must carry a message");
 }
 
-/// Test run_all_health_checks with all invalid URLs
+/// Test `run_all_health_checks` with all invalid URLs
 #[tokio::test]
 async fn test_all_health_checks_invalid_urls() {
     let results = run_all_health_checks(
@@ -138,7 +138,7 @@ async fn test_all_health_checks_invalid_urls() {
     assert!(!nats_result.healthy);
 }
 
-/// Test run_all_health_checks with valid URLs
+/// Test `run_all_health_checks` with valid URLs
 /// This test requires all services to be running
 #[tokio::test]
 async fn test_all_health_checks_valid_urls() {
@@ -162,7 +162,7 @@ async fn test_all_health_checks_valid_urls() {
     }
 }
 
-/// Test HealthStatus struct fields
+/// Test `HealthStatus` struct fields
 #[tokio::test]
 async fn test_health_status_struct() {
     let status = HealthStatus {

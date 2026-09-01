@@ -1,17 +1,18 @@
-//! SearXNG metasearch discovery client.
+//! `SearXNG` metasearch discovery client.
 //!
-//! SearXNG is a privacy-focused metasearch engine: it fans a query out to
+//! `SearXNG` is a privacy-focused metasearch engine: it fans a query out to
 //! multiple upstream engines (google cse, duckduckgo, brave, ...) and returns
 //! one merged, deduplicated, ranked result list. Results are web hits
 //! (url, title, snippet, engine, score), not structured business records —
 //! the ETL stage turns promising candidates into business data.
 
 use std::time::Duration;
+use std::fmt::Write;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-/// One merged result from a SearXNG search.
+/// One merged result from a `SearXNG` search.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearxngResult {
     pub url: String,
@@ -38,13 +39,13 @@ pub struct SearxngResponse {
     pub query: Option<String>,
     #[serde(default)]
     pub results: Vec<SearxngResult>,
-    /// Upstream engines currently suspended by SearXNG's circuit breaker,
+    /// Upstream engines currently suspended by `SearXNG`'s circuit breaker,
     /// as [engine, reason] pairs. Non-empty means the result set is degraded.
     #[serde(default)]
     pub unresponsive_engines: Vec<Vec<String>>,
 }
 
-/// HTTP client for a SearXNG instance.
+/// HTTP client for a `SearXNG` instance.
 #[derive(Debug, Clone)]
 pub struct SearxngClient {
     http: reqwest::Client,
@@ -54,6 +55,12 @@ pub struct SearxngClient {
 impl SearxngClient {
     /// Create a client for the instance at `base_url`
     /// (e.g. `http://192.168.68.50:8888`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the reqwest client cannot be built (should not occur with
+    /// the default configuration).
+    #[must_use]
     pub fn new(base_url: &str) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
@@ -67,6 +74,11 @@ impl SearxngClient {
     }
 
     /// Run one search page. `pageno` is 1-based.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails, the instance responds with a
+    /// non-2xx status, or the response body is not valid JSON.
     pub async fn search(&self, query: &str, pageno: u32) -> Result<SearxngResponse> {
         let url = format!(
             "{}/search?q={}&format=json&pageno={}",
@@ -96,10 +108,12 @@ fn urlencoding_form_urlencode(s: &str) -> String {
     for byte in s.bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char)
+                out.push(byte as char);
             }
             b' ' => out.push('+'),
-            _ => out.push_str(&format!("%{byte:02X}")),
+            _ => {
+                let _ = write!(out, "%{byte:02X}");
+            }
         }
     }
     out

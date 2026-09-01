@@ -1,6 +1,6 @@
 //! SearXNG-backed business discovery.
 //!
-//! Stage 1 of the two-stage pipeline: ask SearXNG for web results about a
+//! Stage 1 of the two-stage pipeline: ask `SearXNG` for web results about a
 //! business query + location. Stage 2 (etl) keeps only business-like hits.
 
 use std::collections::HashSet;
@@ -23,6 +23,7 @@ pub struct SearxngBusinessScraper {
 }
 
 impl SearxngBusinessScraper {
+    #[must_use]
     pub fn new(client: SearxngClient, etl: EtlPipeline, rate_limiter: RateLimiter) -> Self {
         Self {
             client,
@@ -32,6 +33,11 @@ impl SearxngBusinessScraper {
     }
 
     /// Discover businesses across up to `max_pages` result pages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a `SearXNG` page request fails (network error,
+    /// non-2xx status, or invalid JSON).
     pub async fn scrape(
         &mut self,
         query: &str,

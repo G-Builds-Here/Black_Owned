@@ -2,35 +2,33 @@
  * LOC-0082 — Enrichment pipeline E2E
  *
  * AC1: End-to-end enrichment happy path.
- *   Given a test business with source "google_maps", a share-link source_id,
- *         and empty phone/website/description/rating/review_count
+ *   Given a test business with source "google_maps" and empty content
+ *         fields
  *   When an admin triggers enrichment via POST /api/admin/enrichment
- *   Then the business row in Postgres has phone, website, description,
- *        rating, and review_count populated from the fixture source
- *   And the directory and business detail pages render the enriched values
- *   And external (Google) review count displays separately from on-site
- *        reviews
+ *   Then the business row in Postgres has phone, website, and
+ *        description populated from the SearXNG fixture result
+ *   And the directory and business detail pages render the enriched
+ *        values (rating/review_count stay at the seeded zeros — the
+ *        SearXNG lookup does not supply them)
  *
- * Fixture strategy (deterministic, no live Google):
- *   bw-scraper fetches `scraped_businesses.source_id` directly, and
- *   `is_google_share_link()` requires the URL to be Google-shaped (host
- *   contains "google."), so this spec:
- *     1. Serves the place-JSON fixture from an in-process Node server on the
- *        host (port 9977).
- *     2. Maps the Google-shaped hostname `maps.google.e2e-fixture` to the
- *        host's IPv4 (resolved via `host.docker.internal`) inside the worker
- *        container's /etc/hosts (`docker exec -u root`).
- *     3. Seeds `source_id = http://maps.google.e2e-fixture:9977/...`.
- *   The worker's single outbound fetch lands on the fixture; the menu pass is
- *   N/A (pre-run website is NULL) and the fixture carries no `photos`, so
- *   there are zero other external calls.
+ * Fixture strategy (deterministic, no live SearXNG/Google):
+ *   The enrichment engine looks each business up on SearXNG by name
+ *   (+ location) and never fetches `scraped_businesses.source_id` — the
+ *   share link is only the eligibility gate. This spec:
+ *     1. Serves a SearXNG /search fixture from an in-process Node server
+ *        on the host (port 9977), routing on the business name in `q`.
+ *     2. Recreates the worker container with SEARXNG_URL pointed at the
+ *        host (resolved via `host.docker.internal`), preserving image,
+ *        command, network, ports, and every other env var.
+ *     3. Restores the original worker in afterAll (docker compose) and
+ *        verifies its SEARXNG_URL came back.
  *
- * AC2 (idempotent re-run) and AC3 (partial-failure isolation) extend this
- * spec via the seed/cleanup helpers below.
+ * AC2 (idempotent re-run) and AC3 (partial-failure isolation) extend
+ * this spec via the seed/cleanup helpers below.
  */
 
 import { test, expect, beforeAll, afterAll } from '@playwright/test';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import http from 'node:http';
 import type { E2ESession } from './e2e-utils';
 import {
@@ -48,40 +46,35 @@ import {
 test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
 // ---------------------------------------------------------------------------
-// Fixture source data — deterministic, intentionally distinct from
-// bw-scraper/tests/fixtures/place-json/southern_kitchen.json so a pass can
-// never come from stale real data. No `photos` (photo pass NotApplicable —
-// no external HEAD) and no `social` (social_urls not planned): exactly one
-// outbound fetch per enrich call.
+// SearXNG fixture results — deterministic, intentionally distinct from any
+// real SearXNG output so a pass can never come from stale data. The engine
+// derives: website = result URL, description = snippet, phone = first
+// US-style number in the snippet (ETL regex). Routing markers are uppercase
+// words — RUN_SUFFIX is lowercase base36+hex, so they cannot collide.
 // ---------------------------------------------------------------------------
 
-const FIXTURE_PORT = 9977;
-const FIXTURE_HOST = 'maps.google.e2e-fixture';
-const FIXTURE_SOURCE_ID = `http://${FIXTURE_HOST}:${FIXTURE_PORT}/maps/preview/place?cid=e2e0082`;
+const SEARXNG_FIX_PORT = 9977;
 
 const FIXTURE = {
-  phone: '+15550119342',
   website: 'https://fixture-e2e.example',
-  description: 'E2E enrichment fixture kitchen',
-  rating: 4.8,
-  review_count: 137,
+  content: 'E2E enrichment fixture kitchen. Call (404) 555-0142.',
 };
-// AC2 (idempotent re-run) fixture — distinct identity (host/port/cid/values)
-// so AC1 and AC2 stay independent when run serially in this file. The
-// website domain is IANA-reserved (.example never resolves), so the
-// post-enrichment menu-discovery pass fetches it once, fails at DNS, and
-// writes nothing: deterministic, zero other outbound traffic.
-const FIXTURE_2_PORT = 9978;
-const FIXTURE_2_HOST = 'maps.google.e2e-fixture-a';
-const FIXTURE_2_SOURCE_ID = `http://${FIXTURE_2_HOST}:${FIXTURE_2_PORT}/maps/preview/place?cid=e2e0082a`;
+const FIXTURE_PHONE = '(404) 555-0142';
 
 const FIXTURE_2 = {
-  phone: '+15550128473',
   website: 'https://ac2-fixture.example',
-  description: 'E2E AC2 idempotent fixture kitchen',
-  rating: 4.2,
-  review_count: 58,
+  content: 'E2E AC2 idempotent fixture kitchen. Call (404) 555-0133.',
 };
+const FIXTURE_2_PHONE = '(404) 555-0133';
+
+const FIXTURE_3 = {
+  website: 'https://ac3-fixture.example',
+  content: 'E2E AC3 isolation fixture kitchen. Call (404) 555-0147.',
+};
+const FIXTURE_3_PHONE = '(404) 555-0147';
+
+// Google-shaped source_id for the eligibility gate; never fetched.
+const FIXTURE_SOURCE_ID = 'http://maps.google.e2e-fixture:9977/maps/preview/place?cid=e2e0082';
 
 const WORKER_CONTAINER = 'black-owned-bw-scraper';
 
@@ -97,7 +90,8 @@ interface EnrichFixture {
 let fixtureServer: http.Server | null = null;
 let admin: E2ESession;
 let biz: EnrichFixture;
-let fixtureServer2: http.Server | null = null;
+let workerTouched = false;
+let originalSearxngUrl = '';
 
 /** Host IPv4 as seen from inside the worker container. */
 function workerHostIpv4(): string {
@@ -111,46 +105,144 @@ function workerHostIpv4(): string {
   return ip;
 }
 
+function dockerInspect(format: string): string {
+  // Double-quote the format expression so cmd.exe hands it to docker as a
+  // single argument.
+  const out = execSync(`docker inspect ${WORKER_CONTAINER} --format "${format}"`, {
+    encoding: 'utf8',
+  });
+  return out.trim();
+}
+
+function workerEnv(): string[] {
+  return JSON.parse(dockerInspect('{{json .Config.Env}}')) as string[];
+}
+
+async function waitForWorkerHealth(timeoutMs = 90_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const res = await fetch('http://127.0.0.1:8080/health');
+      if (res.ok) return;
+    } catch {
+      /* worker not up yet */
+    }
+    if (Date.now() > deadline) throw new Error('worker /health did not come back up in time');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
 /**
- * Point the worker container's /etc/hosts at `host` -> `ip`.
- * /etc/hosts is a bind mount (rename fails EBUSY, so sed -i cannot work):
- * filter, cat over the same inode, append.
- * NOTE: the sh -c program is wrapped in double quotes only — execSync on
- * Windows goes through cmd.exe, which treats single quotes as literal and
- * would hand `sh -c` only the word `grep`. Host/IP contain no shell
- * metacharacters (validated upstream), so no inner quoting is needed.
+ * Recreate the worker container with SEARXNG_URL pointed at the local
+ * fixture server, preserving image, command, network, ports, and all
+ * other env vars from the original container.
  */
-function setWorkerHostsEntry(ip: string, host: string): void {
-  execSync(
-    `docker exec -u root ${WORKER_CONTAINER} sh -c "grep -v ${host} /etc/hosts > /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts && echo ${ip} ${host} >> /etc/hosts"`,
-    { encoding: 'utf8' }
+function recreateWorkerWithSearXng(searxngUrl: string): void {
+  const image = dockerInspect('{{.Config.Image}}');
+  const cmd: string[] = JSON.parse(dockerInspect('{{json .Config.Cmd}}')) ?? [];
+  const networks = Object.keys(
+    JSON.parse(dockerInspect('{{json .NetworkSettings.Networks}}')) as Record<string, unknown>
+  );
+  const env = workerEnv().map((e) =>
+    e.startsWith('SEARXNG_URL=') ? `SEARXNG_URL=${searxngUrl}` : e
+  );
+  const portBindings = JSON.parse(
+    dockerInspect('{{json .HostConfig.PortBindings}}')
+  ) as Record<string, Array<{ HostIp: string; HostPort: string }>>;
+  const portArgs = Object.entries(portBindings).flatMap(([containerPort, bindings]) =>
+    bindings.flatMap(
+      (b) => [
+        '--publish',
+        `${b.HostIp ? `${b.HostIp}:` : ''}${b.HostPort}:${containerPort.replace('/tcp', '')}`,
+      ]
+    )
+  );
+  if (portArgs.length === 0) {
+    throw new Error('worker has no published ports; cannot verify health');
+  }
+
+  workerTouched = true;
+  execSync(`docker stop ${WORKER_CONTAINER}`);
+  execSync(`docker rm ${WORKER_CONTAINER}`);
+  const args = [
+    'run',
+    '-d',
+    '--name',
+    WORKER_CONTAINER,
+    ...networks.flatMap((n) => ['--network', n]),
+    ...portArgs,
+    ...env.flatMap((e) => ['-e', e]),
+    image,
+    ...cmd,
+  ];
+  const spawned = spawnSync('docker', args, { encoding: 'utf8' });
+  if (spawned.status !== 0) {
+    throw new Error(`docker run failed (${spawned.status}): ${spawned.stderr}`);
+  }
+}
+
+/**
+ * Restore the original worker: stop + remove the fixture worker, let
+ * docker compose recreate it, wait for health, and verify the original
+ * SEARXNG_URL came back.
+ */
+async function restoreWorker(): Promise<void> {
+  try { execSync(`docker stop ${WORKER_CONTAINER}`); } catch { /* already stopped/gone */ }
+  try { execSync(`docker rm ${WORKER_CONTAINER}`); } catch { /* not present */ }
+  execSync('docker compose up -d bw-scraper');
+  await waitForWorkerHealth();
+  expect(workerEnv(), 'worker must come back with the original SEARXNG_URL').toContain(
+    originalSearxngUrl
   );
 }
 
-/** Remove a previous entry for `host` from the worker's /etc/hosts. */
-function removeWorkerHostsEntry(host: string): void {
-  execSync(
-    `docker exec -u root ${WORKER_CONTAINER} sh -c "grep -v ${host} /etc/hosts > /tmp/hosts.new && cat /tmp/hosts.new > /etc/hosts"`,
-    { encoding: 'utf8' }
-  );
-}
 /**
- * Start an in-process fixture server on `port` that serves `fixture` as
- * JSON on every path. The worker's Google share-link fetch lands here.
+ * Start the SearXNG fixture server: answers GET /search?format=json with
+ * one result routed by the business name in `q` (uppercase markers keep
+ * the routes disjoint); the "IsoFail" marker answers 500 to exercise
+ * AC3's failure isolation.
  */
-function startFixtureServer(port: number, fixture: object): Promise<http.Server> {
-  const { promise, resolve, reject } = Promise.withResolvers<http.Server>();
-  const body = JSON.stringify(fixture);
-  const server = http.createServer((_req, res) => {
-    res.writeHead(200, {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(body),
+function startSearXngFixtureServer(port: number): Promise<http.Server> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
+      if (url.pathname !== '/search') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end('{}');
+        return;
+      }
+      const q = url.searchParams.get('q') ?? '';
+      if (q.includes('IsoFail')) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('{"error": "fixture failure marker"}');
+        return;
+      }
+      let fixture = FIXTURE;
+      if (q.includes('Iso')) fixture = FIXTURE_3;
+      else if (q.includes('Idem')) fixture = FIXTURE_2;
+      const body = JSON.stringify({
+        query: q,
+        number_of_results: 1,
+        results: [
+          {
+            url: fixture.website,
+            title: q,
+            content: fixture.content,
+            engine: 'searxng',
+            score: 1.0,
+          },
+        ],
+        answers: [],
+        infoboxes: [],
+        suggestions: [],
+        articles: [],
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(body);
     });
-    res.end(body);
+    server.once('error', reject);
+    server.listen(port, '0.0.0.0', () => resolve(server));
   });
-  server.once('error', reject);
-  server.listen(port, '0.0.0.0', () => resolve(server));
-  return promise;
 }
 
 /**
@@ -198,8 +290,12 @@ function cleanupEnrichmentBusiness(b: EnrichFixture | undefined): void {
 
 beforeAll(async () => {
   biz = seedEnrichmentBusiness(`Enrich E2E ${RUN_SUFFIX}`, FIXTURE_SOURCE_ID);
-  setWorkerHostsEntry(workerHostIpv4(), FIXTURE_HOST);
-  fixtureServer = await startFixtureServer(FIXTURE_PORT, FIXTURE);
+  fixtureServer = await startSearXngFixtureServer(SEARXNG_FIX_PORT);
+  originalSearxngUrl =
+    workerEnv().find((e) => e.startsWith('SEARXNG_URL=')) ?? 'SEARXNG_URL=http://192.168.68.50:8888';
+  recreateWorkerWithSearXng(`http://${workerHostIpv4()}:${SEARXNG_FIX_PORT}`);
+  workerTouched = true;
+  await waitForWorkerHealth();
   admin = await newSession('e2e-admin-enrich');
   promoteAdmin(admin.email);
   admin = await loginUser(admin.email, E2E_PASSWORD);
@@ -207,24 +303,22 @@ beforeAll(async () => {
   await warmRoutes(['/directory']);
   await warmRoutes([`/business/${biz.businessId}`]);
   await warmRoutes(['/api/admin/enrichment']);
-}, 180_000);
+}, 240_000);
 
 afterAll(async () => {
-  try {
-    removeWorkerHostsEntry(FIXTURE_HOST);
-  } catch {
-    /* best effort — the container entry is inert without the fixture server */
-  }
   cleanupEnrichmentBusiness(biz);
   try {
     psql(`DELETE FROM users WHERE email='${admin.email}'`);
   } catch {
     /* best effort */
   }
+  if (workerTouched) {
+    await restoreWorker();
+  }
   fixtureServer?.close();
-}, 120_000);
+}, 240_000);
 
-test('AC1: admin enrichment trigger enriches the seeded business from the fixture source', async () => {
+test('AC1: admin enrichment trigger enriches the seeded business from the SearXNG fixture', async () => {
   const { status, body } = await apiJson('/api/admin/enrichment', {
     method: 'POST',
     body: { business_ids: [biz.businessId] },
@@ -238,16 +332,16 @@ test('AC1: admin enrichment trigger enriches the seeded business from the fixtur
   const entry = report.businesses.find((b: { id: string }) => b.id === biz.businessId);
   expect(entry, `business entry missing from report: ${JSON.stringify(report.businesses)}`).toBeDefined();
   expect(entry.error).toBeNull();
-  for (const field of ['phone', 'website', 'description', 'rating', 'review_count']) {
-    expect(entry.applied, `field ${field} not applied: ${JSON.stringify(entry.applied)}`).toContain(field);
-  }
+  // SearXNG lookups supply exactly three fields; rating/review_count stay
+  // at the seeded zeros.
+  expect([...entry.applied].sort()).toEqual(['description', 'phone', 'website']);
 });
 
-test('AC1: postgres row carries the fixture values', () => {
+test('AC1: postgres row carries the SearXNG fixture values', () => {
   const row = psql(
-    `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = ${FIXTURE.rating} THEN 'ok' ELSE rating::text END || '|' || review_count FROM businesses WHERE id='${biz.businessId}'`
+    `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = 0 AND review_count = 0 THEN 'zeros' ELSE 'changed' END FROM businesses WHERE id='${biz.businessId}'`
   );
-  expect(row).toBe(`${FIXTURE.phone}|${FIXTURE.website}|${FIXTURE.description}|ok|${FIXTURE.review_count}`);
+  expect(row).toBe(`${FIXTURE_PHONE}|${FIXTURE.website}|${FIXTURE.content}|zeros`);
 });
 
 test('AC1: directory API exposes the enriched fields', async () => {
@@ -258,9 +352,9 @@ test('AC1: directory API exposes the enriched fields', async () => {
     (b) => b.name === biz.name
   );
   expect(item, `business ${biz.name} not in directory API: ${JSON.stringify(body.data).slice(0, 500)}`).toBeDefined();
-  expect(item!.description).toBe(FIXTURE.description);
-  expect(Number(item!.rating)).toBeCloseTo(FIXTURE.rating, 5);
-  expect(Number(item!.reviewCount)).toBe(FIXTURE.review_count);
+  expect(item!.description).toBe(FIXTURE.content);
+  expect(Number(item!.rating)).toBe(0);
+  expect(Number(item!.reviewCount)).toBe(0);
   expect(item!.website).toBe(FIXTURE.website);
 });
 
@@ -271,37 +365,31 @@ test('AC1: directory page renders the enriched card', async ({ page }) => {
   await expect(card).toBeVisible({ timeout: 30_000 });
   await page.locator('input[aria-label="Search businesses"]').fill(biz.name);
 
-  // Card content: fixture description + rating stars + review count, scoped to the card.
-  await expect(card.getByText(FIXTURE.description, { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(card.getByRole('img', { name: `Rating: ${FIXTURE.rating} out of 5 stars` })).toBeVisible();
-  await expect(card.getByText(`(${FIXTURE.review_count})`, { exact: true })).toBeVisible();
+  // Card content: fixture description + zeroed rating/reviews, scoped to the card.
+  await expect(card.getByText(FIXTURE.content, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByRole('img', { name: 'Rating: 0 out of 5 stars' })).toBeVisible();
+  await expect(card.getByText('(0)', { exact: true })).toBeVisible();
 });
 
 test('AC1: detail page renders enriched values with external and on-site review counts separated', async ({ page }) => {
   await page.goto(`${BASE_URL}/business/${biz.businessId}`);
 
-  // Enriched content from the fixture source.
-  await expect(page.getByText(FIXTURE.description, { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(`a[href="tel:${FIXTURE.phone}"]`)).toContainText(FIXTURE.phone);
+  // Enriched content from the SearXNG fixture.
+  await expect(page.getByText(FIXTURE.content, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(`a[href="tel:${FIXTURE_PHONE}"]`)).toContainText(FIXTURE_PHONE);
   await expect(page.locator(`a[href="${FIXTURE.website}"]`)).toBeVisible();
 
-  // External (Google) rating + review count, labelled by source.
-  await expect(page.getByText(`${FIXTURE.review_count} reviews on Google`, { exact: true })).toBeVisible();
-  // The star span makes the div text "★4.8", so exact-match can't target
-  // the value node — substring match, first hit wins.
-  await expect(page.getByText(String(FIXTURE.rating)).first()).toBeVisible();
-
-  // On-site review section: zero site reviews, displayed separately from
-  // the Google count above.
+  // External (Google) count renders zero — the SearXNG lookup supplies no
+  // rating/review_count, and the on-site section stays separate.
+  await expect(page.getByText('0 reviews on Google', { exact: true })).toBeVisible();
   await expect(page.getByText('No reviews on this site yet.', { exact: true })).toBeVisible();
 });
+
 test.describe('AC2: idempotent re-run', () => {
   let biz2: EnrichFixture;
 
   beforeAll(async () => {
-    biz2 = seedEnrichmentBusiness(`Enrich E2E 2 ${RUN_SUFFIX}`, FIXTURE_2_SOURCE_ID);
-    setWorkerHostsEntry(workerHostIpv4(), FIXTURE_2_HOST);
-    fixtureServer2 = await startFixtureServer(FIXTURE_2_PORT, FIXTURE_2);
+    biz2 = seedEnrichmentBusiness(`Enrich E2E Idem ${RUN_SUFFIX}`, FIXTURE_SOURCE_ID);
     // /directory is already warmed by the root beforeAll.
     await warmRoutes([`/business/${biz2.businessId}`]);
   }, 180_000);
@@ -309,17 +397,13 @@ test.describe('AC2: idempotent re-run', () => {
   afterAll(async () => {
     // Strict teardown: AC2's AC requires verified residue-free cleanup.
     // If seeding itself failed, biz2 is undefined and there is nothing to verify.
-    removeWorkerHostsEntry(FIXTURE_2_HOST);
     cleanupEnrichmentBusiness(biz2);
-    fixtureServer2?.close();
     if (!biz2) return;
 
     expect(psql(`SELECT count(*) FROM businesses WHERE name='${biz2.name}'`)).toBe('0');
     expect(psql(`SELECT count(*) FROM scraped_businesses WHERE name='${biz2.name}'`)).toBe('0');
     expect(psql(`SELECT count(*) FROM scrape_jobs WHERE id='${biz2.jobId}'`)).toBe('0');
     expect(psql(`SELECT count(*) FROM users WHERE email='${biz2.email}'`)).toBe('0');
-    const hosts = execSync(`docker exec ${WORKER_CONTAINER} cat /etc/hosts`, { encoding: 'utf8' });
-    expect(hosts, 'worker /etc/hosts must not keep the AC2 fixture host').not.toContain(FIXTURE_2_HOST);
   }, 120_000);
 
   test('AC2: first enrichment run populates the seeded business', async () => {
@@ -336,15 +420,13 @@ test.describe('AC2: idempotent re-run', () => {
     const entry = report.businesses.find((b: { id: string }) => b.id === biz2.businessId);
     expect(entry, `business entry missing from report: ${JSON.stringify(report.businesses)}`).toBeDefined();
     expect(entry.error).toBeNull();
-    expect([...entry.applied].sort()).toEqual(['description', 'phone', 'rating', 'review_count', 'website']);
+    expect([...entry.applied].sort()).toEqual(['description', 'phone', 'website']);
     expect(entry.skipped).toEqual([]);
 
     const row = psql(
-      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = ${FIXTURE_2.rating} THEN 'ok' ELSE rating::text END || '|' || review_count FROM businesses WHERE id='${biz2.businessId}'`
+      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = 0 AND review_count = 0 THEN 'zeros' ELSE 'changed' END FROM businesses WHERE id='${biz2.businessId}'`
     );
-    expect(row).toBe(
-      `${FIXTURE_2.phone}|${FIXTURE_2.website}|${FIXTURE_2.description}|ok|${FIXTURE_2.review_count}`
-    );
+    expect(row).toBe(`${FIXTURE_2_PHONE}|${FIXTURE_2.website}|${FIXTURE_2.content}|zeros`);
   });
 
   test('AC2: re-running enrichment skips every field and changes no data', async () => {
@@ -377,7 +459,7 @@ test.describe('AC2: idempotent re-run', () => {
     // Idempotency contract: nothing applied, every field the fixture
     // provides is reported as skipped.
     expect(entry.applied).toEqual([]);
-    expect([...entry.skipped].sort()).toEqual(['description', 'phone', 'rating', 'review_count', 'website']);
+    expect([...entry.skipped].sort()).toEqual(['description', 'phone', 'website']);
 
     // Ground truth: the row is byte-identical and nothing was duplicated.
     const after = psqlReturning(rowFingerprintSql);
@@ -394,38 +476,28 @@ test.describe('AC2: idempotent re-run', () => {
     await page.locator('input[aria-label="Search businesses"]').fill(biz2.name);
 
     // Card content rendered exactly once.
-    await expect(card.getByText(FIXTURE_2.description, { exact: true })).toHaveCount(1, { timeout: 15_000 });
-    await expect(card.getByRole('img', { name: `Rating: ${FIXTURE_2.rating} out of 5 stars` })).toHaveCount(1);
-    await expect(card.getByText(`(${FIXTURE_2.review_count})`, { exact: true })).toHaveCount(1);
+    await expect(card.getByText(FIXTURE_2.content, { exact: true })).toHaveCount(1, { timeout: 15_000 });
+    await expect(card.getByRole('img', { name: 'Rating: 0 out of 5 stars' })).toHaveCount(1);
+    await expect(card.getByText('(0)', { exact: true })).toHaveCount(1);
 
     await page.goto(`${BASE_URL}/business/${biz2.businessId}`);
     // Detail content rendered exactly once.
-    await expect(page.getByText(FIXTURE_2.description, { exact: true })).toHaveCount(1, { timeout: 15_000 });
-    await expect(page.locator(`a[href="tel:${FIXTURE_2.phone}"]`)).toHaveCount(1);
+    await expect(page.getByText(FIXTURE_2.content, { exact: true })).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator(`a[href="tel:${FIXTURE_2_PHONE}"]`)).toHaveCount(1);
     await expect(page.locator(`a[href="${FIXTURE_2.website}"]`)).toHaveCount(1);
-    await expect(page.getByText(`${FIXTURE_2.review_count} reviews on Google`, { exact: true })).toHaveCount(1);
+    await expect(page.getByText('0 reviews on Google', { exact: true })).toHaveCount(1);
   });
 });
-test.describe('AC3: partial-failure isolation', () => {
-  // Two businesses, one enrichment run: a valid fixture source (its own host
-  // + port + cid so AC1/AC2 stay independent) and a Google-shaped source
-  // that PASSES is_google_share_link() but is unreachable — the dead host is
-  // mapped into the worker's /etc/hosts, but nothing listens on the port, so
-  // the engine's fetch fails with connection-refused after DNS.
-  const AC3_FIX_PORT = 9979;
-  const AC3_FIX_HOST = 'maps.google.e2e-fixture-b';
-  const AC3_FIX_SOURCE_ID = `http://${AC3_FIX_HOST}:${AC3_FIX_PORT}/maps/preview/place?cid=e2e0082b`;
-  const AC3_DEAD_HOST = 'maps.google.e2e-fixture-dead';
-  const AC3_DEAD_PORT = 9981;
-  const AC3_DEAD_SOURCE_ID = `http://${AC3_DEAD_HOST}:${AC3_DEAD_PORT}/maps/preview/place?cid=e2e0082c`;
 
-  const FIXTURE_3 = {
-    phone: '+15550135798',
-    website: 'https://ac3-fixture.example',
-    description: 'E2E AC3 isolation fixture kitchen',
-    rating: 4.5,
-    review_count: 83,
-  };
+test.describe('AC3: partial-failure isolation', () => {
+  // Two businesses, one enrichment run: one whose SearXNG lookup succeeds
+  // and one whose lookup fails (the fixture answers 500 for the "IsoFail"
+  // marker in the query) — isolation must hold. Both source_ids are
+  // Google-shaped so both pass the eligibility gate; only the SearXNG
+  // lookup differs.
+  const AC3_FIX_SOURCE_ID = 'http://maps.google.e2e-fixture-b:9977/maps/preview/place?cid=e2e0082b';
+  const AC3_DEAD_SOURCE_ID = 'http://maps.google.e2e-fixture-dead:9977/maps/preview/place?cid=e2e0082c';
+
   // Pre-existing data on the failing business: gives the "existing data is
   // unchanged" clause something to verify.
   const DEAD_PRESET = {
@@ -436,27 +508,20 @@ test.describe('AC3: partial-failure isolation', () => {
 
   let goodBiz: EnrichFixture;
   let badBiz: EnrichFixture;
-  let fixtureServer3: http.Server | null = null;
   let badBefore: string;
 
   beforeAll(async () => {
-    goodBiz = seedEnrichmentBusiness(`Enrich E2E 3 valid ${RUN_SUFFIX}`, AC3_FIX_SOURCE_ID);
-    badBiz = seedEnrichmentBusiness(`Enrich E2E 3 failing ${RUN_SUFFIX}`, AC3_DEAD_SOURCE_ID);
+    goodBiz = seedEnrichmentBusiness(`Enrich E2E Iso ${RUN_SUFFIX}`, AC3_FIX_SOURCE_ID);
+    badBiz = seedEnrichmentBusiness(`Enrich E2E IsoFail ${RUN_SUFFIX}`, AC3_DEAD_SOURCE_ID);
     psql(
       `UPDATE businesses SET phone='${DEAD_PRESET.phone}', website='${DEAD_PRESET.website}', description='${DEAD_PRESET.description}' WHERE id='${badBiz.businessId}'`
     );
-    setWorkerHostsEntry(workerHostIpv4(), AC3_FIX_HOST);
-    setWorkerHostsEntry(workerHostIpv4(), AC3_DEAD_HOST);
-    fixtureServer3 = await startFixtureServer(AC3_FIX_PORT, FIXTURE_3);
   }, 180_000);
 
   afterAll(async () => {
     // Strict teardown: verified residue-free cleanup for both businesses.
-    removeWorkerHostsEntry(AC3_FIX_HOST);
-    removeWorkerHostsEntry(AC3_DEAD_HOST);
     cleanupEnrichmentBusiness(goodBiz);
     cleanupEnrichmentBusiness(badBiz);
-    fixtureServer3?.close();
     if (!goodBiz || !badBiz) return;
 
     for (const b of [goodBiz, badBiz]) {
@@ -467,12 +532,9 @@ test.describe('AC3: partial-failure isolation', () => {
     expect(psql(`SELECT count(*) FROM scrape_jobs WHERE id='${badBiz.jobId}'`)).toBe('0');
     expect(psql(`SELECT count(*) FROM users WHERE email='${goodBiz.email}'`)).toBe('0');
     expect(psql(`SELECT count(*) FROM users WHERE email='${badBiz.email}'`)).toBe('0');
-    const hosts = execSync(`docker exec ${WORKER_CONTAINER} cat /etc/hosts`, { encoding: 'utf8' });
-    expect(hosts, 'worker /etc/hosts must not keep the AC3 fixture host').not.toContain(AC3_FIX_HOST);
-    expect(hosts, 'worker /etc/hosts must not keep the AC3 dead host').not.toContain(AC3_DEAD_HOST);
   }, 120_000);
 
-  test('AC3: one run over a valid + a failing source enriches the valid one and reports an error for the failing one', async () => {
+  test('AC3: one run over a successful + a failing lookup enriches the good one and reports an error for the failing one', async () => {
     // Content fingerprint of the failing row (incl. updated_at) taken BEFORE
     // the run — any write, even a lost-race no-op UPDATE, changes the hash.
     const badFpSql = `SELECT md5(COALESCE(phone, '') || COALESCE(website, '') || COALESCE(description, '') || COALESCE(rating::text, '') || COALESCE(review_count::text, '') || COALESCE(menu_url, '') || COALESCE(image_url, '') || COALESCE(social_urls::text, '') || COALESCE(updated_at::text, '')) FROM businesses WHERE id='${badBiz.businessId}'`;
@@ -492,17 +554,18 @@ test.describe('AC3: partial-failure isolation', () => {
     const good = report.businesses.find((b: { id: string }) => b.id === goodBiz.businessId);
     expect(good, `valid business entry missing: ${JSON.stringify(report.businesses)}`).toBeDefined();
     expect(good.error).toBeNull();
-    expect([...good.applied].sort()).toEqual(['description', 'phone', 'rating', 'review_count', 'website']);
+    expect([...good.applied].sort()).toEqual(['description', 'phone', 'website']);
     expect(good.skipped).toEqual([]);
 
     const bad = report.businesses.find((b: { id: string }) => b.id === badBiz.businessId);
     expect(bad, `failing business entry missing: ${JSON.stringify(report.businesses)}`).toBeDefined();
     expect(bad.error, 'failing business must be reported with an error').not.toBeNull();
-    expect(bad.applied, 'no field may apply when the source is unreachable').toEqual([]);
+    expect(bad.error).toContain('searxng lookup failed');
+    expect(bad.applied, 'no field may apply when the lookup fails').toEqual([]);
     expect(bad.skipped).toEqual([]);
   });
 
-  test('AC3: failing business data is byte-identical and valid business holds fixture values (psql ground truth)', () => {
+  test('AC3: failing business data is byte-identical and good business holds fixture values (psql ground truth)', () => {
     const badFpSql = `SELECT md5(COALESCE(phone, '') || COALESCE(website, '') || COALESCE(description, '') || COALESCE(rating::text, '') || COALESCE(review_count::text, '') || COALESCE(menu_url, '') || COALESCE(image_url, '') || COALESCE(social_urls::text, '') || COALESCE(updated_at::text, '')) FROM businesses WHERE id='${badBiz.businessId}'`;
     expect(psqlReturning(badFpSql), `failing row changed: before=${badBefore}`).toBe(badBefore);
 
@@ -513,8 +576,8 @@ test.describe('AC3: partial-failure isolation', () => {
     expect(badRow).toBe(`${DEAD_PRESET.phone}|${DEAD_PRESET.website}|${DEAD_PRESET.description}|untouched`);
 
     const goodRow = psql(
-      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = ${FIXTURE_3.rating} THEN 'ok' ELSE rating::text END || '|' || review_count FROM businesses WHERE id='${goodBiz.businessId}'`
+      `SELECT COALESCE(phone, '') || '|' || COALESCE(website, '') || '|' || COALESCE(description, '') || '|' || CASE WHEN rating = 0 AND review_count = 0 THEN 'zeros' ELSE 'changed' END FROM businesses WHERE id='${goodBiz.businessId}'`
     );
-    expect(goodRow).toBe(`${FIXTURE_3.phone}|${FIXTURE_3.website}|${FIXTURE_3.description}|ok|${FIXTURE_3.review_count}`);
+    expect(goodRow).toBe(`${FIXTURE_3_PHONE}|${FIXTURE_3.website}|${FIXTURE_3.content}|zeros`);
   });
 });

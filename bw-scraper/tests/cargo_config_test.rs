@@ -23,9 +23,7 @@ fn read_cargo_toml_from_commit() -> String {
         .output()
         .expect("Failed to execute git command");
 
-    if !output.status.success() {
-        panic!("git show failed: {}", String::from_utf8_lossy(&output.stderr));
-    }
+    assert!(output.status.success(), "git show failed: {}", String::from_utf8_lossy(&output.stderr));
 
     String::from_utf8(output.stdout).expect("Invalid UTF-8 in Cargo.toml")
 }
@@ -37,9 +35,7 @@ fn read_workspace_cargo_toml() -> String {
         .output()
         .expect("Failed to execute git command");
 
-    if !output.status.success() {
-        panic!("git show failed: {}", String::from_utf8_lossy(&output.stderr));
-    }
+    assert!(output.status.success(), "git show failed: {}", String::from_utf8_lossy(&output.stderr));
 
     String::from_utf8(output.stdout).expect("Invalid UTF-8 in Cargo.toml")
 }

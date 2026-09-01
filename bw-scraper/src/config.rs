@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 
-/// User-provided SearXNG metasearch instance.
+/// User-provided `SearXNG` metasearch instance.
 pub const DEFAULT_SEARXNG_URL: &str = "http://192.168.68.50:8888";
 
 #[derive(Debug, Clone)]
@@ -20,6 +20,10 @@ pub struct Config {
 impl Config {
     /// Read configuration from the environment. Only `DATABASE_URL` is
     /// required; optional services degrade out of the health report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `DATABASE_URL` is not set.
     pub fn from_env() -> Result<Self> {
         Ok(Self {
             database_url: std::env::var("DATABASE_URL")

@@ -1,4 +1,4 @@
-//! Snippet-level extraction: turn raw SearXNG web hits into business
+//! Snippet-level extraction: turn raw `SearXNG` web hits into business
 //! records, rejecting directory/listicle pages.
 
 use std::sync::LazyLock;
@@ -15,6 +15,7 @@ use crate::searxng::SearxngResult;
 pub struct EtlPipeline;
 
 impl EtlPipeline {
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -109,7 +110,7 @@ fn phone_regex() -> &'static Regex {
 }
 
 /// First US-style phone number found in the snippet, if any.
-fn extract_us_phone(snippet: &str) -> Option<String> {
+pub(crate) fn extract_us_phone(snippet: &str) -> Option<String> {
     phone_regex().find(snippet).map(|m| m.as_str().to_string())
 }
 
@@ -128,7 +129,7 @@ fn extract_google_maps_coords(url: &str) -> Option<(f64, f64)> {
 }
 
 /// Stable, deterministic id so re-scrapes can dedupe by `source_id`.
-/// FNV-1a 64 (std's DefaultHasher is per-process seeded and not stable).
+/// FNV-1a 64 (std's `DefaultHasher` is per-process seeded and not stable).
 fn stable_source_id(url: &str) -> String {
     format!("searxng-{:x}", fnv1a64(url))
 }
@@ -150,7 +151,7 @@ mod tests {
         SearxngResult {
             url: url.to_string(),
             title: title.to_string(),
-            content: content.map(|s| s.to_string()),
+            content: content.map(std::string::ToString::to_string),
             engine: None,
             engines: vec![],
             score: None,
@@ -199,8 +200,8 @@ mod tests {
                 None,
             ))
             .expect("business-like result should transform");
-        assert_eq!(record.lat, Some(33.8455382));
-        assert_eq!(record.lng, Some(-84.5043073));
+        assert_eq!(record.lat, Some(33.845_538_2));
+        assert_eq!(record.lng, Some(-84.504_307_3));
     }
 
     #[test]

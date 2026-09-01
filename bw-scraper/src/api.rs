@@ -158,7 +158,8 @@ async fn scrape(
                 .importer
                 .insert_scraped_businesses(job_id, "searxng", &records)
                 .await;
-            if let Err(e) = state.importer.complete(job_id, inserted as i32).await {
+            let count = i32::try_from(inserted).unwrap_or(i32::MAX);
+            if let Err(e) = state.importer.complete(job_id, count).await {
                 tracing::error!(?job_id, error = %e, "failed to mark job completed");
             }
             Ok((
@@ -189,7 +190,7 @@ async fn scrape(
 const ENRICH_DEFAULT_LIMIT: i32 = 50;
 
 /// Upper bound for a single enrichment run; a request `limit` must fall
-/// inside 1..=ENRICH_MAX_LIMIT or the endpoint rejects it with 400.
+/// inside `1..=ENRICH_MAX_LIMIT` or the endpoint rejects it with 400.
 const ENRICH_MAX_LIMIT: i32 = 500;
 
 /// Eligible for enrichment: google_maps-sourced (joined by name, the
@@ -209,7 +210,7 @@ async fn enrich(
     Json(req): Json<EnrichRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     let limit = req.limit.unwrap_or(ENRICH_DEFAULT_LIMIT);
-    if limit < 1 || limit > ENRICH_MAX_LIMIT {
+    if !(1..=ENRICH_MAX_LIMIT).contains(&limit) {
         return Err(err(
             StatusCode::BAD_REQUEST,
             format!("limit must be between 1 and {ENRICH_MAX_LIMIT}, got {limit}"),
@@ -217,30 +218,27 @@ async fn enrich(
     }
     let dry_run = req.dry_run.unwrap_or(false);
 
-    let rows = match &req.business_ids {
-        Some(ids) => {
-            let q =
-                format!("{SELECT_ELIGIBLE} AND b.id = ANY($1::uuid[]) ORDER BY b.updated_at LIMIT $2");
-            sqlx::query(&q)
-                .bind(ids)
-                .bind(limit)
-                .fetch_all(&state.pool)
-                .await
-        }
-        None => {
-            let q = format!("{SELECT_ELIGIBLE} ORDER BY b.updated_at LIMIT $1");
-            sqlx::query(&q)
-                .bind(limit)
-                .fetch_all(&state.pool)
-                .await
-        }
+    let rows = if let Some(ids) = &req.business_ids {
+        let q =
+            format!("{SELECT_ELIGIBLE} AND b.id = ANY($1::uuid[]) ORDER BY b.updated_at LIMIT $2");
+        sqlx::query(&q)
+            .bind(ids)
+            .bind(limit)
+            .fetch_all(&state.pool)
+            .await
+    } else {
+        let q = format!("{SELECT_ELIGIBLE} ORDER BY b.updated_at LIMIT $1");
+        sqlx::query(&q)
+            .bind(limit)
+            .fetch_all(&state.pool)
+            .await
     };
     let rows = rows.map_err(|e| {
         err(StatusCode::INTERNAL_SERVER_ERROR, format!("enrichment selection failed: {e}"))
     })?;
 
     let ids: Vec<Uuid> = rows.iter().map(|r| r.get::<Uuid, _>("id")).collect();
-    let mut engine = EnrichmentEngine::new();
+    let mut engine = EnrichmentEngine::new(&state.config.searxng_url);
     let results = engine.enrich_batch(&state.pool, &ids, dry_run).await;
 
     let (mut enriched, mut skipped, mut failed) = (0_i32, 0_i32, 0_i32);
@@ -258,7 +256,7 @@ async fn enrich(
                 "id": r.business_id,
                 "name": r.business_name,
                 "applied": r.applied.iter().map(|a| a.field).collect::<Vec<_>>(),
-                "skipped": r.skipped.iter().copied().collect::<Vec<_>>(),
+                "skipped": r.skipped.clone(),
                 "error": r.error,
             })
         })
@@ -287,8 +285,26 @@ mod tests {
     use axum::http::Request;
     use crate::rate_limiter::RateLimiterConfig;
 
-    const FIXTURE_PLACE_JSON: &str =
-        include_str!("../tests/fixtures/place-json/southern_kitchen.json");
+    /// `SearXNG` search-response fixture: one result whose URL is the
+    /// website and whose snippet carries the description and a US phone
+    /// number (extracted by the ETL regex).
+    const FIXTURE_SEARXNG_RESULT: &str = r#"{
+        "query": "ac fixture",
+        "number_of_results": 1,
+        "results": [
+            {
+                "url": "https://ac-fixture.example/",
+                "title": "AC Fixture Kitchen",
+                "content": "AC fixture kitchen and bar. Call (404) 555-0134.",
+                "engine": "searxng",
+                "score": 1.0
+            }
+        ],
+        "answers": [],
+        "infoboxes": [],
+        "suggestions": [],
+        "articles": []
+    }"#;
 
     /// Compose Postgres pool; DB tests skip when unreachable.
     async fn test_pool() -> Result<PgPool, String> {
@@ -301,43 +317,43 @@ mod tests {
             .map_err(|e| format!("connect failed: {e}"))
     }
 
-    /// Shared fixture place-JSON server for the whole module: one stub
-    /// answering every request with the fixture. Seeded source_ids are
-    /// Google-shaped so they pass `is_google_share_link`; the engine's
-    /// default client routes them through the `http_proxy` env var
-    /// (set once, here) to the stub.
+    /// Shared fixture `SearXNG` server for the whole module: one stub
+    /// answering every request with the `SearXNG` JSON fixture. Seeded
+    /// `source_ids` are Google-shaped so they pass `is_google_share_link`
+    /// (gate only — never fetched); the engine's `SearXNG` base URL is
+    /// routed through the `http_proxy` env var (set once, here) to the
+    /// stub.
     static FIXTURE_STUB_PORT: std::sync::LazyLock<u16> = std::sync::LazyLock::new(|| {
         let listener =
             std::net::TcpListener::bind("127.0.0.1:0").expect("bind fixture listener");
         let port = listener.local_addr().expect("fixture address").port();
-        let body = FIXTURE_PLACE_JSON.to_string();
+        let body = FIXTURE_SEARXNG_RESULT.to_string();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
-                let mut stream = match stream {
-                    Ok(stream) => stream,
-                    Err(_) => break,
+                let Ok(mut stream) = stream else {
+                    break;
                 };
                 let mut head = Vec::new();
                 let mut buf = [0u8; 8192];
                 loop {
                     match stream.read(&mut buf) {
-                        Ok(0) => break,
+                        Ok(0) | Err(_) => break,
                         Ok(n) => {
                             head.extend_from_slice(&buf[..n]);
                             if head.windows(4).any(|w| w == b"\r\n\r\n") {
                                 break;
                             }
                         }
-                        Err(_) => break,
                     }
                 }
-                // AC3 bookkeeping: record the distinct /ac3- fetch paths
-                // served. A transport-level retry re-sends the same path,
-                // so the distinct count stays exact under concurrent load
-                // and proves one logical fetch per business.
+                // AC3 bookkeeping: record the distinct /search?q= paths for
+                // the AC3 Enrich 500 family. A transport-level retry
+                // re-sends the same query, so the distinct count stays
+                // exact under concurrent load and proves one logical
+                // SearXNG lookup per business.
                 if let Some(path) = stub_request_path(&head) {
-                    if path.starts_with("/ac3-") {
-                        AC3_STUB_PATHS.lock().unwrap().insert(path);
+                    if path.starts_with("/search") && path.contains("AC3+Enrich+500") {
+                        AC3_STUB_PATHS.lock().insert(path);
                     }
                 }
                 let response = format!(
@@ -361,8 +377,8 @@ mod tests {
 
     /// AC3 bookkeeping: distinct `/ac3-` fetch paths the stub served.
     /// Stays AC3-exclusive because no other test seeds that path prefix.
-    static AC3_STUB_PATHS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
-        std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+    static AC3_STUB_PATHS: std::sync::LazyLock<parking_lot::Mutex<std::collections::HashSet<String>>> =
+        std::sync::LazyLock::new(|| parking_lot::Mutex::new(std::collections::HashSet::new()));
 
     /// Path component of the first request line in a captured request head.
     /// Proxy-routed requests arrive in absolute form
@@ -372,7 +388,7 @@ mod tests {
         let first_line = text.lines().next()?;
         let target = first_line.split_whitespace().nth(1)?;
         let path = match target.rsplit_once("://") {
-            Some((_, rest)) => rest.find('/').map(|i| &rest[i..]).unwrap_or(""),
+            Some((_, rest)) => rest.find('/').map_or("", |i| &rest[i..]),
             None => target,
         };
         Some(path.to_string())
@@ -381,9 +397,9 @@ mod tests {
     /// Serializes the AC3 tests that assert on the shared fixture stub, so
     /// one test's batch cannot queue behind another's and skew timing
     /// assertions.
-    static AC3_STUB_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    static AC3_STUB_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
 
-    /// AppState with an unconnected lazy pool — enough for handler paths
+    /// `AppState` with an unconnected lazy pool — enough for handler paths
     /// that reject the request before touching the database (AC3
     /// validation tests are true unit tests: no compose Postgres needed).
     fn lazy_state() -> AppState {
@@ -412,8 +428,8 @@ mod tests {
         }
     }
 
-    /// Seed `count` eligible businesses (google_maps source, every content
-    /// field empty) under `prefix` with the default fixture source_id;
+    /// Seed `count` eligible businesses (`google_maps` source, every content
+    /// field empty) under `prefix` with the default fixture `source_id`;
     /// returns their ids in seed order.
     async fn seed_eligible(pool: &PgPool, prefix: &str, count: i32) -> Vec<Uuid> {
         seed_eligible_source(
@@ -425,7 +441,7 @@ mod tests {
         .await
     }
 
-    /// Like `seed_eligible`, but with per-business source_ids so a test
+    /// Like `seed_eligible`, but with per-business `source_ids` so a test
     /// can correlate the stub's observed fetch paths with businesses.
     async fn seed_eligible_source(
         pool: &PgPool,
@@ -464,11 +480,11 @@ mod tests {
             let name = format!("{prefix} Business {i}");
             let id: Uuid = {
                 let row = sqlx::query(
-                    r#"INSERT INTO businesses
+                    r"INSERT INTO businesses
                        (owner_id, name, description, category_id, rating, review_count,
                         phone, website, social_urls)
                        VALUES ($1, $2, NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
-                       RETURNING id"#,
+                       RETURNING id",
                 )
                 .bind(user_id)
                 .bind(&name)
@@ -492,7 +508,7 @@ mod tests {
         ids
     }
 
-    /// Delete this test family's rows (businesses + scraped_businesses).
+    /// Delete this test family's rows (businesses + `scraped_businesses`).
     async fn cleanup_family(pool: &PgPool, prefix: &str) {
         let like = format!("{prefix} %");
         sqlx::query("DELETE FROM businesses WHERE name LIKE $1")
@@ -548,17 +564,17 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("summary object");
         assert_eq!(
-            summary.get("total").and_then(|v| v.as_i64()),
+            summary.get("total").and_then(serde_json::Value::as_i64),
             Some(5),
             "limit bounds the run: {body}"
         );
         assert_eq!(
-            summary.get("enriched").and_then(|v| v.as_i64()),
+            summary.get("enriched").and_then(serde_json::Value::as_i64),
             Some(5),
             "all selected businesses enrich: {body}"
         );
-        assert_eq!(summary.get("skipped").and_then(|v| v.as_i64()), Some(0), "{body}");
-        assert_eq!(summary.get("failed").and_then(|v| v.as_i64()), Some(0), "{body}");
+        assert_eq!(summary.get("skipped").and_then(serde_json::Value::as_i64), Some(0), "{body}");
+        assert_eq!(summary.get("failed").and_then(serde_json::Value::as_i64), Some(0), "{body}");
 
         let businesses = body
             .get("businesses")
@@ -572,12 +588,12 @@ mod tests {
             let fields: Vec<&str> = applied.iter().map(|f| f.as_str().unwrap_or_default()).collect();
             assert_eq!(
                 fields,
-                vec!["phone", "website", "description", "rating", "review_count", "social"],
-                "fixture fills every empty field: {body}"
+                vec!["phone", "website", "description"],
+                "SearXNG fixture fills exactly its three fields: {body}"
             );
             assert!(entry.get("skipped").and_then(|v| v.as_array()).is_some(), "{body}");
             assert!(
-                entry.get("error").map(|v| v.is_null()).unwrap_or(false),
+                entry.get("error").is_some_and(serde_json::Value::is_null),
                 "{body}"
             );
         }
@@ -643,12 +659,12 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("summary object");
         assert_eq!(
-            summary.get("total").and_then(|v| v.as_i64()),
+            summary.get("total").and_then(serde_json::Value::as_i64),
             Some(50),
             "default limit is 50 when omitted: {body}"
         );
         assert_eq!(
-            summary.get("enriched").and_then(|v| v.as_i64()),
+            summary.get("enriched").and_then(serde_json::Value::as_i64),
             Some(50),
             "{body}"
         );
@@ -663,6 +679,35 @@ mod tests {
         assert_eq!(untouched, 1, "one eligible business remains past the default limit");
 
         cleanup_family(&pool, "AC1 Enrich Default").await;
+    }
+
+    /// Content snapshot of a business row: the fields a dry run must not
+    /// touch, plus `updated_at` so a stray UPDATE is detectable.
+    #[derive(Debug, PartialEq)]
+    struct RowSnapshot {
+        id: Uuid,
+        phone: Option<String>,
+        review_count: Option<i32>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    async fn row_snapshot(pool: &PgPool, name_pattern: &str) -> Vec<RowSnapshot> {
+        let rows = sqlx::query(
+            "SELECT id, phone, review_count, updated_at
+             FROM businesses WHERE name LIKE $1 ORDER BY name",
+        )
+        .bind(name_pattern)
+        .fetch_all(pool)
+        .await
+        .expect("snapshot rows read back");
+        rows.iter()
+            .map(|row| RowSnapshot {
+                id: row.get::<Uuid, _>("id"),
+                phone: row.get("phone"),
+                review_count: row.get("review_count"),
+                updated_at: row.get("updated_at"),
+            })
+            .collect()
     }
 
     // AC1 scenario: dry_run=true reports the fields that would apply and
@@ -682,30 +727,15 @@ mod tests {
         let ids = seed_eligible(&pool, "AC1 Enrich DryRun", 3).await;
 
         // Pre-state: every content field empty, timestamps captured.
-        let before_rows = sqlx::query(
-                "SELECT id, phone, review_count, updated_at
-                 FROM businesses WHERE name LIKE $1 ORDER BY name",
-            )
-            .bind("AC1 Enrich DryRun %")
-            .fetch_all(&pool)
-            .await
-            .expect("snapshot pre-state");
-        let before: Vec<(Uuid, Option<String>, Option<i32>, chrono::DateTime<chrono::Utc>)> =
-            before_rows
-                .iter()
-                .map(|r| {
-                    (
-                        r.get::<Uuid, _>("id"),
-                        r.get::<Option<String>, _>("phone"),
-                        r.get::<Option<i32>, _>("review_count"),
-                        r.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
-                    )
-                })
-                .collect();
+        let before = row_snapshot(&pool, "AC1 Enrich DryRun %").await;
         assert_eq!(before.len(), 3, "three rows seeded");
-        for (_, phone, review_count, _) in &before {
-            assert!(phone.is_none(), "seed rows start empty: {phone:?}");
-            assert_eq!(*review_count, Some(0));
+        for snapshot in &before {
+            assert!(
+                snapshot.phone.is_none(),
+                "seed rows start empty: {:?}",
+                snapshot.phone
+            );
+            assert_eq!(snapshot.review_count, Some(0));
         }
 
         let state = test_state(&pool);
@@ -731,14 +761,14 @@ mod tests {
             .get("summary")
             .and_then(|v| v.as_object())
             .expect("summary object");
-        assert_eq!(summary.get("total").and_then(|v| v.as_i64()), Some(3), "{body}");
+        assert_eq!(summary.get("total").and_then(serde_json::Value::as_i64), Some(3), "{body}");
         assert_eq!(
-            summary.get("enriched").and_then(|v| v.as_i64()),
+            summary.get("enriched").and_then(serde_json::Value::as_i64),
             Some(3),
             "dry run reports the fields that would apply: {body}"
         );
-        assert_eq!(summary.get("skipped").and_then(|v| v.as_i64()), Some(0), "{body}");
-        assert_eq!(summary.get("failed").and_then(|v| v.as_i64()), Some(0), "{body}");
+        assert_eq!(summary.get("skipped").and_then(serde_json::Value::as_i64), Some(0), "{body}");
+        assert_eq!(summary.get("failed").and_then(serde_json::Value::as_i64), Some(0), "{body}");
 
         let businesses = body
             .get("businesses")
@@ -749,8 +779,8 @@ mod tests {
             let fields: Vec<&str> = applied.iter().map(|f| f.as_str().unwrap_or_default()).collect();
             assert_eq!(
                 fields,
-                vec!["phone", "website", "description", "rating", "review_count", "social"],
-                "dry run lists every field that would apply: {body}"
+                vec!["phone", "website", "description"],
+                "SearXNG lookup supplies exactly these fields: {body}"
             );
             let skipped = entry.get("skipped").and_then(|v| v.as_array()).expect("skipped array");
             assert!(skipped.is_empty(), "fully empty row skips nothing: {body}");
@@ -758,26 +788,7 @@ mod tests {
 
         // Post-state: rows untouched — no content fields written and no
         // updated_at bump, proving zero UPDATE statements hit these rows.
-        let after_rows = sqlx::query(
-                "SELECT id, phone, review_count, updated_at
-                 FROM businesses WHERE name LIKE $1 ORDER BY name",
-            )
-            .bind("AC1 Enrich DryRun %")
-            .fetch_all(&pool)
-            .await
-            .expect("snapshot post-state");
-        let after: Vec<(Uuid, Option<String>, Option<i32>, chrono::DateTime<chrono::Utc>)> =
-            after_rows
-                .iter()
-                .map(|r| {
-                    (
-                        r.get::<Uuid, _>("id"),
-                        r.get::<Option<String>, _>("phone"),
-                        r.get::<Option<i32>, _>("review_count"),
-                        r.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
-                    )
-                })
-                .collect();
+        let after = row_snapshot(&pool, "AC1 Enrich DryRun %").await;
         assert_eq!(before, after, "dry run left every row untouched");
 
         cleanup_family(&pool, "AC1 Enrich DryRun").await;
@@ -826,14 +837,14 @@ mod tests {
         let name = "AC1 Enrich Empty Filled";
         let filled_id: Uuid = {
             let row = sqlx::query(
-                r#"INSERT INTO businesses
+                r"INSERT INTO businesses
                    (owner_id, name, description, category_id, rating, review_count,
                     phone, website, menu_url, image_url, social_urls)
                    VALUES ($1, $2, 'Filled description', 'test-enrichment', 4.0, 42,
                            '+15550004444', 'https://filled.example.com',
                            'https://filled.example.com/menu',
                            'https://filled.example.com/img.jpg', '[]')
-                   RETURNING id"#,
+                   RETURNING id",
             )
             .bind(user_id)
             .bind(name)
@@ -877,13 +888,13 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("summary object");
         assert_eq!(
-            summary.get("total").and_then(|v| v.as_i64()),
+            summary.get("total").and_then(serde_json::Value::as_i64),
             Some(0),
             "empty selection reports total 0: {body}"
         );
-        assert_eq!(summary.get("enriched").and_then(|v| v.as_i64()), Some(0), "{body}");
-        assert_eq!(summary.get("skipped").and_then(|v| v.as_i64()), Some(0), "{body}");
-        assert_eq!(summary.get("failed").and_then(|v| v.as_i64()), Some(0), "{body}");
+        assert_eq!(summary.get("enriched").and_then(serde_json::Value::as_i64), Some(0), "{body}");
+        assert_eq!(summary.get("skipped").and_then(serde_json::Value::as_i64), Some(0), "{body}");
+        assert_eq!(summary.get("failed").and_then(serde_json::Value::as_i64), Some(0), "{body}");
         let businesses = body
             .get("businesses")
             .and_then(|v| v.as_array())
@@ -939,13 +950,13 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("summary object");
         assert_eq!(
-            summary.get("total").and_then(|v| v.as_i64()),
+            summary.get("total").and_then(serde_json::Value::as_i64),
             Some(50),
             "unfiltered selection binds to the default limit: {body}"
         );
-        let enriched = summary.get("enriched").and_then(|v| v.as_i64()).unwrap_or(-1);
-        let skipped = summary.get("skipped").and_then(|v| v.as_i64()).unwrap_or(-1);
-        let failed = summary.get("failed").and_then(|v| v.as_i64()).unwrap_or(-1);
+        let enriched = summary.get("enriched").and_then(serde_json::Value::as_i64).unwrap_or(-1);
+        let skipped = summary.get("skipped").and_then(serde_json::Value::as_i64).unwrap_or(-1);
+        let failed = summary.get("failed").and_then(serde_json::Value::as_i64).unwrap_or(-1);
         assert_eq!(
             enriched + skipped + failed,
             50,
@@ -984,6 +995,40 @@ mod tests {
         cleanup_family(&pool, "AC1 QA Unfiltered").await;
     }
 
+    /// Full content state of one business row: every field the engine can
+    /// write, plus `updated_at` so a stray UPDATE is detectable.
+    #[derive(Debug, PartialEq)]
+    struct BusinessState {
+        phone: Option<String>,
+        website: Option<String>,
+        description: Option<String>,
+        rating: Option<String>,
+        review_count: Option<i32>,
+        social_urls: Option<String>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    async fn business_state(pool: &PgPool, business_id: Uuid) -> BusinessState {
+        let row = sqlx::query(
+            "SELECT phone, website, description, rating::text AS rating,
+                     review_count, social_urls::text AS social_urls, updated_at
+              FROM businesses WHERE id = $1",
+        )
+        .bind(business_id)
+        .fetch_one(pool)
+        .await
+        .expect("business state snapshot");
+        BusinessState {
+            phone: row.get("phone"),
+            website: row.get("website"),
+            description: row.get("description"),
+            rating: row.get("rating"),
+            review_count: row.get("review_count"),
+            social_urls: row.get("social_urls"),
+            updated_at: row.get("updated_at"),
+        }
+    }
+
     // AC2: targeted run respects ids. Given b-1, b-2, b-3 all eligible,
     // POST /enrich naming only b-1 and b-2 processes exactly those two
     // (summary counts reflect the two) and leaves b-3 untouched: no
@@ -1005,25 +1050,8 @@ mod tests {
 
         // Pre-state snapshot of the excluded business b-3: every content
         // field the engine can write, plus updated_at.
-        let before_rows = sqlx::query(
-            r#"SELECT phone, website, description, rating::text AS rating,
-                      review_count, social_urls::text AS social_urls, updated_at
-               FROM businesses WHERE id = $1"#,
-        )
-        .bind(b3)
-        .fetch_one(&pool)
-        .await
-        .expect("snapshot b-3 pre-state");
-        let before = (
-            before_rows.get::<Option<String>, _>("phone"),
-            before_rows.get::<Option<String>, _>("website"),
-            before_rows.get::<Option<String>, _>("description"),
-            before_rows.get::<Option<String>, _>("rating"),
-            before_rows.get::<Option<i32>, _>("review_count"),
-            before_rows.get::<Option<String>, _>("social_urls"),
-            before_rows.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
-        );
-        assert!(before.0.is_none(), "seed rows start with empty phone");
+        let before = business_state(&pool, b3).await;
+        assert!(before.phone.is_none(), "seed rows start with empty phone");
 
         let state = test_state(&pool);
         let (status, Json(body)) = match enrich(
@@ -1077,17 +1105,17 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("summary object");
         assert_eq!(
-            summary.get("total").and_then(|v| v.as_i64()),
+            summary.get("total").and_then(serde_json::Value::as_i64),
             Some(2),
             "summary total is the two requested: {body}"
         );
         assert_eq!(
-            summary.get("enriched").and_then(|v| v.as_i64()),
+            summary.get("enriched").and_then(serde_json::Value::as_i64),
             Some(2),
             "{body}"
         );
-        assert_eq!(summary.get("skipped").and_then(|v| v.as_i64()), Some(0), "{body}");
-        assert_eq!(summary.get("failed").and_then(|v| v.as_i64()), Some(0), "{body}");
+        assert_eq!(summary.get("skipped").and_then(serde_json::Value::as_i64), Some(0), "{body}");
+        assert_eq!(summary.get("failed").and_then(serde_json::Value::as_i64), Some(0), "{body}");
 
         // Both requested businesses were actually written...
         let written: i64 = sqlx::query_scalar(
@@ -1100,24 +1128,7 @@ mod tests {
         assert_eq!(written, 2, "both requested businesses were enriched");
 
         // ...and b-3 remains unchanged: no field written, updated_at untouched.
-        let after_rows = sqlx::query(
-            r#"SELECT phone, website, description, rating::text AS rating,
-                      review_count, social_urls::text AS social_urls, updated_at
-               FROM businesses WHERE id = $1"#,
-        )
-        .bind(b3)
-        .fetch_one(&pool)
-        .await
-        .expect("snapshot b-3 post-state");
-        let after = (
-            after_rows.get::<Option<String>, _>("phone"),
-            after_rows.get::<Option<String>, _>("website"),
-            after_rows.get::<Option<String>, _>("description"),
-            after_rows.get::<Option<String>, _>("rating"),
-            after_rows.get::<Option<i32>, _>("review_count"),
-            after_rows.get::<Option<String>, _>("social_urls"),
-            after_rows.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
-        );
+        let after = business_state(&pool, b3).await;
         assert_eq!(
             after, before,
             "b-3 unchanged: no field written, updated_at untouched"
@@ -1240,22 +1251,22 @@ mod tests {
     // production 2s minimum, proving the injected limiter is in the loop.
     #[tokio::test]
     async fn test_enrich_fetch_goes_through_rate_limiter() {
-        let _guard = AC3_STUB_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = AC3_STUB_LOCK.lock().await;
         fixture_proxy_port();
-        let mut engine = EnrichmentEngine::with_limiter(RateLimiter::with_config(
-            RateLimiterConfig {
+        let mut engine = EnrichmentEngine::with_limiter(
+            "http://searxng.test",
+            RateLimiter::with_config(RateLimiterConfig {
                 min_delay_ms: 100,
                 max_jitter_ms: 0,
-            },
-        ));
-        let url = "http://maps.google.test/maps/place.json";
+            }),
+        );
         let t0 = std::time::Instant::now();
         for _ in 0..3 {
-            let raw = engine
-                .fetch_place_json(url)
+            let place = engine
+                .fetch_place_data("ac limiter business", "")
                 .await
-                .expect("fetch succeeds via the guarded path");
-            assert!(!raw.is_empty(), "fixture stub answers");
+                .expect("lookup succeeds via the guarded path");
+            assert!(place.is_some(), "fixture stub answers");
         }
         let elapsed = t0.elapsed();
         assert!(
@@ -1272,7 +1283,7 @@ mod tests {
     // through the engine's single guarded path (robots check + rate
     // limiter + UA rotation — no direct reqwest call bypasses them). A
     // zero-delay injected limiter keeps the run fast; the stub's distinct
-    // /ac3- path set proves one fetch per business.
+    // /search?q=AC3+Enrich+500 path set proves one lookup per business.
     #[tokio::test]
     async fn test_enrich_500_run_all_fetches_go_through_guarded_path() {
         let pool = match test_pool().await {
@@ -1282,7 +1293,7 @@ mod tests {
                 return;
             }
         };
-        let _guard = AC3_STUB_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = AC3_STUB_LOCK.lock().await;
         fixture_proxy_port();
         cleanup_family(&pool, "AC3 Enrich 500").await;
 
@@ -1292,12 +1303,13 @@ mod tests {
         .await;
         assert_eq!(ids.len(), 500, "500 eligible businesses seeded");
 
-        let mut engine = EnrichmentEngine::with_limiter(RateLimiter::with_config(
-            RateLimiterConfig {
+        let mut engine = EnrichmentEngine::with_limiter(
+            "http://searxng.test",
+            RateLimiter::with_config(RateLimiterConfig {
                 min_delay_ms: 0,
                 max_jitter_ms: 0,
-            },
-        ));
+            }),
+        );
         let results = engine.enrich_batch(&pool, &ids, false).await;
 
         let failed: Vec<_> = results.iter().filter(|r| r.error.is_some()).collect();
@@ -1306,9 +1318,12 @@ mod tests {
             failed.is_empty(),
             "500-business run must complete without per-business errors: {failed:?}"
         );
-        let paths = AC3_STUB_PATHS.lock().unwrap();
+        let paths_len = {
+            let paths = AC3_STUB_PATHS.lock();
+            paths.len()
+        };
         assert_eq!(
-            paths.len(),
+            paths_len,
             500,
             "one distinct fetch per business, all through the guarded engine path"
         );

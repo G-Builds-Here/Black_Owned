@@ -11,10 +11,16 @@ pub struct PostgresImporter {
 }
 
 impl PostgresImporter {
+    #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
+    /// Insert a pending scrape job; returns the new job id.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Postgres insert fails.
     pub async fn create_scrape_job(
         &self,
         source: &str,
@@ -22,9 +28,9 @@ impl PostgresImporter {
         location: &str,
     ) -> anyhow::Result<Uuid> {
         let row = sqlx::query(
-            r#"INSERT INTO scrape_jobs (source, query, location, status, created_at, updated_at)
+            r"INSERT INTO scrape_jobs (source, query, location, status, created_at, updated_at)
                VALUES ($1, $2, $3, 'pending', now(), now())
-               RETURNING id"#,
+               RETURNING id",
         )
         .bind(source)
         .bind(query)
@@ -34,11 +40,16 @@ impl PostgresImporter {
         Ok(row.get::<Uuid, _>("id"))
     }
 
+    /// Mark the job running.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Postgres update fails.
     pub async fn mark_running(&self, job_id: Uuid) -> anyhow::Result<()> {
         sqlx::query(
-            r#"UPDATE scrape_jobs
+            r"UPDATE scrape_jobs
                SET status = 'running', started_at = now(), updated_at = now()
-               WHERE id = $1"#,
+               WHERE id = $1",
         )
         .bind(job_id)
         .execute(&self.pool)
@@ -46,11 +57,16 @@ impl PostgresImporter {
         Ok(())
     }
 
+    /// Mark the job completed and record the business count.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Postgres update fails.
     pub async fn complete(&self, job_id: Uuid, business_count: i32) -> anyhow::Result<()> {
         sqlx::query(
-            r#"UPDATE scrape_jobs
+            r"UPDATE scrape_jobs
                SET status = 'completed', business_count = $2, completed_at = now(), updated_at = now()
-               WHERE id = $1"#,
+               WHERE id = $1",
         )
         .bind(job_id)
         .bind(business_count)
@@ -59,11 +75,16 @@ impl PostgresImporter {
         Ok(())
     }
 
+    /// Mark the job failed with an error message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Postgres update fails.
     pub async fn fail(&self, job_id: Uuid, error_message: &str) -> anyhow::Result<()> {
         sqlx::query(
-            r#"UPDATE scrape_jobs
+            r"UPDATE scrape_jobs
                SET status = 'failed', error_message = $2, completed_at = now(), updated_at = now()
-               WHERE id = $1"#,
+               WHERE id = $1",
         )
         .bind(job_id)
         .bind(error_message)
@@ -83,10 +104,10 @@ impl PostgresImporter {
         let mut inserted = 0usize;
         for record in records {
             match sqlx::query(
-                r#"INSERT INTO scraped_businesses
+                r"INSERT INTO scraped_businesses
                    (scrape_job_id, source, name, address, phone, website, category,
                     rating, review_count, lat, lng, source_id, created_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())"#,
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())",
             )
             .bind(job_id)
             .bind(source)
@@ -103,7 +124,7 @@ impl PostgresImporter {
             .execute(&self.pool)
             .await
             {
-                Ok(result) => inserted += result.rows_affected() as usize,
+                Ok(result) => inserted = inserted.saturating_add(usize::try_from(result.rows_affected()).unwrap_or(usize::MAX)),
                 Err(e) => tracing::warn!(
                     source_id = %record.source_id,
                     error = %e,

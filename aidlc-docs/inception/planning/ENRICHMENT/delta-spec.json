@@ -8,7 +8,7 @@
               "id": "enrichment-engine",
               "name": "EnrichmentEngine",
               "c4_type": "Component",
-              "description": "Fetches the Google Maps place JSON for a business's source_id (share-link URL), parses name/phone/website/description/rating/review_count/photos/social, and applies fill-empty UPDATEs to businesses; sets rating_source='google'. Reuses robots.rs, rate_limiter.rs, user_agent_rotator.rs. Idempotent and rerunnable.",
+              "description": "Gates on the business's google_maps source row (scraped_businesses joined by name; the share-link source_id is the eligibility gate only, never fetched), looks the business up on SearXNG (config SEARXNG_URL, query = name + location, top result: website = result URL, description = snippet, phone = ETL US-phone regex on the snippet), and applies fill-empty UPDATEs to businesses. SearXNG supplies no rating/review_count/social/photos, so those stay untouched. Reuses robots.rs, rate_limiter.rs, user_agent_rotator.rs. Idempotent and rerunnable.",
               "technology": "Rust module (reqwest + sqlx 0.7)",
               "path": "bw-scraper/src/enrichment.rs"
             },

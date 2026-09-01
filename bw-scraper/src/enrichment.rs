@@ -1,12 +1,15 @@
-//! Google place-JSON enrichment engine (fill-empty semantics).
+//! `SearXNG` enrichment engine (fill-empty semantics).
 //!
-//! Enrichment resolves a business's Google share-link source (via
+//! Enrichment gates on a business's `google_maps` source row (via
 //! `scraped_businesses`, matched by name — the same join convention
-//! migration 019 used to backfill phones), fetches the place JSON, and
-//! applies fill-empty updates to the `businesses` row: a field is only
-//! written when it is currently empty. Existing values are never
-//! clobbered; the per-business report lists what was applied, what was
-//! skipped because it already had a value, and any error.
+//! migration 019 used to backfill phones), looks the business up on
+//! `SearXNG` by name + location, and applies fill-empty updates to the
+//! `businesses` row: a field is only written when it is currently
+//! empty. The top `SearXNG` result supplies `website` (result URL),
+//! `description` (snippet), and `phone` (US phone extracted from the
+//! snippet with the ETL's regex). Existing values are never clobbered;
+//! the per-business report lists what was applied, what was skipped
+//! because it already had a value, and any error.
 
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -17,14 +20,18 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
+use crate::etl::extract_us_phone;
 use crate::rate_limiter::RateLimiter;
 use crate::robots::RobotsChecker;
+use crate::searxng::SearxngResponse;
 use crate::user_agent_rotator::UserAgentRotator;
 
-/// Parsed enrichment payload from a Google share-link place JSON.
+/// Enrichment payload for one business.
 ///
-/// Fields the document does not carry stay `None` rather than being
-/// fabricated.
+/// The `SearXNG` lookup populates `website` (top result URL),
+/// `description` (top result snippet), and `phone` (US phone extracted
+/// from the snippet). Fields the source does not carry stay `None`
+/// rather than being fabricated.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PlaceData {
     pub phone: Option<String>,
@@ -50,6 +57,7 @@ pub struct SocialUrl {
 pub struct BusinessRow {
     pub id: Uuid,
     pub name: String,
+    pub location: Option<String>,
     pub phone: Option<String>,
     pub website: Option<String>,
     pub description: Option<String>,
@@ -111,6 +119,7 @@ pub struct EnrichResult {
 /// Whether a `scraped_businesses` row is an eligible enrichment source:
 /// source `google_maps` with a `source_id` that is a Google Maps URL
 /// (maps host, /maps path, or cid= query on a google domain).
+#[must_use]
 pub fn is_google_share_link(source: &str, source_id: &str) -> bool {
     if !source.eq_ignore_ascii_case("google_maps") {
         return false;
@@ -119,7 +128,7 @@ pub fn is_google_share_link(source: &str, source_id: &str) -> bool {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return false;
     }
-    let after_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or("");
+    let after_scheme = url.split_once("://").map_or("", |(_, rest)| rest);
     let host = after_scheme.split('/').next().unwrap_or("").to_lowercase();
     if !host.contains("google.") {
         return false;
@@ -133,6 +142,11 @@ pub fn is_google_share_link(source: &str, source_id: &str) -> bool {
 ///
 /// Accepts the flat share-link JSON shape (see
 /// `tests/fixtures/place-json/`); missing or empty fields stay `None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the document is not valid JSON or is not a
+    /// JSON object.
 pub fn parse_place_json(raw: &str) -> Result<PlaceData, String> {
     let value: serde_json::Value =
         serde_json::from_str(raw).map_err(|e| format!("parse failed: {e}"))?;
@@ -270,6 +284,9 @@ pub enum PhotoOutcome {
 /// Non-web schemes (`mailto:`, `tel:`, `javascript:`, `data:`) and
 /// bare in-page fragments are ignored. Relative links resolve against
 /// `page_url`.
+    // `path` is lowercased before comparison, so the extension check is
+    // case-insensitive; the lint cannot track that.
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
 pub fn find_menu_url(html: &str, page_url: &str) -> Option<String> {
     static A_HREF: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r#"(?i)<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))"#)
@@ -360,8 +377,14 @@ fn resolve_link(base: &str, href: &str) -> Option<String> {
 /// Build the fill-empty plan: which fields of `place` to write onto
 /// `row`, and which to skip because the row already has a value.
 ///
-/// Empty means: text fields NULL/empty string, rating/review_count
-/// NULL/0, social_urls NULL.
+/// Empty means: text fields NULL/empty string, `rating/review_count`
+/// NULL/0, `social_urls` NULL.
+#[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if a `SocialUrl` value cannot be serialized to JSON
+    /// (cannot occur).
 pub fn plan_fill_empty(row: &BusinessRow, place: &PlaceData) -> FillPlan {
     let mut apply: Vec<PlannedField> = Vec::new();
     let mut skipped: Vec<&'static str> = Vec::new();
@@ -370,7 +393,7 @@ pub fn plan_fill_empty(row: &BusinessRow, place: &PlaceData) -> FillPlan {
                          current: &Option<String>,
                          value: &Option<String>| {
         if let Some(value) = value.as_ref().filter(|v| !v.trim().is_empty()) {
-            if current.as_deref().map_or(true, str::is_empty) {
+            if current.as_deref().is_none_or(str::is_empty) {
                 apply.push(PlannedField {
                     field,
                     value: FieldValue::Text(value.clone()),
@@ -386,7 +409,7 @@ pub fn plan_fill_empty(row: &BusinessRow, place: &PlaceData) -> FillPlan {
     consider_text("description", &row.description, &place.description);
 
     if let Some(rating) = place.rating.filter(|v| *v > 0.0) {
-        if row.rating.map_or(true, |v| v <= 0.0) {
+        if row.rating.is_none_or(|v| v <= 0.0) {
             apply.push(PlannedField {
                 field: "rating",
                 value: FieldValue::Rating(rating),
@@ -397,7 +420,7 @@ pub fn plan_fill_empty(row: &BusinessRow, place: &PlaceData) -> FillPlan {
     }
 
     if let Some(count) = place.review_count.filter(|v| *v > 0) {
-        if row.review_count.map_or(true, |v| v <= 0) {
+        if row.review_count.is_none_or(|v| v <= 0) {
             apply.push(PlannedField {
                 field: "review_count",
                 value: FieldValue::Count(count),
@@ -423,17 +446,20 @@ pub fn plan_fill_empty(row: &BusinessRow, place: &PlaceData) -> FillPlan {
     FillPlan { apply, skipped }
 }
 
-/// Resolve the business's Google share-link source.
+/// Resolve the business's `google_maps` source row — the eligibility
+/// gate for enrichment.
 ///
-/// `businesses` has no source column; the share-link lives on
+/// `businesses` has no source column; the source row lives on
 /// `scraped_businesses` and is matched by name (the join convention
-/// migration 019 used to backfill phones).
+/// migration 019 used to backfill phones). The share-link `source_id`
+/// is never fetched; the `SearXNG` lookup is keyed on the business name
+/// (+ location). It gates eligibility via `is_google_share_link`.
 async fn resolve_source(
     pool: &PgPool,
     business_id: Uuid,
 ) -> Result<(String, String, String), String> {
     let row = sqlx::query(
-        r#"SELECT b.name,
+        r"SELECT b.name,
                   s.source,
                   s.source_id
            FROM businesses b
@@ -441,7 +467,7 @@ async fn resolve_source(
              ON s.name = b.name AND s.source = 'google_maps'
            WHERE b.id = $1
            ORDER BY s.created_at DESC NULLS LAST
-           LIMIT 1"#,
+           LIMIT 1",
     )
     .bind(business_id)
     .fetch_optional(pool)
@@ -460,8 +486,9 @@ async fn resolve_source(
 /// Load the `businesses` row fields enrichment may write.
 async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, String> {
     let row = sqlx::query(
-        r#"SELECT id,
+        r"SELECT id,
                   name,
+                  location,
                   phone,
                   website,
                   description,
@@ -471,7 +498,7 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
                   image_url,
                   social_urls::text AS social_urls
            FROM businesses
-           WHERE id = $1"#,
+           WHERE id = $1",
     )
     .bind(business_id)
     .fetch_optional(pool)
@@ -489,6 +516,7 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
     Ok(BusinessRow {
         id: row.get::<Uuid, _>("id"),
         name: row.get::<String, _>("name"),
+        location: row.get::<Option<String>, _>("location"),
         phone: row.get::<Option<String>, _>("phone"),
         website: row.get::<Option<String>, _>("website"),
         description: row.get::<Option<String>, _>("description"),
@@ -507,6 +535,11 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
 /// instead of clobbering: the affected-rows count decides applied vs
 /// skipped. With `dry_run` the plan is reported as the fields that would
 /// apply and zero UPDATE statements are issued.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when loading the business row or a field UPDATE
+    /// fails.
 pub async fn apply_fill_empty(
     pool: &PgPool,
     business_id: Uuid,
@@ -624,20 +657,25 @@ fn previous_value(row: &BusinessRow, field: &str) -> Option<String> {
     }
 }
 
-/// Enrichment engine: owns the outbound HTTP guards for place-JSON fetches.
+/// Enrichment engine: owns the outbound HTTP guards for `SearXNG` lookups.
 pub struct EnrichmentEngine {
     http: Client,
     limiter: RateLimiter,
     rotator: UserAgentRotator,
     robots: RobotsChecker,
+    /// `SearXNG` base URL (e.g. `http://192.168.68.50:8888`); lookups hit
+    /// `{base}/search?q=...&format=json`.
+    searxng_base: String,
 }
 
 /// Body cap for the homepage menu-discovery fetch (500 KB).
 const HOMEPAGE_BODY_CAP: usize = 500 * 1024;
 
 impl EnrichmentEngine {
-    pub fn new() -> Self {
-        Self::with_limiter(RateLimiter::new())
+    /// Production constructor: default limiter.
+    #[must_use]
+    pub fn new(searxng_base: &str) -> Self {
+        Self::with_limiter(searxng_base, RateLimiter::new())
     }
 
     /// Build the engine with an injected rate limiter. Production uses
@@ -645,7 +683,13 @@ impl EnrichmentEngine {
     /// limiter so a bounded batch can run without the production
     /// per-fetch delay, and so tests can prove every external fetch
     /// waits on the limiter.
-    pub fn with_limiter(limiter: RateLimiter) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if the reqwest client cannot be built (should not occur with
+    /// default settings).
+    #[must_use]
+    pub fn with_limiter(searxng_base: &str, limiter: RateLimiter) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
             .build()
@@ -654,38 +698,83 @@ impl EnrichmentEngine {
             http,
             limiter,
             rotator: UserAgentRotator::new(),
-            robots: RobotsChecker::new("BlackOwnedBot"),
+            robots: RobotsChecker::new(),
+            searxng_base: searxng_base.trim_end_matches('/').to_string(),
         }
     }
 
-    /// Fetch the place JSON for a share-link URL (robots + rate-limit +
-    /// UA-rotation guarded).
-    pub async fn fetch_place_json(&mut self, url: &str) -> Result<String, String> {
-        if !self.robots.is_allowed(url) {
-            return Err("fetch failed: blocked by robots.txt".to_string());
+    /// Look a business up on `SearXNG` (robots + rate-limit +
+    /// UA-rotation guarded — the engine's single guarded path for
+    /// outbound enrichment fetches). `Ok(None)` means the lookup returned
+    /// no results: the caller reports "no enrichment source". The top
+    /// result supplies `website` (result URL), `description` (snippet),
+    /// and `phone` (US phone extracted from the snippet with the ETL
+    /// regex).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the robots check blocks the lookup, the
+    /// request fails, the instance answers a non-2xx status, or the
+    /// body is not valid `SearXNG` JSON.
+    pub async fn fetch_place_data(&mut self, name: &str, location: &str) -> Result<Option<PlaceData>, String> {
+        let mut query = name.trim().to_string();
+        let loc = location.trim();
+        if !loc.is_empty() {
+            if !query.is_empty() {
+                query.push(' ');
+            }
+            query.push_str(loc);
+        }
+        if query.is_empty() {
+            return Ok(None);
+        }
+
+        let url = format!("{}/search", self.searxng_base);
+        if !self.robots.is_allowed(&url) {
+            return Err("searxng lookup blocked by robots.txt".to_string());
         }
         self.limiter.wait_before_request().await;
         let user_agent = self.rotator.get_next_user_agent();
         let response = self
             .http
-            .get(url)
+            .get(&url)
+            .query(&[("q", query.as_str()), ("format", "json")])
             .header("User-Agent", user_agent)
             .header("Accept", "application/json")
             .send()
             .await
-            .map_err(|e| format!("fetch failed: {e}"))?;
+            .map_err(|e| format!("searxng lookup failed: {e}"))?;
         let status = response.status();
         if !status.is_success() {
-            return Err(format!("fetch failed: HTTP {}", status.as_u16()));
+            return Err(format!("searxng lookup failed: HTTP {}", status.as_u16()));
         }
-        response.text().await.map_err(|e| format!("fetch failed: {e}"))
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("searxng lookup failed: {e}"))?;
+        let parsed: SearxngResponse =
+            serde_json::from_str(&body).map_err(|e| format!("searxng lookup failed: {e}"))?;
+
+        let Some(top) = parsed.results.into_iter().next() else {
+            return Ok(None);
+        };
+        Ok(Some(PlaceData {
+            phone: top.content.as_deref().and_then(extract_us_phone),
+            website: (!top.url.trim().is_empty()).then(|| top.url.clone()),
+            description: top.content.filter(|content| !content.trim().is_empty()),
+            rating: None,
+            review_count: None,
+            social_urls: None,
+            photos: None,
+        }))
     }
 
-    /// Enrich one business end-to-end: resolve its Google share-link,
-    /// fetch the place JSON, apply fill-empty updates, then run the
-    /// menu-discovery and photo-selection passes against the pre-run
-    /// row (values written by this run are picked up on the next run).
-    /// `dry_run` reports the fields that would apply without writing.
+    /// Enrich one business end-to-end: gate on its `google_maps` source
+    /// row, look the business up on `SearXNG` (query = name + location),
+    /// apply fill-empty updates, then run the menu-discovery and
+    /// photo-selection passes against the pre-run row (values written by
+    /// this run are picked up on the next run). `dry_run` reports the
+    /// fields that would apply without writing.
     pub async fn enrich(&mut self, pool: &PgPool, business_id: Uuid, dry_run: bool) -> EnrichResult {
         let with_error = |name: String, error: String| EnrichResult {
             business_id,
@@ -699,7 +788,7 @@ impl EnrichmentEngine {
 
         // Pre-run snapshot: the menu pass judges on website/menu_url as
         // they stood before this run, not on values written by the
-        // place-JSON pass below.
+        // SearXNG pass below.
         let pre_run_row = match load_business(pool, business_id).await {
             Ok(row) => row,
             Err(e) => return with_error(String::new(), e),
@@ -712,7 +801,12 @@ impl EnrichmentEngine {
 
         let mut place: Option<PlaceData> = None;
 
-        let mut result = if !is_google_share_link(&source, &source_id) {
+        let mut result = if is_google_share_link(&source, &source_id) {
+            let location = pre_run_row.location.clone().unwrap_or_default();
+            self.lookup_and_apply(pool, business_id, &name, &location, &mut place, dry_run)
+                .await
+                .unwrap_or_else(|e| with_error(name, e))
+        } else {
             EnrichResult {
                 business_id,
                 business_name: name,
@@ -721,30 +815,6 @@ impl EnrichmentEngine {
                 notes: Vec::new(),
                 reason: Some("no enrichment source"),
                 error: None,
-            }
-        } else {
-            let raw = match self.fetch_place_json(&source_id).await {
-                Ok(raw) => raw,
-                Err(e) => return with_error(name, e),
-            };
-
-            let parsed = match parse_place_json(&raw) {
-                Ok(parsed) => parsed,
-                Err(e) => return with_error(name, e),
-            };
-            place = Some(parsed.clone());
-
-            match apply_fill_empty(pool, business_id, &parsed, dry_run).await {
-                Ok((applied, skipped)) => EnrichResult {
-                    business_id,
-                    business_name: name,
-                    applied,
-                    skipped,
-                    notes: Vec::new(),
-                    reason: None,
-                    error: None,
-                },
-                Err(e) => return with_error(name, e),
             }
         };
 
@@ -802,6 +872,46 @@ impl EnrichmentEngine {
         result
     }
 
+    /// Look the business up on `SearXNG` and apply the fill-empty plan.
+    /// Stores the parsed result into `*place` so the photo pass can judge
+    /// on this run's URLs.
+    async fn lookup_and_apply(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        name: &str,
+        location: &str,
+        place: &mut Option<PlaceData>,
+        dry_run: bool,
+    ) -> Result<EnrichResult, String> {
+        let looked_up = self.fetch_place_data(name, location).await?;
+        match looked_up {
+            Some(parsed) => {
+                *place = Some(parsed.clone());
+                let (applied, skipped) =
+                    apply_fill_empty(pool, business_id, &parsed, dry_run).await?;
+                Ok(EnrichResult {
+                    business_id,
+                    business_name: name.to_string(),
+                    applied,
+                    skipped,
+                    notes: Vec::new(),
+                    reason: None,
+                    error: None,
+                })
+            }
+            None => Ok(EnrichResult {
+                business_id,
+                business_name: name.to_string(),
+                applied: Vec::new(),
+                skipped: Vec::new(),
+                notes: Vec::new(),
+                reason: Some("no enrichment source"),
+                error: None,
+            }),
+        }
+    }
+
     /// Enrich a batch of businesses. Each business is processed
     /// independently; a per-business failure is recorded on that entry's
     /// `error` and the remaining businesses still process to completion.
@@ -818,9 +928,15 @@ impl EnrichmentEngine {
         results
     }
 
-    /// Fetch a business homepage for menu discovery: robots + rate-limit
-    /// + UA-rotation guarded, 10 s timeout, 500 KB body cap. Depth 1 —
+    /// Fetch a business homepage for menu discovery (robots check, rate
+    /// limiting, UA rotation; 10 s timeout, 500 KB body cap). Depth 1:
     /// only the homepage itself, no sub-page crawling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the robots check blocks the URL, the request
+    /// fails or exceeds the body cap, or the server answers a non-2xx
+    /// status.
     pub async fn fetch_homepage(&mut self, url: &str) -> Result<String, String> {
         if !self.robots.is_allowed(url) {
             return Err("homepage fetch blocked by robots.txt".to_string());
@@ -860,6 +976,12 @@ impl EnrichmentEngine {
     /// Passes only when the server answers a success status with an
     /// `image/*` content type. Google photo URLs are often time-limited,
     /// so a failing check means skip, not retry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the robots check blocks the URL, the HEAD
+    /// request fails, the status is not success, or the content type is
+    /// not an image.
     pub async fn head_photo(&mut self, url: &str) -> Result<(), String> {
         if !self.robots.is_allowed(url) {
             return Err("photo head check blocked by robots.txt".to_string());
@@ -878,15 +1000,12 @@ impl EnrichmentEngine {
         if !status.is_success() {
             return Err(format!("photo head check failed: HTTP {}", status.as_u16()));
         }
-        let content_type = match response
+        let Some(content_type) = response
             .headers()
             .get("content-type")
             .and_then(|value| value.to_str().ok())
-        {
-            Some(content_type) => content_type,
-            None => {
-                return Err("photo head check failed: no content type".to_string());
-            }
+        else {
+            return Err("photo head check failed: no content type".to_string());
         };
         if !content_type.to_ascii_lowercase().starts_with("image/") {
             return Err(format!(
@@ -899,8 +1018,12 @@ impl EnrichmentEngine {
     /// Menu-discovery pass for one business (depth 1: homepage only).
     ///
     /// Runs only when the row has a non-empty website and an empty
-    /// menu_url (fill-empty: an existing menu_url is never overwritten).
-    /// A fetch failure leaves menu_url unchanged; the run keeps going.
+    /// `menu_url` (fill-empty: an existing `menu_url` is never overwritten).
+    /// A fetch failure leaves `menu_url` unchanged; the run keeps going.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when loading the business row fails.
     pub async fn discover_menu(
         &mut self,
         pool: &PgPool,
@@ -921,11 +1044,10 @@ impl EnrichmentEngine {
         row: &BusinessRow,
         dry_run: bool,
     ) -> Result<MenuOutcome, String> {
-        let website = match row.website.clone().filter(|v| !v.trim().is_empty()) {
-            Some(website) => website,
-            None => return Ok(MenuOutcome::NotApplicable),
+        let Some(website) = row.website.clone().filter(|v| !v.trim().is_empty()) else {
+            return Ok(MenuOutcome::NotApplicable);
         };
-        if row.menu_url.clone().filter(|v| !v.trim().is_empty()).is_some() {
+        if row.menu_url.clone().as_ref().is_some_and(|v| !v.trim().is_empty()) {
             return Ok(MenuOutcome::NotApplicable);
         }
 
@@ -951,9 +1073,9 @@ impl EnrichmentEngine {
     /// Photo-selection pass against a pre-loaded row and a parsed place.
     ///
     /// Runs only when the place JSON carries a photos array and the
-    /// row's image_url is empty (fill-empty: an existing image_url is
+    /// row's `image_url` is empty (fill-empty: an existing `image_url` is
     /// never overwritten). The first photo URL is HEAD-checked; a failing
-    /// check leaves image_url unchanged.
+    /// check leaves `image_url` unchanged.
     async fn discover_photo_on_place(
         &mut self,
         pool: &PgPool,
@@ -962,7 +1084,7 @@ impl EnrichmentEngine {
         place: &PlaceData,
         dry_run: bool,
     ) -> Result<PhotoOutcome, String> {
-        if row.image_url.clone().filter(|v| !v.trim().is_empty()).is_some() {
+        if row.image_url.clone().as_ref().is_some_and(|v| !v.trim().is_empty()) {
             return Ok(PhotoOutcome::NotApplicable);
         }
         let photo = match place.photos.as_ref().and_then(|v| v.first()) {
@@ -1002,6 +1124,26 @@ mod tests {
     const FIXTURE_PLACE_JSON: &str =
         include_str!("../tests/fixtures/place-json/southern_kitchen.json");
 
+    /// `SearXNG` search-response fixture: one result whose URL is the website
+    /// and whose snippet carries the description and a US phone number.
+    const FIXTURE_SEARXNG_RESULT: &str = r#"{
+        "query": "ac2 fixture",
+        "number_of_results": 1,
+        "results": [
+            {
+                "url": "https://ac2-fixture.example/",
+                "title": "AC2 Fixture Kitchen",
+                "content": "AC2 fixture kitchen and bar. Call (404) 555-0142.",
+                "engine": "searxng",
+                "score": 1.0
+            }
+        ],
+        "answers": [],
+        "infoboxes": [],
+        "suggestions": [],
+        "articles": []
+    }"#;
+
     fn fixture_place() -> PlaceData {
         parse_place_json(FIXTURE_PLACE_JSON).expect("fixture must parse")
     }
@@ -1010,6 +1152,7 @@ mod tests {
         BusinessRow {
             id: Uuid::new_v4(),
             name: name.to_string(),
+            location: None,
             phone: None,
             website: None,
             description: None,
@@ -1124,13 +1267,13 @@ mod tests {
         let plan = plan_fill_empty(&row, &place);
 
         assert!(
-            plan.skipped.iter().any(|f| *f == "phone"),
+            plan.skipped.contains(&"phone"),
             "pre-set phone must be reported skipped: skipped={:?} apply={:?}",
             plan.skipped,
             plan.apply
         );
-        assert!(plan.skipped.iter().any(|f| *f == "rating"));
-        assert!(plan.skipped.iter().any(|f| *f == "review_count"));
+        assert!(plan.skipped.contains(&"rating"));
+        assert!(plan.skipped.contains(&"review_count"));
         assert!(
             !plan.apply.iter().any(|f| f.field == "phone"),
             "pre-set phone must not be planned for write"
@@ -1158,6 +1301,116 @@ mod tests {
             .map_err(|e| format!("connect failed: {e}"))
     }
 
+    /// Seed an admin user with a unique email; returns the user id.
+    async fn seed_user(pool: &PgPool, email_prefix: &str, display_name: &str) -> Uuid {
+        let email = format!("{email_prefix}{}@example.com", Uuid::new_v4());
+        let row = sqlx::query(
+            "INSERT INTO users (email, password_hash, name, role)
+             VALUES ($1, 'test', $2, 'admin')
+             RETURNING id",
+        )
+        .bind(&email)
+        .bind(display_name)
+        .fetch_one(pool)
+        .await
+        .expect("seed user inserts");
+        row.get::<Uuid, _>("id")
+    }
+
+    /// Seed a scrape job; returns the job id.
+    async fn seed_scrape_job(pool: &PgPool, query: &str) -> Uuid {
+        let row = sqlx::query(
+            "INSERT INTO scrape_jobs (source, query, location)
+             VALUES ('ac2-test', $1, 'Test')
+             RETURNING id",
+        )
+        .bind(query)
+        .fetch_one(pool)
+        .await
+        .expect("seed scrape job");
+        row.get::<Uuid, _>("id")
+    }
+
+    /// Seed an empty test business; returns the business id.
+    async fn seed_business(pool: &PgPool, owner_id: Uuid, name: &str, phone: Option<&str>) -> Uuid {
+        let row = sqlx::query(
+            r"INSERT INTO businesses
+               (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
+               VALUES ($1, $2, NULL, 'test-enrichment', 0, 0, $3, NULL, NULL)
+               RETURNING id",
+        )
+        .bind(owner_id)
+        .bind(name)
+        .bind(phone)
+        .fetch_one(pool)
+        .await
+        .expect("seed business inserts");
+        row.get::<Uuid, _>("id")
+    }
+
+    /// Seed a `google_maps` source row for `name` — the enrichment
+    /// eligibility gate.
+    async fn seed_google_source(pool: &PgPool, job_id: Uuid, name: &str, source_id: &str) {
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', $2, $3)",
+        )
+        .bind(job_id)
+        .bind(name)
+        .bind(source_id)
+        .execute(pool)
+        .await
+        .expect("seed source inserts");
+    }
+
+    /// Assert every content field of the row is still at its seeded empty state.
+    async fn assert_row_unenriched(pool: &PgPool, business_id: Uuid) {
+        let row = sqlx::query(
+            r"SELECT phone, website, description, rating::text, review_count,
+                      social_urls::text
+               FROM businesses WHERE id = $1",
+        )
+        .bind(business_id)
+        .fetch_one(pool)
+        .await
+        .expect("row reads back");
+        assert!(row.get::<Option<String>, _>("phone").is_none());
+        assert!(row.get::<Option<String>, _>("website").is_none());
+        assert!(row.get::<Option<String>, _>("description").is_none());
+        assert_eq!(
+            row.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
+            Some(0.0)
+        );
+        assert_eq!(row.get::<Option<i32>, _>("review_count"), Some(0));
+        assert!(row.get::<Option<String>, _>("social_urls").is_none());
+    }
+
+    /// Assert the AC2 `SearXNG` fixture landed: its three fields written,
+    /// `rating`/`review_count` untouched.
+    async fn assert_ac2_fixture_written(pool: &PgPool, business_id: Uuid) {
+        let row = sqlx::query(
+            "SELECT phone, website, description, rating::text, review_count FROM businesses WHERE id = $1",
+        )
+        .bind(business_id)
+        .fetch_one(pool)
+        .await
+        .expect("row reads back");
+        assert_eq!(row.get::<Option<String>, _>("phone").as_deref(), Some("(404) 555-0142"));
+        assert_eq!(
+            row.get::<Option<String>, _>("website").as_deref(),
+            Some("https://ac2-fixture.example/")
+        );
+        assert_eq!(
+            row.get::<Option<String>, _>("description").as_deref(),
+            Some("AC2 fixture kitchen and bar. Call (404) 555-0142.")
+        );
+        assert_eq!(
+            row.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
+            Some(0.0)
+        );
+        assert_eq!(row.get::<Option<i32>, _>("review_count"), Some(0));
+    }
+
     #[tokio::test]
     async fn test_apply_fill_empty_writes_only_empty_fields() {
         let pool = match test_pool().await {
@@ -1178,33 +1431,9 @@ mod tests {
 
         let place = fixture_place();
 
-        let email = format!("enrich-test-{}@example.com", Uuid::new_v4());
-        let user_id: Uuid = {
-            let row = sqlx::query(
-                "INSERT INTO users (email, password_hash, name, role)
-                 VALUES ($1, 'test', 'Enrich Test', 'admin')
-                 RETURNING id",
-            )
-            .bind(&email)
-            .fetch_one(&pool)
-            .await
-            .expect("seed user inserts");
-            row.get::<Uuid, _>("id")
-        };
+        let user_id = seed_user(&pool, "enrich-test-", "Enrich Test").await;
 
-        let business_id: Uuid = {
-            let row = sqlx::query(
-                r#"INSERT INTO businesses
-                   (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
-                   VALUES ($1, 'Enrichment Test Business', NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
-                   RETURNING id"#,
-            )
-            .bind(user_id)
-            .fetch_one(&pool)
-            .await
-            .expect("seed business inserts");
-            row.get::<Uuid, _>("id")
-        };
+        let business_id = seed_business(&pool, user_id, "Enrichment Test Business", None).await;
 
         let (applied, skipped) =
             apply_fill_empty(&pool, business_id, &place, false)
@@ -1222,9 +1451,9 @@ mod tests {
         );
 
         let row = sqlx::query(
-            r#"SELECT phone, website, description, rating::text, review_count,
+            r"SELECT phone, website, description, rating::text, review_count,
                       rating_source, social_urls::text
-               FROM businesses WHERE id = $1"#,
+               FROM businesses WHERE id = $1",
         )
         .bind(business_id)
         .fetch_one(&pool)
@@ -1255,19 +1484,7 @@ mod tests {
 
         // Partial row: pre-set phone survives, empty description fills,
         // report lists phone as skipped.
-        let business_id2: Uuid = {
-            let row = sqlx::query(
-                r#"INSERT INTO businesses
-                   (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
-                   VALUES ($1, 'Enrichment Test Business 2', NULL, 'test-enrichment', 0, 0, '+15550001111', NULL, NULL)
-                   RETURNING id"#,
-            )
-            .bind(user_id)
-            .fetch_one(&pool)
-            .await
-            .expect("seed business 2 inserts");
-            row.get::<Uuid, _>("id")
-        };
+        let business_id2 = seed_business(&pool, user_id, "Enrichment Test Business 2", Some("+15550001111")).await;
 
         let place2 = PlaceData {
             phone: Some("+15559998888".to_string()),
@@ -1280,7 +1497,7 @@ mod tests {
                 .expect("apply succeeds for the partial row");
 
         assert!(
-            skipped2.iter().any(|f| *f == "phone"),
+            skipped2.contains(&"phone"),
             "pre-set phone must be reported skipped: {skipped2:?}"
         );
         assert!(applied2.iter().any(|a| a.field == "description"));
@@ -1326,7 +1543,8 @@ mod tests {
                 max_jitter_ms: 0,
             }),
             rotator: UserAgentRotator::new(),
-            robots: RobotsChecker::new("BlackOwnedBot"),
+            robots: RobotsChecker::new(),
+            searxng_base: "http://searxng.test".to_string(),
         }
     }
 
@@ -1339,22 +1557,20 @@ mod tests {
         let success_body = success_body.to_string();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
-                let mut stream = match stream {
-                    Ok(stream) => stream,
-                    Err(_) => break,
+                let Ok(mut stream) = stream else {
+                    break;
                 };
                 let mut head = Vec::new();
                 let mut buf = [0u8; 8192];
                 loop {
                     match stream.read(&mut buf) {
-                        Ok(0) => break,
+                        Ok(0) | Err(_) => break,
                         Ok(n) => {
                             head.extend_from_slice(&buf[..n]);
                             if head.windows(4).any(|window| window == b"\r\n\r\n") {
                                 break;
                             }
                         }
-                        Err(_) => break,
                     }
                 }
                 let request_line = String::from_utf8_lossy(&head)
@@ -1380,18 +1596,18 @@ mod tests {
         port
     }
 
-    // AC2: a non-success place-JSON fetch becomes the exact run-report error.
+    // AC2: a non-success SearXNG lookup becomes the exact run-report error.
     #[tokio::test]
-    async fn test_fetch_place_json_reports_http_500() {
-        let port = ac2_start_http_stub("/fail", "{}");
+    async fn test_fetch_place_data_reports_http_500() {
+        let port = ac2_start_http_stub("ac2-fail", "{}");
         let mut engine = ac2_test_engine(port);
 
         let err = engine
-            .fetch_place_json("http://maps.google.test/maps/fail?cid=ac2")
+            .fetch_place_data("ac2-fail business", "")
             .await
             .expect_err("HTTP 500 must be reported as an error");
 
-        assert_eq!(err, "fetch failed: HTTP 500");
+        assert_eq!(err, "searxng lookup failed: HTTP 500");
     }
 
     // AC2 scenario 1: a per-business HTTP failure is isolated in the run
@@ -1419,81 +1635,38 @@ mod tests {
         .await
         .expect("cleanup scraped businesses");
 
-        let stub_port = ac2_start_http_stub("/fail", FIXTURE_PLACE_JSON);
+        let stub_port = ac2_start_http_stub("Business+3", FIXTURE_SEARXNG_RESULT);
         let mut engine = ac2_test_engine(stub_port);
 
-        let email = format!("ac2-batch-{}@example.com", Uuid::new_v4());
-        let user_id: Uuid = {
-            let row = sqlx::query(
-                "INSERT INTO users (email, password_hash, name, role)
-                 VALUES ($1, 'test', 'AC2 Batch', 'admin')
-                 RETURNING id",
-            )
-            .bind(&email)
-            .fetch_one(&pool)
-            .await
-            .expect("seed user inserts");
-            row.get::<Uuid, _>("id")
-        };
+        let user_id = seed_user(&pool, "ac2-batch-", "AC2 Batch").await;
 
-        let job_id: Uuid = {
-            let row = sqlx::query(
-                "INSERT INTO scrape_jobs (source, query, location)
-                 VALUES ('ac2-test', 'ac2 batch', 'Test')
-                 RETURNING id",
-            )
-            .fetch_one(&pool)
-            .await
-            .expect("seed scrape job");
-            row.get::<Uuid, _>("id")
-        };
+        let job_id = seed_scrape_job(&pool, "ac2 batch").await;
 
-        let seed_business = |name: &str| {
-            let name = name.to_string();
-            let pool_ref = &pool;
-            async move {
-                let row = sqlx::query(
-                    r#"INSERT INTO businesses
-                       (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
-                       VALUES ($1, $2, NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
-                       RETURNING id"#,
-                )
-                .bind(user_id)
-                .bind(&name)
-                .fetch_one(pool_ref)
-                .await
-                .expect("seed business inserts");
-                row.get::<Uuid, _>("id")
-            }
-        };
-        let b1_id = seed_business("AC2 Batch Business 1").await;
-        let b3_id = seed_business("AC2 Batch Business 3").await;
-        let b5_id = seed_business("AC2 Batch Business 5").await;
+        let b1_id = seed_business(&pool, user_id, "AC2 Batch Business 1", None).await;
+        let b3_id = seed_business(&pool, user_id, "AC2 Batch Business 3", None).await;
+        let b5_id = seed_business(&pool, user_id, "AC2 Batch Business 5", None).await;
 
-        sqlx::query(
-            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
-             VALUES ($1, 'google_maps', 'AC2 Batch Business 1', 'http://maps.google.test/maps/ok?cid=ac2-one')",
+        seed_google_source(
+            &pool,
+            job_id,
+            "AC2 Batch Business 1",
+            "http://maps.google.test/maps/ok?cid=ac2-one",
         )
-        .bind(job_id)
-        .execute(&pool)
-        .await
-        .expect("seed b-1 source");
-        sqlx::query(
-            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
-             VALUES ($1, 'google_maps', 'AC2 Batch Business 3', 'http://maps.google.test/maps/fail?cid=ac2-three')",
+        .await;
+        seed_google_source(
+            &pool,
+            job_id,
+            "AC2 Batch Business 3",
+            "http://maps.google.test/maps/fail?cid=ac2-three",
         )
-        .bind(job_id)
-        .execute(&pool)
-        .await
-        .expect("seed b-3 source");
-        sqlx::query(
-            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
-             VALUES ($1, 'google_maps', 'AC2 Batch Business 5', 'http://maps.google.test/maps/ok?cid=ac2-five')",
+        .await;
+        seed_google_source(
+            &pool,
+            job_id,
+            "AC2 Batch Business 5",
+            "http://maps.google.test/maps/ok?cid=ac2-five",
         )
-        .bind(job_id)
-        .execute(&pool)
-        .await
-        .expect("seed b-5 source");
+        .await;
 
         // b-3 fails first; b-1 and b-5 must still process to completion.
         let report = engine.enrich_batch(&pool, &[b3_id, b1_id, b5_id], false).await;
@@ -1502,56 +1675,35 @@ mod tests {
 
         let failed = &report[0];
         assert_eq!(failed.business_id, b3_id);
-        assert_eq!(failed.error.as_deref(), Some("fetch failed: HTTP 500"));
+        assert_eq!(failed.error.as_deref(), Some("searxng lookup failed: HTTP 500"));
         assert!(failed.applied.is_empty(), "failed fetch must apply nothing");
 
         let b1 = &report[1];
         assert_eq!(b1.business_id, b1_id);
         assert!(b1.error.is_none(), "b-1 must not error even though b-3 failed first");
-        assert_eq!(b1.applied.len(), 6, "fully empty b-1 must apply every fixture field");
+        let b1_fields: Vec<&str> = b1.applied.iter().map(|a| a.field).collect();
+        assert_eq!(
+            b1_fields,
+            vec!["phone", "website", "description"],
+            "SearXNG fixture fills exactly its three fields: {b1_fields:?}"
+        );
 
         let b5 = &report[2];
         assert_eq!(b5.business_id, b5_id);
         assert!(b5.error.is_none(), "business after the failure must still process to completion");
-        assert_eq!(b5.applied.len(), 6, "fully empty b-5 must apply every fixture field");
+        let b5_fields: Vec<&str> = b5.applied.iter().map(|a| a.field).collect();
+        assert_eq!(
+            b5_fields,
+            vec!["phone", "website", "description"],
+            "SearXNG fixture fills exactly its three fields: {b5_fields:?}"
+        );
 
         // b-3's row is unchanged.
-        let unchanged = sqlx::query(
-            r#"SELECT phone, website, description, rating::text, review_count,
-                      social_urls::text
-               FROM businesses WHERE id = $1"#,
-        )
-        .bind(b3_id)
-        .fetch_one(&pool)
-        .await
-        .expect("b-3 row reads back");
-        assert!(unchanged.get::<Option<String>, _>("phone").is_none());
-        assert!(unchanged.get::<Option<String>, _>("website").is_none());
-        assert!(unchanged.get::<Option<String>, _>("description").is_none());
-        assert_eq!(
-            unchanged.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
-            Some(0.0)
-        );
-        assert_eq!(unchanged.get::<Option<i32>, _>("review_count"), Some(0));
-        assert!(unchanged.get::<Option<String>, _>("social_urls").is_none());
+        assert_row_unenriched(&pool, b3_id).await;
 
-        // b-1 actually landed on the row.
-        let enriched = sqlx::query(
-            "SELECT phone, rating::text, review_count FROM businesses WHERE id = $1",
-        )
-        .bind(b1_id)
-        .fetch_one(&pool)
-        .await
-        .expect("b-1 row reads back");
-        assert_eq!(
-            enriched.get::<Option<String>, _>("phone").as_deref(),
-            Some("+15551234567")
-        );
-        assert_eq!(
-            enriched.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
-            Some(4.5)
-        );
-        assert_eq!(enriched.get::<Option<i32>, _>("review_count"), Some(214));
+        // b-1 actually landed on the row (SearXNG fixture: phone,
+        // website, description — no rating/review_count).
+        assert_ac2_fixture_written(&pool, b1_id).await;
 
         // Cleanup: seeded rows only.
         sqlx::query("DELETE FROM businesses WHERE id = ANY($1)")
@@ -1597,47 +1749,13 @@ mod tests {
             .await
             .expect("cleanup scraped business");
 
-        let mut engine = EnrichmentEngine::new();
+        let mut engine = EnrichmentEngine::new("http://searxng.test");
 
-        let email = format!("ac2-nosrc-{}@example.com", Uuid::new_v4());
-        let user_id: Uuid = {
-            let row = sqlx::query(
-                "INSERT INTO users (email, password_hash, name, role)
-                 VALUES ($1, 'test', 'AC2 NoSource', 'admin')
-                 RETURNING id",
-            )
-            .bind(&email)
-            .fetch_one(&pool)
-            .await
-            .expect("seed user inserts");
-            row.get::<Uuid, _>("id")
-        };
+        let user_id = seed_user(&pool, "ac2-nosrc-", "AC2 NoSource").await;
 
-        let job_id: Uuid = {
-            let row = sqlx::query(
-                "INSERT INTO scrape_jobs (source, query, location)
-                 VALUES ('ac2-test', 'ac2 no source', 'Test')
-                 RETURNING id",
-            )
-            .fetch_one(&pool)
-            .await
-            .expect("seed scrape job");
-            row.get::<Uuid, _>("id")
-        };
+        let job_id = seed_scrape_job(&pool, "ac2 no source").await;
 
-        let b4_id: Uuid = {
-            let row = sqlx::query(
-                r#"INSERT INTO businesses
-                   (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
-                   VALUES ($1, 'AC2 Batch Business 4', NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
-                   RETURNING id"#,
-            )
-            .bind(user_id)
-            .fetch_one(&pool)
-            .await
-            .expect("seed business inserts");
-            row.get::<Uuid, _>("id")
-        };
+        let b4_id = seed_business(&pool, user_id, "AC2 Batch Business 4", None).await;
 
         sqlx::query(
             "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
@@ -1658,24 +1776,7 @@ mod tests {
         assert!(entry.error.is_none(), "ineligible source must not raise an error");
         assert!(entry.applied.is_empty());
 
-        let row = sqlx::query(
-            r#"SELECT phone, website, description, rating::text, review_count,
-                      social_urls::text
-               FROM businesses WHERE id = $1"#,
-        )
-        .bind(b4_id)
-        .fetch_one(&pool)
-        .await
-        .expect("b-4 row reads back");
-        assert!(row.get::<Option<String>, _>("phone").is_none());
-        assert!(row.get::<Option<String>, _>("website").is_none());
-        assert!(row.get::<Option<String>, _>("description").is_none());
-        assert_eq!(
-            row.get::<Option<String>, _>("rating").and_then(|raw| raw.parse::<f64>().ok()),
-            Some(0.0)
-        );
-        assert_eq!(row.get::<Option<i32>, _>("review_count"), Some(0));
-        assert!(row.get::<Option<String>, _>("social_urls").is_none());
+        assert_row_unenriched(&pool, b4_id).await;
 
         sqlx::query("DELETE FROM businesses WHERE id = $1")
             .bind(b4_id)
@@ -1722,7 +1823,7 @@ mod tests {
             "fully enriched row must produce no writes, got {:?}",
             plan.apply
         );
-        let skipped: Vec<&str> = plan.skipped.iter().copied().collect();
+        let skipped: Vec<&str> = plan.skipped;
         assert_eq!(
             skipped,
             vec!["phone", "website", "description", "rating", "review_count", "social"]
@@ -1737,10 +1838,10 @@ mod tests {
         business_id: Uuid,
     ) -> Vec<(String, Option<String>)> {
         let row = sqlx::query(
-            r#"SELECT phone, website, description, rating::text AS rating,
+            r"SELECT phone, website, description, rating::text AS rating,
                       review_count::text AS review_count, rating_source,
                       social_urls::text AS social_urls, updated_at::text AS updated_at
-               FROM businesses WHERE id = $1"#,
+               FROM businesses WHERE id = $1",
         )
         .bind(business_id)
         .fetch_one(pool)
@@ -1803,10 +1904,10 @@ mod tests {
 
         let business_id: Uuid = {
             let row = sqlx::query(
-                r#"INSERT INTO businesses
+                r"INSERT INTO businesses
                    (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
                    VALUES ($1, 'Enrichment Test Business 5', NULL, 'test-enrichment', 0, 0, NULL, NULL, NULL)
-                   RETURNING id"#,
+                   RETURNING id",
             )
             .bind(user_id)
             .fetch_one(&pool)
@@ -1861,8 +1962,7 @@ mod tests {
         let rating_source = after
             .iter()
             .find(|(k, _)| k == "rating_source")
-            .map(|(_, v)| v.clone())
-            .flatten();
+            .and_then(|(_, v)| v.clone());
         assert_eq!(
             rating_source.as_deref(),
             Some("google"),
@@ -1907,17 +2007,17 @@ mod tests {
 
     #[test]
     fn test_find_menu_url_matches_pdf_and_case_insensitive_paths() {
-        let html = r##"<html><body>
+        let html = r#"<html><body>
             <a href="/food-menu.PDF">PDF</a>
-        </body></html>"##;
+        </body></html>"#;
         assert_eq!(
             find_menu_url(html, "https://example.com").as_deref(),
             Some("https://example.com/food-menu.PDF")
         );
 
-        let html = r##"<html><body>
+        let html = r#"<html><body>
             <a href="/MENU-BOARD">Board</a>
-        </body></html>"##;
+        </body></html>"#;
         assert_eq!(
             find_menu_url(html, "https://example.com").as_deref(),
             Some("https://example.com/MENU-BOARD")
@@ -1926,10 +2026,10 @@ mod tests {
 
     #[test]
     fn test_find_menu_url_resolves_relative_and_dotted_paths() {
-        let html = r##"<html><body>
+        let html = r#"<html><body>
             <a href="../../menu">Up two levels</a>
             <a href="./sub/menu">Relative dir</a>
-        </body></html>"##;
+        </body></html>"#;
 
         // First match wins: the "../../menu" link resolves to /menu.
         assert_eq!(
@@ -1937,9 +2037,9 @@ mod tests {
             Some("https://example.com/menu")
         );
 
-        let html = r##"<html><body>
+        let html = r#"<html><body>
             <a href="./sub/menu">Relative dir</a>
-        </body></html>"##;
+        </body></html>"#;
         assert_eq!(
             find_menu_url(html, "https://example.com/pages/").as_deref(),
             Some("https://example.com/pages/sub/menu")
@@ -1964,10 +2064,10 @@ mod tests {
 
     #[test]
     fn test_find_menu_url_accepts_single_quoted_and_unquoted_hrefs() {
-        let html = r##"<html><body>
+        let html = r"<html><body>
             <a href='/menu-single'>Single</a>
             <a href=menu-unquoted>Unquoted</a>
-        </body></html>"##;
+        </body></html>";
 
         assert_eq!(
             find_menu_url(html, "https://example.com").as_deref(),
@@ -1977,9 +2077,9 @@ mod tests {
 
     #[test]
     fn test_find_menu_url_matching_is_path_based() {
-        let html = r##"<html><body>
+        let html = r#"<html><body>
             <a href="/menu?cat=food#top">Menu</a>
-        </body></html>"##;
+        </body></html>"#;
         assert_eq!(
             find_menu_url(html, "https://example.com").as_deref(),
             // Fragment is dropped from the stored URL; the query survives.
@@ -1988,14 +2088,14 @@ mod tests {
 
         // A "menu" that only lives in the query string is not a menu page:
         // matching is path-based.
-        let html = r##"<html><body>
+        let html = r#"<html><body>
             <a href="/about?highlight=menu">About</a>
-        </body></html>"##;
+        </body></html>"#;
         assert_eq!(find_menu_url(html, "https://example.com"), None);
     }
 
     /// Seed an admin user and a business row with the given website;
-    /// returns (user_id, business_id). No scraped_businesses row: the
+    /// returns (`user_id`, `business_id`). No `scraped_businesses` row: the
     /// business has no place-JSON source, so only the menu pass acts.
     async fn ac1_seed_business_with_website(pool: &PgPool, website: &str) -> (Uuid, Uuid) {
         let email = format!("ac1-menu-{}@example.com", Uuid::new_v4());
@@ -2041,7 +2141,7 @@ mod tests {
             .expect("user cleanup");
     }
 
-    /// AC1: a business with a website and NULL menu_url gets menu_url
+    /// AC1: a business with a website and NULL `menu_url` gets `menu_url`
     /// written from the first menu-like link on the homepage.
     #[tokio::test]
     async fn test_discover_menu_writes_first_menu_link_from_homepage() {
@@ -2097,7 +2197,7 @@ mod tests {
     }
 
     /// AC1 scenario 2: a homepage without a menu-like link leaves
-    /// menu_url NULL and the run report says "no menu link found".
+    /// `menu_url` NULL and the run report says "no menu link found".
     #[tokio::test]
     async fn test_enrich_report_says_no_menu_link_found() {
         let pool = match test_pool().await {
@@ -2179,7 +2279,7 @@ mod tests {
         ac1_cleanup_business(&pool, user_id, business_id).await;
     }
 
-    /// Homepage fetch failure: menu_url stays NULL, the failure is
+    /// Homepage fetch failure: `menu_url` stays NULL, the failure is
     /// recorded on the run report, and the run continues without error.
     #[tokio::test]
     async fn test_discover_menu_fetch_failure_leaves_row_unchanged() {
@@ -2236,7 +2336,7 @@ mod tests {
         ac1_cleanup_business(&pool, user_id, business_id).await;
     }
 
-    /// dry_run: the menu write is reported as applied but zero UPDATEs
+    /// `dry_run`: the menu write is reported as applied but zero UPDATEs
     /// hit the row.
     #[tokio::test]
     async fn test_enrich_dry_run_reports_menu_url_without_writing() {
@@ -2312,22 +2412,20 @@ mod tests {
         let photo_content_type = photo_content_type.to_string();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
-                let mut stream = match stream {
-                    Ok(stream) => stream,
-                    Err(_) => break,
+                let Ok(mut stream) = stream else {
+                    break;
                 };
                 let mut head = Vec::new();
                 let mut buf = [0u8; 8192];
                 loop {
                     match stream.read(&mut buf) {
-                        Ok(0) => break,
+                        Ok(0) | Err(_) => break,
                         Ok(n) => {
                             head.extend_from_slice(&buf[..n]);
                             if head.windows(4).any(|window| window == b"\r\n\r\n") {
                                 break;
                             }
                         }
-                        Err(_) => break,
                     }
                 }
                 let request_line = String::from_utf8_lossy(&head)
@@ -2356,9 +2454,9 @@ mod tests {
         port
     }
 
-    /// Seed a user, a business (image_url NULL or preset), a scrape job,
-    /// and a google_maps source row named after the business so
-    /// `resolve_source` finds it. Returns (user_id, business_id, job_id).
+    /// Seed a user, a business (`image_url` NULL or preset), a scrape job,
+    /// and a `google_maps` source row named after the business so
+    /// `resolve_source` finds it. Returns (`user_id`, `business_id`, `job_id`).
     async fn ac3_seed_photo_business(pool: &PgPool, preset_image_url: Option<&str>) -> (Uuid, Uuid, Uuid) {
         let name = format!("AC3 Photo Business {}", Uuid::new_v4());
         let email = format!("ac3-photo-{}@example.com", Uuid::new_v4());
@@ -2434,10 +2532,22 @@ mod tests {
             .expect("user cleanup");
     }
 
-    fn photo_place_json(port: u16) -> String {
-        format!(
-            r#"{{"photos": [{{"uri": "http://127.0.0.1:{port}/photos/first.jpg"}}, {{"uri": "http://127.0.0.1:{port}/photos/second.jpg"}}]}}"#
-        )
+    /// `PlaceData` carrying exactly the two fixture photo URLs (first must
+    /// win). `SearXNG` lookups never carry photos, so the photo pass is
+    /// driven with hand-built `PlaceData` values.
+    fn photo_place(port: u16) -> PlaceData {
+        PlaceData {
+            phone: None,
+            website: None,
+            description: None,
+            rating: None,
+            review_count: None,
+            social_urls: None,
+            photos: Some(vec![
+                format!("http://127.0.0.1:{port}/photos/first.jpg"),
+                format!("http://127.0.0.1:{port}/photos/second.jpg"),
+            ]),
+        }
     }
 
     // Parse: the place JSON photos array becomes ordered photo URLs.
@@ -2532,12 +2642,14 @@ mod tests {
         );
     }
 
-    // Enrichment run: the photo pass as a sibling of the menu pass.
+    // Photo-selection pass, driven directly against a pre-loaded row:
+    // the SearXNG lookup never carries photos, so these tests exercise
+    // the pass itself (row + PlaceData in, PhotoOutcome out).
 
-    /// AC2: a place JSON with photos and a NULL image_url lands the first
+    /// AC2: a place with photos and a NULL `image_url` lands the first
     /// photo URL on the row after it passes the HEAD check.
     #[tokio::test]
-    async fn test_enrich_sets_image_url_from_first_photo() {
+    async fn test_discover_photo_sets_image_url_from_first_photo() {
         let pool = match test_pool().await {
             Ok(pool) => pool,
             Err(e) => {
@@ -2546,23 +2658,24 @@ mod tests {
             }
         };
 
-        let port = ac3_start_photo_stub(Box::new(photo_place_json), 200, "image/jpeg");
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 200, "image/jpeg");
         let mut engine = ac2_test_engine(port);
 
         let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+        let row = load_business(&pool, business_id).await.expect("row loads");
+        let place = photo_place(port);
 
-        let report = engine.enrich(&pool, business_id, false).await;
-        assert!(report.error.is_none(), "photo selection must not error: {:?}", report.error);
-
-        let fields: Vec<&str> = report.applied.iter().map(|a| a.field).collect();
-        assert_eq!(fields, vec!["image_url"], "only the photo write applies: {fields:?}");
-        assert!(
-            report.notes.is_empty(),
-            "a passing check must not log a skip: {:?}",
-            report.notes
+        let outcome = engine
+            .discover_photo_on_place(&pool, business_id, &row, &place, false)
+            .await
+            .expect("photo pass runs");
+        let expected = format!("http://127.0.0.1:{port}/photos/first.jpg");
+        assert_eq!(
+            outcome,
+            PhotoOutcome::Selected(expected.clone()),
+            "the first photo URL must be selected"
         );
 
-        let expected = format!("http://127.0.0.1:{port}/photos/first.jpg");
         let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
             .bind(business_id)
             .fetch_one(&pool)
@@ -2577,10 +2690,10 @@ mod tests {
         ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
     }
 
-    /// AC2 scenario: a first photo URL that 404s on HEAD keeps image_url
-    /// NULL and the run report logs the skip.
+    /// AC2 scenario: a first photo URL that 404s on HEAD fails the check
+    /// and leaves `image_url` NULL.
     #[tokio::test]
-    async fn test_enrich_photo_404_keeps_image_url_null_and_logs_skip() {
+    async fn test_discover_photo_404_keeps_image_url_null() {
         let pool = match test_pool().await {
             Ok(pool) => pool,
             Err(e) => {
@@ -2589,22 +2702,20 @@ mod tests {
             }
         };
 
-        let port = ac3_start_photo_stub(Box::new(photo_place_json), 404, "image/jpeg");
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 404, "image/jpeg");
         let mut engine = ac2_test_engine(port);
 
         let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+        let row = load_business(&pool, business_id).await.expect("row loads");
+        let place = photo_place(port);
 
-        let report = engine.enrich(&pool, business_id, false).await;
-        assert!(report.error.is_none(), "a failed check is a skip, not an error");
+        let outcome = engine
+            .discover_photo_on_place(&pool, business_id, &row, &place, false)
+            .await
+            .expect("photo pass runs");
         assert!(
-            report.applied.is_empty(),
-            "a failed check must apply nothing: {:?}",
-            report.applied
-        );
-        assert_eq!(
-            report.notes,
-            vec!["photo url failed check".to_string()],
-            "run report must log the skip"
+            matches!(&outcome, PhotoOutcome::CheckFailed(detail) if detail.contains("HTTP 404")),
+            "404 must fail the check: {outcome:?}"
         );
 
         let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
@@ -2621,9 +2732,9 @@ mod tests {
     }
 
     /// AC2 scenario: a first photo URL whose HEAD returns a non-image
-    /// content type keeps image_url NULL and logs the skip.
+    /// content type fails the check and leaves `image_url` NULL.
     #[tokio::test]
-    async fn test_enrich_photo_non_image_content_type_keeps_image_url_null() {
+    async fn test_discover_photo_non_image_content_type_keeps_image_url_null() {
         let pool = match test_pool().await {
             Ok(pool) => pool,
             Err(e) => {
@@ -2632,15 +2743,21 @@ mod tests {
             }
         };
 
-        let port = ac3_start_photo_stub(Box::new(photo_place_json), 200, "text/html");
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 200, "text/html");
         let mut engine = ac2_test_engine(port);
 
         let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+        let row = load_business(&pool, business_id).await.expect("row loads");
+        let place = photo_place(port);
 
-        let report = engine.enrich(&pool, business_id, false).await;
-        assert!(report.error.is_none(), "a failed check is a skip, not an error");
-        assert!(report.applied.is_empty());
-        assert_eq!(report.notes, vec!["photo url failed check".to_string()]);
+        let outcome = engine
+            .discover_photo_on_place(&pool, business_id, &row, &place, false)
+            .await
+            .expect("photo pass runs");
+        assert!(
+            matches!(&outcome, PhotoOutcome::CheckFailed(detail) if detail.contains("non-image content type")),
+            "non-image content type must fail the check: {outcome:?}"
+        );
 
         let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
             .bind(business_id)
@@ -2655,9 +2772,10 @@ mod tests {
         ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
     }
 
-    /// Both passes honor dry_run: the photo write is reported, not written.
+    /// `dry_run`: the photo write is reported as selected but zero UPDATEs
+    /// hit the row.
     #[tokio::test]
-    async fn test_enrich_dry_run_reports_photo_without_writing() {
+    async fn test_discover_photo_dry_run_reports_without_writing() {
         let pool = match test_pool().await {
             Ok(pool) => pool,
             Err(e) => {
@@ -2666,17 +2784,21 @@ mod tests {
             }
         };
 
-        let port = ac3_start_photo_stub(Box::new(photo_place_json), 200, "image/jpeg");
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 200, "image/jpeg");
         let mut engine = ac2_test_engine(port);
 
         let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+        let row = load_business(&pool, business_id).await.expect("row loads");
+        let place = photo_place(port);
 
-        let report = engine.enrich(&pool, business_id, true).await;
-        assert!(report.error.is_none());
-        let fields: Vec<&str> = report.applied.iter().map(|a| a.field).collect();
+        let outcome = engine
+            .discover_photo_on_place(&pool, business_id, &row, &place, true)
+            .await
+            .expect("photo pass runs");
+        let expected = format!("http://127.0.0.1:{port}/photos/first.jpg");
         assert_eq!(
-            fields,
-            vec!["image_url"],
+            outcome,
+            PhotoOutcome::Selected(expected),
             "dry run must report the planned photo write"
         );
 
@@ -2693,10 +2815,10 @@ mod tests {
         ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
     }
 
-    /// Fill-empty: a preset image_url is never overwritten — the pass is
-    /// not even applicable (no HEAD request, no skip note).
+    /// Fill-empty: a preset `image_url` is never overwritten — the pass is
+    /// not even applicable (no HEAD request).
     #[tokio::test]
-    async fn test_enrich_photo_not_applicable_when_image_url_set() {
+    async fn test_discover_photo_not_applicable_when_image_url_set() {
         let pool = match test_pool().await {
             Ok(pool) => pool,
             Err(e) => {
@@ -2705,24 +2827,23 @@ mod tests {
             }
         };
 
-        // 404 photos: if the pass ran the check, a skip note would appear.
-        let port = ac3_start_photo_stub(Box::new(photo_place_json), 404, "image/jpeg");
+        // 404 photos: if the pass ran the check, it would report CheckFailed.
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 404, "image/jpeg");
         let mut engine = ac2_test_engine(port);
 
         let preset = "https://example.com/preset.jpg";
         let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, Some(preset)).await;
+        let row = load_business(&pool, business_id).await.expect("row loads");
+        let place = photo_place(port);
 
-        let report = engine.enrich(&pool, business_id, false).await;
-        assert!(report.error.is_none());
-        assert!(
-            report.applied.iter().all(|a| a.field != "image_url"),
-            "preset image_url must not be rewritten: {:?}",
-            report.applied
-        );
-        assert!(
-            report.notes.is_empty(),
-            "pass must not run at all when image_url is set: {:?}",
-            report.notes
+        let outcome = engine
+            .discover_photo_on_place(&pool, business_id, &row, &place, false)
+            .await
+            .expect("photo pass runs");
+        assert_eq!(
+            outcome,
+            PhotoOutcome::NotApplicable,
+            "pass must not run when image_url is set: {outcome:?}"
         );
 
         let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
@@ -2739,9 +2860,9 @@ mod tests {
         ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
     }
 
-    /// No photos in the place JSON: the pass is not applicable, no notes.
+    /// No photos in the place: the pass is not applicable.
     #[tokio::test]
-    async fn test_enrich_photo_not_applicable_when_place_has_no_photos() {
+    async fn test_discover_photo_not_applicable_when_place_has_no_photos() {
         let pool = match test_pool().await {
             Ok(pool) => pool,
             Err(e) => {
@@ -2750,18 +2871,24 @@ mod tests {
             }
         };
 
-        let port = ac3_start_photo_stub(Box::new(|_| "{}".to_string()), 200, "image/jpeg");
+        let port = ac3_start_photo_stub(Box::new(|_| String::new()), 200, "image/jpeg");
         let mut engine = ac2_test_engine(port);
 
         let (user_id, business_id, job_id) = ac3_seed_photo_business(&pool, None).await;
+        let row = load_business(&pool, business_id).await.expect("row loads");
+        let place = PlaceData {
+            photos: None,
+            ..PlaceData::default()
+        };
 
-        let report = engine.enrich(&pool, business_id, false).await;
-        assert!(report.error.is_none());
-        assert!(report.applied.is_empty(), "no photos -> nothing applies");
-        assert!(
-            report.notes.is_empty(),
-            "no photos is not a skip worth logging: {:?}",
-            report.notes
+        let outcome = engine
+            .discover_photo_on_place(&pool, business_id, &row, &place, false)
+            .await
+            .expect("photo pass runs");
+        assert_eq!(
+            outcome,
+            PhotoOutcome::NotApplicable,
+            "no photos -> pass is not applicable: {outcome:?}"
         );
 
         let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")

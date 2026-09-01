@@ -39,9 +39,10 @@ pub struct UserAgentRotator {
 }
 
 impl UserAgentRotator {
-    /// Create a new UserAgentRotator with the default pool
+    /// Create a new `UserAgentRotator` with the default pool
+    #[must_use]
     pub fn new() -> Self {
-        let user_agent_pool: Vec<String> = USER_AGENT_POOL.iter().map(|s| s.to_string()).collect();
+        let user_agent_pool: Vec<String> = USER_AGENT_POOL.iter().map(std::string::ToString::to_string).collect();
         let mut consecutive_counts = HashMap::new();
 
         for ua in &user_agent_pool {
@@ -56,9 +57,10 @@ impl UserAgentRotator {
         }
     }
 
-    /// Create a new UserAgentRotator with a custom pool
+    /// Create a new `UserAgentRotator` with a custom pool
+    #[must_use]
     pub fn with_pool(pool: &[&str]) -> Self {
-        let user_agent_pool: Vec<String> = pool.iter().map(|s| s.to_string()).collect();
+        let user_agent_pool: Vec<String> = pool.iter().map(std::string::ToString::to_string).collect();
         let mut consecutive_counts = HashMap::new();
 
         for ua in &user_agent_pool {
@@ -74,7 +76,7 @@ impl UserAgentRotator {
     }
 
     /// Get the next user-agent in rotation
-    /// Ensures no single user-agent is used more than MAX_CONSECUTIVE_USES times consecutively
+    /// Ensures no single user-agent is used more than `MAX_CONSECUTIVE_USES` times consecutively
     pub fn get_next_user_agent(&mut self) -> String {
         // If all user-agents have reached the limit, reset counts
         let all_at_limit = self.consecutive_counts.values().all(|&count| count >= MAX_CONSECUTIVE_USES);
@@ -140,6 +142,7 @@ impl UserAgentRotator {
     }
 
     /// Get current rotation stats (for debugging)
+    #[must_use]
     pub fn get_stats(&self) -> UserAgentStats {
         UserAgentStats {
             total_user_agents: self.user_agent_pool.len(),

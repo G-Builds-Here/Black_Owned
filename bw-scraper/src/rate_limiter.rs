@@ -35,11 +35,13 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     /// Create a new rate limiter with default configuration
+    #[must_use]
     pub fn new() -> Self {
         Self::with_config(RateLimiterConfig::default())
     }
 
     /// Create a new rate limiter with custom configuration
+    #[must_use]
     pub fn with_config(config: RateLimiterConfig) -> Self {
         Self {
             config,
@@ -71,13 +73,18 @@ impl RateLimiter {
 
     /// Wait for the appropriate delay before making a request
     /// Returns immediately if this is the first request
+    ///
+    /// # Panics
+    ///
+    /// Panics if the computed wait time cannot be represented — cannot occur
+    /// because the wait is only computed when `elapsed < required_delay`.
     pub async fn wait_before_request(&mut self) {
         if let Some(last_time) = self.last_request_time {
             let elapsed = last_time.elapsed();
             let required_delay = self.calculate_delay();
 
             if elapsed < required_delay {
-                let wait_time = required_delay - elapsed;
+                let wait_time = required_delay.checked_sub(elapsed).unwrap();
                 debug!(
                     "Rate limiting: waiting {:?} (elapsed: {:?}, required: {:?})",
                     wait_time, elapsed, required_delay
@@ -96,11 +103,13 @@ impl RateLimiter {
     }
 
     /// Get the configured minimum delay
+    #[must_use]
     pub fn min_delay(&self) -> Duration {
         Duration::from_millis(self.config.min_delay_ms)
     }
 
     /// Get the configured maximum jitter
+    #[must_use]
     pub fn max_jitter(&self) -> Duration {
         Duration::from_millis(self.config.max_jitter_ms)
     }
@@ -151,12 +160,12 @@ mod tests {
 
         // All delays should be at least 2000ms
         for delay in &delays {
-            assert!(*delay >= 2000, "Delay {} should be >= 2000ms", delay);
+            assert!(*delay >= 2000, "Delay {delay} should be >= 2000ms");
         }
 
         // All delays should be at most 2500ms (2000 + 500)
         for delay in &delays {
-            assert!(*delay <= 2500, "Delay {} should be <= 2500ms", delay);
+            assert!(*delay <= 2500, "Delay {delay} should be <= 2500ms");
         }
 
         // Verify jitter actually varies (at least some different values)
@@ -189,7 +198,7 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Should be very fast (less than 100ms)
-        assert!(elapsed.as_millis() < 100, "First request should not delay, but took {:?}", elapsed);
+        assert!(elapsed.as_millis() < 100, "First request should not delay, but took {elapsed:?}");
     }
 
     #[tokio::test]
@@ -210,8 +219,7 @@ mod tests {
 
         assert!(
             elapsed.as_millis() >= 100,
-            "Second request should delay at least 100ms, but only took {:?}",
-            elapsed
+            "Second request should delay at least 100ms, but only took {elapsed:?}"
         );
     }
 
@@ -237,8 +245,7 @@ mod tests {
         // Should be fast since we already waited
         assert!(
             elapsed.as_millis() < 50,
-            "Request should not delay when enough time has elapsed, but took {:?}",
-            elapsed
+            "Request should not delay when enough time has elapsed, but took {elapsed:?}"
         );
     }
 
@@ -265,8 +272,7 @@ mod tests {
         // So total should be at least 200ms (4 * 50ms)
         assert!(
             total_time.as_millis() >= 200,
-            "5 requests with 50ms minimum delay should take at least 200ms, but took {:?}",
-            total_time
+            "5 requests with 50ms minimum delay should take at least 200ms, but took {total_time:?}"
         );
     }
 
@@ -278,7 +284,7 @@ mod tests {
         };
         let limiter = RateLimiter::with_config(config);
 
-        assert_eq!(limiter.min_delay(), Duration::from_millis(2000));
+        assert_eq!(limiter.min_delay(), Duration::from_secs(2));
         assert_eq!(limiter.max_jitter(), Duration::from_millis(500));
     }
 }

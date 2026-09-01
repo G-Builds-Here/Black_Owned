@@ -1,6 +1,6 @@
 //! Black Owned Scraper crate
 //!
-//! Business discovery pipeline: SearXNG metasearch -> ETL extraction ->
+//! Business discovery pipeline: `SearXNG` metasearch -> ETL extraction ->
 //! Postgres scrape records.
 
 pub mod api;

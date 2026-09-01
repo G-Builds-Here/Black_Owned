@@ -14,7 +14,11 @@ pub struct HealthStatus {
     pub message: String,
 }
 
-/// Check PostgreSQL connection
+/// Check `PostgreSQL` connection
+///
+/// # Errors
+///
+/// Returns an error if the connection cannot be established.
 pub async fn check_postgres(database_url: &str) -> Result<HealthStatus> {
     match sqlx::PgPool::connect(database_url).await {
         Ok(pool) => {
@@ -28,12 +32,16 @@ pub async fn check_postgres(database_url: &str) -> Result<HealthStatus> {
         Err(e) => Ok(HealthStatus {
             service: "PostgreSQL".to_string(),
             healthy: false,
-            message: format!("Connection failed: {}", e),
+            message: format!("Connection failed: {e}"),
         }),
     }
 }
 
 /// Check NATS connection
+///
+/// # Errors
+///
+/// Returns an error if the connection cannot be established.
 pub async fn check_nats(nats_url: &str) -> Result<HealthStatus> {
     match async_nats::connect(nats_url).await {
         Ok(conn) => {
@@ -47,19 +55,21 @@ pub async fn check_nats(nats_url: &str) -> Result<HealthStatus> {
         Err(e) => Ok(HealthStatus {
             service: "NATS".to_string(),
             healthy: false,
-            message: format!("Connection failed: {}", e),
+            message: format!("Connection failed: {e}"),
         }),
     }
 }
 
 /// Check Redis connection
+///
+/// # Errors
+///
+/// Returns an error if the connection cannot be established.
 pub fn check_redis(redis_url: &str) -> Result<HealthStatus> {
     // redis-rs only accepts the redis(s):// schemes; valkey:// is the same
     // RESP protocol, so normalize before parsing.
     let url = redis_url
-        .strip_prefix("valkey://")
-        .map(|rest| format!("redis://{rest}"))
-        .unwrap_or_else(|| redis_url.to_string());
+        .strip_prefix("valkey://").map_or_else(|| redis_url.to_string(), |rest| format!("redis://{rest}"));
     match redis::Client::open(url.as_str()) {
         Ok(_client) => {
             info!("Redis client created successfully");
@@ -72,12 +82,16 @@ pub fn check_redis(redis_url: &str) -> Result<HealthStatus> {
         Err(e) => Ok(HealthStatus {
             service: "Redis".to_string(),
             healthy: false,
-            message: format!("Connection failed: {}", e),
+            message: format!("Connection failed: {e}"),
         }),
     }
 }
 
-/// Check ClickHouse connection
+/// Check `ClickHouse` connection
+///
+/// # Errors
+///
+/// Returns an error if the connection cannot be established.
 pub fn check_clickhouse(clickhouse_url: &str) -> Result<HealthStatus> {
     let _client = clickhouse::Client::default().with_url(clickhouse_url);
     Ok(HealthStatus {
@@ -88,6 +102,10 @@ pub fn check_clickhouse(clickhouse_url: &str) -> Result<HealthStatus> {
 }
 
 /// Run all health checks
+///
+/// # Panics
+///
+/// Panics (via `unwrap`) if any individual health check returns an error.
 pub async fn run_all_health_checks(
     database_url: &str,
     nats_url: &str,

@@ -695,6 +695,7 @@ dependencies = [
  "chrono",
  "clickhouse 0.12.2",
  "fastrand",
+ "parking_lot",
  "redis 0.24.1",
  "regex",
  "reqwest",

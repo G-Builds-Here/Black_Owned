@@ -54,4 +54,5 @@ fastrand = "2.0"
 # Test-only: router-level oneshot tests for /enrich request validation
 # (malformed JSON bodies are rejected by axum's extractor, not the handler).
 [dev-dependencies]
+parking_lot = "0.12"
 tower = { version = "0.5", features = ["util"] }
