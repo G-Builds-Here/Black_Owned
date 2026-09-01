@@ -50,12 +50,33 @@ const unverifiedCanonicalRow = {
   verification_status: "unverified",
 };
 
+const primaryLocationRow = {
+  business_id: "biz-1",
+  id: "loc-1",
+  label: "Main",
+  address: "1 Main St, Testville, GA 30001",
+  lat: 33.75,
+  lng: -84.38,
+  is_primary: true,
+};
+
+const secondaryLocationRow = {
+  business_id: "biz-1",
+  id: "loc-2",
+  label: "Second",
+  address: "2 Second St, Testville, GA 30001",
+  lat: 33.8,
+  lng: -84.4,
+  is_primary: false,
+};
+
 function mockQuerySequence() {
   // First query: approved pending; second query: canonical businesses
   const query = jest
     .fn()
     .mockResolvedValueOnce({ rows: [pendingRow] })
-    .mockResolvedValueOnce({ rows: [canonicalRow, unverifiedCanonicalRow] });
+    .mockResolvedValueOnce({ rows: [canonicalRow, unverifiedCanonicalRow] })
+    .mockResolvedValueOnce({ rows: [primaryLocationRow, secondaryLocationRow] });
   return query;
 }
 
@@ -221,6 +242,26 @@ describe("GET /api/directory", () => {
     // unverified canonical
     expect(byId["biz-2"].isVerified).toBe(false);
 
+    // multi-location business: primary first, secondary after
+    expect(byId["biz-1"].locations).toEqual([
+      {
+        id: "loc-1",
+        label: "Main",
+        address: "1 Main St, Testville, GA 30001",
+        lat: 33.75,
+        lng: -84.38,
+        isPrimary: true,
+      },
+      {
+        id: "loc-2",
+        label: "Second",
+        address: "2 Second St, Testville, GA 30001",
+        lat: 33.8,
+        lng: -84.4,
+        isPrimary: false,
+      },
+    ]);
+    expect(byId["biz-2"].locations).toEqual([]);
     expect(json.data.facets.categories).toEqual(["Food & Dining", "Retail & Fashion"]);
     expect(json.data.facets.locations).toEqual(["Harlem, NY"]);
   });

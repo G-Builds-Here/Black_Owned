@@ -47,10 +47,10 @@ const RATING_FILTERS: { label: string; value: number }[] = [
  * accent; inactive ones are neutral.
  */
 const pillClass = (active: boolean) =>
-  `rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+  `min-h-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
     active
-      ? 'border-heritage-ochre bg-heritage-ochre/10 text-heritage-ochre'
-      : 'border-neutral-300 bg-white text-neutral-700'
+      ? 'border-heritage-ochre bg-heritage-ochre text-white'
+      : 'border-neutral-300 bg-white text-neutral-800 hover:border-heritage-ochre'
   }`;
 
 /**
@@ -127,7 +127,7 @@ export default function FilterBar({
         <div className="flex items-center rounded-full border border-neutral-300 bg-white p-0.5">
           <button
             type="button"
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`min-h-0 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
               activeTab === 'all'
                 ? 'bg-heritage-ochre text-white'
                 : 'text-neutral-600 hover:text-neutral-900'
@@ -138,7 +138,7 @@ export default function FilterBar({
           </button>
           <button
             type="button"
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`min-h-0 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
               activeTab === 'saved'
                 ? 'bg-heritage-ochre text-white'
                 : 'text-neutral-600 hover:text-neutral-900'
@@ -152,7 +152,7 @@ export default function FilterBar({
 
       {/* Search */}
       {onSearchChange && (
-        <div className="relative w-full min-w-[180px] max-w-sm flex-1">
+        <div className="relative w-64 min-w-[180px]">
           <span
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400"
             aria-hidden="true"
@@ -171,7 +171,7 @@ export default function FilterBar({
       )}
 
       {/* Location Filter */}
-      <div className="min-w-[150px]">
+      <div>
         <Dropdown
           trigger={localFilters.location || 'Location'}
           triggerClassName={pillClass(!!localFilters.location)}
@@ -183,7 +183,7 @@ export default function FilterBar({
       </div>
 
       {/* Category Filter */}
-      <div className="min-w-[160px]">
+      <div>
         <Dropdown
           trigger={localFilters.category || 'Category'}
           triggerClassName={pillClass(!!localFilters.category)}
@@ -195,7 +195,7 @@ export default function FilterBar({
       </div>
 
       {/* Rating Filter */}
-      <div className="min-w-[130px]">
+      <div>
         <Dropdown
           trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Rating'}
           triggerClassName={pillClass(!!localFilters.minRating)}
@@ -207,18 +207,8 @@ export default function FilterBar({
         />
       </div>
 
-      {/* Verified Only Toggle */}
-      <Button
-        variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
-        size="sm"
-        onClick={handleVerifiedToggle}
-        className="rounded-full border px-3 py-1.5 text-sm font-medium"
-      >
-        {localFilters.verifiedOnly ? '✓' : 'All'}
-      </Button>
-
       {/* Sort Dropdown */}
-      <div className="min-w-[130px]">
+      <div>
         <Dropdown
           trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort by'}
           triggerClassName={pillClass(currentSort !== 'relevance')}
@@ -229,6 +219,16 @@ export default function FilterBar({
           }))}
         />
       </div>
+
+      {/* Verified Only Toggle */}
+      <Button
+        variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
+        size="sm"
+        onClick={handleVerifiedToggle}
+        className="min-h-0 rounded-full border px-3 py-1.5 text-sm font-medium"
+      >
+        {localFilters.verifiedOnly ? '✓' : 'All'}
+      </Button>
 
       {/* Clear Filters */}
       {(hasActiveFilters || search) && (

@@ -35,6 +35,17 @@ export interface DirectoryBusiness {
   lat?: number | null;
   lng?: number | null;
   createdAt: string;
+  /** Physical locations from the business_locations table (primary first). */
+  locations?: DirectoryLocation[];
+}
+
+export interface DirectoryLocation {
+  id: string;
+  label: string | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  isPrimary: boolean;
 }
 
 /**
@@ -132,6 +143,7 @@ export async function fetchDirectoryItems(
       lat: row.lat ?? null,
       lng: row.lng ?? null,
       createdAt: toCreatedAt(row.created_at),
+      locations: [],
     };
   });
 
@@ -153,6 +165,49 @@ export async function fetchDirectoryItems(
     lng: row.lng ?? null,
     createdAt: toCreatedAt(row.created_at),
   }));
+
+  // Multi-location businesses (business_locations table) get one entry per
+  // physical location so the directory map can pin every site, primary
+  // first.
+  const locationsTable = schema ? `${schema}.business_locations` : "business_locations";
+  const canonicalIds = canonicalItems.map((item) => item.id);
+  const locationsByBusiness = new Map<string, DirectoryLocation[]>();
+  if (canonicalIds.length > 0) {
+    const locationsResult = await client.query<{
+      business_id: string;
+      id: string;
+      label: string | null;
+      address: string;
+      lat: number | null;
+      lng: number | null;
+      is_primary: boolean;
+    }>(
+      `SELECT business_id, id, label, address, lat, lng, is_primary
+       FROM ${locationsTable}
+       WHERE business_id = ANY($1::uuid[])
+       ORDER BY is_primary DESC, created_at ASC`,
+      [canonicalIds]
+    );
+    for (const row of locationsResult.rows) {
+      const entry: DirectoryLocation = {
+        id: row.id,
+        label: row.label,
+        address: row.address,
+        lat: row.lat,
+        lng: row.lng,
+        isPrimary: row.is_primary,
+      };
+      const list = locationsByBusiness.get(row.business_id);
+      if (list !== undefined) {
+        list.push(entry);
+      } else {
+        locationsByBusiness.set(row.business_id, [entry]);
+      }
+    }
+  }
+  for (const item of canonicalItems) {
+    item.locations = locationsByBusiness.get(item.id) ?? [];
+  }
 
   return [...pendingItems, ...canonicalItems];
 }

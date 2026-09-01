@@ -36,6 +36,17 @@ interface DirectoryBusiness {
   lat?: number | null;
   lng?: number | null;
   createdAt: string;
+  /**
+   * Physical locations from business_locations (primary first). When
+   * present the map pins one marker per location instead of the single
+   * businesses.lat/lng.
+   */
+  locations?: {
+    label: string | null;
+    address: string;
+    lat: number | null;
+    lng: number | null;
+  }[] | null;
 }
 
 interface DirectoryFacets {
@@ -274,9 +285,23 @@ function DirectoryContent() {
 
   const mapPins = useMemo<MapPin[]>(
     () =>
-      listSource
-        .filter((b) => b.lat != null && b.lng != null)
-        .map((b) => ({ id: b.id, name: b.name, lat: b.lat as number, lng: b.lng as number })),
+      listSource.flatMap((b): MapPin[] => {
+        // One pin per physical location (primary first) when the business
+        // has entries in business_locations; otherwise the legacy single
+        // pin carried on the business row itself.
+        const locs = (b.locations ?? []).filter((l) => l.lat != null && l.lng != null);
+        if (locs.length > 0) {
+          return locs.map((l) => ({
+            id: b.id,
+            name: l.label ? `${b.name} — ${l.label}` : b.name,
+            lat: l.lat as number,
+            lng: l.lng as number,
+          }));
+        }
+        return b.lat != null && b.lng != null
+          ? [{ id: b.id, name: b.name, lat: b.lat as number, lng: b.lng as number }]
+          : [];
+      }),
     [listSource]
   );
 
@@ -399,7 +424,7 @@ function DirectoryContent() {
 
         {/* Map Panel - Right Side */}
         {showMap && (
-          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 relative">
+          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 relative isolate">
             {/* Map Toggle Button */}
             <button
               onClick={() => setShowMap(false)}

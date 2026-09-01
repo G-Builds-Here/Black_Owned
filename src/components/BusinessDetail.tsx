@@ -193,7 +193,7 @@ export function BusinessDetail({ business, loading, error, onReviewsSubmitted }:
   const mapPins = pinSources
     .filter((l) => l.lat != null && l.lng != null)
     .map((l) => ({
-      id: l.id,
+      id: business.id,
       name: l.label ? `${business.name} — ${l.label}` : business.name,
       lat: l.lat as number,
       lng: l.lng as number,

@@ -155,10 +155,11 @@ describe('BusinessCard', () => {
     expect(cardRoot(container)).toHaveClass('flex-col');
   });
 
-  it('has a left image column', () => {
+  it('has a full-height left image column (OpenTable ratio)', () => {
     const { container } = render(<BusinessCard business={mockBusiness} onViewDetails={jest.fn()} />);
     const imageContainer = container.querySelector('.bg-neutral-200') as HTMLElement;
-    expect(imageContainer).toHaveClass('w-40');
+    expect(imageContainer).toHaveClass('w-2/5');
+    expect(imageContainer).toHaveClass('self-stretch');
     expect(imageContainer).toHaveClass('overflow-hidden');
   });
 
@@ -181,12 +182,13 @@ describe('BusinessCard', () => {
     expect(img).toHaveAttribute('loading', 'lazy');
   });
 
-  it('renders image with cover fit', () => {
+  it('renders image with contain fit so the whole image stays inside the box', () => {
     const businessWithImage = { ...mockBusiness, imageUrl: 'https://example.com/image.jpg' };
     render(<BusinessCard business={businessWithImage} onViewDetails={jest.fn()} />);
     const img = screen.getByAltText(/business photo/i) as HTMLElement;
-    // The old hover-scale effect was removed; the image is a static cover crop.
-    expect(img).toHaveClass('object-cover');
+    // Wide banners (e.g. SearXNG logo images) must scale down to fit the
+    // box instead of being cropped by cover.
+    expect(img).toHaveClass('object-contain');
     expect(img).toHaveClass('w-full');
   });
 

@@ -93,12 +93,12 @@ export default function BusinessCard({
     >
       <div className="flex h-full">
         {/* Image - left column */}
-        <div className="relative w-40 flex-shrink-0 self-stretch min-h-[132px] overflow-hidden bg-neutral-200">
+        <div className="relative w-2/5 flex-shrink-0 self-stretch overflow-hidden bg-neutral-200">
           {business.imageUrl ? (
             <img
               src={business.imageUrl}
               alt={`Business photo for ${business.name}`}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
               loading="lazy"
             />
           ) : (
