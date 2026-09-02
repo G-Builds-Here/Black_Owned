@@ -8,7 +8,10 @@
 //! empty. The top `SearXNG` result supplies `website` (result URL) and
 //! `description` (snippet); `phone` is the first US phone (ETL regex)
 //! found scanning results in rank order, taken only from the top result
-//! or results titled with the full business name. Existing values are
+//! or results titled with the full business name. Menu discovery: a
+//! menu-like link on the homepage (depth 1); when the homepage fetch
+//! fails or carries no menu link, a `SearXNG` result on the website's
+//! own host that mentions a menu fills the same field. Existing values are
 //! never clobbered;
 //! the per-business report lists what was applied, what was skipped
 //! because it already had a value, and any error.
@@ -258,9 +261,13 @@ fn photo_urls(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Vec<St
 /// Outcome of the menu-discovery pass for one business.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuOutcome {
-    /// A menu-like link was found; `menu_url` was written
-    /// (or would be written under `dry_run`).
+    /// A menu-like link was found on the homepage; `menu_url` was
+    /// written (or would be written under `dry_run`).
     Found(String),
+    /// The homepage fetch was blocked or carried no menu link, but a
+    /// `SearXNG` result on the website's own host identified a menu
+    /// page; `menu_url` was written (or would be, under `dry_run`).
+    FoundInResults(String),
     /// The homepage was fetched but carried no menu-like link.
     NoMenuLink,
     /// The homepage fetch failed (timeout, HTTP error, robots.txt);
@@ -329,6 +336,40 @@ pub fn find_menu_url(html: &str, page_url: &str) -> Option<String> {
             .to_lowercase();
         if path.contains("menu") || path.ends_with(".pdf") {
             return Some(candidate);
+        }
+    }
+    None
+}
+
+/// Find a menu page among `SearXNG` results: the first result (rank
+/// order) whose URL is on the same host as `website` (case- and
+/// `www.`-insensitive) and whose path or title contains "menu".
+///
+/// Fallback for [`Self::discover_menu_on_row`] when the homepage cannot
+/// confirm the menu link (blocked fetch, or no menu-like link) but the
+/// search index has already surfaced the menu page.
+#[must_use]
+pub fn find_menu_result(results: &[SearxngResult], website: &str) -> Option<String> {
+    let (_, website_host, _) = split_url(website)?;
+    let website_host = website_host.to_lowercase();
+    let site_host = website_host.strip_prefix("www.").unwrap_or(&website_host);
+    for result in results {
+        let Some((_, result_host, result_path)) = split_url(&result.url) else {
+            continue;
+        };
+        let result_host = result_host.to_lowercase();
+        let result_host = result_host.strip_prefix("www.").unwrap_or(&result_host);
+        if result_host != site_host {
+            continue;
+        }
+        let path = result_path
+            .split(['?', '#'])
+            .next()
+            .unwrap_or("")
+            .to_lowercase();
+        let title = result.title.to_lowercase();
+        if path.contains("menu") || title.contains("menu") {
+            return Some(result.url.clone());
         }
     }
     None
@@ -894,28 +935,17 @@ impl EnrichmentEngine {
         } = lookup;
 
         // Menu-discovery pass: depth 1 (homepage only), independent of
-        // the place-JSON outcome.
-        match self.discover_menu_on_row(pool, business_id, &pre_run_row, dry_run).await {
-            Ok(MenuOutcome::Found(url)) => {
-                tracing::info!(business_id = %business_id, menu_url = %url, "menu discovered");
-                result.applied.push(AppliedField {
-                    field: "menu_url",
-                    previous: None,
-                });
-            }
-            Ok(MenuOutcome::NoMenuLink) => {
-                result.notes.push("no menu link found".to_string());
-            }
-            Ok(MenuOutcome::FetchFailed(error)) => {
-                tracing::warn!(business_id = %business_id, "menu discovery failed: {error}");
-                result.notes.push(format!("menu discovery failed: {error}"));
-            }
-            Ok(MenuOutcome::NotApplicable) => {}
-            Err(error) => {
-                tracing::warn!(business_id = %business_id, "menu discovery error: {error}");
-                result.notes.push(format!("menu discovery failed: {error}"));
-            }
-        }
+        // the place-JSON outcome; falls back to this run's SearXNG
+        // results when the homepage cannot confirm the menu link.
+        self.run_menu_pass(
+            pool,
+            business_id,
+            &pre_run_row,
+            search_results.as_deref(),
+            dry_run,
+            &mut result,
+        )
+        .await;
 
         // Photo-selection pass: sibling of the menu pass, judged on the
         // pre-run row so an image_url written by this run is not
@@ -950,6 +980,69 @@ impl EnrichmentEngine {
             .await;
 
         result
+    }
+
+    /// Menu-discovery pass over the pre-run row: homepage first, with
+    /// the `SearXNG` results as fallback when the homepage cannot
+    /// confirm the menu link. Merges the outcome (applied fields,
+    /// notes) into `result`.
+    async fn run_menu_pass(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        pre_run_row: &BusinessRow,
+        search_results: Option<&[SearxngResult]>,
+        dry_run: bool,
+        result: &mut EnrichResult,
+    ) {
+        // The row-level guards (no website, or `menu_url` already set)
+        // live inside `discover_menu_on_row`; either way the outcome
+        // merges the same way.
+        let menu_outcome = self
+            .discover_menu_on_row(
+                pool,
+                business_id,
+                pre_run_row,
+                dry_run,
+                search_results.unwrap_or(&[]),
+            )
+            .await;
+        match menu_outcome {
+            Ok(MenuOutcome::Found(url)) => {
+                tracing::info!(
+                    business_id = %business_id,
+                    menu_url = %url,
+                    "menu discovered on homepage"
+                );
+                result.applied.push(AppliedField {
+                    field: "menu_url",
+                    previous: None,
+                });
+            }
+            Ok(MenuOutcome::FoundInResults(url)) => {
+                tracing::info!(
+                    business_id = %business_id,
+                    menu_url = %url,
+                    "menu discovered in search results"
+                );
+                result.applied.push(AppliedField {
+                    field: "menu_url",
+                    previous: None,
+                });
+            }
+            Ok(MenuOutcome::NoMenuLink) => {
+                result.notes.push("no menu link found".to_string());
+            }
+            Ok(MenuOutcome::FetchFailed(error)) => {
+                tracing::warn!(business_id = %business_id, "menu discovery failed: {error}");
+                result.notes.push(format!("menu discovery failed: {error}"));
+            }
+            Ok(MenuOutcome::NotApplicable) => {}
+            Err(error) => {
+                tracing::warn!(business_id = %business_id, "menu discovery error: {error}");
+                result.notes.push(format!("menu discovery failed: {error}"));
+            }
+        }
     }
 
     /// Location-discovery pass over this run's `SearXNG` results: ensures
@@ -1332,7 +1425,9 @@ impl EnrichmentEngine {
         Ok(())
     }
 
-    /// Menu-discovery pass for one business (depth 1: homepage only).
+    /// Menu-discovery pass for one business (depth 1: homepage only, with a
+    /// fallback to `SearXNG` results when the homepage cannot confirm the
+    /// menu link).
     ///
     /// Runs only when the row has a non-empty website and an empty
     /// `menu_url` (fill-empty: an existing `menu_url` is never overwritten).
@@ -1348,18 +1443,22 @@ impl EnrichmentEngine {
         dry_run: bool,
     ) -> Result<MenuOutcome, String> {
         let row = load_business(pool, business_id).await?;
-        self.discover_menu_on_row(pool, business_id, &row, dry_run).await
+        self.discover_menu_on_row(pool, business_id, &row, dry_run, &[]).await
     }
 
     /// Menu discovery against a pre-loaded row. [`Self::enrich`] uses this
     /// with the pre-run snapshot so a website written by this run's
-    /// place-JSON pass is not fetched until the next run.
+    /// place-JSON pass is not fetched until the next run. When the
+    /// homepage cannot confirm the menu link (fetch failed, or no
+    /// menu-like link), [`find_menu_result`] looks for a menu page on
+    /// the website's own host among `results`.
     async fn discover_menu_on_row(
         &mut self,
         pool: &PgPool,
         business_id: Uuid,
         row: &BusinessRow,
         dry_run: bool,
+        results: &[SearxngResult],
     ) -> Result<MenuOutcome, String> {
         let Some(website) = row.website.clone().filter(|v| !v.trim().is_empty()) else {
             return Ok(MenuOutcome::NotApplicable);
@@ -1368,12 +1467,18 @@ impl EnrichmentEngine {
             return Ok(MenuOutcome::NotApplicable);
         }
 
-        let html = match self.fetch_homepage(&website).await {
-            Ok(html) => html,
-            Err(e) => return Ok(MenuOutcome::FetchFailed(e)),
-        };
-        let Some(url) = find_menu_url(&html, &website) else {
-            return Ok(MenuOutcome::NoMenuLink);
+        let (url, from_homepage) = match self.fetch_homepage(&website).await {
+            Ok(html) => match find_menu_url(&html, &website) {
+                Some(url) => (url, true),
+                None => match find_menu_result(results, &website) {
+                    Some(url) => (url, false),
+                    None => return Ok(MenuOutcome::NoMenuLink),
+                },
+            },
+            Err(e) => match find_menu_result(results, &website) {
+                Some(url) => (url, false),
+                None => return Ok(MenuOutcome::FetchFailed(e)),
+            },
         };
 
         if !dry_run {
@@ -1384,7 +1489,11 @@ impl EnrichmentEngine {
                 return Ok(MenuOutcome::NotApplicable);
             }
         }
-        Ok(MenuOutcome::Found(url))
+        Ok(if from_homepage {
+            MenuOutcome::Found(url)
+        } else {
+            MenuOutcome::FoundInResults(url)
+        })
     }
 
     /// Photo-selection pass against a pre-loaded row and a parsed place.
@@ -2923,6 +3032,70 @@ mod tests {
         assert_eq!(find_menu_url(html, "https://example.com"), None);
     }
 
+    /// The `SearXNG` menu fallback only picks menu-like results on
+    /// the website's own host (case- and `www.`-insensitive), in rank
+    /// order; aggregator results and other hosts are ignored.
+    #[test]
+    fn test_find_menu_result_requires_same_host() {
+        let results = vec![
+            SearxngResult {
+                url: "https://aggregator.example/best-menus".to_string(),
+                title: "Best menus in town".to_string(),
+                content: Some("a list of menus".to_string()),
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://www.example.com/menu".to_string(),
+                title: "Menu".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+        ];
+        assert_eq!(
+            find_menu_result(&results, "https://example.com/"),
+            Some("https://www.example.com/menu".to_string())
+        );
+        // No menu-like result on the requested host -> None.
+        assert_eq!(find_menu_result(&results, "https://other.com/"), None);
+        assert!(find_menu_result(&[], "https://example.com/").is_none());
+    }
+
+    /// Menu-likeness also matches on the result title when the path is
+    /// unmarked; a "menu" that only lives in the query string never counts.
+    #[test]
+    fn test_find_menu_result_title_match() {
+        let results = vec![SearxngResult {
+            url: "https://example.com/dinner".to_string(),
+            title: "Menu - Example Kitchen".to_string(),
+            content: None,
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: None,
+        }];
+        assert_eq!(
+            find_menu_result(&results, "https://example.com"),
+            Some("https://example.com/dinner".to_string())
+        );
+
+        let query_only = vec![SearxngResult {
+            url: "https://example.com/?highlight=menu".to_string(),
+            title: "Example Kitchen".to_string(),
+            content: None,
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: None,
+        }];
+        assert_eq!(find_menu_result(&query_only, "https://example.com"), None);
+    }
+
     /// Seed an admin user and a business row with the given website;
     /// returns (`user_id`, `business_id`). No `scraped_businesses` row: the
     /// business has no place-JSON source, so only the menu pass acts.
@@ -3106,6 +3279,174 @@ mod tests {
         );
 
         ac1_cleanup_business(&pool, user_id, business_id).await;
+    }
+
+    /// The homepage is bot-blocked (403) but the `SearXNG` results carry
+    /// a menu page on the website's own host: `menu_url` falls back to
+    /// the result URL and the run still succeeds.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn test_enrich_menu_falls_back_to_search_results_when_homepage_blocked() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        // Routed stub: the SearXNG endpoint serves the results fixture;
+        // every other request (the homepage fetch) is 403.
+        let searxng_body = r#"{
+            "query": "fallback fixture",
+            "results": [
+                {
+                    "url": "https://menu-fixture.example/",
+                    "title": "Fallback Kitchen",
+                    "content": "Fallback kitchen.",
+                    "engine": "searxng",
+                    "score": 1.0
+                },
+                {
+                    "url": "https://menu-fixture.example/menu",
+                    "title": "Menu - Fallback Kitchen",
+                    "content": "Dinner menu.",
+                    "engine": "searxng",
+                    "score": 0.9
+                }
+            ]
+        }"#;
+        let searxng_body = searxng_body.to_string();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind routed stub listener");
+        let port = listener.local_addr().expect("routed stub address").port();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else {
+                    break;
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                let (status, body) = if request_line.contains("searxng.test") {
+                    ("200 OK", searxng_body.as_str())
+                } else {
+                    ("403 Forbidden", "")
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+
+        let mut engine = ac2_test_engine(port);
+        let name = format!("AC2 Menu Fallback Business {}", Uuid::new_v4());
+        let email = format!("ac2-menu-fb-{}@example.com", Uuid::new_v4());
+        let user_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO users (email, password_hash, name, role)
+                 VALUES ($1, 'test', 'AC2 Menu FB', 'admin')
+                 RETURNING id",
+            )
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .expect("seed user inserts");
+            row.get::<Uuid, _>("id")
+        };
+        let business_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO businesses (owner_id, name, category_id, website)
+                 VALUES ($1, $2, 'test-enrichment', 'https://menu-fixture.example/')
+                 RETURNING id",
+            )
+            .bind(user_id)
+            .bind(&name)
+            .fetch_one(&pool)
+            .await
+            .expect("seed business inserts");
+            row.get::<Uuid, _>("id")
+        };
+        let job_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO scrape_jobs (source, query, location)
+                 VALUES ('ac2-test', 'menu fallback', 'Test')
+                 RETURNING id",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("seed scrape job inserts");
+            row.get::<Uuid, _>("id")
+        };
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', $2, 'http://maps.google.test/maps/place?cid=menu-fallback')",
+        )
+        .bind(job_id)
+        .bind(&name)
+        .execute(&pool)
+        .await
+        .expect("seed source inserts");
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(
+            report.error.is_none(),
+            "a blocked homepage must not fail the run: {:?} {:?}",
+            report.error,
+            report.notes
+        );
+        let fields: Vec<&str> = report.applied.iter().map(|a| a.field).collect();
+        assert!(
+            fields.contains(&"menu_url"),
+            "fallback must apply menu_url, applied: {fields:?}"
+        );
+        let row = sqlx::query("SELECT menu_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("menu row reads back");
+        assert_eq!(
+            row.get::<Option<String>, _>("menu_url").as_deref(),
+            Some("https://menu-fixture.example/menu")
+        );
+
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
     }
 
     /// Homepage fetch failure: `menu_url` stays NULL, the failure is
