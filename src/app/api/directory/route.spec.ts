@@ -40,6 +40,7 @@ const canonicalRow = {
   description: "Owner submitted",
   category: "Retail & Fashion",
   verification_status: "verified",
+  phone: "(404) 555-0123",
   created_at: new Date("2026-08-10T00:00:00Z"),
 };
 
@@ -238,6 +239,7 @@ describe("GET /api/directory", () => {
     // verified canonical
     expect(byId["biz-1"].isVerified).toBe(true);
     expect(byId["biz-1"].rating).toBeNull();
+    expect(byId["biz-1"].phone).toBe("(404) 555-0123");
 
     // unverified canonical
     expect(byId["biz-2"].isVerified).toBe(false);

@@ -83,6 +83,7 @@ interface CanonicalRow {
   location: string | null;
   rating: string | number | null;
   review_count: number | null;
+  phone: string | null;
   website: string | null;
   image_url: string | null;
   tags: string[] | null;
@@ -118,7 +119,7 @@ export async function fetchDirectoryItems(
     client.query(
       `SELECT b.id, b.name, b.description, COALESCE(c.name, b.category_id) AS category,
               b.verification_status, b.location, b.rating, b.review_count,
-              b.website, b.image_url, b.tags, b.created_at, b.lat, b.lng
+              b.phone, b.website, b.image_url, b.tags, b.created_at, b.lat, b.lng
        FROM ${tableName} b
        LEFT JOIN ${categoryTable} c ON c.id::text = b.category_id`
     ),
@@ -157,7 +158,7 @@ export async function fetchDirectoryItems(
     isVerified: row.verification_status === "verified",
     description: row.description,
     website: row.website ?? null,
-    phone: null,
+    phone: row.phone ?? null,
     source: null,
     imageUrl: row.image_url ?? null,
     tags: row.tags ?? [],
