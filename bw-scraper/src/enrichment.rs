@@ -5,9 +5,11 @@
 //! migration 019 used to backfill phones), looks the business up on
 //! `SearXNG` by name + location, and applies fill-empty updates to the
 //! `businesses` row: a field is only written when it is currently
-//! empty. The top `SearXNG` result supplies `website` (result URL),
-//! `description` (snippet), and `phone` (US phone extracted from the
-//! snippet with the ETL's regex). Existing values are never clobbered;
+//! empty. The top `SearXNG` result supplies `website` (result URL) and
+//! `description` (snippet); `phone` is the first US phone (ETL regex)
+//! found scanning results in rank order, taken only from the top result
+//! or results titled with the full business name. Existing values are
+//! never clobbered;
 //! the per-business report lists what was applied, what was skipped
 //! because it already had a value, and any error.
 
@@ -30,8 +32,9 @@ use crate::user_agent_rotator::UserAgentRotator;
 /// Enrichment payload for one business.
 ///
 /// The `SearXNG` lookup populates `website` (top result URL),
-/// `description` (top result snippet), and `phone` (US phone extracted
-/// from the snippet). Fields the source does not carry stay `None`
+/// `description` (top result snippet), and `phone` (first ranked
+/// snippet carrying a US phone: the top result or a result titled with
+/// the business name). Fields the source does not carry stay `None`
 /// rather than being fabricated.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PlaceData {
@@ -780,14 +783,28 @@ impl EnrichmentEngine {
         }
     }
 
-    /// Derive the fill-empty payload from the top `SearXNG` result:
-    /// `website` = result URL, `description` = snippet, `phone` = US
-    /// phone extracted from the snippet with the ETL regex.
+    /// Derive the fill-empty payload from the `SearXNG` results:
+    /// `website` = top result URL, `description` = top snippet.
+    /// `phone` is the first US phone (ETL regex) found scanning the
+    /// results in rank order; only the top result and results whose
+    /// title carries the full business name are eligible, so listicle
+    /// snippets that cite other businesses' phones cannot leak into
+    /// the entry.
     #[must_use]
-    pub fn place_from_results(results: &[SearxngResult]) -> Option<PlaceData> {
+    pub fn place_from_results(
+        results: &[SearxngResult],
+        business_name: &str,
+    ) -> Option<PlaceData> {
         let top = results.first()?;
+        let phone = results
+            .iter()
+            .enumerate()
+            .filter(|(rank, r)| {
+                *rank == 0 || locations::title_has_full_name(&r.title, business_name)
+            })
+            .find_map(|(_, r)| r.content.as_deref().and_then(extract_us_phone));
         Some(PlaceData {
-            phone: top.content.as_deref().and_then(extract_us_phone),
+            phone,
             website: (!top.url.trim().is_empty()).then(|| top.url.clone()),
             description: top
                 .content
@@ -810,7 +827,7 @@ impl EnrichmentEngine {
     pub async fn fetch_place_data(&mut self, name: &str, location: &str) -> Result<Option<PlaceData>, String> {
         self.fetch_search_results(name, location)
             .await
-            .map(|found| found.and_then(|results| Self::place_from_results(&results)))
+            .map(|found| found.and_then(|results| Self::place_from_results(&results, name)))
     }
 
     /// Enrich one business end-to-end: gate on its `google_maps` source
@@ -993,7 +1010,7 @@ impl EnrichmentEngine {
         let looked_up = self.fetch_search_results(name, location).await?;
         match looked_up {
             Some(found) => {
-                let parsed = Self::place_from_results(&found)
+                let parsed = Self::place_from_results(&found, name)
                     .expect("non-empty result list carries a top result");
                 out.place = Some(parsed.clone());
                 out.results = Some(found);
@@ -1930,8 +1947,9 @@ mod tests {
         assert_eq!(err, "searxng lookup failed: HTTP 500");
     }
 
-    /// `place_from_results` maps the top result only; an empty list yields
-    /// `None` (regression guard for the fetch/derive split).
+    /// `place_from_results` maps `website`/`description` from the top
+    /// result only; an empty list yields `None` (regression guard for
+    /// the fetch/derive split).
     #[test]
     fn test_place_from_results_maps_top_result_only() {
         let results = vec![SearxngResult {
@@ -1943,13 +1961,112 @@ mod tests {
             score: None,
             img_src: None,
         }];
-        let place = EnrichmentEngine::place_from_results(&results).expect("top result maps");
+        let place =
+            EnrichmentEngine::place_from_results(&results, "Example Kitchen")
+                .expect("top result maps");
+        assert_eq!(place.phone.as_deref(), Some("(404) 555-0199"));
         assert_eq!(place.website.as_deref(), Some("https://example.test/kitchen"));
         assert_eq!(
             place.description.as_deref(),
             Some("Great kitchen. Call (404) 555-0199.")
         );
-        assert!(EnrichmentEngine::place_from_results(&[]).is_none());
+        assert!(EnrichmentEngine::place_from_results(&[], "Example Kitchen").is_none());
+    }
+
+    /// `phone` is mined across ranked snippets, not just the top
+    /// result: a phone absent from the top snippet is found in the
+    /// first lower result titled with the business name, while
+    /// results that do not mention the business are skipped even when
+    /// they rank higher (cross-business contamination guard).
+    #[test]
+    fn test_place_from_results_mines_phone_from_ranked_snippets() {
+        let results = vec![
+            SearxngResult {
+                url: "https://example.test/kitchen".to_string(),
+                title: "Example Kitchen: Home".to_string(),
+                content: Some("Great kitchen in town.".to_string()),
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://listicle.test/best-kitchens".to_string(),
+                title: "Ten Best Kitchens in Town".to_string(),
+                content: Some("Rival spot: call (404) 555-7777.".to_string()),
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://directory.test/example-kitchen".to_string(),
+                title: "Example Kitchen | City Directory".to_string(),
+                content: Some("Call (404) 555-0199 for reservations.".to_string()),
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+        ];
+        let place =
+            EnrichmentEngine::place_from_results(&results, "Example Kitchen")
+                .expect("top result maps");
+        assert_eq!(place.phone.as_deref(), Some("(404) 555-0199"));
+        assert_eq!(place.website.as_deref(), Some("https://example.test/kitchen"));
+    }
+
+    /// Phone eligibility: a snippet that does not mention the business
+    /// by name is never taken, even when it ranks above a matching
+    /// result; the top result's snippet stays eligible without a title
+    /// match (back-compat with the single-payload lookup).
+    #[test]
+    fn test_place_from_results_phone_eligibility_rules() {
+        let foreign_only = vec![
+            SearxngResult {
+                url: "https://example.test/kitchen".to_string(),
+                title: "Example Kitchen: Home".to_string(),
+                content: Some("Great kitchen in town.".to_string()),
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://listicle.test/best-kitchens".to_string(),
+                title: "Ten Best Kitchens in Town".to_string(),
+                content: Some("Rival spot: call (404) 555-7777.".to_string()),
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+        ];
+        let place =
+            EnrichmentEngine::place_from_results(&foreign_only, "Example Kitchen")
+                .expect("top result maps");
+        assert!(
+            place.phone.is_none(),
+            "foreign-titled snippet must not supply a phone"
+        );
+
+        let top_unmatched = vec![SearxngResult {
+            url: "https://example.test/kitchen".to_string(),
+            title: "A Local Eats Roundup".to_string(),
+            content: Some("Great kitchen. Call (404) 555-0199.".to_string()),
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: None,
+        }];
+        let place =
+            EnrichmentEngine::place_from_results(&top_unmatched, "Example Kitchen")
+                .expect("top result maps");
+        assert_eq!(
+            place.phone.as_deref(),
+            Some("(404) 555-0199"),
+            "top snippet is always eligible"
+        );
     }
 
     /// Multi-host stub: answers `searxng.test` with the `SearXNG` body and
