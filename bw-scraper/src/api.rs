@@ -426,6 +426,38 @@ mod tests {
         "articles": []
     }"#;
 
+    /// `SearXNG` fixture for the AC12 location-discovery test: one result
+    /// whose title carries the seeded business name + branch label and
+    /// whose snippet carries a fully-matched US address.
+    const LOC_DISCOVERY_SEARXNG: &str = r#"{
+        "query": "ac12",
+        "number_of_results": 1,
+        "results": [
+            {
+                "url": "https://opentable.test/r/ac12-loc-bistro-west",
+                "title": "AC12 Loc Run Business 1 - West, Springfield, IL - OpenTable",
+                "content": "421 West Ave, Ste 2, Springfield, IL 62704 - About this restaurant",
+                "engine": "opentable",
+                "score": 1.0
+            }
+        ],
+        "unresponsive_engines": []
+    }"#;
+
+    /// `Nominatim` geocode fixture for the AC12 location-discovery test:
+    /// one hit ~14 km from the seeded primary so the 300 m proximity merge
+    /// does not mask the insert.
+    const LOC_DISCOVERY_NOMINATIM: &str = r#"[
+        {
+            "place_id": 1,
+            "osm_type": "way",
+            "osm_id": 1,
+            "lat": "39.797000",
+            "lon": "-89.647000",
+            "display_name": "421 West Ave, Springfield, IL"
+        }
+    ]"#;
+
     /// Compose Postgres pool; DB tests skip when unreachable.
     async fn test_pool() -> Result<PgPool, String> {
         let url = std::env::var("DATABASE_URL")
@@ -438,11 +470,12 @@ mod tests {
     }
 
     /// Shared fixture `SearXNG` server for the whole module: one stub
-    /// answering every request with the `SearXNG` JSON fixture. Seeded
-    /// `source_ids` are Google-shaped so they pass `is_google_share_link`
-    /// (gate only — never fetched); the engine's `SearXNG` base URL is
-    /// routed through the `http_proxy` env var (set once, here) to the
-    /// stub.
+    /// answering every request with the `SearXNG` JSON fixture, except
+    /// paths under `/ac12-search/` and `/ac12-nominatim/`, which serve the
+    /// location-discovery test's own fixtures. Seeded `source_ids` are
+    /// Google-shaped so they pass `is_google_share_link` (gate only — never
+    /// fetched); the engine's base URLs are routed through the `http_proxy`
+    /// env var (set once, here) to the stub.
     static FIXTURE_STUB_PORT: std::sync::LazyLock<u16> = std::sync::LazyLock::new(|| {
         let listener =
             std::net::TcpListener::bind("127.0.0.1:0").expect("bind fixture listener");
@@ -471,11 +504,20 @@ mod tests {
                 // re-sends the same query, so the distinct count stays
                 // exact under concurrent load and proves one logical
                 // SearXNG lookup per business.
-                if let Some(path) = stub_request_path(&head) {
-                    if path.starts_with("/search") && path.contains("AC3+Enrich+500") {
-                        AC3_STUB_PATHS.lock().insert(path);
+                let path = stub_request_path(&head);
+                if let Some(p) = &path {
+                    if p.starts_with("/search") && p.contains("AC3+Enrich+500") {
+                        AC3_STUB_PATHS.lock().insert(p.clone());
                     }
                 }
+                // The AC12 location-discovery test routes unroutable bases
+                // through this proxy and selects its fixtures by path
+                // prefix; every other request keeps the shared fixture.
+                let body = match path.as_deref() {
+                    Some(p) if p.starts_with("/ac12-search/") => LOC_DISCOVERY_SEARXNG,
+                    Some(p) if p.starts_with("/ac12-nominatim/") => LOC_DISCOVERY_NOMINATIM,
+                    _ => body.as_str(),
+                };
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
@@ -1562,5 +1604,132 @@ mod tests {
         assert_eq!(count, 0, "dry run must not write location rows");
 
         cleanup_family(&pool, "AC11 Locations").await;
+    }
+
+    // POST /locations live discovery pinned end-to-end: a `SearXNG` snippet
+    // carrying a US address plus a `Nominatim` geocode produce one secondary
+    // `business_locations` row next to the ensured primary; a re-run dedupes
+    // to zero new rows. Routes through the shared fixture proxy like the
+    // other handler tests; the /ac12-* path prefixes select this test's
+    // fixtures so the process-wide proxy env cannot starve them.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn test_locations_run_discovers_and_dedupes() {
+
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        // Both bases are unroutable directly; the shared fixture proxy
+        // (http_proxy, set by fixture_proxy_port) intercepts them, and the
+        // /ac12-* path prefixes select this test's SearXNG/Nominatim
+        // fixtures.
+        fixture_proxy_port();
+
+        cleanup_family(&pool, "AC12 Loc Run").await;
+        let ids = seed_eligible_source(&pool, "AC12 Loc Run", 1, |_i| {
+            "http://maps.google.test/maps/ok?cid=ac12-loc".to_string()
+        })
+        .await;
+        let biz_id = ids[0];
+        // A real primary address with coordinates far from the candidate's
+        // geocode, so the state guard passes and the proximity merge does not
+        // mask the string dedupe.
+        sqlx::query("UPDATE businesses SET location = $2, lat = 39.70, lng = -89.75 WHERE id = $1")
+            .bind(biz_id)
+            .bind("10 Main St, Springfield, IL 62701")
+            .execute(&pool)
+            .await
+            .expect("primary address seeded");
+
+        let state = AppState {
+            pool: pool.clone(),
+            config: Config {
+                database_url: "postgresql://localhost/test".to_string(),
+                searxng_url: "http://127.0.0.1:1/ac12-search".to_string(),
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                nats_url: None,
+                redis_url: None,
+                clickhouse_url: None,
+                log_level: "info".to_string(),
+                nominatim_url: Some("http://127.0.0.1:1/ac12-nominatim".to_string()),
+            },
+            importer: PostgresImporter::new(pool.clone()),
+            searxng: SearxngClient::new("http://127.0.0.1:1"),
+        };
+
+        let res = locations(
+            State(state.clone()),
+            Json(LocationsRequest {
+                business_ids: Some(vec![biz_id]),
+                limit: Some(10),
+                dry_run: None,
+            }),
+        )
+        .await
+        .expect("live discovery run succeeds");
+        let (status, Json(body)) = res;
+        let value: serde_json::Value = body;
+        assert_eq!(status, StatusCode::OK, "{value}");
+        assert_eq!(value["summary"]["total"], 1, "{value}");
+        assert_eq!(value["summary"]["locations_added"], 1, "{value}");
+        assert_eq!(value["summary"]["failed"], 0, "{value}");
+        let entry = &value["businesses"][0];
+        assert_eq!(entry["primary_added"], true, "{value}");
+        assert_eq!(entry["locations"][0]["inserted"], true, "{value}");
+        assert_eq!(
+            entry["locations"][0]["address"],
+            "421 West Ave, Ste 2, Springfield, IL 62704",
+            "{value}"
+        );
+
+        let rows: Vec<(String, bool)> = sqlx::query_as(
+            "SELECT address, is_primary FROM business_locations
+             WHERE business_id = $1 ORDER BY is_primary DESC",
+        )
+        .bind(biz_id)
+        .fetch_all(&pool)
+        .await
+        .expect("location rows read");
+        assert_eq!(rows.len(), 2, "primary + discovered secondary: {value}");
+        assert_eq!(rows[0].0, "10 Main St, Springfield, IL 62701", "{value}");
+        assert!(rows[0].1, "{value}");
+
+        // Re-run: the discovered address is already stored -> deduped, no new
+        // rows.
+        let res2 = locations(
+            State(state.clone()),
+            Json(LocationsRequest {
+                business_ids: Some(vec![biz_id]),
+                limit: Some(10),
+                dry_run: None,
+            }),
+        )
+        .await
+        .expect("second discovery run succeeds");
+        let (_, Json(body2)) = res2;
+        let value2: serde_json::Value = body2;
+        assert_eq!(value2["summary"]["locations_added"], 0, "{value2}");
+        assert_eq!(
+            value2["businesses"][0]["locations"][0]["inserted"],
+            false,
+            "repeat address must dedupe: {value2}"
+        );
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM business_locations WHERE business_id = $1",
+        )
+        .bind(biz_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count reads");
+        assert_eq!(count, 2, "re-run must not duplicate rows: {value2}");
+
+        cleanup_family(&pool, "AC12 Loc Run").await;
     }
 }
