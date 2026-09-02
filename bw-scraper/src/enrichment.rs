@@ -21,9 +21,10 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::etl::extract_us_phone;
+use crate::locations;
 use crate::rate_limiter::RateLimiter;
 use crate::robots::RobotsChecker;
-use crate::searxng::SearxngResponse;
+use crate::searxng::{SearxngResponse, SearxngResult};
 use crate::user_agent_rotator::UserAgentRotator;
 
 /// Enrichment payload for one business.
@@ -111,6 +112,10 @@ pub struct EnrichResult {
     /// Informational run-report notes (e.g. "no menu link found").
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
+    /// Secondary locations discovered this run (empty = none found or
+    /// written; omitted from JSON when empty).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locations: Vec<locations::LocationDiscovered>,
     /// Present when the business has no usable enrichment source.
     pub reason: Option<&'static str>,
     pub error: Option<String>,
@@ -666,6 +671,8 @@ pub struct EnrichmentEngine {
     /// `SearXNG` base URL (e.g. `http://192.168.68.50:8888`); lookups hit
     /// `{base}/search?q=...&format=json`.
     searxng_base: String,
+    /// Geocoder for the location-discovery pass (Nominatim by default).
+    geocoder: locations::Geocoder,
 }
 
 /// Body cap for the homepage menu-discovery fetch (500 KB).
@@ -694,29 +701,40 @@ impl EnrichmentEngine {
             .timeout(Duration::from_secs(20))
             .build()
             .expect("reqwest client builds with default settings");
+        let geocoder = locations::Geocoder::new(&http, locations::DEFAULT_NOMINATIM_URL);
         Self {
             http,
             limiter,
             rotator: UserAgentRotator::new(),
             robots: RobotsChecker::new(),
             searxng_base: searxng_base.trim_end_matches('/').to_string(),
+            geocoder,
         }
     }
 
-    /// Look a business up on `SearXNG` (robots + rate-limit +
+    /// Point the location-discovery geocoder at a custom `Nominatim`
+    /// endpoint (e.g. a local mirror or a test stub).
+    #[must_use]
+    pub fn with_nominatim(mut self, base: &str) -> Self {
+        self.geocoder = locations::Geocoder::new(&self.http, base);
+        self
+    }
+
+    /// Look the business up on `SearXNG` (robots + rate-limit +
     /// UA-rotation guarded — the engine's single guarded path for
     /// outbound enrichment fetches). `Ok(None)` means the lookup returned
-    /// no results: the caller reports "no enrichment source". The top
-    /// result supplies `website` (result URL), `description` (snippet),
-    /// and `phone` (US phone extracted from the snippet with the ETL
-    /// regex).
+    /// no results: the caller reports "no enrichment source".
     ///
     /// # Errors
     ///
     /// Returns an error when the robots check blocks the lookup, the
     /// request fails, the instance answers a non-2xx status, or the
     /// body is not valid `SearXNG` JSON.
-    pub async fn fetch_place_data(&mut self, name: &str, location: &str) -> Result<Option<PlaceData>, String> {
+    pub async fn fetch_search_results(
+        &mut self,
+        name: &str,
+        location: &str,
+    ) -> Result<Option<Vec<SearxngResult>>, String> {
         let mut query = name.trim().to_string();
         let loc = location.trim();
         if !loc.is_empty() {
@@ -755,18 +773,44 @@ impl EnrichmentEngine {
         let parsed: SearxngResponse =
             serde_json::from_str(&body).map_err(|e| format!("searxng lookup failed: {e}"))?;
 
-        let Some(top) = parsed.results.into_iter().next() else {
-            return Ok(None);
-        };
-        Ok(Some(PlaceData {
+        if parsed.results.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(parsed.results))
+        }
+    }
+
+    /// Derive the fill-empty payload from the top `SearXNG` result:
+    /// `website` = result URL, `description` = snippet, `phone` = US
+    /// phone extracted from the snippet with the ETL regex.
+    #[must_use]
+    pub fn place_from_results(results: &[SearxngResult]) -> Option<PlaceData> {
+        let top = results.first()?;
+        Some(PlaceData {
             phone: top.content.as_deref().and_then(extract_us_phone),
             website: (!top.url.trim().is_empty()).then(|| top.url.clone()),
-            description: top.content.filter(|content| !content.trim().is_empty()),
+            description: top
+                .content
+                .as_ref()
+                .filter(|content| !content.trim().is_empty())
+                .cloned(),
             rating: None,
             review_count: None,
             social_urls: None,
             photos: None,
-        }))
+        })
+    }
+
+    /// Backwards-compatible single-payload lookup (see
+    /// [`Self::fetch_search_results`] for the full result list).
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`Self::fetch_search_results`] errors.
+    pub async fn fetch_place_data(&mut self, name: &str, location: &str) -> Result<Option<PlaceData>, String> {
+        self.fetch_search_results(name, location)
+            .await
+            .map(|found| found.and_then(|results| Self::place_from_results(&results)))
     }
 
     /// Enrich one business end-to-end: gate on its `google_maps` source
@@ -782,6 +826,7 @@ impl EnrichmentEngine {
             applied: Vec::new(),
             skipped: Vec::new(),
             notes: Vec::new(),
+            locations: Vec::new(),
             reason: None,
             error: Some(error),
         };
@@ -799,24 +844,37 @@ impl EnrichmentEngine {
             Err(e) => return with_error(String::new(), e),
         };
 
-        let mut place: Option<PlaceData> = None;
+        let mut lookup = LookupOut { place: None, results: None };
 
         let mut result = if is_google_share_link(&source, &source_id) {
             let location = pre_run_row.location.clone().unwrap_or_default();
-            self.lookup_and_apply(pool, business_id, &name, &location, &mut place, dry_run)
-                .await
-                .unwrap_or_else(|e| with_error(name, e))
+            self.lookup_and_apply(
+                pool,
+                business_id,
+                &name,
+                &location,
+                &mut lookup,
+                dry_run,
+            )
+            .await
+            .unwrap_or_else(|e| with_error(name.clone(), e))
         } else {
             EnrichResult {
                 business_id,
-                business_name: name,
+                business_name: name.clone(),
                 applied: Vec::new(),
                 skipped: Vec::new(),
                 notes: Vec::new(),
+                locations: Vec::new(),
                 reason: Some("no enrichment source"),
                 error: None,
             }
         };
+
+        let LookupOut {
+            place,
+            results: search_results,
+        } = lookup;
 
         // Menu-discovery pass: depth 1 (homepage only), independent of
         // the place-JSON outcome.
@@ -869,25 +927,76 @@ impl EnrichmentEngine {
             }
         }
 
+        // Location-discovery pass: independent of the place-JSON outcome;
+        // a failure is a note, never a business failure.
+        self.run_location_pass(pool, business_id, &pre_run_row, search_results.as_ref(), dry_run, &mut result)
+            .await;
+
         result
     }
 
+    /// Location-discovery pass over this run's `SearXNG` results: ensures
+    /// the primary row, mines snippets for secondary addresses, geocodes
+    /// and inserts them, then merges the outcome (notes + discovered
+    /// locations) into `result`. Failures become notes, never errors.
+    async fn run_location_pass(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        pre_run_row: &BusinessRow,
+        search_results: Option<&Vec<SearxngResult>>,
+        dry_run: bool,
+        result: &mut EnrichResult,
+    ) {
+        let Some(results) = search_results else {
+            return;
+        };
+        match self
+            .discover_locations_on_results(pool, business_id, &pre_run_row.name, results, pre_run_row, dry_run)
+            .await
+        {
+            Ok(outcome) => {
+                if outcome.primary_added {
+                    tracing::info!(business_id = %business_id, "primary location row ensured");
+                    result.notes.push("primary location row ensured".to_string());
+                }
+                for found in &outcome.locations {
+                    if found.inserted {
+                        tracing::info!(
+                            "secondary location written: business {business_id}, label {}",
+                            found.label.as_deref().unwrap_or("")
+                        );
+                    }
+                }
+                result.notes.extend(outcome.notes);
+                result.locations = outcome.locations;
+            }
+            Err(e) => {
+                tracing::warn!(business_id = %business_id, "location discovery failed: {e}");
+                result.notes.push(format!("location discovery failed: {e}"));
+            }
+        }
+    }
+
     /// Look the business up on `SearXNG` and apply the fill-empty plan.
-    /// Stores the parsed result into `*place` so the photo pass can judge
-    /// on this run's URLs.
+    /// Stores the parsed place into `out.place` (photo pass) and the raw
+    /// result list into `out.results` (location-discovery pass).
     async fn lookup_and_apply(
         &mut self,
         pool: &PgPool,
         business_id: Uuid,
         name: &str,
         location: &str,
-        place: &mut Option<PlaceData>,
+        out: &mut LookupOut,
         dry_run: bool,
     ) -> Result<EnrichResult, String> {
-        let looked_up = self.fetch_place_data(name, location).await?;
+        let looked_up = self.fetch_search_results(name, location).await?;
         match looked_up {
-            Some(parsed) => {
-                *place = Some(parsed.clone());
+            Some(found) => {
+                let parsed = Self::place_from_results(&found)
+                    .expect("non-empty result list carries a top result");
+                out.place = Some(parsed.clone());
+                out.results = Some(found);
                 let (applied, skipped) =
                     apply_fill_empty(pool, business_id, &parsed, dry_run).await?;
                 Ok(EnrichResult {
@@ -896,6 +1005,7 @@ impl EnrichmentEngine {
                     applied,
                     skipped,
                     notes: Vec::new(),
+                    locations: Vec::new(),
                     reason: None,
                     error: None,
                 })
@@ -906,10 +1016,200 @@ impl EnrichmentEngine {
                 applied: Vec::new(),
                 skipped: Vec::new(),
                 notes: Vec::new(),
+                locations: Vec::new(),
                 reason: Some("no enrichment source"),
                 error: None,
             }),
         }
+    }
+
+    /// Location-discovery pass over one business: gate on the
+    /// `google_maps` source, fetch `SearXNG` results, then run
+    /// [`Self::discover_locations_on_results`] over them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the source gate or the `SearXNG` lookup
+    /// fails; per-candidate geocode misses become notes instead.
+    pub async fn discover_business_locations(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        dry_run: bool,
+    ) -> Result<locations::LocationDiscoveryOutcome, String> {
+        let row = load_business(pool, business_id).await?;
+        let (name, source, source_id) = resolve_source(pool, business_id).await?;
+        if !is_google_share_link(&source, &source_id) {
+            return Ok(locations::LocationDiscoveryOutcome {
+                business_name: name,
+                reason: Some("no enrichment source".to_string()),
+                ..Default::default()
+            });
+        }
+        let location = row.location.clone().unwrap_or_default();
+        let results = self.fetch_search_results(&name, &location).await?;
+        if let Some(results) = results {
+            self.discover_locations_on_results(pool, business_id, &row.name, &results, &row, dry_run)
+                .await
+        } else {
+            Ok(locations::LocationDiscoveryOutcome {
+                business_name: name,
+                notes: vec!["no searxng results".to_string()],
+                ..Default::default()
+            })
+        }
+    }
+
+    /// Location-discovery pass over an already-fetched result list: build
+    /// address-driven candidates, geocode them via the shared rate
+    /// limiter, merge near-duplicates, and upsert non-duplicate secondary
+    /// locations into `business_locations`. Also ensures the primary row
+    /// exists (data-model completeness).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the primary-ensure or a location insert
+    /// round-trip fails; individual geocode misses become notes.
+    pub async fn discover_locations_on_results(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        name: &str,
+        results: &[SearxngResult],
+        row: &BusinessRow,
+        dry_run: bool,
+    ) -> Result<locations::LocationDiscoveryOutcome, String> {
+        let mut outcome = locations::LocationDiscoveryOutcome {
+            business_name: name.to_string(),
+            ..Default::default()
+        };
+
+        let mut existing: Vec<(f64, f64, String)> = Vec::new();
+        if !dry_run {
+            outcome.primary_added = locations::ensure_primary_location(pool, business_id).await?;
+            existing = sqlx::query_as(
+                "SELECT lat, lng, address FROM business_locations
+                 WHERE business_id = $1 AND lat IS NOT NULL AND lng IS NOT NULL",
+            )
+            .bind(business_id)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+
+        let candidates =
+            locations::filter_candidates(&locations::build_candidates(name, results), &row.location);
+        let mut capped = candidates;
+        capped.truncate(locations::MAX_CANDIDATES_TO_GEOCODE);
+
+        let mut groups: Vec<GeocodedCandidate> = Vec::new();
+        for cand in &capped {
+            let label_votes = cand.labels.clone();
+            if dry_run {
+                outcome.locations.push(locations::LocationDiscovered {
+                    label: locations::pick_label(&label_votes, &cand.parsed.city),
+                    address: cand.parsed.full.clone(),
+                    lat: None,
+                    lng: None,
+                    inserted: false,
+                });
+                continue;
+            }
+            self.limiter.wait_before_request().await;
+            match self.geocoder.geocode(&cand.parsed.full).await {
+                Ok(Some((lat, lng))) => {
+                    if let Some(group) = groups
+                        .iter_mut()
+                        .find(|g| locations::distance_m(g.lat, g.lng, lat, lng) <= locations::MERGE_DISTANCE_M)
+                    {
+                        group.addresses.push(cand.parsed.full.clone());
+                        group.labels.extend(label_votes);
+                    } else {
+                        groups.push(GeocodedCandidate {
+                            addresses: vec![cand.parsed.full.clone()],
+                            labels: label_votes,
+                            lat,
+                            lng,
+                        });
+                    }
+                }
+                Ok(None) => outcome.notes.push(format!(
+                    "no geocode result for {}; skipped",
+                    cand.parsed.full
+                )),
+                Err(e) => outcome.notes.push(format!("geocode failed for {}: {e}", cand.parsed.full)),
+            }
+        }
+
+        groups.truncate(locations::MAX_LOCATIONS_PER_BUSINESS);
+
+        for group in &groups {
+            Self::insert_or_report_duplicate(pool, business_id, group, &existing, &mut outcome)
+                .await?;
+        }
+
+        Ok(outcome)
+    }
+
+    /// Insert a geocoded candidate group into `business_locations`, or report
+    /// it as a proximity duplicate when it geocodes within
+    /// `locations::MERGE_DISTANCE_M` of a location already stored for the
+    /// business.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the insert query fails.
+    async fn insert_or_report_duplicate(
+        pool: &PgPool,
+        business_id: Uuid,
+        group: &GeocodedCandidate,
+        existing: &[(f64, f64, String)],
+        outcome: &mut locations::LocationDiscoveryOutcome,
+    ) -> Result<(), String> {
+        let address = group
+            .addresses
+            .iter()
+            .max_by_key(|a| a.len())
+            .cloned()
+            .unwrap_or_default();
+        let city = locations::parse_address(&address).map(|p| p.city).unwrap_or_default();
+        let label = locations::pick_label(&group.labels, &city);
+        if existing
+            .iter()
+            .any(|(elat, elng, _)| {
+                locations::distance_m(*elat, *elng, group.lat, group.lng)
+                    <= locations::MERGE_DISTANCE_M
+            })
+        {
+            outcome.notes.push(format!(
+                "{address} within 300 m of an existing location; skipped as duplicate"
+            ));
+            outcome.locations.push(locations::LocationDiscovered {
+                label,
+                address,
+                lat: Some(group.lat),
+                lng: Some(group.lng),
+                inserted: false,
+            });
+            return Ok(());
+        }
+        let inserted = locations::insert_secondary_location(
+            pool,
+            business_id,
+            &label,
+            &address,
+            Some(group.lat),
+            Some(group.lng),
+        )
+        .await?;
+        outcome.locations.push(locations::LocationDiscovered {
+            label,
+            address,
+            lat: Some(group.lat),
+            lng: Some(group.lng),
+            inserted,
+        });
+        Ok(())
     }
 
     /// Enrich a batch of businesses. Each business is processed
@@ -1113,6 +1413,24 @@ impl EnrichmentEngine {
             Err(detail) => Ok(PhotoOutcome::CheckFailed(detail)),
         }
     }
+}
+
+/// A geocoded location-discovery group: one or more address variants that
+/// resolved to (approximately) the same place, plus their label votes.
+/// Out-parameters written by `EnrichmentEngine::lookup_and_apply`: the
+/// parsed place (consumed by the photo pass) and the raw `SearXNG` result
+/// list (consumed by the location-discovery pass).
+struct LookupOut {
+    place: Option<PlaceData>,
+    results: Option<Vec<SearxngResult>>,
+}
+
+#[derive(Debug)]
+struct GeocodedCandidate {
+    addresses: Vec<String>,
+    labels: Vec<String>,
+    lat: f64,
+    lng: f64,
 }
 
 #[cfg(test)]
@@ -1536,6 +1854,7 @@ mod tests {
             )
             .build()
             .expect("test client builds");
+        let geocoder = locations::Geocoder::new(&http, "http://nominatim.test");
         EnrichmentEngine {
             http,
             limiter: RateLimiter::with_config(RateLimiterConfig {
@@ -1545,6 +1864,7 @@ mod tests {
             rotator: UserAgentRotator::new(),
             robots: RobotsChecker::new(),
             searxng_base: "http://searxng.test".to_string(),
+            geocoder,
         }
     }
 
@@ -1608,6 +1928,398 @@ mod tests {
             .expect_err("HTTP 500 must be reported as an error");
 
         assert_eq!(err, "searxng lookup failed: HTTP 500");
+    }
+
+    /// `place_from_results` maps the top result only; an empty list yields
+    /// `None` (regression guard for the fetch/derive split).
+    #[test]
+    fn test_place_from_results_maps_top_result_only() {
+        let results = vec![SearxngResult {
+            url: "https://example.test/kitchen".to_string(),
+            title: "Example Kitchen".to_string(),
+            content: Some("Great kitchen. Call (404) 555-0199.".to_string()),
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: None,
+        }];
+        let place = EnrichmentEngine::place_from_results(&results).expect("top result maps");
+        assert_eq!(place.website.as_deref(), Some("https://example.test/kitchen"));
+        assert_eq!(
+            place.description.as_deref(),
+            Some("Great kitchen. Call (404) 555-0199.")
+        );
+        assert!(EnrichmentEngine::place_from_results(&[]).is_none());
+    }
+
+    /// Multi-host stub: answers `searxng.test` with the `SearXNG` body and
+    /// `nominatim.test` with the Nominatim body. Requests arrive in
+    /// absolute form through the proxy, so the host is visible on the
+    /// request line.
+    fn start_dual_stub(searxng_body: &str, nominatim_body: &str) -> u16 {
+        let listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("bind dual stub listener");
+        let port = listener.local_addr().expect("dual stub address").port();
+        let searxng_body = searxng_body.to_string();
+        let nominatim_body = nominatim_body.to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else {
+                    break;
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                let body = if request_line.contains("nominatim.test") {
+                    nominatim_body.clone()
+                } else {
+                    searxng_body.clone()
+                };
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        port
+    }
+
+    const LOC_DISCOVERY_SEARXNG: &str = r#"{
+        "query": "ac10 loc bistro",
+        "number_of_results": 2,
+        "results": [
+            {
+                "url": "https://opentable.test/r/ac10-loc-bistro-west-springfield",
+                "title": "AC10 Loc Bistro - West, Springfield, IL - OpenTable",
+                "content": "421 West Ave, Ste 2, Springfield, IL 62704 - About this restaurant",
+                "engine": "opentable",
+                "score": 1.0
+            },
+            {
+                "url": "https://yelp.test/biz/ac10-loc-bistro",
+                "title": "AC10 Loc Bistro - Restaurant Reviews - Yelp",
+                "content": "AC10 Loc Bistro - Try Our New Menu",
+                "engine": "yelp",
+                "score": 0.9
+            }
+        ],
+        "unresponsive_engines": []
+    }"#;
+
+    const LOC_DISCOVERY_NOMINATIM: &str = r#"[
+        {
+            "place_id": 1,
+            "osm_type": "way",
+            "osm_id": 1,
+            "lat": "39.797000",
+            "lon": "-89.647000",
+            "display_name": "421 West Ave, Springfield, IL"
+        }
+    ]"#;
+
+    const LOC_DISCOVERY_NEAR_SEARXNG: &str = r#"{
+        "query": "ac11 loc bistro",
+        "number_of_results": 1,
+        "results": [
+            {
+                "url": "https://opentable.test/r/ac11-loc-bistro-west-springfield",
+                "title": "AC11 Loc Bistro - West, Springfield, IL - OpenTable",
+                "content": "421 West Ave, Ste 2, Springfield, IL 62704 - About this restaurant",
+                "engine": "opentable",
+                "score": 1.0
+            }
+        ],
+        "unresponsive_engines": []
+    }"#;
+
+    // Location discovery: a venue title + snippet address produce one
+    // secondary `business_locations` row, the primary row is ensured from
+    // the `businesses` row, and a re-run dedupes to zero new rows.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn test_discover_locations_writes_secondary_and_primary() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let name = "AC10 Loc Bistro";
+        sqlx::query(
+            "DELETE FROM business_locations WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)",
+        )
+        .bind(name)
+        .execute(&pool)
+        .await
+        .expect("cleanup locations");
+        sqlx::query("DELETE FROM businesses WHERE name = $1")
+            .bind(name)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE name = $1")
+            .bind(name)
+            .execute(&pool)
+            .await
+            .expect("cleanup scraped");
+
+        let stub_port = start_dual_stub(LOC_DISCOVERY_SEARXNG, LOC_DISCOVERY_NOMINATIM);
+        let mut engine = ac2_test_engine(stub_port);
+
+        let user_id = seed_user(&pool, "ac10-loc-", "AC10 Loc").await;
+        let job_id = seed_scrape_job(&pool, "ac10 loc").await;
+        let biz_id = seed_business(&pool, user_id, name, None).await;
+
+        // Give the row a real primary address + coordinates so the state
+        // guard, primary exclusion, and primary-ensure paths all run.
+        // Keep the primary's coordinates far from the candidate's geocode
+        // (39.797, -89.647) so the proximity gate does not skip the
+        // secondary insert. The city stays Springfield so the state guard
+        // still passes.
+        sqlx::query("UPDATE businesses SET location = $2, lat = 39.70, lng = -89.75 WHERE id = $1")
+            .bind(biz_id)
+            .bind("10 Main St, Springfield, IL 62701")
+            .execute(&pool)
+            .await
+            .expect("primary address seeded");
+        seed_google_source(&pool, job_id, name, "http://maps.google.test/maps/ok?cid=ac10-loc").await;
+
+        let row = load_business(&pool, biz_id).await.expect("business loads");
+        let fixture: serde_json::Value =
+            serde_json::from_str(LOC_DISCOVERY_SEARXNG).expect("fixture parses");
+        let results: Vec<SearxngResult> =
+            serde_json::from_value(fixture["results"].clone()).expect("fixture results parse");
+
+        let outcome = engine
+            .discover_locations_on_results(&pool, biz_id, name, &results, &row, false)
+            .await
+            .expect("discovery succeeds");
+
+        assert!(outcome.primary_added, "primary row must be ensured");
+        assert_eq!(
+            outcome.locations.len(),
+            1,
+            "one secondary location expected: {outcome:?}"
+        );
+        let found = &outcome.locations[0];
+        assert!(found.inserted);
+        assert_eq!(found.label.as_deref(), Some("West"));
+        assert_eq!(found.address, "421 West Ave, Ste 2, Springfield, IL 62704");
+        assert_eq!(found.lat, Some(39.797));
+        assert_eq!(found.lng, Some(-89.647));
+
+        let rows = sqlx::query(
+            "SELECT label, address, is_primary FROM business_locations WHERE business_id = $1 ORDER BY is_primary DESC",
+        )
+        .bind(biz_id)
+        .fetch_all(&pool)
+        .await
+        .expect("location rows read");
+        assert_eq!(rows.len(), 2, "primary + one secondary");
+        let primary = &rows[0];
+        assert!(primary.get::<bool, _>("is_primary"));
+        assert_eq!(
+            primary.get::<Option<String>, _>("address").as_deref(),
+            Some("10 Main St, Springfield, IL 62701")
+        );
+        let secondary = &rows[1];
+        assert!(!secondary.get::<bool, _>("is_primary"));
+        assert_eq!(
+            secondary.get::<Option<String>, _>("address").as_deref(),
+            Some("421 West Ave, Ste 2, Springfield, IL 62704")
+        );
+        assert_eq!(secondary.get::<Option<String>, _>("label").as_deref(), Some("West"));
+
+        // Re-run: the same address is already stored -> deduped, no new row.
+        let outcome2 = engine
+            .discover_locations_on_results(&pool, biz_id, name, &results, &row, false)
+            .await
+            .expect("second discovery succeeds");
+        assert_eq!(outcome2.locations.len(), 1);
+        assert!(!outcome2.locations[0].inserted, "repeat address must dedupe");
+        assert!(!outcome2.primary_added, "primary already exists");
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM business_locations WHERE business_id = $1",
+        )
+        .bind(biz_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count reads");
+        assert_eq!(count, 2, "re-run must not duplicate rows");
+
+        // Cleanup: seeded rows only.
+        sqlx::query("DELETE FROM business_locations WHERE business_id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup locations");
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    // Proximity merge against existing rows: a candidate that geocodes
+    // within 300 m of an already-stored location is reported but not
+    // inserted, so re-discovery of an OCR/typo variant never duplicates a
+    // row.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn test_discover_locations_skips_candidate_near_existing_row() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let name = "AC11 Loc Bistro";
+        sqlx::query(
+            "DELETE FROM business_locations WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)",
+        )
+        .bind(name)
+        .execute(&pool)
+        .await
+        .expect("cleanup locations");
+        sqlx::query("DELETE FROM businesses WHERE name = $1")
+            .bind(name)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE name = $1")
+            .bind(name)
+            .execute(&pool)
+            .await
+            .expect("cleanup scraped");
+
+        let stub_port = start_dual_stub(LOC_DISCOVERY_NEAR_SEARXNG, LOC_DISCOVERY_NOMINATIM);
+        let mut engine = ac2_test_engine(stub_port);
+
+        let user_id = seed_user(&pool, "ac11-loc-", "AC11 Loc").await;
+        let job_id = seed_scrape_job(&pool, "ac11 loc").await;
+        let biz_id = seed_business(&pool, user_id, name, None).await;
+
+        // Primary far from the candidate's geocode (39.797, -89.647); a
+        // pre-existing secondary sits ~14 m from that geocode, well inside
+        // the 300 m merge radius.
+        sqlx::query("UPDATE businesses SET location = $2, lat = 39.70, lng = -89.75 WHERE id = $1")
+            .bind(biz_id)
+            .bind("10 Main St, Springfield, IL 62701")
+            .execute(&pool)
+            .await
+            .expect("primary address seeded");
+        sqlx::query(
+            "INSERT INTO business_locations (business_id, label, address, lat, lng, is_primary)
+             VALUES ($1, 'West', '421 West Ave Ste 2 Springfield IL', 39.7971, -89.6471, false)",
+        )
+        .bind(biz_id)
+        .execute(&pool)
+        .await
+        .expect("pre-existing secondary seeded");
+        seed_google_source(&pool, job_id, name, "http://maps.google.test/maps/ok?cid=ac11-loc").await;
+
+        let row = load_business(&pool, biz_id).await.expect("business loads");
+        let fixture: serde_json::Value =
+            serde_json::from_str(LOC_DISCOVERY_NEAR_SEARXNG).expect("fixture parses");
+        let results: Vec<SearxngResult> =
+            serde_json::from_value(fixture["results"].clone()).expect("fixture results parse");
+
+        let outcome = engine
+            .discover_locations_on_results(&pool, biz_id, name, &results, &row, false)
+            .await
+            .expect("discovery succeeds");
+
+        assert!(outcome.primary_added, "primary row must be ensured");
+        assert_eq!(
+            outcome.locations.len(),
+            1,
+            "one candidate expected: {outcome:?}"
+        );
+        assert!(
+            !outcome.locations[0].inserted,
+            "candidate within 300 m of a stored row must not insert: {outcome:?}"
+        );
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("skipped as duplicate")),
+            "proximity skip should be noted: {outcome:?}"
+        );
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM business_locations WHERE business_id = $1",
+        )
+        .bind(biz_id)
+        .fetch_one(&pool)
+        .await
+        .expect("count reads");
+        assert_eq!(count, 2, "primary + pre-existing row, no duplicate");
+
+        // Cleanup: seeded rows only.
+        sqlx::query("DELETE FROM business_locations WHERE business_id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup locations");
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
     }
 
     // AC2 scenario 1: a per-business HTTP failure is isolated in the run

@@ -9,6 +9,7 @@ pub mod connectors;
 pub mod enrichment;
 pub mod etl;
 pub mod importer;
+pub mod locations;
 pub mod models;
 pub mod rate_limiter;
 pub mod robots;

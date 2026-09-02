@@ -15,6 +15,9 @@ pub struct Config {
     pub redis_url: Option<String>,
     pub clickhouse_url: Option<String>,
     pub log_level: String,
+    /// Optional `Nominatim` endpoint for location-discovery geocoding.
+    /// Defaults to the public OpenStreetMap instance when unset.
+    pub nominatim_url: Option<String>,
 }
 
 impl Config {
@@ -39,6 +42,7 @@ impl Config {
             redis_url: std::env::var("REDIS_URL").ok(),
             clickhouse_url: std::env::var("CLICKHOUSE_URL").ok(),
             log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+            nominatim_url: std::env::var("NOMINATIM_URL").ok(),
         })
     }
 }

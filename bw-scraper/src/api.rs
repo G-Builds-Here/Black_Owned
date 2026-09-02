@@ -35,6 +35,7 @@ pub fn router(state: AppState) -> Router {
         .route("/health/detailed", get(health_detailed))
         .route("/scrape", post(scrape))
         .route("/enrich", post(enrich))
+        .route("/locations", post(locations))
         .with_state(state)
 }
 
@@ -257,6 +258,7 @@ async fn enrich(
                 "name": r.business_name,
                 "applied": r.applied.iter().map(|a| a.field).collect::<Vec<_>>(),
                 "skipped": r.skipped.clone(),
+                "locations": r.locations,
                 "error": r.error,
             })
         })
@@ -270,6 +272,124 @@ async fn enrich(
                 "total": businesses.len(),
                 "enriched": enriched,
                 "skipped": skipped,
+                "failed": failed,
+            },
+        })),
+    ))
+}
+
+/// Default bound for a location-discovery run when the client omits `limit`.
+const LOCATIONS_DEFAULT_LIMIT: i32 = 25;
+
+/// Upper bound for a single location-discovery run.
+const LOCATIONS_MAX_LIMIT: i32 = 500;
+
+/// Eligible for location discovery: `google_maps`-sourced (the same join
+/// convention the enrichment engine resolves share-links from). Unlike
+/// `/enrich`, there is no content-field gate: discovery also runs on
+/// fully enriched businesses.
+const SELECT_LOCATIONS: &str = "SELECT b.id, b.name \
+  FROM businesses b \
+  JOIN scraped_businesses s \
+    ON s.name = b.name AND s.source = 'google_maps'";
+
+/// Location-discovery run request. All fields optional.
+#[derive(Deserialize)]
+pub struct LocationsRequest {
+    /// Restrict the run to these businesses.
+    #[serde(default)]
+    pub business_ids: Option<Vec<Uuid>>,
+    /// Max businesses to process; defaults to 25 when omitted.
+    #[serde(default)]
+    pub limit: Option<i32>,
+    /// Report discovered locations without geocoding or writing rows.
+    #[serde(default)]
+    pub dry_run: Option<bool>,
+}
+
+/// POST /locations — discover secondary physical locations for eligible
+/// businesses from their `SearXNG` results, geocode them via Nominatim,
+/// and write them to `business_locations` (atomic dedupe). Also ensures
+/// every processed business has a primary location row. Unauthenticated
+/// by design (operator endpoint, like `/enrich`).
+async fn locations(
+    State(state): State<AppState>,
+    Json(req): Json<LocationsRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    let limit = req.limit.unwrap_or(LOCATIONS_DEFAULT_LIMIT);
+    if !(1..=LOCATIONS_MAX_LIMIT).contains(&limit) {
+        return Err(err(
+            StatusCode::BAD_REQUEST,
+            format!("limit must be between 1 and {LOCATIONS_MAX_LIMIT}, got {limit}"),
+        ));
+    }
+    let dry_run = req.dry_run.unwrap_or(false);
+
+    let rows = if let Some(ids) = &req.business_ids {
+        let q = format!("{SELECT_LOCATIONS} AND b.id = ANY($1::uuid[]) ORDER BY b.updated_at LIMIT $2");
+        sqlx::query(&q)
+            .bind(ids)
+            .bind(limit)
+            .fetch_all(&state.pool)
+            .await
+    } else {
+        let q = format!("{SELECT_LOCATIONS} ORDER BY b.updated_at LIMIT $1");
+        sqlx::query(&q)
+            .bind(limit)
+            .fetch_all(&state.pool)
+            .await
+    };
+    let rows = rows.map_err(|e| {
+        err(StatusCode::INTERNAL_SERVER_ERROR, format!("location selection failed: {e}"))
+    })?;
+
+    let ids: Vec<Uuid> = rows.iter().map(|r| r.get::<Uuid, _>("id")).collect();
+    let mut engine = EnrichmentEngine::new(&state.config.searxng_url);
+    if let Some(base) = &state.config.nominatim_url {
+        engine = engine.with_nominatim(base);
+    }
+
+    let (mut processed, mut added, mut failed) = (0_i32, 0_i32, 0_i32);
+    let mut businesses: Vec<serde_json::Value> = Vec::with_capacity(ids.len());
+    for id in ids {
+        match engine.discover_business_locations(&state.pool, id, dry_run).await {
+            Ok(outcome) => {
+                processed += 1;
+                let count =
+                    i32::try_from(outcome.locations.iter().filter(|l| l.inserted).count())
+                        .unwrap_or(i32::MAX);
+                added += count;
+                businesses.push(json!({
+                    "id": id,
+                    "name": outcome.business_name,
+                    "locations": outcome.locations,
+                    "primary_added": outcome.primary_added,
+                    "notes": outcome.notes,
+                    "error": null,
+                }));
+            }
+            Err(e) => {
+                failed += 1;
+                businesses.push(json!({
+                    "id": id,
+                    "name": null,
+                    "locations": [],
+                    "primary_added": false,
+                    "notes": [],
+                    "error": e,
+                }));
+            }
+        }
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "businesses": businesses,
+            "summary": {
+                "total": businesses.len(),
+                "processed": processed,
+                "locations_added": added,
                 "failed": failed,
             },
         })),
@@ -422,6 +542,7 @@ mod tests {
                 redis_url: None,
                 clickhouse_url: None,
                 log_level: "info".to_string(),
+                nominatim_url: None,
             },
             importer: PostgresImporter::new(pool.clone()),
             searxng: SearxngClient::new("http://127.0.0.1:1"),
@@ -1329,5 +1450,117 @@ mod tests {
         );
 
         cleanup_family(&pool, "AC3 Enrich 500").await;
+    }
+
+    // /locations validation: out-of-range limits are rejected with 400
+    // before any database work (true unit test via the lazy pool).
+    #[tokio::test]
+    async fn test_locations_limit_out_of_range_rejected() {
+        let state = lazy_state();
+        for limit in [i32::MIN, -1, 0, 501, i32::MAX] {
+            let Err((status, Json(body))) = locations(
+                State(state.clone()),
+                Json(LocationsRequest {
+                    business_ids: None,
+                    limit: Some(limit),
+                    dry_run: None,
+                }),
+            )
+            .await
+            else {
+                panic!("limit {limit} must be rejected");
+            };
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            let value: serde_json::Value = body;
+            assert!(value.get("error").is_some());
+        }
+    }
+
+    // /locations: malformed JSON is rejected by the extractor with 400,
+    // before the handler runs.
+    #[tokio::test]
+    async fn test_locations_malformed_json_returns_400() {
+        let state = lazy_state();
+        for body in ["{not json", "{'limit': oops}", "{\"limit\": 5"] {
+            let app = router(state.clone());
+            let req = Request::builder()
+                .method("POST")
+                .uri("/locations")
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body))
+                .expect("request builds");
+            let res = tower::ServiceExt::oneshot(app, req)
+                .await
+                .expect("router responds");
+            assert_eq!(
+                res.status(),
+                StatusCode::BAD_REQUEST,
+                "malformed body must yield 400: {body}"
+            );
+        }
+    }
+
+    // /locations dry run: eligible businesses are reported, but the
+    // shared `SearXNG` fixture carries no addresses, so no candidates
+    // are built, no geocoding happens, and `business_locations` is
+    // untouched.
+    #[tokio::test]
+    async fn test_locations_dry_run_reports_without_writes() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+        let _guard = AC3_STUB_LOCK.lock().await;
+        fixture_proxy_port();
+        cleanup_family(&pool, "AC11 Locations").await;
+
+        let ids = seed_eligible_source(&pool, "AC11 Locations", 2, |_i| {
+            "http://maps.google.test/maps/ok?cid=ac11".to_string()
+        })
+        .await;
+        assert_eq!(ids.len(), 2, "two eligible businesses seeded");
+
+        let state = test_state(&pool);
+        let res = locations(
+            State(state),
+            Json(LocationsRequest {
+                business_ids: Some(ids.clone()),
+                limit: Some(10),
+                dry_run: Some(true),
+            }),
+        )
+        .await
+        .expect("dry run succeeds");
+        let (status, Json(body)) = res;
+        let value: serde_json::Value = body;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(value["summary"]["total"], 2);
+        assert_eq!(value["summary"]["processed"], 2);
+        assert_eq!(value["summary"]["locations_added"], 0);
+        assert_eq!(value["summary"]["failed"], 0);
+        let business_entries = value["businesses"]
+            .as_array()
+            .expect("businesses is an array");
+        for entry in business_entries {
+            let locs = entry.get("locations").and_then(|v| v.as_array());
+            assert!(
+                locs.is_none_or(Vec::is_empty),
+                "fixture SearXNG carries no addresses: {entry:?}"
+            );
+        }
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM business_locations WHERE business_id = ANY($1::uuid[])",
+        )
+        .bind(&ids)
+        .fetch_one(&pool)
+        .await
+        .expect("count reads");
+        assert_eq!(count, 0, "dry run must not write location rows");
+
+        cleanup_family(&pool, "AC11 Locations").await;
     }
 }
