@@ -52,6 +52,184 @@ pub struct PlaceData {
     pub photos: Option<Vec<String>>,
 }
 
+/// The social platform for a URL host, when the host is a known platform
+/// (case- and `www.`-insensitive); `x.com` is treated as `twitter`.
+#[must_use]
+fn social_platform_for_host(host: &str) -> Option<&'static str> {
+    let host = host.to_lowercase();
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    match host {
+        "facebook.com" | "fb.com" => Some("facebook"),
+        "instagram.com" => Some("instagram"),
+        "twitter.com" | "x.com" => Some("twitter"),
+        "tiktok.com" => Some("tiktok"),
+        "youtube.com" | "youtu.be" => Some("youtube"),
+        "linkedin.com" => Some("linkedin"),
+        _ => None,
+    }
+}
+
+/// Find social profile pages among `SearXNG` results, in rank order:
+/// the first result per platform whose URL is a clean profile link on a
+/// known platform host. Content and share endpoints (`/reel/`,
+/// `sharer.php`, `watch?v=`, ...) are not profiles; query strings and
+/// fragments are stripped from the stored URL.
+#[must_use]
+pub fn find_social_results(results: &[SearxngResult]) -> Option<Vec<SocialUrl>> {
+    // First path segment values that mark content/share endpoints rather
+    // than profiles.
+    const NON_PROFILE_SEGMENTS: &[&str] = &[
+        "sharer",
+        "sharer.php",
+        "share",
+        "share.php",
+        "reel",
+        "reels",
+        "post",
+        "posts",
+        "status",
+        "statuses",
+        "watch",
+        "v",
+        "t",
+        "photo",
+        "photos",
+        "stories",
+        "live",
+        "i",
+    ];
+    let mut found: Vec<SocialUrl> = Vec::new();
+    for result in results {
+        let Some((_, host, path)) = split_url(&result.url) else {
+            continue;
+        };
+        let Some(platform) = social_platform_for_host(host) else {
+            continue;
+        };
+        let path = path
+            .split(['?', '#'])
+            .next()
+            .unwrap_or("")
+            .trim_matches('/');
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        let Some(first) = segments.first() else {
+            continue;
+        };
+        if NON_PROFILE_SEGMENTS.iter().any(|s| first.eq_ignore_ascii_case(s)) {
+            continue;
+        }
+        if found.iter().any(|s| s.platform == *platform) {
+            continue;
+        }
+        let mut url = result.url.clone();
+        if let Some(pos) = url.find(['?', '#']) {
+            url.truncate(pos);
+        }
+        found.push(SocialUrl {
+            platform: platform.to_string(),
+            url,
+        });
+    }
+    (!found.is_empty()).then_some(found)
+}
+
+
+/// Extract the primary social image from an HTML document: the first
+/// `og:image` meta content in document order, falling back to
+/// `twitter:image` when no og:image is present. Relative URLs resolve
+/// against `page_url`; non-web schemes (`data:`, `mailto:`, ...) are
+/// rejected.
+#[must_use]
+pub fn find_og_image(html: &str, page_url: &str) -> Option<String> {
+    static META: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)<meta\b[^>]*>").expect("meta-tag regex compiles"));
+    static ATTR: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"(?i)\b(property|name|content)\s*=\s*(?:"([^"]*)"|'([^']*)')"#)
+            .expect("meta-attribute regex compiles")
+    });
+
+    let mut twitter_image: Option<String> = None;
+    for caps in META.captures_iter(html) {
+        let tag = caps.get(0)?.as_str();
+        let mut key = String::new();
+        let mut content = String::new();
+        for attr in ATTR.captures_iter(tag) {
+            let name = attr
+                .get(1)
+                .map(|m| m.as_str().to_lowercase())
+                .unwrap_or_default();
+            let value = attr
+                .get(2)
+                .or_else(|| attr.get(3))
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default();
+            match name.as_str() {
+                "property" | "name" if key.is_empty() => key = value,
+                "content" if content.is_empty() => content = value,
+                _ => {}
+            }
+        }
+        if key.is_empty() || content.is_empty() {
+            continue;
+        }
+        let content = content.trim();
+        if content.is_empty() {
+            continue;
+        }
+        let lower = content.to_lowercase();
+        if lower.starts_with("data:")
+            || lower.starts_with("mailto:")
+            || lower.starts_with("tel:")
+            || lower.starts_with("javascript:")
+        {
+            continue;
+        }
+        match key.as_str() {
+            "og:image" => {
+                if let Some(resolved) = resolve_link(page_url, content) {
+                    return Some(resolved);
+                }
+            }
+            "twitter:image" if twitter_image.is_none() => {
+                if let Some(resolved) = resolve_link(page_url, content) {
+                    twitter_image = Some(resolved);
+                }
+            }
+            _ => {}
+        }
+    }
+    twitter_image
+}
+
+/// Find a business image among `SearXNG` results: the first non-empty
+/// `img_src` in rank order, preferring an image on the website's own
+/// host (case- and `www.`-insensitive) over third-party thumbnails.
+/// Returns `None` when no result carries an image.
+#[must_use]
+pub fn find_image_result(results: &[SearxngResult], website: &str) -> Option<String> {
+    let (_, website_host, _) = split_url(website)?;
+    let website_host = website_host.to_lowercase();
+    let site_host = website_host.strip_prefix("www.").unwrap_or(&website_host);
+    let mut fallback = None;
+    for result in results {
+        let Some(img) = result.img_src.as_deref().filter(|v| !v.trim().is_empty()) else {
+            continue;
+        };
+        let Some((_, host, _)) = split_url(img) else {
+            continue;
+        };
+        let host = host.to_lowercase();
+        let host = host.strip_prefix("www.").unwrap_or(&host);
+        if host == site_host {
+            return Some(img.to_string());
+        }
+        if fallback.is_none() {
+            fallback = Some(img.to_string());
+        }
+    }
+    fallback
+}
+
 /// One social link ({platform, url}) carried by a place JSON.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SocialUrl {
@@ -854,7 +1032,7 @@ impl EnrichmentEngine {
                 .cloned(),
             rating: None,
             review_count: None,
-            social_urls: None,
+            social_urls: find_social_results(results),
             photos: None,
         })
     }
@@ -877,6 +1055,7 @@ impl EnrichmentEngine {
     /// photo-selection passes against the pre-run row (values written by
     /// this run are picked up on the next run). `dry_run` reports the
     /// fields that would apply without writing.
+    #[allow(clippy::too_many_lines)]
     pub async fn enrich(&mut self, pool: &PgPool, business_id: Uuid, dry_run: bool) -> EnrichResult {
         let with_error = |name: String, error: String| EnrichResult {
             business_id,
@@ -934,6 +1113,23 @@ impl EnrichmentEngine {
             results: search_results,
         } = lookup;
 
+        // One homepage fetch per run, shared by the menu and image
+        // passes; skipped when there is nothing left to discover.
+        let menu_wanted = pre_run_row
+            .menu_url
+            .as_ref()
+            .is_none_or(|v| v.trim().is_empty());
+        let image_wanted = pre_run_row
+            .image_url
+            .as_ref()
+            .is_none_or(|v| v.trim().is_empty());
+        let website = pre_run_row.website.clone().unwrap_or_default();
+        let homepage = if website.trim().is_empty() || (!menu_wanted && !image_wanted) {
+            None
+        } else {
+            Some(self.fetch_homepage(&website).await)
+        };
+
         // Menu-discovery pass: depth 1 (homepage only), independent of
         // the place-JSON outcome; falls back to this run's SearXNG
         // results when the homepage cannot confirm the menu link.
@@ -944,15 +1140,37 @@ impl EnrichmentEngine {
             search_results.as_deref(),
             dry_run,
             &mut result,
+            homepage.as_ref(),
         )
         .await;
 
-        // Photo-selection pass: sibling of the menu pass, judged on the
-        // pre-run row so an image_url written by this run is not
-        // re-checked, and on this run's place JSON for the photo URLs.
-        if let Some(place) = place {
+        // Image-selection pass: judged on the pre-run row so an
+        // image_url written by this run is not re-checked. Candidates
+        // in priority order: place-JSON photos, the homepage og:image
+        // (when the fetch succeeded), then this run's SearXNG img_src.
+        let mut image_candidates: Vec<String> = Vec::new();
+        if let Some(photos) = place.as_ref().and_then(|p| p.photos.as_ref()) {
+            image_candidates.extend(photos.iter().cloned());
+        }
+        if let Some(Ok(html)) = homepage.as_ref() {
+            if let Some(og_image) = find_og_image(html, &website) {
+                image_candidates.push(og_image);
+            }
+        }
+        if let Some(results) = search_results.as_deref() {
+            if let Some(img) = find_image_result(results, &website) {
+                image_candidates.push(img);
+            }
+        }
+        if !image_candidates.is_empty() {
             match self
-                .discover_photo_on_place(pool, business_id, &pre_run_row, &place, dry_run)
+                .discover_image_on_candidates(
+                    pool,
+                    business_id,
+                    &pre_run_row,
+                    &image_candidates,
+                    dry_run,
+                )
                 .await
             {
                 Ok(PhotoOutcome::Selected(url)) => {
@@ -982,10 +1200,11 @@ impl EnrichmentEngine {
         result
     }
 
-    /// Menu-discovery pass over the pre-run row: homepage first, with
-    /// the `SearXNG` results as fallback when the homepage cannot
-    /// confirm the menu link. Merges the outcome (applied fields,
-    /// notes) into `result`.
+    /// Menu-discovery pass over the pre-run row: uses the pre-fetched
+    /// homepage (shared with the image pass), with the `SearXNG` results
+    /// as fallback when the homepage cannot confirm the menu link.
+    /// Merges the outcome (applied fields, notes) into `result`.
+    #[allow(clippy::too_many_arguments)]
     async fn run_menu_pass(
         &mut self,
         pool: &PgPool,
@@ -994,19 +1213,24 @@ impl EnrichmentEngine {
         search_results: Option<&[SearxngResult]>,
         dry_run: bool,
         result: &mut EnrichResult,
+        homepage: Option<&Result<String, String>>,
     ) {
         // The row-level guards (no website, or `menu_url` already set)
-        // live inside `discover_menu_on_row`; either way the outcome
+        // live inside `discover_menu_on_homepage`; either way the outcome
         // merges the same way.
-        let menu_outcome = self
-            .discover_menu_on_row(
-                pool,
-                business_id,
-                pre_run_row,
-                dry_run,
-                search_results.unwrap_or(&[]),
-            )
-            .await;
+        let menu_outcome = match homepage {
+            Some(homepage) => self
+                .discover_menu_on_homepage(
+                    pool,
+                    business_id,
+                    pre_run_row,
+                    homepage,
+                    dry_run,
+                    search_results.unwrap_or(&[]),
+                )
+                .await,
+            None => Ok(MenuOutcome::NotApplicable),
+        };
         match menu_outcome {
             Ok(MenuOutcome::Found(url)) => {
                 tracing::info!(
@@ -1463,12 +1687,32 @@ impl EnrichmentEngine {
         let Some(website) = row.website.clone().filter(|v| !v.trim().is_empty()) else {
             return Ok(MenuOutcome::NotApplicable);
         };
+        let homepage = self.fetch_homepage(&website).await;
+        self.discover_menu_on_homepage(pool, business_id, row, &homepage, dry_run, results)
+            .await
+    }
+
+    /// Menu discovery from an already-fetched homepage: link scan first,
+    /// then the `SearXNG` fallback. Split out so [`Self::enrich`] can
+    /// share one homepage fetch between the menu and image passes.
+    async fn discover_menu_on_homepage(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        row: &BusinessRow,
+        homepage: &Result<String, String>,
+        dry_run: bool,
+        results: &[SearxngResult],
+    ) -> Result<MenuOutcome, String> {
+        let Some(website) = row.website.clone().filter(|v| !v.trim().is_empty()) else {
+            return Ok(MenuOutcome::NotApplicable);
+        };
         if row.menu_url.clone().as_ref().is_some_and(|v| !v.trim().is_empty()) {
             return Ok(MenuOutcome::NotApplicable);
         }
 
-        let (url, from_homepage) = match self.fetch_homepage(&website).await {
-            Ok(html) => match find_menu_url(&html, &website) {
+        let (url, from_homepage) = match homepage {
+            Ok(html) => match find_menu_url(html, &website) {
                 Some(url) => (url, true),
                 None => match find_menu_result(results, &website) {
                     Some(url) => (url, false),
@@ -1477,7 +1721,7 @@ impl EnrichmentEngine {
             },
             Err(e) => match find_menu_result(results, &website) {
                 Some(url) => (url, false),
-                None => return Ok(MenuOutcome::FetchFailed(e)),
+                None => return Ok(MenuOutcome::FetchFailed(e.clone())),
             },
         };
 
@@ -1496,12 +1740,9 @@ impl EnrichmentEngine {
         })
     }
 
-    /// Photo-selection pass against a pre-loaded row and a parsed place.
-    ///
-    /// Runs only when the place JSON carries a photos array and the
-    /// row's `image_url` is empty (fill-empty: an existing `image_url` is
-    /// never overwritten). The first photo URL is HEAD-checked; a failing
-    /// check leaves `image_url` unchanged.
+    /// Photo-selection pass against a pre-loaded row and a parsed place:
+    /// delegates to [`Self::discover_image_on_candidates`] with the
+    /// place JSON's photo list.
     async fn discover_photo_on_place(
         &mut self,
         pool: &PgPool,
@@ -1510,10 +1751,32 @@ impl EnrichmentEngine {
         place: &PlaceData,
         dry_run: bool,
     ) -> Result<PhotoOutcome, String> {
+        self.discover_image_on_candidates(
+            pool,
+            business_id,
+            row,
+            place.photos.as_deref().unwrap_or(&[]),
+            dry_run,
+        )
+        .await
+    }
+
+    /// Image-selection pass over an ordered candidate list: the first
+    /// URL that passes the HEAD stability check is written to
+    /// `image_url` (fill-empty: an existing `image_url` is never
+    /// overwritten). A losing write race reports `NotApplicable`.
+    async fn discover_image_on_candidates(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        row: &BusinessRow,
+        candidates: &[String],
+        dry_run: bool,
+    ) -> Result<PhotoOutcome, String> {
         if row.image_url.clone().as_ref().is_some_and(|v| !v.trim().is_empty()) {
             return Ok(PhotoOutcome::NotApplicable);
         }
-        let photo = match place.photos.as_ref().and_then(|v| v.first()) {
+        let photo = match candidates.first() {
             Some(url) => url.clone(),
             None => return Ok(PhotoOutcome::NotApplicable),
         };
@@ -3096,6 +3359,169 @@ mod tests {
         assert_eq!(find_menu_result(&query_only, "https://example.com"), None);
     }
 
+    /// Social extraction picks clean profile URLs on known platforms,
+    /// in rank order, one per platform, with query strings stripped;
+    /// content and share endpoints are rejected.
+    #[test]
+    fn test_find_social_results_profile_urls() {
+        let results = vec![
+            SearxngResult {
+                url: "https://www.yelp.com/biz/foo".to_string(),
+                title: "Yelp".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://www.facebook.com/twistedsoul/".to_string(),
+                title: "Twisted Soul - Facebook".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://www.instagram.com/twistedsoul/?hl=en".to_string(),
+                title: "Twisted Soul - Instagram".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://www.instagram.com/reel/XYZ/".to_string(),
+                title: "reel".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+            SearxngResult {
+                url: "https://www.facebook.com/sharer.php?u=https://foo".to_string(),
+                title: "share".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: None,
+            },
+        ];
+        let found = find_social_results(&results).expect("socials found");
+        assert_eq!(found.len(), 2, "exactly one entry per platform: {found:?}");
+        assert_eq!(found[0].platform, "facebook");
+        assert_eq!(found[0].url, "https://www.facebook.com/twistedsoul/");
+        assert_eq!(found[1].platform, "instagram");
+        assert_eq!(found[1].url, "https://www.instagram.com/twistedsoul/");
+    }
+
+    #[test]
+    fn test_find_social_results_ignores_non_socials() {
+        let results = vec![SearxngResult {
+            url: "https://example.com/".to_string(),
+            title: "Example".to_string(),
+            content: None,
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: None,
+        }];
+        assert!(find_social_results(&results).is_none());
+        assert!(find_social_results(&[]).is_none());
+    }
+
+    /// og:image beats twitter:image regardless of document order;
+    /// relative URLs resolve against the page; data: URIs are rejected.
+    #[test]
+    fn test_find_og_image_preference_and_resolution() {
+        let both = r#"<html><head>
+            <meta name="twitter:image" content="/img/tw.jpg">
+            <meta property="og:image" content="https://cdn.example.com/img/og.jpg">
+        </head><body></body></html>"#;
+        assert_eq!(
+            find_og_image(both, "https://example.com/"),
+            Some("https://cdn.example.com/img/og.jpg".to_string())
+        );
+
+        let relative = r#"<html><head>
+            <meta property="og:image" content="img/bird.jpg">
+        </head></html>"#;
+        assert_eq!(
+            find_og_image(relative, "https://example.com/menu"),
+            Some("https://example.com/img/bird.jpg".to_string())
+        );
+
+        let twitter_only = r#"<html><head>
+            <meta name="twitter:image" content="https://cdn.example.com/img/tw.jpg">
+        </head></html>"#;
+        assert_eq!(
+            find_og_image(twitter_only, "https://example.com/"),
+            Some("https://cdn.example.com/img/tw.jpg".to_string())
+        );
+
+        let data_uri = r#"<html><head>
+            <meta property="og:image" content="data:image/png;base64,AAA">
+        </head></html>"#;
+        assert_eq!(find_og_image(data_uri, "https://example.com/"), None);
+
+        assert_eq!(
+            find_og_image("<html><body>no metas</body></html>", "https://example.com/"),
+            None
+        );
+    }
+
+    /// Same-host thumbnails win; otherwise the first ranked thumbnail;
+    /// no thumbnails (or no website) yields None.
+    #[test]
+    fn test_find_image_result_prefers_same_host() {
+        let results = vec![
+            SearxngResult {
+                url: "https://aggregator.example/photo".to_string(),
+                title: "aggregator".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: Some("https://cdn.aggregator.example/p.jpg".to_string()),
+            },
+            SearxngResult {
+                url: "https://www.example.com/".to_string(),
+                title: "site".to_string(),
+                content: None,
+                engine: None,
+                engines: vec![],
+                score: None,
+                img_src: Some("https://www.example.com/og.jpg".to_string()),
+            },
+        ];
+        assert_eq!(
+            find_image_result(&results, "https://example.com/"),
+            Some("https://www.example.com/og.jpg".to_string())
+        );
+
+        let only_foreign = vec![results[0].clone()];
+        assert_eq!(
+            find_image_result(&only_foreign, "https://example.com/"),
+            Some("https://cdn.aggregator.example/p.jpg".to_string())
+        );
+
+        let none = vec![SearxngResult {
+            url: "https://example.com/".to_string(),
+            title: "no image".to_string(),
+            content: None,
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: None,
+        }];
+        assert!(find_image_result(&none, "https://example.com/").is_none());
+        assert!(find_image_result(&results, "").is_none());
+    }
+
     /// Seed an admin user and a business row with the given website;
     /// returns (`user_id`, `business_id`). No `scraped_businesses` row: the
     /// business has no place-JSON source, so only the menu pass acts.
@@ -3425,6 +3851,205 @@ mod tests {
         assert_eq!(
             row.get::<Option<String>, _>("menu_url").as_deref(),
             Some("https://menu-fixture.example/menu")
+        );
+
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    /// End-to-end SearXNG-sourced enrichment on a blocked homepage: the
+    /// social profiles, the menu link, and the image thumbnail all come
+    /// from the search results (no place JSON, no reachable homepage).
+    #[allow(clippy::too_many_lines)]
+    #[tokio::test]
+    async fn test_enrich_applies_socials_image_and_menu_from_search_results() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        // Routed stub: the SearXNG endpoint serves the results fixture
+        // (social profile, menu page, same-host image thumbnail); the
+        // business homepage is 403 (blocked, as Cloudflare does to the
+        // worker egress IP); the photo URL answers HEAD with an image.
+        let searxng_body = r#"{
+            "query": "fixture",
+            "results": [
+                {
+                    "url": "https://menu-fixture.example/",
+                    "title": "Fallback Kitchen",
+                    "content": "Fallback kitchen.",
+                    "engine": "searxng",
+                    "score": 1.0,
+                    "img_src": "http://menu-fixture.example/photo.jpg"
+                },
+                {
+                    "url": "https://www.facebook.com/fallbackkitchen/",
+                    "title": "Fallback Kitchen - Facebook",
+                    "content": "Facebook page.",
+                    "engine": "searxng",
+                    "score": 0.9
+                },
+                {
+                    "url": "https://menu-fixture.example/menu",
+                    "title": "Menu - Fallback Kitchen",
+                    "content": "Dinner menu.",
+                    "engine": "searxng",
+                    "score": 0.8
+                }
+            ]
+        }"#;
+        let searxng_body = searxng_body.to_string();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind routed stub listener");
+        let port = listener.local_addr().expect("routed stub address").port();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else {
+                    break;
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                let response = if request_line.contains("searxng.test") {
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        searxng_body.len(),
+                        searxng_body
+                    )
+                } else if request_line.contains("/photo.jpg") {
+                    "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        .to_string()
+                } else {
+                    "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                };
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+
+        let mut engine = ac2_test_engine(port);
+        let name = format!("AC2 Socials Business {}", Uuid::new_v4());
+        let email = format!("ac2-socials-{}@example.com", Uuid::new_v4());
+        let user_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO users (email, password_hash, name, role)
+                 VALUES ($1, 'test', 'AC2 Socials', 'admin')
+                 RETURNING id",
+            )
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .expect("seed user inserts");
+            row.get::<Uuid, _>("id")
+        };
+        let business_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO businesses (owner_id, name, category_id, website)
+                 VALUES ($1, $2, 'test-enrichment', 'https://menu-fixture.example/')
+                 RETURNING id",
+            )
+            .bind(user_id)
+            .bind(&name)
+            .fetch_one(&pool)
+            .await
+            .expect("seed business inserts");
+            row.get::<Uuid, _>("id")
+        };
+        let job_id: Uuid = {
+            let row = sqlx::query(
+                "INSERT INTO scrape_jobs (source, query, location)
+                 VALUES ('ac2-test', 'socials fallback', 'Test')
+                 RETURNING id",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("seed scrape job inserts");
+            row.get::<Uuid, _>("id")
+        };
+        sqlx::query(
+            "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)
+             VALUES ($1, 'google_maps', $2, 'http://maps.google.test/maps/place?cid=socials-fallback')",
+        )
+        .bind(job_id)
+        .bind(&name)
+        .execute(&pool)
+        .await
+        .expect("seed source inserts");
+
+        let report = engine.enrich(&pool, business_id, false).await;
+        assert!(
+            report.error.is_none(),
+            "a blocked homepage must not fail the run: {:?} {:?}",
+            report.error,
+            report.notes
+        );
+        let fields: Vec<&str> = report.applied.iter().map(|a| a.field).collect();
+        for field in ["social", "image_url", "menu_url"] {
+            assert!(
+                fields.contains(&field),
+                "expected {field} applied, applied: {fields:?} notes: {:?} skipped: {:?}",
+                report.notes,
+                report.skipped
+            );
+        }
+
+        let row = sqlx::query(
+            "SELECT menu_url, image_url, social_urls FROM businesses WHERE id = $1",
+        )
+        .bind(business_id)
+        .fetch_one(&pool)
+        .await
+        .expect("enriched row reads back");
+        assert_eq!(
+            row.get::<Option<String>, _>("menu_url").as_deref(),
+            Some("https://menu-fixture.example/menu")
+        );
+        assert_eq!(
+            row.get::<Option<String>, _>("image_url").as_deref(),
+            Some("http://menu-fixture.example/photo.jpg")
+        );
+        let social_urls = row.get::<Option<serde_json::Value>, _>("social_urls");
+        assert_eq!(
+            social_urls,
+            Some(serde_json::json!([
+                { "platform": "facebook", "url": "https://www.facebook.com/fallbackkitchen/" }
+            ]))
         );
 
         sqlx::query("DELETE FROM businesses WHERE id = $1")

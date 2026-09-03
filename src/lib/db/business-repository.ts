@@ -6,7 +6,7 @@
 
 import { PoolClient } from "pg";
 import { Business, BusinessLocation } from "../../types/business";
-import { SocialUrls } from "../../services/social-discovery";
+import { PLATFORMS, Platform, SocialUrls } from "../../services/social-discovery";
 
 /**
  * Get business table name (with schema if configured)
@@ -28,6 +28,56 @@ function getLocationsTableName(): string {
  * Initialize the businesses table schema
  */
 
+/**
+ * Normalize the stored `social_urls` JSONB into the `SocialUrls` display
+ * shape (a record keyed by platform). Two producers write the column:
+ * enrichment and the admin content editor store an array of
+ * `{platform, url}` entries; older rows may carry the keyed object shape
+ * directly. Both read back as the record the detail page and GraphQL
+ * resolver expect.
+ */
+function normalizeSocialUrls(raw: unknown): SocialUrls | null {
+  if (raw == null) {
+    return null;
+  }
+  if (!Array.isArray(raw)) {
+    return raw as SocialUrls;
+  }
+  const out: SocialUrls = {};
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const e = entry as Record<string, unknown>;
+    const platform = typeof e.platform === "string" ? e.platform.toLowerCase() : "";
+    const url = typeof e.url === "string" ? e.url : "";
+    if (!PLATFORMS.includes(platform as Platform) || !url) {
+      continue;
+    }
+    if (!out[platform as Platform]) {
+      out[platform as Platform] = {
+        url,
+        handle: extractSocialHandle(url),
+        confidence: 0.75,
+        verified: false,
+        source: "google_search",
+      };
+    }
+  }
+  return out;
+}
+
+/**
+ * Extract the social handle (last path segment) from a profile URL.
+ */
+function extractSocialHandle(url: string): string {
+  try {
+    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    return segments[segments.length - 1] ?? "";
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Convert database row to Business entity
@@ -51,7 +101,7 @@ function rowToBusiness(row: unknown): Business {
     tags: (r.tags as string[] | null | undefined) ?? null,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
-    socialUrls: r.social_urls as SocialUrls | null | undefined,
+    socialUrls: normalizeSocialUrls(r.social_urls),
     phone: (r.phone as string | null | undefined) ?? null,
     menuUrl: (r.menu_url as string | null | undefined) ?? null,
     ratingSource: (r.rating_source as string | null | undefined) ?? 'google',

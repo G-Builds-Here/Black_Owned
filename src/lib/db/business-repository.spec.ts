@@ -156,4 +156,96 @@ describe("Business Repository", () => {
       }
     });
   });
+
+  describe("findBusinessById socialUrls normalization", () => {
+    it("normalizes an array of {platform, url} entries into a keyed record", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          const business = await createBusiness(client, user.id, "Social Array Test", "Desc", "cat-3");
+          await client.query("UPDATE businesses SET social_urls = $1::jsonb WHERE id = $2", [
+            JSON.stringify([
+              { platform: "Instagram", url: "https://www.instagram.com/acme/" },
+              { platform: "facebook", url: "https://facebook.com/acme" },
+              { platform: "myspace", url: "https://myspace.com/acme" },
+              { bogus: true },
+            ]),
+            business.id,
+          ]);
+
+          const found = await findBusinessById(client, business.id);
+          expect(found?.socialUrls).toEqual({
+            instagram: {
+              url: "https://www.instagram.com/acme/",
+              handle: "acme",
+              confidence: 0.75,
+              verified: false,
+              source: "google_search",
+            },
+            facebook: {
+              url: "https://facebook.com/acme",
+              handle: "acme",
+              confidence: 0.75,
+              verified: false,
+              source: "google_search",
+            },
+          });
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("passes through the keyed object shape unchanged", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          const business = await createBusiness(client, user.id, "Social Object Test", "Desc", "cat-3");
+          const keyed = {
+            instagram: {
+              url: "https://instagram.com/acme",
+              handle: "acme",
+              confidence: 0.9,
+              verified: true,
+              source: "website",
+            },
+          };
+          await client.query("UPDATE businesses SET social_urls = $1::jsonb WHERE id = $2", [
+            JSON.stringify(keyed),
+            business.id,
+          ]);
+
+          const found = await findBusinessById(client, business.id);
+          expect(found?.socialUrls).toEqual(keyed);
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+
+    it("returns null socialUrls when the column is null", async () => {
+      const user = await createTestUser();
+
+      try {
+        const client = await getPool().connect();
+        try {
+          const business = await createBusiness(client, user.id, "Social Null Test", "Desc", "cat-3");
+          const found = await findBusinessById(client, business.id);
+          expect(found?.socialUrls).toBeNull();
+        } finally {
+          client.release();
+        }
+      } finally {
+        await cleanupUser(user.email);
+      }
+    });
+  });
 });
