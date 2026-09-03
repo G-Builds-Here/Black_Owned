@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ToastProvider } from '@/components/ui/Toast';
+import { NotificationBanner } from '@/components/NotificationBanner';
 
 export const metadata: Metadata = {
   title: 'Black Owned - Celebrating Black Excellence',
@@ -15,8 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <ToastProvider>
+        <ToastProvider position="top-right">
           {children}
+          <NotificationBanner />
         </ToastProvider>
       </body>
     </html>

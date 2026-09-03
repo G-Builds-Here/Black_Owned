@@ -40,12 +40,9 @@ see the **Patched after copy** column.
 | `references/luke-survey.md` | `references/luke-reference.md` | No |
 | `references/alfred-reference.md` | `references/alfred-reference.md` | No |
 | `references/claude-rules.md` | `references/claude-rules.md` | No |
-| `skills/commit-review/SKILL.md` | `skills/commit-review/SKILL.md` | No |
 | `skills/handoff-discipline/SKILL.md` | `skills/handoff-discipline/SKILL.md` | Yes — `~/.claude/handoffs/` → `.claude/handoffs/` |
 | `skills/jira-usage/SKILL.md` | `skills/jira-usage/SKILL.md` | No |
 | `skills/pr-management/SKILL.md` | `skills/pr-management/SKILL.md` | No |
-| `skills/tdd-coding/SKILL.md` | `skills/tdd-coding/SKILL.md` | No |
-| `skills/test-standards/SKILL.md` | `skills/test-standards/SKILL.md` | No |
 
 ---
 

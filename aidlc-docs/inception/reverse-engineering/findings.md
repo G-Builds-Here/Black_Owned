@@ -1,263 +1,84 @@
-# Black Owned - Survey Findings
-
-**Survey Date:** 2026-07-31 | **Commit:** f43142ed | **Mode:** AIDLC-1
-
-## Executive Summary
-
-Black Owned is a dual-stack platform for discovering and managing Black-owned businesses. Built with Next.js/TypeScript frontend and Rust (bw-api) backend, it implements a GraphQL-first architecture with polyglot persistence (PostgreSQL, Valkey, MinIO, ClickHouse) and event-driven messaging via NATS.
-
----
-
-## Business Overview
-
-### Core Capabilities
-
-| Capability | Description | User Types |
-|------------|-------------|------------|
-| Business Directory | Browse, search, and filter Black-owned businesses | All users |
-| Business Claiming | Owners can claim and verify their businesses | Business owners |
-| Verification Workflow | Document-based verification with admin approval | Business owners, Admins |
-| Image Management | Upload and manage business images via MinIO | Business owners, Admins |
-| Admin Console | User and business management dashboard | Admins, Super-admins |
-
-### User Types
-
-| Role | Permission Level | Key Capabilities |
-|------|------------------|------------------|
-| user | Level 1 | Browse directory, view businesses |
-| business_owner | Level 2 | Claim businesses, manage listings |
-| admin | Level 3 | Review verifications, moderate content |
-| super_admin | Level 4 | Full system access, user management |
-
----
-
-## Architecture Highlights
-
-### Technology Stack
-
-**Frontend:**
-- Next.js 14 (App Router) - SEO-optimized SSR for directory pages
-- React 18 with TypeScript
-- Tailwind CSS for design system (Kente/Bogolanfini cultural patterns)
-
-**Backend:**
-- **bw-api** (Rust) - High-performance GraphQL API using async-graphql
-- **bw-ingestion** (Rust) - Data processing pipeline
-- **bw-types** - Shared type definitions
-
-**Data Layer:**
-| System | Purpose | Why Chosen |
-|--------|---------|------------|
-| PostgreSQL | Primary relational data | ACID compliance, complex queries |
-| Valkey | Session/cache layer | Redis fork after SSPL licensing change |
-| MinIO | Object storage (images) | S3-compatible, self-hosted |
-| ClickHouse | Analytics | High-volume event aggregation |
-| NATS | Event messaging | Cache invalidation, async workflows |
-
-### Architectural Patterns
-
-1. **Layered Architecture**
-   - Presentation: Next.js pages and components
-   - Application: Route handlers, GraphQL resolvers
-   - Domain: Business logic, repositories
-   - Infrastructure: Database clients, MinIO, NATS
-
-2. **GraphQL-First API**
-   - Schema defined in Rust (bw-api/src/graphql/schema.rs)
-   - TypeScript resolvers for Node.js fallback
-   - Type-safe code generation
-
-3. **Polyglot Persistence**
-   - Each data store serves a specific purpose
-   - No single point of failure
-   - Optimized for specific query patterns
-
-4. **Event-Driven Cache Coherence**
-   - NATS events trigger cache invalidation
-   - Distributed cache consistency across instances
-
----
-
-## Component Inventory
-
-### Frontend Components (40+ total)
-
-**Pages:**
-- `/` - Home page with featured businesses
-- `/directory` - Business listing with filters
-- `/search` - Advanced search
-- `/business/[id]` - Business detail and claiming
-- `/admin` - Admin dashboard
-- `/admin/users` - User management
-
-**UI Components:**
-- Card, BusinessCard - Display patterns
-- Navigation, Tabs, Dropdown - Navigation patterns
-- SearchBar, FilterBar - Discovery patterns
-- UserTable - Admin data display
-- Toast - Feedback patterns
-
-**Backend Services:**
-- `business-repository.ts` - Data access layer
-- `minio-service.ts` - Object storage operations
-- `valkey-client.ts` - Cache operations
-- `nats/client.ts`, `cache-invalidator.ts` - Event handling
-- `image-service.ts` - Business logic for image management
-
-### Rust Modules
-
-- `bw-api/src/graphql/` - GraphQL schema, queries, mutations, types
-- `bw-api/src/routes/` - REST endpoints
-- `bw-api/src/middleware/` - Authentication middleware
-- `bw-types/` - Shared type definitions
-
----
-
-## API Surface
-
-### REST Endpoints (10 total)
-
-| Method | Path | Purpose | Auth |
-|--------|------|---------|------|
-| GET | /api/users | List users | Admin |
-| POST | /api/users | Create user | Admin |
-| PUT | /api/users/:id | Update user | Admin |
-| DELETE | /api/users/:id | Delete user | Super-admin |
-| POST | /api/auth/login | User authentication | Public |
-| POST | /api/auth/register | User registration | Public |
-| GET | /api/images/presigned-url | Image upload URL | Authenticated |
-| POST | /api/images/upload | Complete upload | Authenticated |
-| GET | /api/businesses/:id/verification-docs | Verification docs | Business owner |
-| POST | /api/businesses/:id/claim | Claim business | Business owner |
-
-### GraphQL Operations (13 total)
-
-**Queries:**
-- `businesses` - List all businesses with pagination
-- `business(id!)` - Single business by ID
-- `users` - List users (admin only)
-- `me` - Current user profile
-
-**Mutations:**
-- `createBusiness` - Create new business listing
-- `updateBusiness` - Update business details
-- `deleteBusiness` - Remove business
-- `claimBusiness` - Claim ownership
-- `uploadVerificationDoc` - Submit verification documents
-- `approveVerification` - Admin approval
-- `updateUser` - Update user details
-- `deleteUser` - Delete user account
-
----
-
-## Test Infrastructure
-
-### Test Types
-
-| Type | Framework | Coverage | Location |
-|------|-----------|----------|----------|
-| Unit | Jest | Business logic, utilities | `src/**/*.spec.ts` |
-| Integration | Vitest | Service layer, API | `src/**/*.test.ts` |
-| E2E | Playwright | AC validation, critical paths | `e2e/*.spec.ts` |
-| Rust Integration | async-graphql | bw-api GraphQL layer | `bw-api/src/graphql/tests.rs` |
-
-### Test Coverage
-
-- **E2E Tests:** 2 spec files covering AC1-AC3 (Design System, UI Components, Directory) and AC8 (Performance)
-- **Rust Tests:** 9 integration tests in bw-api
-- **Unit Tests:** Business repository, token refresh, MinIO service
-
-### Known Gaps
-
-- Service layer tests missing for: `business-repository.ts`, `minio-service.ts`, `nats/cache-invalidator.ts`, `valkey-client.ts`
-- No coverage thresholds configured
-- Playwright webServer disabled in config (requires external environment)
-
----
-
-## Anti-Patterns Identified
-
-### HIGH Severity
-
-| Finding | Location | Impact | Mitigation |
-|---------|----------|--------|------------|
-| Hardcoded database credentials | Multiple config files | Security vulnerability, environment coupling | Use environment variables or secret management |
-
-### MEDIUM Severity
-
-| Finding | Location | Impact | Mitigation |
-|---------|----------|--------|------------|
-| TypeScript config inconsistency | tsconfig.json vs package.json | Build confusion, IDE issues | Standardize on single config source |
-| FID measurement inaccuracy | web-vitals.ts | Misleading performance metrics | Use INP as primary metric |
-| GraphQL schema recreation overhead | bw-api/src/graphql/schema.rs | Slow cold starts, resource waste | Cache compiled schema |
-| Missing service layer tests | Multiple services | Uncovered business logic | Add integration tests |
-
-### LOW Severity
-
-| Finding | Location | Impact | Mitigation |
-|---------|----------|--------|------------|
-| Missing coverage config | jest.config.ts | Unknown test coverage | Add coverage thresholds |
-| Playwright webServer disabled | playwright.config.ts | Manual env required for E2E | Configure testcontainers or mock |
-| Missing error handling | Various routes | Poor error feedback | Add centralized error handling |
-| Inconsistent naming | Components, functions | Cognitive load | Establish naming conventions |
-| Missing integration test matrix | Test suite | Uncovered edge cases | Add matrix testing |
-
----
-
-## Cross-Cutting Concerns
-
-### Security
-
-- JWT-based authentication with role-based access control
-- Role hierarchy: user(1) < business_owner(2) < admin/moderator(3) < super_admin(4)
-- Presigned URLs for secure image uploads (15-minute expiry)
-
-### Performance
-
-- Dual backend strategy (Node.js + Rust) enables gradual migration
-- Valkey caching reduces database load
-- ClickHouse for analytics offloads primary database
-
-### Operational
-
-- NATS event bus for distributed cache coherence
-- Container-based deployment (docker-compose.yml)
-- Health check endpoints for monitoring
-
----
-
-## Recommendations
-
-### Immediate (HIGH Priority)
-
-1. **Remove hardcoded credentials** - Move all secrets to environment variables or secret management service
-2. **Add coverage thresholds** - Prevent regression in test coverage
-3. **Enable Playwright webServer** - Configure testcontainers for automated E2E
-
-### Short-term (MEDIUM Priority)
-
-1. **Standardize TypeScript config** - Resolve tsconfig/package.json inconsistencies
-2. **Add service layer tests** - Cover business-repository, minio-service, nats handlers
-3. **Schema caching** - Implement GraphQL schema compilation cache
-
-### Long-term (LOW Priority)
-
-1. **Error handling framework** - Centralized error handling with proper HTTP status codes
-2. **Naming conventions** - Document and enforce consistent naming patterns
-3. **Performance monitoring** - Add APM integration for production monitoring
-
----
-
-## Change Triggers
-
-| File | Trigger |
-|------|---------|
-| overview.md | Initial survey - business capabilities documentation |
-| technology-stack.md | Initial survey - tech stack analysis |
-| architecture.md | Initial survey - architectural pattern extraction |
-| component-inventory.md | Initial survey - component catalog |
-| api-documentation.md | Initial survey - API surface documentation |
-| dependencies.md | Initial survey - dependency analysis |
-| test-infrastructure.md | Initial survey - test strategy documentation |
-| anti-patterns.md | Initial survey - quality issue identification |
-| findings.md | Initial survey - cross-cutting synthesis |
+<!--
+surveyed_at: 2026-08-27T02:40:39Z
+commit: 5a67ed37776c18bc32c9f8e783cb67e23b6c1641
+relevant_paths:
+- src/app/api
+- src/lib
+- bw-scraper/src
+- docker-compose.yml
+- .env
+summary: High-severity findings with operational impact and mitigation sketches.
+-->
+
+# Findings
+
+## HIGH
+
+### H1 — `categories` table has no Postgres migration
+**Impact:** Fresh databases created by `npm run migrate` lack `categories`. `/api/categories`, claim category validation, owner business category joins, and GraphQL category resolution fail or leave listings with invalid categories.  
+**Evidence:** No `migrations/postgresql/*.sql` creates `categories`; routes read Postgres `categories` table; table exists only in ClickHouse schema and live DB from prior bw-api era.  
+**Mitigation sketch:** Add an idempotent migration creating `categories` if absent and seed baseline categories; verify claim, directory, categories, and GraphQL paths against a fresh database.
+
+### H2 — User-management UI calls missing endpoints
+**Impact:** Admin role/status changes from `UserManagement.tsx` and `UserTable.tsx` can 404 in production. The actual role endpoint is `PATCH /api/users`, while the UI targets `PATCH /api/users/role`; status endpoint is exported as `PATCH_STATUS`, which is not a valid App Router export.  
+**Evidence:** `src/components/admin/UserManagement.tsx`, `src/components/ui/UserTable.tsx`, `src/app/api/users/route.ts`.  
+**Mitigation sketch:** Move handlers to `src/app/api/users/[id]/role/route.ts` and `src/app/api/users/[id]/status/route.ts` or update UI to existing reachable route shape; add route specs and admin E2E coverage.
+
+### H3 — Scraped jobs are never executed by the deployed stack
+**Impact:** `POST /api/scrape-jobs` creates `pending` jobs, but no deployed component executes them. In-app executor is test-only, and bw-scraper does not poll `scrape_jobs`; it only has its own `POST /scrape` entry point. Admin-created jobs can stall forever.  
+**Evidence:** `src/app/api/scrape-jobs/route.ts` inserts pending; `src/services/scraper-job-executor.ts` has no production caller; bw-scraper `main.rs`/`api.rs` only exposes health and scrape commands.  
+**Mitigation sketch:** Choose one execution model: either make bw-scraper poll `scrape_jobs` and update status, or expose a controlled executor service. Add integration test proving a job transitions pending → running → completed.
+
+### H4 — `.env` is tracked in Git
+**Impact:** Secrets (`JWT_SECRET`, MinIO credentials) and private network details (`SEARXNG_URL=http://192.168.68.50:8888`) are in repository history. Any clone can expose auth material and internal endpoints.  
+**Evidence:** `.gitignore` lacks `.env`; `git ls-files` includes `.env`.  
+**Mitigation sketch:** Remove `.env` from Git, add it to `.gitignore`, rotate JWT/MinIO credentials, commit `.env.example` with non-secret values, and audit history/remote if the repo has ever been shared.
+
+### H5 — GraphQL `createBusiness` cannot authenticate
+**Impact:** The GraphQL route hardcodes a fake authorization context, so `createBusiness` (and owner-scoped mutations) cannot rely on the real user. This can allow unauthenticated mutation attempts or always produce auth failures depending on resolver logic.  
+**Evidence:** `src/app/api/graphql/route.ts` hardcodes `context.authorization = "Bearer token"` and never sets `context.user`; resolver expects `getCurrentUserId`.  
+**Mitigation sketch:** Use the shared auth middleware or explicitly verify `Authorization` before building resolver context. Remove the regex parser and use the existing `graphql`/`@graphql-tools/schema` dependencies or explicitly retire them.
+
+## MEDIUM
+
+### M1 — Reviews table lacks referential integrity
+**Impact:** `reviews.business_id` and `reviews.user_id` have no FKs; rating has no 1-5 CHECK. Bad rows can exist only if route validation is bypassed or a future writer forgets constraints.  
+**Mitigation sketch:** Add migrations for FKs and `rating CHECK (rating BETWEEN 1 AND 5)` after validating existing data.
+
+### M2 — `pending_import_businesses.job_id` has no FK
+**Impact:** Pending import rows can reference missing jobs, making audit/debugging and import reporting unreliable.  
+**Mitigation sketch:** Add FK to `scrape_jobs(id)` with appropriate delete behavior after data validation.
+
+### M3 — Seed role `customer` is invalid
+**Impact:** Seeded customer user can log in but fail all `createAuthMiddleware` role checks, breaking role-based E2E tests or seeded workflows.  
+**Mitigation sketch:** Change seed role to `user` or add/align role enum if `customer` is intentionally supported.
+
+### M4 — Orphan Rust crates and dead dependencies
+**Impact:** `bw-ingestion` has no binary and no in-repo consumer; `bw-api` is retired and not compiling; `graphql`/`@graphql-tools/schema` are unused by the actual GraphQL route. This increases build time, CI noise, and maintenance confusion.  
+**Mitigation sketch:** Decide whether to delete, extract, or rewire each crate/dependency. If kept, document owner and consumer.
+
+### M5 — Directory and suggest load all rows into memory
+**Impact:** `/api/directory` and `/api/directory/suggest` fetch all directory rows, then filter/sort in JS. Performance degrades linearly with data size and can strain Postgres/Node under load.  
+**Mitigation sketch:** Move filtering/pagination into SQL, add indexes on common filters, and cap result sets.
+
+### M6 — MinIO port and credential mismatch
+**Impact:** Compose exposes MinIO on host 9002, but the TS client defaults to 9000. Host-side dev without `MINIO_PORT=9002` points to ClickHouse. Compose uses `MINIO_ROOT_*` while app reads `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`, relying on defaults.  
+**Mitigation sketch:** Use one canonical env convention, set `MINIO_PORT` in `.env.example`/compose, and add a health/presign smoke test.
+
+## LOW
+
+### L1 — `messages.sender_user_id` lacks `ON DELETE CASCADE`
+**Impact:** Deleting a user can fail or leave inconsistent chat rows, unlike sibling FKs.  
+**Mitigation sketch:** Add a migration after checking message retention requirements.
+
+### L2 — `PendingImportBusiness` carries dead `duplicateStatus`
+**Impact:** TypeScript type references a dropped column, causing confusion and possible null/deserialize mismatch.  
+**Mitigation sketch:** Remove field from type and mappers, or restore column if still needed.
+
+### L3 — Inconsistent `POSTGRES_SCHEMA` qualification
+**Impact:** Some routes qualify table names, most do not. Future schema usage will be inconsistent and error-prone.  
+**Mitigation sketch:** Standardize repository queries to use a schema-qualified table name helper.
+
+### L4 — Stale duplicate test infrastructure
+**Impact:** Multiple jest setups, missing file mocks, Vitest config without dependency, and root-level specs not picked up by Jest create false confidence.  
+**Mitigation sketch:** Remove unused configs/files or wire them into npm scripts; make `npm test` reflect all intended test groups.

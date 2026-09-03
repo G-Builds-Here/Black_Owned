@@ -240,11 +240,21 @@ def render_c1_svg(data, deltas=None):
     for i, person in enumerate(people):
         cy = person_y_start + i * 90
         delta_cls = get_delta_class(person['id'], deltas, 'c1_people') if deltas else ''
+        # Wrap description into 2 lines (max 40 chars per line)
+        desc = person.get('description', '')
+        desc_lines = wrap_text(desc, 40)
+        desc_tspans = ''
+        for li, dl in enumerate(desc_lines[:2]):
+            dy_val = 0 if li == 0 else 11
+            desc_tspans += f'<tspan x="{person_cx}" dy="{dy_val}">{dl}</tspan>'
+        if not desc_lines:
+            desc_tspans = f'<tspan x="{person_cx}" dy="0"></tspan>'
+
         svg_parts.append(f'''
         <g class="element {delta_cls}" data-id="{person['id']}" data-type="Person" data-tech="" data-path="{person.get('source','')}" data-container-type="person">
             {_person_icon(person_cx, cy)}
-            <text x="{person_cx}" y="{cy + 30}" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="bold" font-family="system-ui">{person['name']}</text>
-            <text x="{person_cx}" y="{cy + 45}" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">{person.get('description', '')[:40]}</text>
+            <text x="{person_cx}" y="{cy + 35}" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="bold" font-family="system-ui">{person['name']}</text>
+            <text fill="#94a3b8" font-size="9" font-family="system-ui">{desc_tspans}</text>
         </g>''')
 
     # Main system box
@@ -312,7 +322,7 @@ def render_c1_svg(data, deltas=None):
         label_svg = (f'<text x="{mx}" y="{my}" fill="#64748b" font-size="9" font-family="system-ui" text-anchor="middle">{rel_label}</text>'
                      if show_label else '')
         svg_parts.append(f'''
-        <g class="relationship" data-from="{sanitize_id(sys_name)}" data-to="{ext['id']}" data-label="{rel_label}">
+        <g class="relationship" data-from="{sanitize_id(sys_name)}" data-to="{ext['id']}" data-label="{rel_label}" style="opacity: 0;">
             <line x1="{ax1}" y1="{ay1}" x2="{ax2}" y2="{ay2}"
                   stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-c1)"/>
             {label_svg}
@@ -450,7 +460,9 @@ def render_edges_svg(edges, positions, box_width, box_height, marker_id, stroke_
 def render_c2_svg(data, deltas=None):
     """Render C2 Container diagram as SVG."""
     c2 = data['c2_containers']
+    c1 = data.get('c1_context', {})
     containers = c2.get('containers', [])
+    system_name = c1.get('system_name', 'Black Owned')
 
     # Separate by type - MUTUALLY EXCLUSIVE (check databases first, then services)
     databases = [c for c in containers if 'database' in c.get('description', '').lower() or
@@ -542,7 +554,7 @@ def render_c2_svg(data, deltas=None):
     # System boundary — sized to content
     svg_parts.append(f'''
     {_diagram_boundary(margin_x, y_services, width - margin_x, content_bottom)}
-    <text x="40" y="42" fill="#64748b" font-size="12" font-family="system-ui">{c2['system_name']}</text>''')
+    <text x="40" y="42" fill="#64748b" font-size="12" font-family="system-ui">{system_name}</text>''')
 
     # Track box positions for edge-to-edge arrow routing: {id: (cx, cy, w, h)}
     container_boxes = {}
@@ -851,7 +863,7 @@ def _classify_component(comp):
 LANE_ORDER = ['controller', 'middleware', 'handler', 'request', 'response', 'service', 'validator', 'repository', 'mapper', 'graphql', 'auth', 'domain', 'analytics', 'events', 'other']
 
 
-def render_c3_svg(data, container_id, deltas=None):
+def render_c3_svg(data, container_id, deltas=None, rel_deltas=None):
     """Render C3 Component diagram grouped into swim lanes by architectural layer."""
     c3 = data.get('c3_components', {}).get('containers', {})
     container = c3.get(container_id)
@@ -1009,7 +1021,18 @@ def render_c3_svg(data, container_id, deltas=None):
         cy_ctrl = int((y1 + y2) / 2 - arc)
         cx_ctrl = int((x1 + x2) / 2)
         path_d = f'M {int(x1)},{int(y1)} Q {cx_ctrl},{cy_ctrl} {int(x2)},{int(y2)}'
-        svg_parts.append(f'<path d="{path_d}" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arrow-c3)" class="relationship" data-from="{src}" data-to="{tgt}"/>')
+
+        # Add delta class to relationship
+        rel_cls = 'relationship'
+        if rel_deltas:
+            rel_key = f'{src}->{tgt}->{edge.get("label", "")}'
+            delta_status = rel_deltas.get(rel_key)
+            if delta_status == 'new':
+                rel_cls += ' delta-new'
+            elif delta_status == 'modified':
+                rel_cls += ' delta-modified'
+
+        svg_parts.append(f'<path d="{path_d}" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arrow-c3)" class="{rel_cls}" data-from="{src}" data-to="{tgt}"/>')
 
     svg_parts.append('</svg>')
     return '\n'.join(svg_parts)
@@ -1284,20 +1307,23 @@ def render_delta_svg(data, deltas):
     ctx_box_w = 150
     ctx_box_h = 44
 
-    def draw_section(title, items, ctx_items, y):
+    def draw_section(title, items, ctx_items, y, add_top_gap=False):
         nonlocal position_map
-        parts.append(f'<text x="{margin_x}" y="{y + 16}" fill="#94a3b8" font-size="13" font-weight="600" font-family="system-ui">{title}</text>')
-        y += 32
+        # Add extra gap before new sections (not the first one)
+        y_start = y + section_gap if add_top_gap else y
+        parts.append(f'<text x="{margin_x}" y="{y_start + 16}" fill="#94a3b8" font-size="13" font-weight="600" font-family="system-ui">{title}</text>')
+        y_content = y_start + 32
 
         # Combine items and context items
         all_items = items + [('', '', cid, name, sub, '', True) for cid, (name, sub) in ctx_items.items()]
         if not all_items:
-            return y + spc_y
+            return y_content + spc_y
 
         n = len(all_items)
         ncols = min(cols, n)
-        total_w = ncols * box_w + (ncols - 1) * spc_x
-        start_x = margin_x + (width - 2 * margin_x - total_w) // 2
+        # Always use max columns for consistent left alignment across sections
+        total_w = cols * box_w + (cols - 1) * spc_x
+        start_x = margin_x
 
         for i, (sec, grp, item_id, name, subtitle, dcls, is_ctx) in enumerate(all_items):
             col = i % ncols
@@ -1307,7 +1333,7 @@ def render_delta_svg(data, deltas):
             x = start_x + col * (box_w + spc_x)
             # center context items within the box_w grid
             cx = x + bw // 2
-            cy = y + row * (bh + spc_y) + bh // 2
+            cy = y_content + row * (bh + spc_y) + bh // 2
             position_map[item_id] = (cx, cy)
 
             if is_ctx:
@@ -1318,7 +1344,7 @@ def render_delta_svg(data, deltas):
                               'external': '#64748b', 'person': '#eab308', 'component': '#64748b',
                               'type': '#64748b'}.get(ctx_type_map.get(item_id, ''), '#475569')
                 ctx_type = ctx_type_map.get(item_id, 'container')
-                cy_off = y + row * (bh + spc_y)
+                cy_off = y_content + row * (bh + spc_y)
                 parts.append(f'<g class="element context" data-id="{item_id}" data-type="Container" data-container-type="{ctx_type}" style="cursor: pointer; opacity: 0.65;">')
                 cx_center = x + bw // 2
                 if ctx_type == 'database':
@@ -1342,20 +1368,20 @@ def render_delta_svg(data, deltas):
                 parts.append('</g>')
             else:
                 parts.append(f'<g class="element component {dcls}" data-id="{item_id}" data-type="Component" data-tech="{subtitle}" style="cursor: pointer;">')
-                parts.append(f'<rect x="{x}" y="{y + row * (bh + spc_y)}" width="{bw}" height="{bh}" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>')
+                parts.append(f'<rect x="{x}" y="{y_content + row * (bh + spc_y)}" width="{bw}" height="{bh}" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>')
                 if dcls:
                     dtag = dcls.replace('delta-', '').upper()
                     bc = '#d946ef' if dtag == 'NEW' else '#fbbf24'
                     parts.append(f'<g class="delta-badge">')
-                    parts.append(f'<rect x="{x + bw - 44}" y="{y + row * (bh + spc_y) + 4}" width="40" height="14" rx="3" fill="{bc}22" stroke="{bc}" stroke-width="1"/>')
-                    parts.append(f'<text x="{x + bw - 24}" y="{y + row * (bh + spc_y) + 14}" text-anchor="middle" fill="{bc}" font-size="7" font-weight="bold" font-family="system-ui">{dtag}</text>')
+                    parts.append(f'<rect x="{x + bw - 44}" y="{y_content + row * (bh + spc_y) + 4}" width="40" height="14" rx="3" fill="{bc}22" stroke="{bc}" stroke-width="1"/>')
+                    parts.append(f'<text x="{x + bw - 24}" y="{y_content + row * (bh + spc_y) + 14}" text-anchor="middle" fill="{bc}" font-size="7" font-weight="bold" font-family="system-ui">{dtag}</text>')
                     parts.append(f'</g>')
-                parts.append(f'<text x="{x + 8}" y="{y + row * (bh + spc_y) + 16}" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">{name[:28]}</text>')
-                parts.append(f'<text x="{x + 8}" y="{y + row * (bh + spc_y) + 30}" fill="#64748b" font-size="8" font-family="system-ui">[{subtitle}]</text>')
+                parts.append(f'<text x="{x + 8}" y="{y_content + row * (bh + spc_y) + 16}" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">{name[:28]}</text>')
+                parts.append(f'<text x="{x + 8}" y="{y_content + row * (bh + spc_y) + 30}" fill="#64748b" font-size="8" font-family="system-ui">[{subtitle}]</text>')
                 parts.append('</g>')
 
         rows = (n + ncols - 1) // ncols
-        return y + rows * (max(box_h, ctx_box_h) + spc_y) + section_gap
+        return y_content + rows * (max(box_h, ctx_box_h) + spc_y) + section_gap
 
     # --- Draw sections ---
     # C2 containers
@@ -1365,17 +1391,21 @@ def render_delta_svg(data, deltas):
 
     # C3 components per container group
     c3_groups = set(d[0] for d in display if d[0].startswith('Components'))
+    first_c3 = True
     for g in sorted(c3_groups):
         grp_items = [d for d in display if d[0] == g]
         # Find container prefix for context inference
         ctx_for_grp = {kid: v for kid, v in ctx_c3.items()}
-        y_cursor = draw_section(g, grp_items, ctx_for_grp, y_cursor)
+        y_cursor = draw_section(g, grp_items, ctx_for_grp, y_cursor, add_top_gap=not first_c3)
+        first_c3 = False
 
     # C3.5 types per container group
     c35_groups = set(d[0] for d in display if d[0].startswith('Types'))
+    first_c35 = True
     for g in sorted(c35_groups):
         grp_items = [d for d in display if d[0] == g]
-        y_cursor = draw_section(g, grp_items, {}, y_cursor)
+        y_cursor = draw_section(g, grp_items, {}, y_cursor, add_top_gap=not first_c35)
+        first_c35 = False
 
     total_h = y_cursor + 20
 
@@ -1402,6 +1432,8 @@ def render_delta_svg(data, deltas):
     .delta-new rect { stroke: #d946ef !important; stroke-width: 3 !important; fill: #d946ef44 !important; }
     .delta-modified rect { stroke: #fbbf24 !important; stroke-width: 3 !important; fill: #fbbf2444 !important; }
     .delta-removed rect { stroke: #ef4444 !important; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
+    .relationship.delta-new, .relationship.delta-modified { pointer-events: auto; }
+    .relationship.delta-new path, .relationship.delta-modified path { stroke: #d946ef !important; }
     .context rect { filter: opacity(0.7); }
 </style>'''
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {total_h}" width="100%" style="background: transparent;">
@@ -1430,6 +1462,8 @@ def style_block():
     .delta-modified rect, .delta-modified ellipse, .delta-modified path { stroke: #fbbf24 !important; stroke-width: 3 !important; }
     .delta-modified rect { fill: #fbbf2444 !important; }
     .delta-removed rect, .delta-removed ellipse, .delta-removed path { stroke: #ef4444 !important; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
+    .relationship.delta-new, .relationship.delta-modified { pointer-events: auto; }
+    .relationship.delta-new path, .relationship.delta-modified path { stroke: #d946ef !important; }
     .tab-btn.has-delta { color: #d946ef !important; }'''
 
 def generate_html(data, deltas=None, system_name='Architecture'):
@@ -1451,7 +1485,8 @@ def generate_html(data, deltas=None, system_name='Architecture'):
     for c in containers:
         cid = sanitize_id(c['name'])
         c3_deltas = deltas.get('c3', {}).get(cid, {}) if deltas else None
-        svg = render_c3_svg(data, cid, c3_deltas)
+        c3_rel_deltas = deltas.get('c3_rels', {}) if deltas else None
+        svg = render_c3_svg(data, cid, c3_deltas, c3_rel_deltas)
         if 'no-data' in svg:
             continue
         delta_cls = get_delta_class(c['id'], deltas, 'c2') if deltas else ''
@@ -1527,7 +1562,7 @@ body {{ font-family: 'Inter', system-ui, -apple-system, sans-serif; background: 
 .legend-title {{ font-weight: 600; color: #94a3b8; }}
 .legend-item {{ display: flex; align-items: center; gap: 4px; }}
 .dot {{ width: 8px; height: 8px; border-radius: 50%; }}
-.dot.new {{ background: #22c55e; }}
+.dot.new {{ background: #d946ef; }}
 .dot.modified {{ background: #f59e0b; }}
 .dot.removed {{ background: #ef4444; opacity: 0.6; }}
 

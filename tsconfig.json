@@ -33,17 +33,25 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
     ".next\\dev/types/**/*.ts",
-    ".next\\dev/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next\\dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "packages/ui",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "jest.setup.ts",
+    "vitest.setup.ts",
+    "packages/**/*",
     "playwright.config.ts",
     "jest.config.ts",
-    "e2e/**/*",
-    "**/*.spec.ts",
-    "**/*.test.ts"
+    "vitest.config.ts",
+    "diag-firefox.ts",
+    "diag-hydration.ts",
+    "diag-toast.ts",
+    "check-hydration.ts"
   ]
 }

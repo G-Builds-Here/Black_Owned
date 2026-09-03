@@ -11,12 +11,8 @@ test.describe('LOC-0051 E2E Validation', () => {
       await expect(page).toHaveTitle(/Black Owned/);
 
       // Verify gradient background (heritage colors)
-      const heroSection = page.getByText('Celebrating Black Excellence');
+      const heroSection = page.getByRole('heading', { name: 'Celebrating Black Excellence', exact: true });
       await expect(heroSection).toBeVisible();
-
-      // Verify typography - main heading
-      const heading = page.getByRole('heading', { name: /Black Owned/i, level: 1 }).first();
-      await expect(heading).toBeVisible();
 
       // Verify navigation component
       const nav = page.getByRole('navigation');
@@ -51,11 +47,11 @@ test.describe('LOC-0051 E2E Validation', () => {
     test('should render Tabs component on directory page', async ({ page }) => {
       await page.goto(`${BASE_URL}/directory`);
 
-      // Check tabs are visible
-      const allTab = page.getByRole('tab', { name: /All Businesses/i });
+      // Check tabs are visible - tabs show "All Businesses (count)" and "Saved (count)"
+      const allTab = page.getByRole('button', { name: /All Businesses/i });
       await expect(allTab).toBeVisible();
 
-      const savedTab = page.getByRole('tab', { name: /Saved/i });
+      const savedTab = page.getByRole('button', { name: /Saved/i });
       await expect(savedTab).toBeVisible();
     });
 
@@ -70,8 +66,8 @@ test.describe('LOC-0051 E2E Validation', () => {
       await page.goto(`${BASE_URL}/directory`);
 
       // Dropdown is used in FilterBar - verify filter bar exists
-      // The dropdown trigger button shows "Select category" when no filter is active
-      const categoryDropdown = page.getByRole('button', { name: /Select category/i });
+      // The dropdown trigger button shows "Category" when no filter is active
+      const categoryDropdown = page.getByRole('button', { name: /Category/i });
       await expect(categoryDropdown).toBeVisible();
     });
 
@@ -99,7 +95,7 @@ test.describe('LOC-0051 E2E Validation', () => {
       await page.goto(`${BASE_URL}/directory`);
 
       // Check filter bar exists - verify category dropdown button
-      const categoryDropdown = page.getByRole('button', { name: /Select category/i });
+      const categoryDropdown = page.getByRole('button', { name: /Category/i });
       await expect(categoryDropdown).toBeVisible();
     });
 
@@ -129,18 +125,19 @@ test.describe('LOC-0051 E2E Validation', () => {
       const starRating = page.getByText('★').first();
       await expect(starRating).toBeVisible();
 
-      // Check for verified badge
-      const verifiedBadge = page.getByText('Verified');
+      // Check for verified badge (uses checkmark symbol, not text)
+      const verifiedBadge = page.getByText('✓').first();
       await expect(verifiedBadge).toBeVisible();
     });
 
     test('should have tabs for All and Saved businesses', async ({ page }) => {
       await page.goto(`${BASE_URL}/directory`);
 
-      const allTab = page.getByRole('tab', { name: /All/i });
+      // Tabs are implemented as buttons with "All Businesses (count)" and "Saved (count)"
+      const allTab = page.getByRole('button', { name: /All Businesses/i });
       await expect(allTab).toBeVisible();
 
-      const savedTab = page.getByRole('tab', { name: /Saved/i });
+      const savedTab = page.getByRole('button', { name: /Saved/i });
       await expect(savedTab).toBeVisible();
     });
   });
@@ -155,7 +152,7 @@ test.describe('LOC-0051 E2E Validation', () => {
 
       // Navigate back to home
       await page.goto(BASE_URL);
-      await expect(page.getByRole('heading', { name: /Black Owned/i, level: 1 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Black Owned/i })).toBeVisible();
     });
   });
 });

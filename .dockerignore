@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Node.js / Next.js (not used by Rust build, but exclude anyway)
+node_modules
+.next
+package*.json
+package-lock.json
+npm-debug.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build artifacts
+target/
+
+# Test and coverage
+coverage/
+*.test.ts
+*.spec.ts
+__mocks__/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+!README.md
+
+# Misc
+*.log
+.DS_Store
+*.tmp

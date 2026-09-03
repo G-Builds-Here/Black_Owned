@@ -1,0 +1,69 @@
+{
+  "artifact": "anti-patterns.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Hardcoded credentials/secrets in tracked files",
+      "content": "**Evidence:** `.env` is git-tracked and includes `JWT_SECRET`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, and private `SEARXNG_URL`.  \n**Risk:** secret leakage and unreviewable environment-specific defaults.",
+      "type": "prose"
+    },
+    {
+      "heading": "Fake auth context in GraphQL route",
+      "content": "**Evidence:** `src/app/api/graphql/route.ts` hardcodes `context.authorization = \"Bearer token\"` and does not set `context.user`.  \n**Risk:** mutation handlers cannot authenticate correctly; security control is bypassed or inconsistent.",
+      "type": "prose"
+    },
+    {
+      "heading": "Regex-based GraphQL execution",
+      "content": "**Evidence:** `/api/graphql` parses queries with regex instead of using `graphql` / `@graphql-tools/schema`, which are declared dependencies.  \n**Risk:** fragile query parsing, poor validation, broken variables/whitespace handling, and dead dependencies.",
+      "type": "prose"
+    },
+    {
+      "heading": "Shared table writes without coordination",
+      "content": "**Evidence:** web app and `bw-scraper` both write `scrape_jobs` and `scraped_businesses`; no claim/lock protocol, no unique constraint on `(source, query, location)`.  \n**Risk:** duplicate jobs, lost updates, inconsistent status, and race conditions.",
+      "type": "prose"
+    },
+    {
+      "heading": "Orphan Rust crates",
+      "content": "**Evidence:** `bw-ingestion` has no binary and no in-repo dependent crate; `bw-api` is retired from compose and currently not compiling.  \n**Risk:** unused code, longer builds, CI confusion, and misleading architecture.",
+      "type": "prose"
+    },
+    {
+      "heading": "Two parallel NATS clients",
+      "content": "**Evidence:** `src/lib/nats/nats-client.ts` and `src/lib/nats/client.ts` expose different functions (`getNatsClient` vs `getNatsConnection`).  \n**Risk:** duplicated reconnect/cache logic and inconsistent client behavior.",
+      "type": "prose"
+    },
+    {
+      "heading": "In-app scraper executor has no production caller",
+      "content": "**Evidence:** `src/services/scraper-job-executor.ts` is only referenced by tests, while admin scrape-job creation only inserts pending rows.  \n**Risk:** user/admin actions appear accepted but have no effect in production.",
+      "type": "prose"
+    },
+    {
+      "heading": "Dead test infrastructure",
+      "content": "**Evidence:** Vitest config exists but Vitest is not installed; `jest.config.components.js` references missing `__mocks__/file-mock.js`; root-level specs are outside Jest `roots`; multiple `jest.setup*` files exist.  \n**Risk:** `npm test` can pass while meaningful tests are not run.",
+      "type": "prose"
+    },
+    {
+      "heading": "Committed stale worktree",
+      "content": "**Evidence:** `.worktrees/epic-jest/` contains duplicated jest configs and test files.  \n**Risk:** accidental edits, confusing test discovery, and repo bloat.",
+      "type": "prose"
+    },
+    {
+      "heading": "Environment-variable drift",
+      "content": "**Evidence:** Compose supplies `MINIO_ROOT_*`, but app reads `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`; compose host MinIO port is 9002 while app default is 9000; CI uses `VALKEY_URL` while TS code reads `VALKEY_HOST`/`VALKEY_PORT`.  \n**Risk:** local/dev failures that depend on which env file happens to set the right name.",
+      "type": "prose"
+    },
+    {
+      "heading": "Hardcoded LAN defaults in product code",
+      "content": "**Evidence:** `SEARXNG_URL` default in `bw-scraper/src/config.rs` is `http://192.168.68.50:8888`.  \n**Risk:** deployment-specific address leaks into defaults and silently works only on one network.",
+      "type": "prose"
+    }
+  ],
+  "summary": "Anti-patterns observed in the repo, with evidence and risk.",
+  "primary_consumers": [
+    "luke",
+    "damian",
+    "alfred"
+  ]
+}

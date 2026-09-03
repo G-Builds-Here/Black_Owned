@@ -1,0 +1,14 @@
+{
+  "artifact": "component-inventory.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [],
+  "summary": "Component ownership table \u2014 what each module owns and why.",
+  "primary_consumers": [
+    "luke",
+    "lucius",
+    "damian",
+    "alfred"
+  ]
+}

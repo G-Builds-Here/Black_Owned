@@ -78,33 +78,12 @@ import json
 from pathlib import Path
 from datetime import date
 
-
-HANDOFF_PATHS = {
-    "oracle":         ("handoffs/oracle",  "Oracle-{key}.md"),
-    "lucius":         ("handoffs/lucius",  "Lucius-{key}.md"),
-    "alfred":         ("handoffs/alfred",  "Alfred-{key}.md"),
-    "alfred-notes":   ("handoffs/alfred",  "Alfred-{key}-notes.md"),
-    "damian":         ("handoffs/damian",  "Damian-{key}.md"),
-    "damian-case":    ("handoffs/damian",  "Damian-{key}-case.md"),
-    "bruce":          ("handoffs/bruce",   "Bruce-{key}.md"),
-    "bruce-case":     ("handoffs/bruce",   "Bruce-{key}-case.md"),
-    "gordon":         ("handoffs/gordon",  "Gordon-{key}.md"),
-    "gordon-split":   ("handoffs/gordon",  "Gordon-{key}-split.md"),
-    "harvey":         ("handoffs/harvey",  "Harvey-{key}.md"),
-    "harvey-session":  ("handoffs/harvey",  "Harvey-{key}-session.md"),
-    "luke":           ("handoffs/luke",    "Luke-{key}.md"),
-    "blackgate":      ("handoffs/blackgate", "Blackgate-{key}.md"),
-    "signal":         ("handoffs/signal",  "Signal-{key}.md"),
-    "skill-creator":  ("handoffs/skill-creator", "{key}.md"),
-    "session":        ("handoffs/session", "Session-{key}.md"),
-    "dupin":              ("handoffs/dupin",   "{key}.md"),
-    "phase-state":        ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-implement":   ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-commit-impl": ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-commit-qa":   ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-qa":          ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-pr":          ("handoffs/dupin",   "{key}.md"),
-}
+from dupin_shared import (
+    HANDOFF_PATHS,
+    _DUPIN_PREFIX,
+    _DUPIN_TYPES,
+    build_ac_handoff_path,
+)
 
 HEADERS = {
     "oracle":         "## Oracle Handoff",
@@ -127,8 +106,7 @@ HEADERS = {
     "dupin":              "## Dupin Handoff",
     "phase-state":        "## Dupin Phase State",
     "dup-ac-implement":   "## Implementation Handoff — Dupin",
-    "dup-ac-commit-impl": "## Commit Handoff — Dupin (impl)",
-    "dup-ac-commit-qa":   "## Commit Handoff — Dupin (qa)",
+    "dup-ac-commit":      "## Commit Handoff — Dupin",
     "dup-ac-qa":          "## QA Handoff — Dupin",
     "dup-ac-pr":          "## PR Handoff — Dupin",
 }
@@ -166,8 +144,7 @@ SKILL_FIELDS = {
     "dup-ac-implement":   ["Local ticket", "Partial", "A/C Selected (this session)", "Dev Style",
                            "TDD Classification", "TDD Red-Green Cycles", "Test Summary",
                            "Build Final", "Files Changed", "Components Created"],
-    "dup-ac-commit-impl": ["PR Comments", "Files Changed", "Review Findings", "Commit Hash"],
-    "dup-ac-commit-qa":   ["PR Comments", "Files Changed", "Review Findings", "Commit Hash"],
+    "dup-ac-commit":      ["PR Comments", "Files Changed", "Review Findings", "Commit Hash"],
     "dup-ac-qa":          ["QA Result", "Test Types Run", "A/C Selected (this session)",
                            "Test Summary", "QA Summary", "Files Changed",
                            "Failing Tests", "Gaps Addressed", "Gaps Deferred"],
@@ -282,9 +259,7 @@ _TRULY_REQUIRED = {
     "harvey":            ["PR", "Has Fix List"],
     "dup-ac-implement":  ["A/C Selected (this session)", "Dev Style", "Branch",
                           "Repo Root", "Files Changed", "Components Created"],
-    "dup-ac-commit-impl":["Branch", "Repo Root", "Files Changed", "Commit Hash",
-                          "Review Findings"],
-    "dup-ac-commit-qa":  ["Branch", "Repo Root", "Files Changed", "Commit Hash",
+    "dup-ac-commit":     ["Branch", "Repo Root", "Files Changed", "Commit Hash",
                           "Review Findings"],
     "dup-ac-qa":         ["A/C Selected (this session)", "QA Result", "Branch",
                           "Repo Root", "QA Summary", "Files Changed", "Failing Tests"],
@@ -341,8 +316,8 @@ PIPELINE_NAMES = {
     "bruce-case": "Bruce", "harvey": "Harvey", "harvey-session": "Harvey",
     "luke": "Luke",
     "dupin": "Dupin", "phase-state": "Dupin",
-    "dup-ac-implement": "Dupin", "dup-ac-commit-impl": "Dupin",
-    "dup-ac-commit-qa": "Dupin", "dup-ac-qa": "Dupin", "dup-ac-pr": "Dupin",
+    "dup-ac-implement": "Dupin", "dup-ac-commit": "Dupin",
+    "dup-ac-qa": "Dupin", "dup-ac-pr": "Dupin",
 }
 
 
@@ -357,7 +332,8 @@ def _enforce_required_fields(htype: str, fields: dict) -> None:
     """Enforce only the fields the script cannot default — those carrying real session state.
 
     All other declared fields are filled with N/A by _apply_field_defaults before
-    this runs. Only fields in _TRULY_REQUIRED need to be present and non-empty.
+    this runs. Only fields in _TRULY_REQUIRED need to be present and carry a real
+    value: empty AND "N/A" both count as missing (N/A is a default, not state).
     Underscore-prefixed special fields are structural containers and remain optional.
     """
     required = list(_TRULY_REQUIRED.get("_base", []))
@@ -368,12 +344,73 @@ def _enforce_required_fields(htype: str, fields: dict) -> None:
     # Repo-intelligence types have no ticket; remove ticket-specific base requirements.
     if htype in {"luke"}:
         required = [f for f in required if f != "Ticket Status"]
-    missing = [f for f in required if not fields.get(f)]
+    # "Route To" and "Ticket Status" are legitimately N/A (no next skill; local
+    # tickets without Jira) — every other truly-required field must carry real state.
+    na_exempt = {"Route To", "Ticket Status"}
+    def _is_missing(v):
+        return not v or str(v).strip().upper() == "N/A"
+    missing = [f for f in required
+               if f not in na_exempt and _is_missing(fields.get(f))]
     if missing:
         print(f"ERROR: '{htype}' handoff is missing required session fields.", file=sys.stderr)
         print("These fields cannot be defaulted — they carry real session state:", file=sys.stderr)
         for f in missing:
             print(f"  missing: {f}", file=sys.stderr)
+        sys.exit(1)
+
+
+# Phrases that indicate the model pointed at Jira instead of writing the actual
+# Gherkin inline. Bruce (and any other downstream reader) must get the AC text
+# in the handoff itself — a pointer means they have to go fetch the ticket.
+_AC_POINTER_PATTERNS = [
+    "see the jira ticket", "see jira", "in the jira ticket", "in the ticket description",
+    "refer to jira", "refer to the ticket", "full gherkin scenarios are in the jira ticket",
+    "expand blocks", "check jira for", "jira has the full",
+]
+
+
+def _enforce_alfred_gherkin(fields: dict) -> None:
+    """Alfred must hand Bruce/Damian the actual Gherkin, not a pointer back to Jira.
+
+    Only applies when routing to bruce or damian — the two skills that
+    implement/test directly against the AC. Routes to lucius (pre-design,
+    ACs not finalized) or dupin (epic-level story breakout, per-story
+    handoffs carry their own AC) are exempt.
+
+    Checks the '_blocks.Acceptance Criteria' content (or the flat 'Acceptance
+    Criteria' field, since models sometimes put it top-level) for a real
+    Given/When/Then body. A handoff that only summarizes AC titles and tells
+    the reader to go look at Jira defeats the purpose of the handoff.
+    """
+    route_to = str(fields.get("Route To", "")).strip().lower()
+    if route_to not in {"bruce", "damian"}:
+        return
+
+    blocks = fields.get("_blocks") or {}
+    ac_text = blocks.get("Acceptance Criteria") or fields.get("Acceptance Criteria") or ""
+    if not isinstance(ac_text, str):
+        ac_text = str(ac_text)
+    lower = ac_text.lower()
+
+    if not ac_text.strip():
+        print("ERROR: 'alfred' handoff is missing '_blocks.Acceptance Criteria' — "
+              "the full refined Gherkin must be written into the handoff, not left "
+              "for the reader to fetch from Jira.", file=sys.stderr)
+        sys.exit(1)
+
+    for pattern in _AC_POINTER_PATTERNS:
+        if pattern in lower:
+            print(f"ERROR: 'alfred' handoff's Acceptance Criteria contains a Jira "
+                  f"pointer phrase ('{pattern}') instead of the actual Gherkin. "
+                  f"Write the full Given/When/Then scenarios inline in the handoff.",
+                  file=sys.stderr)
+            sys.exit(1)
+
+    if "given" not in lower or "when" not in lower or "then" not in lower:
+        print("ERROR: 'alfred' handoff's Acceptance Criteria has no Given/When/Then "
+              "content. Write the full refined Gherkin scenarios into the handoff "
+              "so Bruce/Damian don't have to open the Jira ticket to read the AC.",
+              file=sys.stderr)
         sys.exit(1)
 
 
@@ -426,8 +463,12 @@ def build_handoff(htype: str, key: str, fields: dict) -> str:
         else:
             lines.append(f"**Gotham Pipeline** · {sender}")
 
-    # Auto-insert grep-friendly completion stamp when Status is "complete"
-    if fields.get("Status", "").lower() == "complete":
+    # Auto-insert grep-friendly completion stamp when Status is a completion
+    # value. 'complete' is canonical, but models may write 'done'/'passed'/
+    # 'success' — normalize all of them so downstream scanners (find_handoff,
+    # validate_handoff_chain) never treat a finished handoff as missing.
+    COMPLETE_STATUSES = {"complete", "done", "passed", "pass", "success"}
+    if fields.get("Status", "").lower() in COMPLETE_STATUSES:
         lines.append("status: complete")
 
     # Ordered fields first
@@ -604,9 +645,18 @@ def main():
         print(f"Unknown handoff type: {htype}. Valid: {', '.join(HANDOFF_PATHS.keys())}", file=sys.stderr)
         sys.exit(1)
 
+    # Dupin epic/phase state is per-EPIC — never per-AC. An AC-suffixed key here
+    # produced top-level handoffs/dupin/<STORY>-AC<n>.md files the scanner doesn't
+    # read; per-AC state belongs in the dup-ac-* stage files.
+    if htype in ("dupin", "phase-state") and re.search(r"-AC\d+$", key):
+        print(f"ERROR: '{htype}' is epic/phase state — key {key!r} has an AC suffix. Use the dup-ac-* types for per-AC handoffs (they write handoffs/dupin/<STORY>/<stage>-<STORY>-AC<n>.md).", file=sys.stderr)
+        sys.exit(1)
+
     _normalize_field_names(htype, fields)
     _apply_field_defaults(htype, fields, key)
     _enforce_required_fields(htype, fields)
+    if htype == "alfred":
+        _enforce_alfred_gherkin(fields)
 
     folder, filename_template = HANDOFF_PATHS[htype]
     out_dir = base / folder
@@ -618,43 +668,37 @@ def main():
         for old in out_dir.glob("Session-*.md"):
             old.replace(completed_dir / old.name)
 
-    # Deterministic path for dupin sub-types:
-    # handoffs/dupin/{ticket_key}/{stage}-{key}-{ac_id}.md
-    _DUPIN_PREFIX = {
-        "dup-ac-implement": "impl", "dup-ac-commit-impl": "commit-impl",
-        "dup-ac-commit-qa": "commit-qa", "dup-ac-qa": "qa", "dup-ac-pr": "pr",
-    }
-    if htype in _DUPIN_PREFIX:
+    if htype in _DUPIN_TYPES:
         # ac_selected is aliased to "A/C Selected (this session)" by _promote_flat_keys
         ac_selected = fields.get("A/C Selected (this session)", "")
-        # Handle PR handoffs: ac_selected = "pr-<STORY_KEY>" or "pr-<EPIC_KEY>"
-        _pr_match = re.match(r"^pr-(.+)$", ac_selected)
-        if _pr_match and htype == "dup-ac-pr":
-            # For PR handoffs, use the story/epic key directly
-            # Path: handoffs/dupin/{STORY_KEY}/pr-{STORY_KEY}.md
-            prefix = _DUPIN_PREFIX[htype]
-            base_filename = f"{key}/{prefix}-{key}.md"
+        # Strip AC suffix from key if present (e.g. "LOC-0035-AC2" → "LOC-0035")
+        _key_strip = re.match(r"^(.+)-AC\d+$", key)
+        story_key = _key_strip.group(1) if _key_strip else key
+        if re.search(r"-AC\d+$", story_key):
+            # Doubled per-AC dir (handoffs/dupin/<STORY>-AC<n>/<stage>-<STORY>-AC<n>-AC<n>.md)
+            # is scanner-invisible. The story key itself must not carry an AC suffix.
+            print(f"ERROR: story key {story_key!r} still carries an AC suffix — pass ticket_key as <STORY> or <STORY>/AC<n> so the file lands in handoffs/dupin/<STORY>/.", file=sys.stderr)
+            sys.exit(1)
+        # Extract AC ID from ac_selected (handles "AC1", "LOC-0001-AC1", "pr-STORY")
+        if htype == "dup-ac-pr" and ac_selected.startswith("pr-"):
+            ac_id_for_path = ac_selected
+        elif "/" in key:
+            _, ac_id_for_path = key.rsplit("/", 1)
         else:
-            # Extract AC ID from format like "AC1" or "AC1, AC2" or full ID "LOC-0001-AC1"
             _ac_extract = re.search(r"(AC\d+)", ac_selected)
-            ac_id = _ac_extract.group(1) if _ac_extract else ""
-            # Normalize: if model passed full ID (e.g. "LOC-0050-AC4"), strip to bare ("AC4")
-            _ac_match = re.match(r"^(.+)-(AC\d+)$", ac_id)
-            if _ac_match:
-                ac_id = _ac_match.group(2)
-            # Strip AC suffix from key if present (e.g. "LOC-0035-AC2" → "LOC-0035")
-            # Prevents double AC in filename: commit-impl-LOC-0035-AC2-AC2.md
-            _key_strip = re.match(r"^(.+)-AC\d+$", key)
-            story_key = _key_strip.group(1) if _key_strip else key
-            if ac_id:
-                prefix = _DUPIN_PREFIX[htype]
-                base_filename = f"{story_key}/{prefix}-{story_key}-{ac_id}.md"
-            elif "/" in key:
-                story, ac = key.rsplit("/", 1)
-                prefix = _DUPIN_PREFIX[htype]
-                base_filename = f"{story}/{prefix}-{ac}.md"
-            else:
-                base_filename = filename_template.replace("{key}", key)
+            ac_id_for_path = _ac_extract.group(1) if _ac_extract else ac_selected
+        # build_ac_handoff_path appends "handoffs/dupin/<story>" itself, so the
+        # base must be BASE_DIR (~/.claude) — passing out_dir.parent produced a
+        # nested handoffs/handoffs/dupin/ tree the scanner never reads.
+        out_path = build_ac_handoff_path(base, htype, story_key, ac_id_for_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        fields = _strip_surrogates(fields)
+        content = build_handoff(htype, key, dict(fields))
+        out_path.write_text(content, encoding="utf-8")
+        repo_root = fields.get("Repo Root") or args.get("repo_root")
+        _post_write(base, htype, key, str(out_path), repo_root,
+                    agent_id=fields.get("_agent_id"))
+        return
     else:
         base_filename = filename_template.replace("{key}", key).replace("{ac_id}", key.split("/")[-1] if "/" in key else key)
 
@@ -703,22 +747,42 @@ STAGE_MAP = {
 }
 
 
-def _post_write(base_dir, htype, key, out_path, repo_root):
+_SUBAGENT_ID_RE = re.compile(r"^dup-ac-(implement|commit|qa|pr)-[0-9a-f]{4,}$")
+
+
+def _post_write(base_dir, htype, key, out_path, repo_root, agent_id=None):
     """Audit log always; AIDLC mirror/state when mode >= 2."""
-    base_type = htype.split("-")[0]
+    # dup-ac-* types must not collapse to "dup" — keep the full type as the
+    # default audit role so audit-log query can filter by stage.
+    base_type = htype if htype in _DUPIN_TYPES else htype.split("-")[0]
     tools_dir = Path(__file__).resolve().parent
     base_str = str(base_dir).replace("\\", "/")
     devnull = subprocess.DEVNULL
 
     # --- Audit: always write to audits/<ticket>/ ---
+    # NOTE: audit-log.py's CLI takes (command, ticket, ...) — it resolves its
+    # own BASE_DIR. Passing base_dir first made args[0] the "command" and every
+    # append silently failed ("Unknown command"), starving the audit log.
     audit_script = tools_dir / "audit-log.py"
     if audit_script.exists():
         subprocess.Popen(
-            [sys.executable, str(audit_script), base_str,
+            [sys.executable, str(audit_script),
              "append", key, "--role", base_type, "--type", "context",
              f"Handoff written: {htype} for {key}"],
             stdout=devnull, stderr=devnull,
         )
+        # --- Dupin subagent stages: machine-readable RESULT line so
+        #     `audit-log query` has a per-stage completion record. Role is the
+        #     subagent ID when it matches the allowlist scheme, else the type.
+        if htype in _DUPIN_TYPES:
+            role = agent_id if (agent_id and _SUBAGENT_ID_RE.fullmatch(agent_id)) else htype
+            stage = _DUPIN_PREFIX.get(htype, htype)
+            subprocess.Popen(
+                [sys.executable, str(audit_script),
+                 "append", key, "--role", role, "--type", "progress",
+                 f"RESULT: {stage} stage handoff for {key} — {out_path}"],
+                stdout=devnull, stderr=devnull,
+            )
 
     # --- AIDLC mirror + state: only for mirrorable types with a repo root ---
     if base_type not in MIRROR_SKILLS or not repo_root:

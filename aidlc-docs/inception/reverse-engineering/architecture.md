@@ -1,183 +1,63 @@
 <!--
-surveyed_at: 2026-07-31T08:00:33Z
-commit: f43142ed0117498d3b05a2409d4893181c7506d0
+surveyed_at: 2026-08-27T02:40:39Z
+commit: 5a67ed37776c18bc32c9f8e783cb67e23b6c1641
 relevant_paths:
-- src/app/**
-- src/lib/**
-- bw-api/src/**
-summary: Layered architecture with polyglot persistence and event-driven communication.
+- src/app
+- src/lib
+- src/services
+- bw-scraper/src
+- docker-compose.yml
+summary: Component boundaries, data flows, and cross-boundary calls.
 -->
 
 # Architecture
 
-## Overview
+## Components
 
-Black Owned is a full-stack platform connecting Black business owners with consumers. The system uses a polyglot architecture combining Next.js/TypeScript for the frontend and API layer with Rust for high-performance backend services.
+| Component | Project | Responsibility |
+|---|---|---|
+| `src/app` (pages + `api/**/route.ts`) | web app | entire HTTP surface: 31 API routes + ~20 pages (directory, search, business detail, owner claim wizard, admin console, chat, auth) |
+| `src/lib` | web app | service layer: `db/` repositories, `auth/` JWT + role middleware, `valkey/`, `nats/`, `minio/`, `chat/` (browser WS client), `graphql/` (resolvers + regex mini-parser + 30s Valkey cache) |
+| `src/services` | web app | Playwright scrapers (google-maps/yelp/facebook), scraper-job-executor, duplicate-detection, social-discovery, image-service — executor is invoked **only by tests** (see findings H3) |
+| `src/components` | web app | UI: `ui/` primitives, `admin/`, `business/` |
+| `bw-scraper` | Rust | active discovery worker: SearXNG → ETL → `scraped_businesses`; owns `scrape_jobs` lifecycle rows; axum /health + POST /scrape on :8080 |
+| `bw-ingestion` | Rust | library only: ETL pipelines, NATS chat/email consumers, image pipeline, cache invalidation — no binary, no in-repo consumer |
+| `bw-api` | Rust | retired axum/GraphQL service (created `reviews` table per migration 013); still a workspace member; currently not compiling |
+| `bw-types` | Rust | shared domain types (used by bw-api + bw-ingestion only) |
+| one-shot scripts | root | `import-scraped-businesses.ts` (scraped → businesses promotion), `run-*.ts`, `scripts/*.mjs` |
+| `docker-compose.yml` | infra | postgres, nats, clickhouse, valkey, minio, bw-scraper |
 
-## Architectural Patterns
+## Cross-Boundary Calls
 
-### Layered Architecture
+- **web app ↔ Postgres** — direct `pg` Pool, the primary data channel; every route. Tables: users, businesses, categories, pending_import_businesses, scrape_jobs, scraped_businesses, business_views, conversations, messages, reviews, business_locations.
+- **web app ↔ bw-scraper** — **no HTTP calls at all.** Verified: nothing in `src/` fetches `:8080`. The only coupling is shared Postgres: both write `scrape_jobs`, both touch `scraped_businesses`, with no claim/lock protocol (finding H3).
+- **bw-scraper ↔ SearXNG** — outbound HTTP (`SEARXNG_URL`).
+- **web app ↔ Valkey** — refresh tokens (`refresh:{token}`) + GraphQL query cache (30s TTL).
+- **web app ↔ NATS (4222)** — publish `role_changed` (admin role PATCH), subscribe `cache.invalidate` → delete Valkey keys.
+- **browser ↔ NATS WebSocket (8081)** — live chat + notifications via nats.ws.
+- **web app ↔ MinIO** — presigned PUT URLs for owner verification documents.
+- **ClickHouse** — provisioned + health-checked + schema present (ReplacingMergeTree mirror), **zero writers** — dormant.
 
-The system follows a layered architecture with clear separation of concerns:
-
-| Layer | Technology | Responsibility |
-|-------|------------|----------------|
-| Presentation | Next.js 14, React, TypeScript | UI rendering, client-side routing, server components |
-| API Gateway | Next.js API Routes | GraphQL endpoint, REST endpoints for auth/users |
-| Business Logic | Rust (bw-api, bw-ingestion) | GraphQL resolvers, domain operations, validation |
-| Data Access | PostgreSQL (sqlx), Valkey | Database queries, caching |
-| Infrastructure | MinIO, NATS, ClickHouse | Object storage, messaging, analytics |
-
-### Key Design Decisions
-
-**1. Polyglot Persistence**
-- PostgreSQL: Primary relational store for businesses, users, reviews, categories
-- Valkey/Redis: Session storage, caching, token refresh
-- MinIO: Object storage for images and verification documents
-- ClickHouse: Analytics and reporting (OLAP workloads)
-- NATS: Event-driven communication between services
-
-**2. API Strategy**
-- GraphQL for business domain operations (queries/mutations for businesses, reviews)
-- REST for authentication flows (login, register, token refresh)
-- JWT-based authentication with access/refresh token pattern
-
-**3. Service Boundaries**
-- `bw-api`: Rust library exposing GraphQL API with async-graphql
-- `bw-ingestion`: Rust library for background processing (email, images, caching)
-- `bw-types`: Shared type definitions across Rust services
-- Next.js application: Frontend SPA + API routes
-
-## Component Layering
+## Core Data Flow (directory content pipeline)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Presentation Layer                      │
-│  Next.js Pages (directory, search, business detail, admin)  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      API Gateway Layer                       │
-│  /api/graphql  │  /api/auth/*  │  /api/users  │  /api/images│
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Business Logic Layer                       │
-│  GraphQL Resolvers (Rust)  │  Auth Service  │  MinIO Service│
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Data Access Layer                        │
-│  Repositories (business, user)  │  Cache Service            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Infrastructure Layer                      │
-│  PostgreSQL  │  Valkey  │  MinIO  │  NATS  │  ClickHouse    │
-└─────────────────────────────────────────────────────────────┘
+SearXNG ──(bw-scraper, Rust)──► scraped_businesses ──(admin import / one-shot script)──► pending_import_businesses (pending_review)
+                                                                                          │
+Google Maps/Yelp/Facebook ──(src/services Playwright, test-only executor)─────────────────┤
+                                                                                          ▼
+                                          businesses (status: unverified → pending_review → approved/rejected)
+                                                                                          │
+                                  claim wizard (owner) + verification doc (MinIO) ◄───────┤
+                                                                                          ▼
+                                            admin approval / bulk-approve ──► verified listings in /directory
 ```
 
-## Security Architecture
+Directory merge: `approved` rows in `pending_import_businesses` are also served as directory content until promoted into `businesses` — the queue table doubles as live content (finding M5).
 
-### Authentication Flow
-1. User submits credentials to `/api/auth/login`
-2. Server validates against PostgreSQL user repository
-3. JWT access token (short-lived) + refresh token (long-lived) issued
-4. Access token sent in `Authorization: Bearer` header for protected requests
-5. Refresh token stored in Valkey for token rotation
+## On-Site Reviews
 
-### Authorization Model
-- Role-based access control (RBAC) with hierarchy:
-  - `user` (level 1): Basic platform access
-  - `business_owner` (level 2): Can manage own businesses
-  - `admin` (level 3): Can manage users, approve businesses
-  - `super_admin`: Full system access
-  - `moderator`: Content moderation capabilities
+Write path is shipped: POST /api/reviews (authenticated), admin moderation via /api/reviews/[id]/moderate (soft-hide), location-scoped via `location_id`. External Google reviews (aggregate count + snippets) are still the gap this epic addresses — no S1 enrichment pipeline exists yet.
 
-### Token Structure
-```typescript
-interface JwtPayload {
-  userId: string;
-  email: string;
-  role: UserRole;
-  iat: number;  // Issued at
-  exp: number;  // Expiration
-}
-```
+## Why These Boundaries
 
-## Data Flow Patterns
-
-### Business Creation Flow
-1. Client calls `createBusiness` GraphQL mutation
-2. Auth middleware extracts user ID from JWT
-3. Business inserted into PostgreSQL with `owner_id` = authenticated user
-4. Business created with `verified: false` status
-5. Owner can submit verification documents via MinIO presigned URLs
-
-### Review Submission Flow
-1. Client calls `submitReview` mutation with business_id, rating, comment
-2. System checks for duplicate review (same user + business)
-3. Review inserted into PostgreSQL
-4. Rating aggregation recalculated (AVG, COUNT)
-5. Returns created review + updated business with rating stats
-
-### Image Upload Flow
-1. Client requests presigned URL for image upload
-2. Server generates MinIO presigned PUT URL (15-min expiry)
-3. Client uploads directly to MinIO
-4. Image queued for processing via NATS
-5. ImageWorker processes and generates variants
-
-## Infrastructure Topology
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Next.js    │────▶│   bw-api     │────▶│  PostgreSQL  │
-│   Frontend   │     │  (GraphQL)   │     │   (Primary)  │
-└──────────────┘     └──────────────┘     └──────────────┘
-       │                    │                    │
-       │                    ▼                    │
-       │              ┌──────────────┐           │
-       └─────────────▶│ bw-ingestion │◀──────────┘
-                      │  (Workers)   │
-                      └──────────────┘
-                           │    │    │
-                           ▼    ▼    ▼
-                      ┌─────────────────────┐
-                      │ MinIO │ NATS │ CH  │
-                      └─────────────────────┘
-```
-
-## Cross-Cutting Concerns
-
-### Caching Strategy
-- Query results cached in Valkey with cache invalidation on mutations
-- Cache keys include query parameters for granular invalidation
-- Cache invalidator publishes events on data changes
-
-### Rate Limiting
-- Request rate limiting at API gateway level
-- Configurable limits per endpoint
-- Rate limit state stored in Valkey
-
-### Observability
-- Structured logging throughout services
-- NATS events for audit trail
-- ClickHouse for analytics aggregation
-
-## Technology Stack Summary
-
-| Component | Technology | Rationale |
-|-----------|------------|-----------|
-| Frontend | Next.js 14, React, TypeScript | SSR, app router, type safety |
-| API Framework | async-graphql (Rust), Apollo Server | Type-safe schema, performance |
-| Database | PostgreSQL (Supabase) | Relational data, ACID compliance |
-| Cache | Valkey/Redis | Session storage, query caching |
-| Object Storage | MinIO | S3-compatible, self-hosted |
-| Messaging | NATS | Lightweight, high-throughput |
-| Analytics | ClickHouse | OLAP, fast aggregations |
-| Auth | JWT (jsonwebtoken) | Stateless, scalable |
+[ASSUMED] Single Postgres as system of record keeps the directory queryable in one place at the cost of two uncoordinated writers on the scrape pipeline. NATS was chosen for chat fan-out (browser WS relay) and cross-cutting cache invalidation rather than polling. Valkey holds refresh tokens (survival across process restarts, revocable) instead of stateless-only JWTs.

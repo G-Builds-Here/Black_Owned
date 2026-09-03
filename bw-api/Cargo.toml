@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "bw-api"
+path = "src/bin/main.rs"
+
 [dependencies]
 bw-types = { path = "../bw-types" }
 serde = { workspace = true }
@@ -21,5 +25,7 @@ tokio = { version = "1.0", features = ["full"] }
 hyper = { version = "1.0", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 http-body = "1.0"
-http-body-util = "0.1"
 jsonwebtoken = "9.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower-http = { version = "0.6", features = ["cors"] }

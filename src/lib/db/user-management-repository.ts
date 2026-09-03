@@ -18,29 +18,7 @@ import { getPool } from "./user-repository";
 /**
  * Initialize user management schema with role and status columns
  */
-export async function initializeUserManagementSchema(): Promise<void> {
-  const client = await getPool().connect();
-  try {
-    // Add role and status columns if they don't exist
-    await client.query(`
-      ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user',
-      ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'
-    `);
 
-    // Create index on role for filtering
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)
-    `);
-
-    // Create index on status for filtering
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)
-    `);
-  } finally {
-    client.release();
-  }
-}
 
 /**
  * Update user role

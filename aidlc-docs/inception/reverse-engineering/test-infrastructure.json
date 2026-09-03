@@ -1,0 +1,34 @@
+{
+  "artifact": "test-infrastructure.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Toolchains",
+      "content": "1. **Jest** \u2014 main web-app unit/component suite.\n   - `npm test` runs Jest with `jest.config.js`.\n   - `roots: [src/]`, `testMatch` includes `*.spec.ts`, `*.test.ts`, `*.spec.tsx`, `*.test.tsx`.\n   - Uses `jsdom`, `ts-jest`, root `jest.setup.ts`, `__mocks__/next-server.ts`, and `__mocks__/style-mock.js`.\n   - Excludes integration/testcontainers/DB-backed specs via `testPathIgnorePatterns`.\n2. **Playwright** \u2014 E2E suite in `e2e/`.\n   - `npx playwright test` or target a file/project.\n   - `playwright.config.ts` starts `npm run dev` unless an existing server is reused.\n   - Shared helpers in `e2e/e2e-utils.ts` use direct `psql`, session seeding, route warming, and cleanup.\n3. **Cargo test** \u2014 Rust tests.\n   - `cargo test` for workspace.\n   - `cargo test -p bw_scraper` for the active scraper crate.\n   - Inline `#[cfg(test)]` modules plus `tests/` integration files.\n   - Some valid-URL connector tests require live local Postgres/NATS/Valkey/ClickHouse.\n4. **Vitest** \u2014 configured but not installed.\n   - `vitest.config.ts` + `vitest.setup.ts` exist, but `vitest` is not in `devDependencies`.\n   - `src/app/performance.test.ts` imports Vitest and therefore cannot run.\n5. **CI** \u2014 Rust-only.\n   - `ci.yml`: `cargo check`, `cargo test`, clippy, coverage, with GitHub Postgres/NATS/Valkey services.\n   - `bw-scraper-ci.yml`: lint/test/coverage for `bw_scraper`, Docker build, `cargo audit`; excludes non-compiling `bw-api`.",
+      "type": "list"
+    },
+    {
+      "heading": "Mock Patterns",
+      "content": "- API route specs colocate next to routes: `src/app/api/<name>/route.spec.ts`.\n- Common mocks:\n  - `jest.mock('@/lib/db/user-repository', () => ({ getPool: jest.fn() }))`\n  - `jest.mock('@/lib/auth/jwt-middleware', () => ({ createAuthMiddleware: jest.fn(), createAuthErrorResponse: jest.fn() }))`\n  - `jest.mock('next/navigation')` for components.\n  - `jest.mock('@/lib/auth/client-session')` for client session behavior.\n- Requests are often plain objects cast to `Request` because routes usually call `request.json()`.\n- Component specs use `@testing-library/react`, usually organized by state: Loading, Error, Not Found, Success.",
+      "type": "list"
+    },
+    {
+      "heading": "How To Add A Test",
+      "content": "- **New REST route**: create `src/app/api/<name>/route.spec.ts` beside the route.\n  - Mock `getPool` and auth middleware.\n  - Define `AUTH_OK` / `AUTH_FAIL` fixtures.\n  - Test 401/403, validation 400, happy path, and external/DB failure cases.\n- **New component**: create `src/components/<Name>.spec.tsx` beside the component.\n  - Mock navigation/session/auth as needed.\n  - Assert with `screen.getBy*`, `waitFor`, and state-based describe blocks.\n- **New Rust unit test**: add `#[cfg(test)] mod tests` inside the file for pure logic.\n- **New Rust integration test**: add `tests/<name>_test.rs`; if it needs live services, document required env vars and defaults.\n- **New E2E test**: add `e2e/<feature>.spec.ts` and reuse `e2e-utils.ts`.",
+      "type": "list"
+    },
+    {
+      "heading": "Known Test Risks",
+      "content": "- `npm test` green does not prove integration behavior: DB-backed and testcontainers suites are excluded.\n- Jest component config is not wired to an npm script and references a missing `__mocks__/file-mock.js`.\n- Multiple unreferenced setup files exist: root `jest.setup.js`, `src/jest.setup.ts`, and active root `jest.setup.ts`.\n- Root-level Valkey/ClickHouse/test-environment specs are not picked up by Jest because `roots` is `src/`.\n- `.worktrees/epic-jest/` contains stale duplicate test infrastructure.",
+      "type": "list"
+    }
+  ],
+  "summary": "Test toolchains, mock patterns, and how to add tests.",
+  "primary_consumers": [
+    "luke",
+    "bruce",
+    "damian"
+  ]
+}

@@ -76,9 +76,9 @@ describe('Button', () => {
   });
 
   it('shows loading spinner when loading', () => {
-    render(<Button isLoading>Load</Button>);
+    const { container } = render(<Button isLoading>Load</Button>);
     expect(screen.getByRole('button')).toHaveTextContent(/load/i);
-    expect(screen.getByRole('button')).toContainElement(screen.getByClass('animate-spin'));
+    expect(container.querySelector('svg.animate-spin')).toBeInTheDocument();
   });
 
   it('shows loading text when provided', () => {

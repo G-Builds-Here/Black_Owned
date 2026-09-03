@@ -1,0 +1,35 @@
+{
+  "artifact": "api-documentation.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Authentication",
+      "content": "- **JWT RS256** (asymmetric): access + refresh token pair; keys in `config/jwt`; secret via `JWT_SECRET`. Refresh tokens stored in Valkey (`refresh:{token}`) \u2014 revocable, survives restarts.\n- **Role middleware**: `createAuthMiddleware(requiredRoles?)` (src/lib/auth/jwt-middleware.ts) \u2014 roles: `user` (default) | `business_owner` | `admin`. 401 (missing/invalid/expired token), 403 (insufficient role).\n- **Browser chat**: session access token from localStorage, events relayed over NATS WebSocket (ws://localhost:8081).\n- bw-scraper HTTP API: **no auth** (internal LAN service on :8080).",
+      "type": "list"
+    },
+    {
+      "heading": "Next.js App \u2014 `src/app/api/**`",
+      "content": "Auth column: open | any role (user|business_owner|admin) | admin.\n\n| Method | Path | Auth | Request | Response | Status |\n|---|---|---|---|---|---|\n| GET | /api/health | open | \u2013 | {status:'healthy', timestamp} | 200; 405 other methods |\n| POST | /api/auth/register | open | {email, password, name} | {success, user, tokens:{accessToken,refreshToken}} | 201; 400; 409 |\n| POST | /api/auth/login | open | {email, password} | same envelope | 200; 400; 401 |\n| GET | /api/directory | open | ?search&category&location&minRating&sort | {success, data:{businesses[], facets, total}} \u2014 loads ALL rows, filters in JS | 200; 400; 500 |\n| GET | /api/directory/suggest | open | ?q (\u22652 chars) | suggestions[] max 5 | 200; 500 |\n| GET | /api/categories | open | \u2013 | categories[{id,name}] | 200; 500 |\n| GET | /api/featured-businesses | open | ?limit=1..50 | businesses[] | 200; 500 |\n| POST | /api/businesses/[id]/view | open | id in path | {success:true} | 201; 400; 404 |\n| POST | /api/graphql | open* | {query, variables} \u2014 regex mini-parser, NOT graphql-js | GraphQL envelope for health/searchBusinesses/businesses/business/register/createBusiness | 200; 400; 405; 500 |\n| POST | /api/reviews | any role | {businessId, rating 1-5, comment \u22642000, locationId?} | review | 201; 400; 404 |\n| GET | /api/chat/conversations | any role | \u2013 | conversations[+unreadCount] | 200; 500 |\n| POST | /api/chat/conversations | any role | {businessId} | conversation (create-or-resume, UNIQUE(user,business)) | 201; 400; 404 |\n| GET | /api/chat/conversations/[id]/messages | any role | ?before=<uuid cursor> | messages[] | 200; 400; 404 |\n| POST | /api/chat/conversations/[id]/messages | any role | {body \u22642000} | {message, delivered} | 201; 400; 404 |\n| POST | /api/chat/conversations/[id]/read | any role | \u2013 | {success} | 200; 400; 404 |\n| GET | /api/owner/businesses | any role | \u2013 | owner's businesses | 200; 500 |\n| PATCH | /api/owner/businesses/[id] | any role | {name? \u2264255, description?} | business | 200; 400; 404 (404 if not yours) |\n| GET | /api/owner/businesses/[id]/views | any role | ?days=1..90 | daily view series | 200; 400; 403; 404 |\n| POST | /api/businesses/claim | any role | {name, description?, categoryId, location?, website?} | business (status:unverified) | 201; 400 (x5 validation codes) |\n| POST | /api/businesses/[id]/approve | admin | \u2013 | business (approved) | 200; 400; 404 |\n| POST | /api/businesses/[id]/reject | admin | {reason 1-500} | business (rejected+reason) | 200; 400; 404 |\n| POST | /api/businesses/bulk-approve | admin | {businessIds: uuid[]} | {approvedCount, approvedBusinesses} \u2014 transactional | 200; 400; 404; 500 |\n| POST | /api/businesses/[id]/verification/approve | admin | \u2013 | verified | 200; 400; 404 |\n| POST | /api/businesses/[id]/verification/reject | admin | {reason} | {success} | 200; 400; 404 |\n| POST | /api/reviews/[id]/moderate | admin | {action:'approve'\\|'hide'} | {success} \u2014 soft-hide via visible flag | 200; 400; 404 |\n| GET | /api/pending-businesses | admin | \u2013 | pending_review queue (address/rating from source_data JSONB) | 200; 500 |\n| POST | /api/pending-businesses/import | admin | {businesses[], jobId?} | {total,succeeded,failed,results,errors} \u2014 transactional | 200; 400; 500 |\n| POST | /api/pending-businesses/import/job/[jobId] | admin | jobId in path | {total,imported,skipped,duplicates[],results} \u2014 fuzzy dedup (DUPLICATE_NAME/ADDRESS_THRESHOLD env) | 200; 400; 404 |\n| GET | /api/scrape-jobs | admin | ?status=pending,running | jobs | 200; 400; 500 |\n| POST | /api/scrape-jobs | admin | {source, query, location} | job \u2014 inserts 'pending' row ONLY; never executed (finding H3) | 201; 400 |\n| GET | /api/analytics/scrape-jobs | admin | ?days=1..365 | aggregates (counts, import rate, durations) | 200; 400; 500 |\n| GET | /api/analytics/scrape-jobs/recent | admin | ?limit=1..100 | jobs[] | 200; 400; 500 |\n| GET | /api/admin/dashboard | admin | ?days=1..365 | counts, jobStats, reviewQueue, recentJobs | 200; 400; 500 |\n| GET | /api/users | admin | ?page&pageSize\u2264100&search | {users, total} | 200; 400; 500 |\n| PATCH | /api/users | admin | {userId, role} | user + NATS role_changed publish | 200; 401; 403; 400; 404 |\n| PATCH | /api/users/status | admin | \u2013 | **dead route** \u2014 exported as PATCH_STATUS, not a valid App Router export (finding H2) | 404 |\n\n\\* /api/graphql: \"open\" but `createBusiness` can never authenticate \u2014 context hardcodes a fake `Bearer token` (finding H5).",
+      "type": "table"
+    },
+    {
+      "heading": "bw-scraper (Rust, :8080)",
+      "content": "| Method | Path | Auth | Request | Response | Status |\n|---|---|---|---|---|---|\n| GET | /health | none | \u2013 | {status:'healthy'} | 200 |\n| GET | /health/detailed | none | \u2013 | {status, checks[]: Postgres, NATS?, Valkey?, ClickHouse?} | 200; 503 |\n| POST | /scrape | none | {query, location?, max_pages? 1-5} | {job_id, status, business_count} | 200; 400; 502 {error} |",
+      "type": "table"
+    },
+    {
+      "heading": "Known Gaps",
+      "content": "- User-management UI calls `PATCH /api/users/role` and `PATCH /api/users/status` \u2014 neither exists as a reachable route (finding H2).\n- No SQL pagination anywhere: `/api/directory` + suggest load the full directory into memory and filter in JS.",
+      "type": "list"
+    }
+  ],
+  "summary": "All HTTP endpoints with auth, request/response shapes, and status codes.",
+  "primary_consumers": [
+    "luke",
+    "damian",
+    "alfred",
+    "lucius"
+  ]
+}

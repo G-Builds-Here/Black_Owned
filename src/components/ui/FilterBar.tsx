@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Dropdown, { DropdownItem } from './Dropdown';
-import Input from './Input';
 import Button from './Button';
 
 export type SortOption = 'relevance' | 'rating' | 'distance' | 'newest';
@@ -11,7 +10,6 @@ export type FilterOption = {
   minRating?: number;
   location?: string;
   verifiedOnly?: boolean;
-  showUnclaimedOnly?: boolean;
 };
 
 export interface FilterBarProps {
@@ -21,25 +19,46 @@ export interface FilterBarProps {
   onSortChange: (sort: SortOption) => void;
   currentSort?: SortOption;
   currentFilters?: FilterOption;
+  savedCount?: number;
+  activeTab?: 'all' | 'saved';
+  onTabChange?: (tab: 'all' | 'saved') => void;
+  filteredCount?: number;
+  /** Controlled search text */
+  search?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
-  { label: 'Relevance', value: 'relevance' },
-  { label: 'Highest Rated', value: 'rating' },
-  { label: 'Nearest', value: 'distance' },
+  { label: 'Sort by', value: 'relevance' },
+  { label: 'Highest rated', value: 'rating' },
+  { label: 'Closest', value: 'distance' },
   { label: 'Newest', value: 'newest' },
 ];
 
 const RATING_FILTERS: { label: string; value: number }[] = [
-  { label: 'Any Rating', value: 0 },
+  { label: 'Any rating', value: 0 },
+  { label: '3+ Stars', value: 3 },
   { label: '4+ Stars', value: 4 },
   { label: '4.5+ Stars', value: 4.5 },
-  { label: '5 Stars', value: 5 },
 ];
 
 /**
- * FilterBar - Provides filtering and sorting controls for business listings
- * Supports: category filter, rating filter, location filter, verified toggle, sort dropdown
+ * Pill styling for filter triggers. Active filters get the heritage-ochre
+ * accent; inactive ones are neutral.
+ */
+const pillClass = (active: boolean) =>
+  `min-h-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+    active
+      ? 'border-heritage-ochre bg-heritage-ochre text-white'
+      : 'border-neutral-300 bg-white text-neutral-800 hover:border-heritage-ochre'
+  }`;
+
+/**
+ * FilterBar - OpenTable-style single control row.
+ *
+ * One full-width row: segmented tabs, search input, then pill filters
+ * (location, category, rating, verified) and sort. No card chrome around
+ * the row — the page provides the sticky white band.
  */
 export default function FilterBar({
   categories,
@@ -48,6 +67,12 @@ export default function FilterBar({
   onSortChange,
   currentSort = 'relevance',
   currentFilters = {},
+  savedCount,
+  onTabChange,
+  activeTab = 'all',
+  filteredCount,
+  search = '',
+  onSearchChange,
 }: FilterBarProps) {
   const [localFilters, setLocalFilters] = useState<FilterOption>(currentFilters);
 
@@ -69,26 +94,10 @@ export default function FilterBar({
     onFilterChange(newFilters);
   };
 
-  const handleStatusChange = (value: string) => {
-    const newFilters: FilterOption = { ...localFilters };
-    if (value === 'unclaimed') {
-      newFilters.showUnclaimedOnly = true;
-      delete newFilters.verifiedOnly;
-    } else if (value === 'verified') {
-      newFilters.verifiedOnly = true;
-      delete newFilters.showUnclaimedOnly;
-    } else {
-      delete newFilters.showUnclaimedOnly;
-      delete newFilters.verifiedOnly;
-    }
+  const handleVerifiedToggle = () => {
+    const newFilters = { ...localFilters, verifiedOnly: !localFilters.verifiedOnly };
     setLocalFilters(newFilters);
     onFilterChange(newFilters);
-  };
-
-  const getDisplayStatus = (): string => {
-    if (localFilters.showUnclaimedOnly) return '📋 Unclaimed';
-    if (localFilters.verifiedOnly) return '✓ Verified';
-    return 'Status';
   };
 
   const handleSortChange = (sort: string) => {
@@ -100,74 +109,131 @@ export default function FilterBar({
     setLocalFilters(emptyFilters);
     onFilterChange(emptyFilters);
     onSortChange('relevance');
+    if (onSearchChange) onSearchChange('');
   };
 
   const hasActiveFilters =
     localFilters.category ||
     localFilters.minRating ||
     localFilters.location ||
-    localFilters.verifiedOnly ||
-    localFilters.showUnclaimedOnly;
+    localFilters.verifiedOnly;
+
+  const showTabs = savedCount !== undefined && onTabChange;
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
-      {/* Status Filter - Combined (Unclaimed/Verified/All) */}
-      <Dropdown
-        trigger={getDisplayStatus()}
-        items={[
-          { label: 'All Listings', key: 'all', onClick: () => handleStatusChange('all') },
-          { label: '📋 Unclaimed', key: 'unclaimed', onClick: () => handleStatusChange('unclaimed') },
-          { label: '✓ Verified', key: 'verified', onClick: () => handleStatusChange('verified') },
-        ]}
-        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
-      />
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Tabs - segmented control */}
+      {showTabs && (
+        <div className="flex items-center rounded-full border border-neutral-300 bg-white p-0.5">
+          <button
+            type="button"
+            className={`min-h-0 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === 'all'
+                ? 'bg-heritage-ochre text-white'
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+            onClick={() => onTabChange('all')}
+          >
+            All Businesses ({filteredCount ?? 0})
+          </button>
+          <button
+            type="button"
+            className={`min-h-0 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === 'saved'
+                ? 'bg-heritage-ochre text-white'
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+            onClick={() => onTabChange('saved')}
+          >
+            Saved ({savedCount})
+          </button>
+        </div>
+      )}
 
-      {/* Category Filter */}
-      <Dropdown
-        trigger={localFilters.category || 'Category'}
-        items={[
-          { label: 'All Categories', key: '', onClick: () => handleCategoryChange('') },
-          ...categories.map((cat) => ({ label: cat, key: cat, onClick: () => handleCategoryChange(cat) })),
-        ]}
-        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
-      />
+      {/* Search */}
+      {onSearchChange && (
+        <div className="relative w-64 min-w-[180px]">
+          <span
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400"
+            aria-hidden="true"
+          >
+            🔍
+          </span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search businesses…"
+            aria-label="Search businesses"
+            className="w-full rounded-full border border-neutral-300 bg-white py-1.5 pl-9 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-heritage-ochre focus:outline-none"
+          />
+        </div>
+      )}
 
       {/* Location Filter */}
-      <Dropdown
-        trigger={localFilters.location || 'Location'}
-        items={[
-          { label: 'All Locations', key: '', onClick: () => handleLocationChange('') },
-          ...locations.map((loc) => ({ label: loc, key: loc, onClick: () => handleLocationChange(loc) })),
-        ]}
-        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
-      />
+      <div>
+        <Dropdown
+          trigger={localFilters.location || 'Location'}
+          triggerClassName={pillClass(!!localFilters.location)}
+          items={[
+            { label: 'All Locations', key: '', onClick: () => handleLocationChange('') },
+            ...locations.map((loc) => ({ label: loc, key: loc, onClick: () => handleLocationChange(loc) })),
+          ]}
+        />
+      </div>
+
+      {/* Category Filter */}
+      <div>
+        <Dropdown
+          trigger={localFilters.category || 'Category'}
+          triggerClassName={pillClass(!!localFilters.category)}
+          items={[
+            { label: 'All Categories', key: '', onClick: () => handleCategoryChange('') },
+            ...categories.map((cat) => ({ label: cat, key: cat, onClick: () => handleCategoryChange(cat) })),
+          ]}
+        />
+      </div>
 
       {/* Rating Filter */}
-      <Dropdown
-        trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Min Rating'}
-        items={RATING_FILTERS.map((r) => ({
-          label: r.label,
-          key: r.value.toString(),
-          onClick: () => handleRatingChange(r.value),
-        }))}
-        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
-      />
+      <div>
+        <Dropdown
+          trigger={localFilters.minRating ? `${localFilters.minRating}+ Stars` : 'Rating'}
+          triggerClassName={pillClass(!!localFilters.minRating)}
+          items={RATING_FILTERS.map((r) => ({
+            label: r.label,
+            key: r.value.toString(),
+            onClick: () => handleRatingChange(r.value),
+          }))}
+        />
+      </div>
 
-      {/* Sort By Dropdown */}
-      <Dropdown
-        trigger={currentSort !== 'relevance' ? SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort By' : 'Sort By'}
-        items={SORT_OPTIONS.map((s) => ({
-          label: s.label,
-          key: s.value,
-          onClick: () => handleSortChange(s.value),
-        }))}
-        triggerClassName="h-[46px] px-4 py-2.5 rounded-lg border border-neutral-300 bg-white hover:border-heritage-ochre transition-colors"
-      />
+      {/* Sort Dropdown */}
+      <div>
+        <Dropdown
+          trigger={SORT_OPTIONS.find((s) => s.value === currentSort)?.label || 'Sort by'}
+          triggerClassName={pillClass(currentSort !== 'relevance')}
+          items={SORT_OPTIONS.map((s) => ({
+            label: s.label,
+            key: s.value,
+            onClick: () => handleSortChange(s.value),
+          }))}
+        />
+      </div>
+
+      {/* Verified Only Toggle */}
+      <Button
+        variant={localFilters.verifiedOnly ? 'primary' : 'secondary'}
+        size="sm"
+        onClick={handleVerifiedToggle}
+        className="min-h-0 rounded-full border px-3 py-1.5 text-sm font-medium"
+      >
+        {localFilters.verifiedOnly ? '✓' : 'All'}
+      </Button>
 
       {/* Clear Filters */}
-      {hasActiveFilters && (
-        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-[46px]">
-          Clear All
+      {(hasActiveFilters || search) && (
+        <Button variant="ghost" size="sm" onClick={clearFilters} className="px-2">
+          Clear
         </Button>
       )}
     </div>

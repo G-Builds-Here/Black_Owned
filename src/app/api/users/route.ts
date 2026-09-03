@@ -11,7 +11,6 @@ import {
   getUsersPaginated,
   updateUserRole,
   updateUserStatus,
-  initializeUserManagementSchema,
 } from "@/lib/db/user-management-repository";
 import { publishRoleChangedEvent } from "@/lib/nats/nats-client";
 import {
@@ -19,15 +18,26 @@ import {
   isValidStatus,
   RoleChangedEvent,
 } from "@/types/user-management";
+import { requireRole, AuthenticatedUser } from "@/lib/auth/auth-middleware";
+import { verifyTokenSafe } from "@/lib/auth/auth-service";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 
 /**
  * GET /api/users
  * List users with pagination and optional email search
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     // Initialize schema on first request
-    await initializeUserManagementSchema();
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
@@ -73,6 +83,43 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  */
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   try {
+    // Verify authentication
+    const token = request.headers.get("authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 }
+      );
+    }
+
+    const payload = verifyTokenSafe(token);
+    if (!payload) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired token",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 }
+      );
+    }
+
+    // Only admins can change roles
+    if (payload.role !== "admin") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Only administrators can modify user roles",
+          code: "INSUFFICIENT_ROLE",
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { userId, role } = body;
 
@@ -135,7 +182,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
         userId,
         oldRole,
         newRole: role,
-        changedBy: "system",
+        changedBy: payload.userId,
         timestamp: new Date().toISOString(),
       };
       await publishRoleChangedEvent(event);
@@ -147,7 +194,6 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       data: updatedUser,
-      message: "Role updated successfully",
     });
   } catch (error) {
     console.error("Error updating user role:", error);
@@ -167,6 +213,43 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
  */
 export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> {
   try {
+    // Verify authentication
+    const token = request.headers.get("authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 }
+      );
+    }
+
+    const payload = verifyTokenSafe(token);
+    if (!payload) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired token",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 }
+      );
+    }
+
+    // Only admins can change status
+    if (payload.role !== "admin") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Only administrators can modify user status",
+          code: "INSUFFICIENT_ROLE",
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { userId, status } = body;
 
@@ -208,7 +291,6 @@ export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> 
     return NextResponse.json({
       success: true,
       data: updatedUser,
-      message: "Status updated successfully",
     });
   } catch (error) {
     console.error("Error updating user status:", error);

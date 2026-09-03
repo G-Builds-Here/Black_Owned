@@ -1,0 +1,370 @@
+{
+  "npm": [
+    {
+      "project": "package.json",
+      "unused": [
+        {
+          "name": "@graphql-tools/schema",
+          "section": "dependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "graphql",
+          "section": "dependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "@tailwindcss/postcss",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "autoprefixer",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "eslint-config-next",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "jest",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "jest-environment-jsdom",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "postcss",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "puppeteer",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "ts-jest",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        }
+      ],
+      "skipped": [
+        {
+          "name": "@types/leaflet",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/bcryptjs",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/jest",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/js-yaml",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/jsonwebtoken",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/minio",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/node",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/pg",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/puppeteer",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/react",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/react-dom",
+          "reason": "type-only package"
+        },
+        {
+          "name": "eslint",
+          "reason": "build tool"
+        },
+        {
+          "name": "playwright",
+          "reason": "build tool"
+        },
+        {
+          "name": "typescript",
+          "reason": "build tool"
+        }
+      ],
+      "total": 39,
+      "unused_count": 10
+    },
+    {
+      "project": ".next\\package.json",
+      "unused": [],
+      "skipped": [],
+      "total": 0,
+      "unused_count": 0
+    },
+    {
+      "project": ".next\\build\\package.json",
+      "unused": [],
+      "skipped": [],
+      "total": 0,
+      "unused_count": 0
+    },
+    {
+      "project": ".next\\dev\\package.json",
+      "unused": [],
+      "skipped": [],
+      "total": 0,
+      "unused_count": 0
+    },
+    {
+      "project": ".next\\dev\\build\\package.json",
+      "unused": [],
+      "skipped": [],
+      "total": 0,
+      "unused_count": 0
+    },
+    {
+      "project": ".worktrees\\epic-jest\\package.json",
+      "unused": [
+        {
+          "name": "@graphql-tools/schema",
+          "section": "dependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "graphql",
+          "section": "dependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "@tailwindcss/postcss",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "autoprefixer",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "eslint-config-next",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "jest",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "jest-environment-jsdom",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "postcss",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "puppeteer",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "ts-jest",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        }
+      ],
+      "skipped": [
+        {
+          "name": "@types/bcryptjs",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/jest",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/js-yaml",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/jsonwebtoken",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/minio",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/node",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/pg",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/puppeteer",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/react",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/react-dom",
+          "reason": "type-only package"
+        },
+        {
+          "name": "eslint",
+          "reason": "build tool"
+        },
+        {
+          "name": "playwright",
+          "reason": "build tool"
+        },
+        {
+          "name": "typescript",
+          "reason": "build tool"
+        }
+      ],
+      "total": 36,
+      "unused_count": 10
+    },
+    {
+      "project": ".worktrees\\epic-jest\\packages\\ui\\package.json",
+      "unused": [
+        {
+          "name": "react-dom",
+          "section": "dependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "@testing-library/dom",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "@vitest/coverage-v8",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "axe-core",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "jsdom",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        }
+      ],
+      "skipped": [
+        {
+          "name": "@types/node",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/react",
+          "reason": "type-only package"
+        },
+        {
+          "name": "typescript",
+          "reason": "build tool"
+        }
+      ],
+      "total": 16,
+      "unused_count": 5
+    },
+    {
+      "project": "packages\\ui\\package.json",
+      "unused": [
+        {
+          "name": "react-dom",
+          "section": "dependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "@testing-library/dom",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "@vitest/coverage-v8",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "axe-core",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        },
+        {
+          "name": "jsdom",
+          "section": "devDependencies",
+          "reason": "no imports found"
+        }
+      ],
+      "skipped": [
+        {
+          "name": "@types/node",
+          "reason": "type-only package"
+        },
+        {
+          "name": "@types/react",
+          "reason": "type-only package"
+        },
+        {
+          "name": "typescript",
+          "reason": "build tool"
+        }
+      ],
+      "total": 16,
+      "unused_count": 5
+    },
+    {
+      "project": "packages\\ui\\.next\\package.json",
+      "unused": [],
+      "skipped": [],
+      "total": 0,
+      "unused_count": 0
+    },
+    {
+      "project": "packages\\ui\\.next\\build\\package.json",
+      "unused": [],
+      "skipped": [],
+      "total": 0,
+      "unused_count": 0
+    }
+  ],
+  "nuget": [],
+  "summary": {
+    "total": 107,
+    "unused": 30,
+    "skipped": 33
+  }
+}

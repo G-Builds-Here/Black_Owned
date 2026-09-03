@@ -74,34 +74,14 @@ _mh_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mh_mod)
 _FIELDS_ALIASES = _mh_mod.ALIASES
 
-
-# Same mapping as make-handoff.py
-HANDOFF_PATHS = {
-    "oracle":         ("handoffs/oracle",  "Oracle-{key}.md"),
-    "lucius":         ("handoffs/lucius",  "Lucius-{key}.md"),
-    "alfred":         ("handoffs/alfred",  "Alfred-{key}.md"),
-    "alfred-notes":   ("handoffs/alfred",  "Alfred-{key}-notes.md"),
-    "damian":         ("handoffs/damian",  "Damian-{key}.md"),
-    "damian-case":    ("handoffs/damian",  "Damian-{key}-case.md"),
-    "dupin":              ("handoffs/dupin",   "{key}.md"),
-    "phase-state":        ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-implement":   ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-commit-impl": ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-commit-qa":   ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-qa":          ("handoffs/dupin",   "{key}.md"),
-    "dup-ac-pr":          ("handoffs/dupin",   "{key}.md"),
-    "bruce":          ("handoffs/bruce",   "Bruce-{key}.md"),
-    "bruce-case":     ("handoffs/bruce",   "Bruce-{key}-case.md"),
-    "gordon":         ("handoffs/gordon",  "Gordon-{key}.md"),
-    "gordon-split":   ("handoffs/gordon",  "Gordon-{key}-split.md"),
-    "harvey":         ("handoffs/harvey",  "Harvey-{key}.md"),
-    "harvey-session": ("handoffs/harvey",  "Harvey-{key}-session.md"),
-    "blackgate":      ("handoffs/blackgate", "Blackgate-{key}.md"),
-    "skill-creator":  ("handoffs/skill-creator", "{key}.md"),
-    "session":        ("handoffs/session", "Session-{key}.md"),
-    "local-tickets":  ("tickets", "{key}.md"),
-    "bug-backlog":    ("tickets/bugs", "{key}.md"),
-}
+from dupin_shared import (
+    HANDOFF_PATHS,
+    _DUPIN_TYPES,
+    _DUPIN_STAGES,
+    _DUPIN_PREFIX,
+    build_ac_handoff_path,
+    is_handoff_complete,
+)
 
 FIELD_RE = re.compile(r"^\*\*([^*]+):\*\*\s*(.*)")
 
@@ -132,17 +112,6 @@ def _glob_dupin_files(base: Path, ticket: str) -> list[Path]:
     exact_re = re.compile(rf"^({stages})-{re.escape(ticket)}-.+\.md$")
     return [f for f in dupin_dir.iterdir() if f.is_file() and exact_re.match(f.name)]
 
-
-# Dupin types that use deterministic path construction
-_DUPIN_TYPES = {"dup-ac-implement", "dup-ac-commit-impl", "dup-ac-commit-qa", "dup-ac-qa", "dup-ac-pr"}
-_DUPIN_STAGES = {
-    "dup-ac-implement": "impl", "dup-ac-commit-impl": "commit-impl",
-    "dup-ac-commit-qa": "commit-qa", "dup-ac-qa": "qa", "dup-ac-pr": "pr",
-}
-_DUPIN_PREFIX = {
-    "dup-ac-implement": "impl", "dup-ac-commit-impl": "commit-impl",
-    "dup-ac-commit-qa": "commit-qa", "dup-ac-qa": "qa", "dup-ac-pr": "pr",
-}
 
 
 def scan_for_active(base: Path, key: str, only_fields: set | None = None) -> dict:
@@ -322,27 +291,10 @@ def resolve_path(args) -> Path:
             ac_id_idx = args.index("--ac_id")
             ac_id = args[ac_id_idx + 1]
         
-        # Q2: Deterministic path for dupin sub-types when ac_id provided
+        # Deterministic path for dupin sub-types when ac_id provided
         if htype in _DUPIN_TYPES and ac_id:
-            # Handle PR handoffs: ac_id = "pr-<STORY_KEY>" or "pr-<EPIC_KEY>"
-            _pr_match = re.match(r"^pr-(.+)$", ac_id)
-            if _pr_match and htype == "dup-ac-pr":
-                # For PR handoffs, use the key directly
-                # Path: handoffs/dupin/{STORY_KEY}/pr-{STORY_KEY}.md
-                stage = "pr"
-                folder = "handoffs/dupin"
-                filename = f"{stage}-{key}.md"
-                return base / folder / key / filename
-            # Normalize ac_id: extract bare AC ID from full ID (e.g., LOC-0031-AC1 → AC1)
-            _ac_match = re.match(r"^(.+)-(AC\d+)$", ac_id)
-            if _ac_match:
-                ac_id = _ac_match.group(2)
-            # Deterministic: handoffs/dupin/{ticket}/{stage}-{ticket}-{ac_id}.md
-            stage = _DUPIN_STAGES.get(htype, "unknown")
-            folder = "handoffs/dupin"
-            filename = f"{stage}-{key}-{ac_id}.md"
-            return base / folder / key / filename
-        
+            return build_ac_handoff_path(base, htype, key, ac_id)
+
         folder, template = HANDOFF_PATHS[htype]
         # Backward compat: parse slash-separated key for dupin types
         if htype in _DUPIN_PREFIX and "/" in key:
@@ -355,7 +307,7 @@ def resolve_path(args) -> Path:
 def _check_complete(content: str, lines: list[str]) -> bool:
     """Check if handoff is in a terminal state."""
     TERMINAL_STATUSES = {"Refined", "Implemented", "Inspected", "Tested", "Reviewed", "Committed"}
-    if "status: complete" in content:
+    if is_handoff_complete(content):
         return True
     for line in lines:
         if "**Ticket Status:**" in line:

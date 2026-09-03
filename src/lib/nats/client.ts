@@ -68,6 +68,59 @@ export async function publishRoleChangedEvent(
 }
 
 /**
+ * NATS event payloads for verification decisions (LOC-0039)
+ */
+export interface VerificationApprovedEvent {
+  businessId: string;
+  timestamp: string;
+}
+
+export interface VerificationRejectedEvent {
+  businessId: string;
+  reason: string;
+  timestamp: string;
+}
+
+/**
+ * Publish a verification.approved event to NATS
+ */
+export async function publishVerificationApproved(businessId: string): Promise<void> {
+  try {
+    const nc = await getNatsConnection();
+    const event: VerificationApprovedEvent = {
+      businessId,
+      timestamp: new Date().toISOString(),
+    };
+
+    await nc.publish("verification.approved", new TextEncoder().encode(JSON.stringify(event)));
+    console.log(`Published verification.approved event for business ${businessId}`);
+  } catch (error) {
+    console.error("Failed to publish verification.approved event:", error);
+    throw error;
+  }
+}
+
+/**
+ * Publish a verification.rejected event to NATS
+ */
+export async function publishVerificationRejected(businessId: string, reason: string): Promise<void> {
+  try {
+    const nc = await getNatsConnection();
+    const event: VerificationRejectedEvent = {
+      businessId,
+      reason,
+      timestamp: new Date().toISOString(),
+    };
+
+    await nc.publish("verification.rejected", new TextEncoder().encode(JSON.stringify(event)));
+    console.log(`Published verification.rejected event for business ${businessId}`);
+  } catch (error) {
+    console.error("Failed to publish verification.rejected event:", error);
+    throw error;
+  }
+}
+
+/**
  * Close NATS connection
  */
 export async function closeNatsConnection(): Promise<void> {

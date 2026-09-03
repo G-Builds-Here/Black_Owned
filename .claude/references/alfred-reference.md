@@ -188,7 +188,7 @@ Epic description content:
 - Epic-level A/C (numbered) — from Alfred's earlier refinement in Epic Creation Flow Step 4
 - Deployable units — from Alfred's Epic Creation Flow
 - MoSCoW summary table — from Lucius's `moscow` field per story, showing count per category: `Must: N, Should: N, Could: N, Won't: N`
-- Story dependencies table with MoSCoW column — | Story | MoSCoW | Depends On | Phase |
+- Story dependencies table with MoSCoW and Seams columns — | Story | MoSCoW | Depends On | Seams | Phase | (Seams values carried verbatim from Lucius's Behavior Decomposition table; `—` when the story touches no shared seams)
 - Story count and component map — from Lucius Stories array
 - Blueprint reference — link to the Implementation-Blueprint.md
 
@@ -256,9 +256,16 @@ If you can't pass all 6 axes for a proposed story, don't write ACs yet — go ba
 | Required story type | When | What to do if missing |
 |--------------------|------|-----------------------|
 | Infrastructure | If the epic introduces new services/containers, CI/CD pipelines, shared types, monitoring, database migrations, or test harnesses | Add `type: infrastructure` stories for each new concern, following Lucius's infra guidance. For new services: at minimum a deployment config story (Docker/k8s) and a CI workflow story. |
-| E2E integration tests | Always — exactly one E2E test story per epic | Add one `type: test` story with `depends_on` listing ALL feature story IDs (puts it in the last phase). Draft a single E2E AC: the full cross-feature happy path (e.g. "Can create, moderate, and publish a review" → exercises auth, business creation, review submission, moderation, listing). |
+| E2E integration tests | Always — exactly one E2E test story per epic | Add one `type: test` story. Its `depends_on` MUST list **every feature AND infrastructure story key** — this is what forces the topological sort to put it alone in the final phase. Draft a single E2E AC: the full cross-feature happy path (e.g. "Can create, moderate, and publish a review" → exercises auth, business creation, review submission, moderation, listing). |
 
-The E2E story must be the last story in dependency order — every feature and infrastructure story must be complete before it can run. If the story list has no `type: test` entry or has more than one, fix it now before AC refinement.
+The E2E story must be the last story in dependency order — every feature and infrastructure story must be complete before it can run. It is the **only** story in the final phase. If the story list has no `type: test` entry or has more than one, fix it now before AC refinement.
+
+**E2E phase contract:** The epic's `## Story Dependencies` table is the authoritative source Dupin reads for phase computation. For the E2E row in that table:
+- `Depends On` must name every feature and infrastructure story key (bare keys, comma-separated — same set as the story's own `Depends On` frontmatter)
+- `Phase` must be the last phase number (the phase count itself)
+- The row must sort last in the table
+
+This is non-negotiable. If the E2E row has empty or partial `depends_on`, Dupin collapses it into an early phase and runs the E2E tests like a normal story — no final-phase gate fires.
 
 **2b3. Technology stack consistency check** — Before presenting to the user, cross-reference every story's draft ACs against Lucius's `technology_stack` array (in the handoff) or the epic's Technology Stack Table (in the blueprint). Every story that names a technology must use one listed in the stack. Flag any mismatch:
 
@@ -411,8 +418,11 @@ In **pre-built mode**, cross-reference Lucius's `depends_on` and `parallel` fiel
 - AC Dependencies table: `| AC | Depends On | Notes |` with `<TicketKey>-<ACn>` format for cross-ticket deps
 - **Cross-story dependency validation:** Before writing a cross-story dep (`<TicketKey>-<ACn>`), verify the referenced story is in the same phase and scheduled earlier. If it's in a later phase or unscheduled, **do not write the dep** — flag the conflict and offer: (a) reorder the phase, (b) remove the dep, (c) merge the stories. Out-of-order deps block the pipeline.
 - `**Phase:**` tag at the bottom of the file
+- **AC Test Contracts table** (`| AC | Test Class | Spec File |`) after the Phase tag — one row per AC; Test Class: `unit|integration|e2e|config-scaffold` (`config-scaffold` requires the reason in the Spec File column or Notes); E2E test stories carry class `e2e`
 - At least one error/edge-case Scenario per AC
 - Empty state Scenario where applicable
+
+**E2E story ticket (`type: test`):** Its `**Depends On:**` frontmatter must list every feature and infrastructure story key (same set as the epic's Story Dependencies table row), and `**Phase:**` must be the final phase number. This is the per-ticket mirror of the E2E phase contract above — both must be set, or Dupin's phase scan will misplace the story.
 
 Refer to `references/templates-shared.md` § Local Ticket (LOC) for the canonical template. Use `tickets/LOC-0009.md` as the gold standard reference for format correctness.
 
@@ -508,6 +518,32 @@ Confirm each addition: "Added to sub-task list. Anything else to split?" Continu
 
 ---
 
+## Local Ticket Management
+
+When `JIRA_MODE=local` (no Jira credentials and no Jira MCP), Alfred works from user-provided text and keeps tickets as local Markdown files. Skip all Jira calls, and in the handoff set `**Jira Updated:** no (local mode)` plus `**Local ticket:** <path>`.
+
+**Storage**
+
+| Ticket type | Location | Key prefix |
+|-------------|----------|------------|
+| Epics + stories | `<BASE_DIR>/tickets/` | `LOC-` |
+| Bugs | `<BASE_DIR>/tickets/bugs/` | `BUG-` |
+
+**Auto-increment**
+- LOC: next key comes from the counter in `tickets/.prefix` — read, +1, zero-pad to 4 digits (`LOC-0009`), write back.
+- Bugs: glob `BUG-*.md` in `tickets/bugs/`, highest number + 1, padded to 4 digits. Counter kept in `tickets/bugs/.prefix` — create it if missing.
+
+**Create** — use the canonical templates in `references/templates-shared.md`:
+- Epic: **Local Ticket (LOC)** template with `Type: Epic` in frontmatter.
+- Story: **Local Ticket (LOC)** template at `tickets/<KEY>.md` with `Parent: <epic key>` and `Epic Key: <epic key>` in frontmatter. `tickets/LOC-0009.md` is the gold standard for format correctness.
+- Bug: **Bug Backlog Entry** template at `tickets/bugs/BUG-XXXX.md`.
+
+**Update** — edit the local file in place (frontmatter + body). No ADF conversion, no media-preservation step.
+
+**List** — to show open local tickets, glob `tickets/*.md` and `tickets/bugs/BUG-*.md` (skip `.prefix` files); present key, summary, and status per ticket.
+
+---
+
 ## Jira Update Procedure
 
 ### If user says YES to updating Jira:
@@ -519,14 +555,12 @@ Confirm each addition: "Added to sub-task list. Anything else to split?" Continu
    - Keep each scenario focused on one behavior.
 3. Build the **complete description** using the canonical template in § Standard ADF Format (below). The template defines the full section order: Story heading (open, includes story points) → CARVED Check (collapsible expand) → Acceptance Criteria (AC expands) → Original AC (collapsible expand) → Dependencies (collapsible expand). Do NOT include Example Tests or Existing Framework Reuse sections — those are Bruce/Damian's domain.
    Write via: `$UB write-temp alfred full-description.json <<'JSON' ... JSON`
-   **⚠ Do NOT call `$UB build-adf-json` separately.** `jira-write` calls it internally via the payload pipeline.
    **Note on nesting:** write both outer and inner levels as `expand` in the input JSON -- `build-adf-json.py` automatically promotes inner expands to `nestedExpand` (required by Jira ADF). Do not write `nestedExpand` manually.
 4. Write the full description in one call:
    - **MCP available:** `jira_update_issue` MCP tool with the complete description content
-   - **REST fallback:**
-     1. `$UB build-adf-json <full-description.json> <output-payload>`
-     2. `$UB jira-write <pin> PUT <issue-url> <output-payload>`
-     3. **Post-write verification:** fetch `$UB jira-fetch <pin> "<issue-url>?fields=description"` and confirm the expected AC headings appear in the response. If they are missing, report failure -- do not claim success.
+   - **REST fallback:** `jira-write` auto-detects the `sections` key — pass the sections JSON file directly. Do NOT pre-convert with `build-adf-json` separately; doing so produces raw ADF which `jira-write` cannot re-wrap, causing a Jira 400 error.
+     1. `$UB jira-write <pin> PUT <issue-url> <full-description.json>`
+     2. **Post-write verification:** fetch `$UB jira-fetch <pin> "<issue-url>?fields=description"` and confirm the expected AC headings appear in the response. If they are missing, report failure -- do not claim success.
 5. Use `jira_add_comment` MCP tool to post a comment:
    ```
    Refined the acceptance criteria for this ticket.

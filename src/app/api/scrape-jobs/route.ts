@@ -1,0 +1,150 @@
+/**
+ * Scrape Jobs API Route
+ *
+ * POST /api/scrape-jobs - Create a new scrape job
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createScrapeJob,
+} from "@/lib/db/scrape-job-repository";
+import { validateScrapeJobInput, ScrapeJobStatus, isValidScrapeJobStatus } from "@/types/scrape-job";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
+
+/**
+ * GET /api/scrape-jobs
+ * List scrape jobs (optional: filter by status)
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const statusParam = searchParams.get("status");
+
+    let statuses: ScrapeJobStatus[] | undefined;
+    if (statusParam) {
+      const parts = statusParam.split(",").map((s) => s.trim()).filter(Boolean);
+      const invalid = parts.find((p) => !isValidScrapeJobStatus(p));
+      if (parts.length === 0 || invalid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid status filter. Valid statuses: pending, running, completed, failed, cancelled",
+            code: "VALIDATION",
+          },
+          { status: 400 }
+        );
+      }
+      statuses = parts as ScrapeJobStatus[];
+    }
+
+    // Get database pool
+    const { getPool } = await import("@/lib/db/user-repository");
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      // Initialize schema on first request
+
+      const { findScrapeJobs } = await import("@/lib/db/scrape-job-repository");
+      const jobs = await findScrapeJobs(client, statuses);
+
+      return NextResponse.json({
+        success: true,
+        data: jobs,
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("Error fetching scrape jobs:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/scrape-jobs
+ * Create a new scrape job
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
+  try {
+    const body = await request.json();
+    const { source, query, location } = body;
+
+    // Validate required fields
+    if (!source || !query || !location) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Missing required fields: source, query, and location are all required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const input = { source, query, location };
+
+    // Validate input
+    const validation = validateScrapeJobInput(input);
+    if (!validation.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: validation.errors.join(", "),
+        },
+        { status: 400 }
+      );
+    }
+
+    // Get database pool
+    const { getPool } = await import("@/lib/db/user-repository");
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      // Initialize schema on first request
+
+      // Create the scrape job
+      const job = await createScrapeJob(client, input);
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: job,
+        },
+        { status: 201 }
+      );
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("Error creating scrape job:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
+  }
+}

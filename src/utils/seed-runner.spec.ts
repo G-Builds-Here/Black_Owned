@@ -21,7 +21,7 @@ import {
   SeedSummary,
   db,
 } from "./seed-runner";
-import { TEST_PREFIX } from "./test-data-seeder";
+import { generateTestBusinesses } from "./test-data-seeder";
 
 describe("Seed Runner - Idempotency", () => {
   beforeEach(() => {
@@ -148,7 +148,12 @@ describe("Seed Runner - Idempotency", () => {
 
     it("returns true for existing business", async () => {
       await runSeed(false);
-      expect(businessExists(`${TEST_PREFIX}: Soul Food Kitchen`)).toBe(true);
+      // Check a name that is guaranteed to be seeded: the first business from
+      // the same generator the runner uses. (Hardcoding a name here was brittle
+      // — it must match generateTestBusinesses(30), whose entries carry a " (N)"
+      // suffix because 30 exceeds the template count.)
+      const first = generateTestBusinesses(30)[0];
+      expect(businessExists(first.formattedName)).toBe(true);
     });
   });
 

@@ -1,5 +1,6 @@
 ---
 name: pr-management
+argument-hint: "[pr-number]"
 description: PR review response and lifecycle management -- comment triage, reply discipline, fix list creation. Use this skill when the user mentions PR review, pull request comments, addressing reviewer feedback, responding to reviews, or managing a pull request lifecycle. This skill uses API credentials -- if prompted for a passphrase, provide the one from your 1Password setup.
 ---
 

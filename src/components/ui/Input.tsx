@@ -1,6 +1,6 @@
 'use client';
 
-import React, { InputHTMLAttributes, forwardRef } from 'react';
+import React, { InputHTMLAttributes, forwardRef, useId } from 'react';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Label text */
@@ -32,7 +32,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
+    // useId is stable across server render and client hydration, so the
+    // generated id matches on both sides and avoids a hydration mismatch.
+    // (Math.random() here would produce a different id on server vs client.)
+    const generatedId = useId();
+    const inputId = id || generatedId;
     const helperId = `${inputId}-helper`;
     const errorId = `${inputId}-error`;
 

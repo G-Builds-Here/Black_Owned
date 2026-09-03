@@ -107,7 +107,7 @@ export function UserTable({ apiUrl = '/api/users', adminUser = 'admin' }: UserTa
       }
 
       if (!result.data) {
-        throw new Error('No data returned from API');
+        throw new Error('No data in response');
       }
 
       setUsers(result.data.users);

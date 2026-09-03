@@ -1,26 +1,11 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
-import { GraphQLClient } from 'graphql-request';
-import Link from 'next/link';
-
-const GRAPHQL_ENDPOINT = '/api/graphql';
-const client = new GraphQLClient(GRAPHQL_ENDPOINT);
 
 const SEARCH_DEBOUNCE_MS = 300;
-
-interface SearchBusinessesQuery {
-  searchBusinesses: {
-    businesses: Business[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  };
-}
 
 interface Business {
   id: string;
@@ -35,6 +20,41 @@ interface Business {
   tags: string[];
 }
 
+/**
+ * Shape of a /api/directory business item (real data)
+ */
+interface DirectoryBusiness {
+  id: string;
+  name: string;
+  category: string;
+  rating: number | null;
+  reviewCount: number | null;
+  location: string;
+  isVerified: boolean;
+  description: string | null;
+  website: string | null;
+  phone: string | null;
+  source: string | null;
+  createdAt: string;
+}
+
+const PAGE_SIZE = 10;
+
+function toCardBusiness(item: DirectoryBusiness): Business {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    rating: item.rating ?? 0,
+    reviewCount: item.reviewCount ?? 0,
+    location: item.location,
+    isVerified: item.isVerified,
+    imageUrl: '',
+    description: item.description || (item.website ? `Website: ${item.website}` : ''),
+    tags: [],
+  };
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -44,6 +64,8 @@ export default function SearchPage() {
   const [totalResults, setTotalResults] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const suggestRequestRef = useRef(0);
 
   // Debounce the search query
   useEffect(() => {
@@ -72,39 +94,19 @@ export default function SearchPage() {
     setError(null);
 
     try {
-      const graphqlQuery = `
-        query SearchBusinesses($query: String!, $page: Int, $pageSize: Int) {
-          searchBusinesses(query: $query, page: $page, pageSize: 10) {
-            businesses {
-              id
-              name
-              category
-              rating
-              reviewCount
-              location
-              isVerified
-              imageUrl
-              description
-              tags
-            }
-            total
-            page
-            pageSize
-            totalPages
-          }
-        }
-      `;
-
-      const variables = {
-        query: searchQuery,
-        page: currentPage,
-        pageSize: 10,
-      };
-
-      const data = await client.request<SearchBusinessesQuery>(graphqlQuery, variables);
-      setResults(data.searchBusinesses.businesses);
-      setTotalPages(data.searchBusinesses.totalPages);
-      setTotalResults(data.searchBusinesses.total);
+      // Real data from the public directory (approved + canonical businesses)
+      const url = `/api/directory?search=${encodeURIComponent(searchQuery)}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        throw new Error(body?.error || `Request failed (${res.status})`);
+      }
+      const items: DirectoryBusiness[] = body.data.businesses;
+      const mapped = items.map(toCardBusiness);
+      const start = (currentPage - 1) * PAGE_SIZE;
+      setResults(mapped.slice(start, start + PAGE_SIZE));
+      setTotalPages(Math.ceil(mapped.length / PAGE_SIZE));
+      setTotalResults(mapped.length);
     } catch (err) {
       console.error('Search error:', err);
       setError('Failed to search businesses. Please try again.');
@@ -119,6 +121,29 @@ export default function SearchPage() {
       performSearch(debouncedQuery, page);
     }
   }, [debouncedQuery, page, performSearch]);
+
+  // Fetch up to five autocomplete suggestions for the debounced query
+  useEffect(() => {
+    const term = debouncedQuery.trim();
+    if (term.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const requestId = ++suggestRequestRef.current;
+    fetch(`/api/directory/suggest?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
+      .then(async (res) => {
+        const body = await res.json();
+        if (requestId !== suggestRequestRef.current) return;
+        if (res.ok && body.success) {
+          setSuggestions(body.data.suggestions || []);
+        } else {
+          setSuggestions([]);
+        }
+      })
+      .catch(() => {
+        if (requestId === suggestRequestRef.current) setSuggestions([]);
+      });
+  }, [debouncedQuery]);
 
   const handleSearch = (searchQuery: string) => {
     setQuery(searchQuery);
@@ -152,7 +177,10 @@ export default function SearchPage() {
         {/* Search Bar */}
         <SearchBar
           onSearch={handleSearch}
+          onQueryChange={handleSearch}
           placeholder="Search by name, category, or location..."
+          suggestions={suggestions}
+          onSuggestionSelect={(value) => setQuery(value)}
         />
 
         {/* Results */}
@@ -205,10 +233,8 @@ export default function SearchPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-neutral-950 text-white py-12 mt-16">
+      <footer className="bg-neutral-950 text-neutral-400 py-12 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Kente-inspired top border */}
-          <div className="h-1 bg-gradient-to-r from-heritage-ochre via-heritage-gold to-heritage-forest mb-8" />
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <h4 className="text-white font-semibold mb-4">Black Owned</h4>
@@ -219,23 +245,23 @@ export default function SearchPage() {
             <div>
               <h4 className="text-white font-semibold mb-4">Explore</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/" className="hover:text-heritage-ochre transition-colors">Home</Link></li>
-                <li><Link href="/directory" className="hover:text-heritage-ochre transition-colors">Directory</Link></li>
-                <li><Link href="/#about" className="hover:text-heritage-ochre transition-colors">About</Link></li>
+                <li><a href="/directory" className="hover:text-white">Businesses</a></li>
+                <li><a href="/about" className="hover:text-white">About Us</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/#contact" className="hover:text-heritage-ochre transition-colors">Contact</Link></li>
-                <li><Link href="/#faq" className="hover:text-heritage-ochre transition-colors">FAQ</Link></li>
+                <li><a href="/help" className="hover:text-white">Help Center</a></li>
+                <li><a href="/about" className="hover:text-white">Contact Us</a></li>
+                <li><a href="/help#faq" className="hover:text-white">FAQ</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/#privacy" className="hover:text-heritage-ochre transition-colors">Privacy</Link></li>
-                <li><Link href="/#terms" className="hover:text-heritage-ochre transition-colors">Terms</Link></li>
+                <li><a href="/privacy" className="hover:text-white">Privacy Policy</a></li>
+                <li><a href="/terms" className="hover:text-white">Terms of Service</a></li>
               </ul>
             </div>
           </div>

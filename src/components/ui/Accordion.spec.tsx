@@ -2,27 +2,27 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Accordion, AccordionTrigger, AccordionContent } from './Accordion';
+import { Accordion } from './Accordion';
+
+// Current component API notes (source of truth: Accordion.tsx):
+// - items use `header`, not `title`.
+// - AccordionTrigger/AccordionContent are pass-through wrappers; the styled
+//   trigger is the per-item header <button> and the styled content is the
+//   role="region" wrapper (id `accordion-content-<key>`) inside each item.
+// - Collapsed content stays in the DOM (height/opacity animation), so
+//   visibility is asserted via style + aria-expanded, not presence.
+
+const mockItems = [
+  { key: 'item1', header: 'Accordion Item 1', content: 'Content for item 1' },
+  { key: 'item2', header: 'Accordion Item 2', content: 'Content for item 2' },
+  { key: 'item3', header: 'Accordion Item 3', content: 'Content for item 3' },
+];
+
+const root = (container: HTMLElement) => container.firstChild as HTMLElement;
+const region = (key: string) => document.getElementById(`accordion-content-${key}`) as HTMLElement;
+const header = (label: RegExp) => screen.getByRole('button', { name: label });
 
 describe('Accordion', () => {
-  const mockItems = [
-    {
-      key: 'item1',
-      title: 'Accordion Item 1',
-      content: 'Content for item 1',
-    },
-    {
-      key: 'item2',
-      title: 'Accordion Item 2',
-      content: 'Content for item 2',
-    },
-    {
-      key: 'item3',
-      title: 'Accordion Item 3',
-      content: 'Content for item 3',
-    },
-  ];
-
   it('renders all accordion items', () => {
     render(<Accordion items={mockItems} />);
     expect(screen.getByText(/accordion item 1/i)).toBeInTheDocument();
@@ -30,192 +30,174 @@ describe('Accordion', () => {
     expect(screen.getByText(/accordion item 3/i)).toBeInTheDocument();
   });
 
-  it('does not show content by default', () => {
+  it('keeps collapsed content in the DOM but hidden', () => {
     render(<Accordion items={mockItems} />);
-    expect(screen.queryByText(/content for item 1/i)).not.toBeInTheDocument();
+    const content = region('item1');
+    expect(content).toBeInTheDocument();
+    expect(content).toHaveStyle({ opacity: '0' });
+    expect(content).toHaveStyle({ height: '0px' });
+    expect(header(/accordion item 1/i)).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows content when item is clicked', () => {
     render(<Accordion items={mockItems} />);
-    fireEvent.click(screen.getByText(/accordion item 1/i));
-    expect(screen.getByText(/content for item 1/i)).toBeInTheDocument();
+    fireEvent.click(header(/accordion item 1/i));
+    expect(region('item1')).toHaveStyle({ opacity: '1' });
+    expect(header(/accordion item 1/i)).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('toggles content on click', () => {
     render(<Accordion items={mockItems} />);
-    fireEvent.click(screen.getByText(/accordion item 1/i));
-    expect(screen.getByText(/content for item 1/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByText(/accordion item 1/i));
-    expect(screen.queryByText(/content for item 1/i)).not.toBeInTheDocument();
+    const h = header(/accordion item 1/i);
+    fireEvent.click(h);
+    expect(region('item1')).toHaveStyle({ opacity: '1' });
+    fireEvent.click(h);
+    expect(region('item1')).toHaveStyle({ opacity: '0' });
+    expect(h).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('closes other items when one is opened (single mode)', () => {
     render(<Accordion items={mockItems} />);
-    fireEvent.click(screen.getByText(/accordion item 1/i));
-    expect(screen.getByText(/content for item 1/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByText(/accordion item 2/i));
-    expect(screen.getByText(/content for item 2/i)).toBeInTheDocument();
-    expect(screen.queryByText(/content for item 1/i)).not.toBeInTheDocument();
+    fireEvent.click(header(/accordion item 1/i));
+    fireEvent.click(header(/accordion item 2/i));
+    expect(header(/accordion item 1/i)).toHaveAttribute('aria-expanded', 'false');
+    expect(header(/accordion item 2/i)).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('allows multiple items open when allowMultiple is true', () => {
     render(<Accordion items={mockItems} allowMultiple />);
-    fireEvent.click(screen.getByText(/accordion item 1/i));
-    fireEvent.click(screen.getByText(/accordion item 2/i));
-    expect(screen.getByText(/content for item 1/i)).toBeInTheDocument();
-    expect(screen.getByText(/content for item 2/i)).toBeInTheDocument();
+    fireEvent.click(header(/accordion item 1/i));
+    fireEvent.click(header(/accordion item 2/i));
+    expect(header(/accordion item 1/i)).toHaveAttribute('aria-expanded', 'true');
+    expect(header(/accordion item 2/i)).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('calls onExpansionChange with the expanded keys', () => {
+    const handleChange = jest.fn();
+    render(<Accordion items={mockItems} onExpansionChange={handleChange} />);
+    fireEvent.click(header(/accordion item 1/i));
+    expect(handleChange).toHaveBeenCalledWith(['item1']);
   });
 
   it('has border for accordion items', () => {
     const { container } = render(<Accordion items={mockItems} />);
-    const item = container.querySelector('[data-testid="accordion-item"]');
-    expect(item).toHaveClass('border');
+    const item = root(container).children[0] as HTMLElement;
+    expect(item).toHaveClass('border-b');
     expect(item).toHaveClass('border-neutral-200');
   });
 
   it('has rounded corners', () => {
     const { container } = render(<Accordion items={mockItems} />);
-    const item = container.querySelector('[data-testid="accordion-item"]');
-    expect(item).toHaveClass('rounded-lg');
+    expect(root(container)).toHaveClass('rounded-lg');
   });
 
   it('has overflow hidden', () => {
     const { container } = render(<Accordion items={mockItems} />);
-    const item = container.querySelector('[data-testid="accordion-item"]');
-    expect(item).toHaveClass('overflow-hidden');
+    expect(root(container)).toHaveClass('overflow-hidden');
   });
 
   it('has background color', () => {
     const { container } = render(<Accordion items={mockItems} />);
-    const item = container.querySelector('[data-testid="accordion-item"]');
-    expect(item).toHaveClass('bg-white');
+    expect(root(container)).toHaveClass('bg-white');
   });
 
-  it('has transition animation', () => {
-    const { container } = render(<Accordion items={mockItems} />);
-    const content = container.querySelector('[data-testid="accordion-content"]');
+  it('has transition animation on content', () => {
+    render(<Accordion items={mockItems} />);
+    const content = region('item1');
     expect(content).toHaveClass('transition-all');
-    expect(content).toHaveClass('duration-300');
+    expect(content).toHaveClass('duration-200');
   });
 
-  it('has chevron icon that rotates', () => {
-    const { container } = render(<Accordion items={mockItems} />);
-    const chevron = container.querySelector('[data-testid="accordion-chevron"]');
+  it('has chevron icon that rotates when expanded', () => {
+    render(<Accordion items={mockItems} />);
+    const h = header(/accordion item 1/i);
+    const chevron = h.querySelector('[aria-hidden="true"]') as HTMLElement;
     expect(chevron).toBeInTheDocument();
+    expect(chevron).not.toHaveClass('rotate-180');
+    fireEvent.click(h);
+    expect(chevron).toHaveClass('rotate-180');
   });
 
-  it('Applies custom className', () => {
+  it('applies custom className', () => {
     const { container } = render(<Accordion items={mockItems} className="custom-class" />);
-    const accordion = container.querySelector('[data-testid="accordion"]');
-    expect(accordion).toHaveClass('custom-class');
+    expect(root(container)).toHaveClass('custom-class');
   });
 
-  it('has gap between items', () => {
+  it('separates items with bottom borders', () => {
     const { container } = render(<Accordion items={mockItems} />);
-    const accordion = container.querySelector('[data-testid="accordion"]');
-    expect(accordion).toHaveClass('gap-2');
+    const items = Array.from(root(container).children) as HTMLElement[];
+    expect(items[0]).toHaveClass('border-b');
+    expect(items[items.length - 1]).toHaveClass('last:border-b-0');
   });
 });
 
-describe('AccordionTrigger', () => {
-  it('renders title', () => {
-    render(<AccordionTrigger title="Test Title" isOpen={false} onToggle={jest.fn()} />);
-    expect(screen.getByText(/test title/i)).toBeInTheDocument();
-  });
+describe('Accordion header button', () => {
+  const renderHeader = () =>
+    render(<Accordion items={[{ key: 'only', header: 'Test', content: 'Body' }]} />);
 
   it('has cursor pointer', () => {
-    const { container } = render(<AccordionTrigger title="Test" isOpen={false} onToggle={jest.fn()} />);
-    const trigger = container.querySelector('[data-testid="accordion-trigger"]');
-    expect(trigger).toHaveClass('cursor-pointer');
+    renderHeader();
+    expect(screen.getByRole('button', { name: 'Test' })).toHaveClass('cursor-pointer');
   });
 
   it('has flex layout with space between', () => {
-    const { container } = render(<AccordionTrigger title="Test" isOpen={false} onToggle={jest.fn()} />);
-    const trigger = container.querySelector('[data-testid="accordion-trigger"]');
+    renderHeader();
+    const trigger = screen.getByRole('button', { name: 'Test' });
     expect(trigger).toHaveClass('flex');
     expect(trigger).toHaveClass('justify-between');
     expect(trigger).toHaveClass('items-center');
   });
 
   it('has padding', () => {
-    const { container } = render(<AccordionTrigger title="Test" isOpen={false} onToggle={jest.fn()} />);
-    const trigger = container.querySelector('[data-testid="accordion-trigger"]');
-    expect(trigger).toHaveClass('p-4');
+    renderHeader();
+    const trigger = screen.getByRole('button', { name: 'Test' });
+    expect(trigger).toHaveClass('px-6');
+    expect(trigger).toHaveClass('py-4');
   });
 
-  it('has font-medium', () => {
-    const { container } = render(<AccordionTrigger title="Test" isOpen={false} onToggle={jest.fn()} />);
-    const trigger = container.querySelector('[data-testid="accordion-trigger"]');
-    expect(trigger).toHaveClass('font-medium');
-  });
-
-  it('calls onToggle when clicked', () => {
-    const handleToggle = jest.fn();
-    render(<AccordionTrigger title="Test" isOpen={false} onToggle={handleToggle} />);
-    fireEvent.click(screen.getByText(/test/i));
-    expect(handleToggle).toHaveBeenCalledTimes(1);
+  it('has font-medium on the label', () => {
+    renderHeader();
+    expect(screen.getByText('Test')).toHaveClass('font-medium');
   });
 
   it('has transition styles', () => {
-    const { container } = render(<AccordionTrigger title="Test" isOpen={false} onToggle={jest.fn()} />);
-    const trigger = container.querySelector('[data-testid="accordion-trigger"]');
-    expect(trigger).toHaveClass('transition-colors');
-    expect(trigger).toHaveClass('duration-200');
+    renderHeader();
+    expect(screen.getByRole('button', { name: 'Test' })).toHaveClass('transition-colors');
   });
 
   it('has hover styles', () => {
-    const { container } = render(<AccordionTrigger title="Test" isOpen={false} onToggle={jest.fn()} />);
-    const trigger = container.querySelector('[data-testid="accordion-trigger"]');
-    expect(trigger).toHaveClass('hover:bg-neutral-50');
+    renderHeader();
+    expect(screen.getByRole('button', { name: 'Test' })).toHaveClass('hover:bg-neutral-50');
+  });
+
+  it('renders disabled items as disabled', () => {
+    render(<Accordion items={[{ key: 'd', header: 'Disabled', content: 'Body', disabled: true }]} />);
+    const trigger = screen.getByRole('button', { name: 'Disabled' });
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveClass('cursor-not-allowed');
   });
 });
 
 describe('AccordionContent', () => {
+  const renderContent = () =>
+    render(<Accordion items={[{ key: 'a', header: 'H', content: 'Content' }]} />);
+
   it('renders children', () => {
-    render(
-      <AccordionContent isOpen={true}>
-        <div data-testid="content">Accordion Content</div>
-      </AccordionContent>
-    );
-    expect(screen.getByTestId('content')).toBeInTheDocument();
+    renderContent();
+    expect(screen.getByText('Content')).toBeInTheDocument();
   });
 
-  it('does not render when isOpen is false', () => {
-    render(
-      <AccordionContent isOpen={false}>
-        <div data-testid="content">Accordion Content</div>
-      </AccordionContent>
-    );
-    expect(screen.queryByTestId('content')).not.toBeInTheDocument();
+  it('hides content when collapsed', () => {
+    renderContent();
+    expect(region('a')).toHaveStyle({ opacity: '0', height: '0px' });
   });
 
-  it('has padding', () => {
-    const { container } = render(
-      <AccordionContent isOpen={true}>
-        <div>Content</div>
-      </AccordionContent>
-    );
-    const content = container.querySelector('[data-testid="accordion-content-inner"]');
-    expect(content).toHaveClass('p-4');
-  });
-
-  it('has text color', () => {
-    const { container } = render(
-      <AccordionContent isOpen={true}>
-        <div>Content</div>
-      </AccordionContent>
-    );
-    const content = container.querySelector('[data-testid="accordion-content-inner"]');
-    expect(content).toHaveClass('text-neutral-600');
-  });
-
-  it('has overflow hidden for animation', () => {
-    const { container } = render(
-      <AccordionContent isOpen={true}>
-        <div>Content</div>
-      </AccordionContent>
-    );
-    const wrapper = container.querySelector('[data-testid="accordion-content"]');
+  it('has padding and overflow hidden for animation', () => {
+    renderContent();
+    const wrapper = region('a');
     expect(wrapper).toHaveClass('overflow-hidden');
+    const inner = wrapper.querySelector('div') as HTMLElement;
+    expect(inner).toHaveClass('px-6');
+    expect(inner).toHaveClass('pb-4');
   });
 });

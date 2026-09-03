@@ -1,121 +1,59 @@
 <!--
-surveyed_at: 2026-07-31T08:00:33Z
-commit: f43142ed0117498d3b05a2409d4893181c7506d0
+surveyed_at: 2026-08-27T02:40:39Z
+commit: 5a67ed37776c18bc32c9f8e783cb67e23b6c1641
 relevant_paths:
 - package.json
-- bw-api/Cargo.toml
+- Cargo.toml
+- bw-scraper/Cargo.toml
+- bw-ingestion/Cargo.toml
 - docker-compose.yml
-summary: Dual-stack architecture with polyglot persistence documented.
+summary: Languages, frameworks, runtimes, and dependency versions with their purposes.
 -->
 
 # Technology Stack
 
-## Architecture Overview
+## Web App (package.json)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Frontend (Next.js)                      │
-│  React 19 • TypeScript • Tailwind CSS • Apollo Client      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ GraphQL over HTTP
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    API Layer (Dual Stack)                   │
-│  ┌─────────────────────┐  ┌─────────────────────────────┐  │
-│  │  Node.js / Next.js  │  │  Rust (bw-api)             │  │
-│  │  - GraphQL Resolvers│  │  - GraphQL Server          │  │
-│  │  - Auth Middleware  │  │  - Tower Middleware        │  │
-│  └─────────────────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                    │              │              │
-        ┌───────────┴──────┬───────┴──────┬───────┴───────────┐
-        ▼                  ▼              ▼                   ▼
-   ┌─────────┐       ┌──────────┐   ┌──────────┐    ┌─────────────┐
-   │PostgreSQL│       │  Valkey  │   │  NATS    │    │   MinIO     │
-   │  15     │       │   7.2    │   │  2.10    │    │  latest     │
-   └─────────┘       └──────────┘   └──────────┘    └─────────────┘
-   (Primary DB)      (Cache)      (Messaging)     (Object Store)
-```
+| Item | Version | Purpose |
+|---|---|---|
+| TypeScript | ^5 | language |
+| Next.js | 16.0.0 | App Router UI + API (all HTTP surface) |
+| React / react-dom | 19.0.0 | UI |
+| Tailwind CSS | ^4.0.0 | styling |
+| pg | ^8.11.0 | Postgres client (module-level Pool via `getPool()`) |
+| jsonwebtoken | ^9.0.0 | JWT RS256 sign/verify (key material in `config/jwt`) |
+| bcryptjs | ^2.4.3 | password hashing |
+| ioredis | ^5.4.1 | Valkey client (refresh tokens, cache) |
+| nats / nats.ws | ^2.28 / ^1.30 | server event bus / browser chat WebSocket |
+| minio | ^8.0.0 | presigned upload URLs |
+| leaflet | ^1.9.4 | directory + detail-page maps |
+| puppeteer | ^24.0.0 | Playwright-based Google Maps/Yelp/Facebook scrapers (src/services) |
+| graphql + @graphql-tools/schema | ^16.8 / ^10 | [DEAD DEPS] declared but the `/api/graphql` route is a hand-rolled regex parser that never imports them — see anti-patterns |
 
-## Frontend Stack
+## Rust Workspace (Cargo.toml, edition 2021)
 
-| Technology | Version | Why This Choice |
-|------------|---------|-----------------|
-| **Next.js** | 15.x | Server-side rendering, API routes, built-in routing, optimal for SEO-focused directory |
-| **React** | 19.x | Latest features, component model, hooks ecosystem |
-| **TypeScript** | Latest | Type safety, better DX, catches errors at compile time |
-| **Tailwind CSS** | Latest | Utility-first styling, rapid development, consistent design system |
-| **Apollo Server** | 7.x | GraphQL server implementation, schema-first development |
-| **graphql-request** | Latest | Lightweight GraphQL client for server-to-server calls |
+| Crate | Role | Notable deps |
+|---|---|---|
+| bw-types | shared domain types | serde, uuid, chrono |
+| bw-scraper | axum HTTP worker (SearXNG discovery + ETL → Postgres) | tokio, sqlx 0.7 (postgres), axum 0.7, reqwest 0.12, redis 0.24, clickhouse 0.12, async-nats |
+| bw-ingestion | library: ETL + NATS consumers + cache invalidation (no binary, no in-repo consumer) | redis 0.27, minio-rsc, image, lettre (optional) |
+| bw-api | axum + GraphQL service, RETIRED from compose, currently not compiling (task #71) | async-graphql 7.0, jsonwebtoken 9.3, tower-http |
 
-## Backend Stack (Rust)
+Note: workspace `dependencies` pins (async-nats 0.33, redis 0.24, clickhouse 0.12, axum 0.7) are bypassed by per-crate versions (0.40 / 0.27 / 0.13 / 0.8) — the sharing is nominal only.
 
-| Technology | Version | Why This Choice |
-|------------|---------|-----------------|
-| **Axum** | 0.8 | Modern, ergonomic, built on hyper, excellent TypeScript-like ergonomics |
-| **Async GraphQL** | 7.x | Type-safe GraphQL implementation for Rust, integrates with serde |
-| **SQLx** | 0.7 | Async SQL toolkit with compile-time query validation, PostgreSQL support |
-| **Tokio** | 1.x | Industry-standard async runtime for Rust |
-| **Tower** | 0.5 | Middleware library, reusable components, HTTP service abstraction |
-| **jsonwebtoken** | 9.3 | JWT handling for authentication |
+## Infrastructure (docker-compose.yml)
 
-## Database Layer
+| Service | Version | Ports (host) |
+|---|---|---|
+| PostgreSQL | 15-alpine | 5432 |
+| NATS (JetStream) | 2.10-alpine | 4222, 8081 (WS, no_tls per nats/nats.conf), 8222 |
+| ClickHouse | 23.8-alpine | 8123, 9000 |
+| Valkey | 7.2-alpine | 6379 |
+| MinIO | latest | 9002 (console 9003) — 9000 was double-mapped with ClickHouse and moved |
+| bw-scraper | built from root Dockerfile (rust:1.88 → bookworm-slim) | 8080, healthcheck /health |
 
-| Technology | Version | Why This Choice |
-|------------|---------|-----------------|
-| **PostgreSQL** | 15 | Relational data, ACID compliance, JSONB support, UUID native types |
-| **Valkey** | 7.2 | Redis fork (after Redis became SSPL), caching, session storage, token rotation |
-| **ClickHouse** | 23.8 | Analytics, aggregations, business metrics dashboards |
+The Next.js app is NOT a compose service — it runs on the host via `npm run dev`.
 
-## Infrastructure
+## Test Frameworks
 
-| Technology | Version | Why This Choice |
-|------------|---------|-----------------|
-| **MinIO** | latest | S3-compatible object storage, self-hosted, business images storage |
-| **NATS** | 2.10 | Lightweight messaging, pub/sub for async workflows, cache invalidation |
-| **Docker** | - | Containerized development, consistent environments |
-
-## Testing Stack
-
-| Technology | Version | Why This Choice |
-|------------|---------|-----------------|
-| **Playwright** | Latest | E2E testing, cross-browser, reliable |
-| **Jest** | Latest | Unit testing, React component testing |
-| **Vitest** | Latest | Fast unit testing, Vite-native, TypeScript-first |
-| **Testcontainers** | Latest | Integration tests with real dependencies (PostgreSQL, NATS) |
-
-## Why This Stack?
-
-### 1. **Dual Backend Strategy**
-The project uses both Node.js (Next.js API routes) and Rust (bw-api). This allows:
-- Gradual migration from Node to Rust for performance-critical paths
-- Rust for memory safety and concurrency guarantees
-- Node.js for rapid iteration on business logic
-
-### 2. **GraphQL-First API**
-GraphQL provides:
-- Strongly typed API contracts
-- Reduced over-fetching of data
-- Single endpoint for all data needs
-- Frontend-driven data requirements
-
-### 3. **Polyglot Persistence**
-- **PostgreSQL**: Transactional data (users, businesses, verifications)
-- **Valkey**: High-speed caching, session management
-- **ClickHouse**: Analytics and reporting
-- **MinIO**: Binary assets (business images)
-
-### 4. **Event-Driven Architecture**
-NATS enables:
-- Decoupled services
-- Cache invalidation events
-- Async processing of verification workflows
-- Future microservices expansion
-
-### 5. **Modern Frontend**
-Next.js + React 19 + TypeScript provides:
-- SEO-friendly SSR for directory pages
-- Type safety across full stack
-- Component reusability
-- Fast development iteration
+Jest ^29.7 (ts-jest, jsdom; unit + component, ~100 specs), Playwright ^1.62 (8 E2E suites), cargo test (Rust unit + integration), Vitest (configured but not installed — dead), plus a second Jest config (`jest.config.components.js`) not wired to any npm script. Details: `test-infrastructure.md`.

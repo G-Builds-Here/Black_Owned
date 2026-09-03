@@ -43,7 +43,7 @@ export default function BusinessCard({
     const hasHalfStar = rating % 1 >= 0.5;
 
     return (
-      <div className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 5 stars`}>
+      <div role="img" className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 5 stars`}>
         {[...Array(5)].map((_, index) => {
           if (index < fullStars) {
             return (
@@ -83,21 +83,26 @@ export default function BusinessCard({
   };
 
   return (
-    <div
-      className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden hover:shadow-md transition-shadow"
+    <Card
+      variant="elevated"
+      padding="none"
+      clickable
+      className="h-full overflow-hidden"
+      as={enableLink ? Link : 'div'}
+      href={enableLink ? `/business/${business.id}` : undefined}
     >
-      <div className="flex flex-col sm:flex-row">
-        {/* Image - Left side */}
-        <div className="sm:w-48 flex-shrink-0 relative">
+      <div className="flex h-full">
+        {/* Image - left column */}
+        <div className="relative w-2/5 flex-shrink-0 self-stretch overflow-hidden bg-neutral-200">
           {business.imageUrl ? (
             <img
               src={business.imageUrl}
               alt={`Business photo for ${business.name}`}
-              className="w-full h-48 sm:h-full object-cover"
+              className="h-full w-full object-contain"
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-48 sm:h-full bg-neutral-200 flex items-center justify-center text-neutral-400">
+            <div className="flex h-full w-full items-center justify-center text-neutral-400">
               <span className="text-3xl">🏪</span>
             </div>
           )}
@@ -109,44 +114,56 @@ export default function BusinessCard({
               size="sm"
               className="absolute top-2 left-2 bg-green-600 text-white border-0"
             >
-              ✓
+              ✓<span className="sr-only">Verified</span>
             </Badge>
           )}
         </div>
 
-        {/* Content - Right side */}
-        <div className="flex-1 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-neutral-800 mb-1">{business.name}</h3>
-              <Badge variant="primary" size="sm">
-                {business.category}
-              </Badge>
-              <div className="mt-2">{renderStars(business.rating)}</div>
-              <p className="text-sm text-neutral-500 mt-1 flex items-center gap-1">
-                <span aria-hidden="true">📍</span>
-                {business.location || 'Location not available'}
-              </p>
-              <p className="text-sm text-neutral-600 mt-2 line-clamp-2">
-                {business.description}
-              </p>
-            </div>
+        {/* Content */}
+        <div className="flex flex-col flex-grow p-3">
+          <h3 className="text-lg font-semibold text-neutral-900 line-clamp-1">
+            {business.name}
+          </h3>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 flex-shrink-0">
-              <Button variant="primary" size="sm" onClick={handleViewDetails}>
-                View
-              </Button>
-              <Button variant="secondary" size="sm" onClick={handleSave} aria-label={`Save ${business.name}`}>
-                📝
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleShare} aria-label={`Share ${business.name}`}>
-                🔗
-              </Button>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {renderStars(business.rating)}
+            <Badge variant="primary" size="sm">{business.category}</Badge>
+          </div>
+
+          <p className="text-sm text-neutral-700 mt-1 flex items-center gap-1">
+            <span aria-hidden="true">📍</span>
+            {business.location}
+          </p>
+
+          <p className="text-sm text-neutral-500 mt-2 line-clamp-2">
+            {business.description}
+          </p>
+
+          {/* Tags */}
+          {business.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {business.tags.slice(0, 3).map((tag) => (
+                <Badge key={tag} variant="default" size="sm">
+                  {tag}
+                </Badge>
+              ))}
             </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 mt-3 pt-3 border-t border-neutral-200">
+            <Button variant="primary" size="sm" onClick={handleViewDetails} className="min-w-0 px-3">
+              View Details
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleSave} aria-label={`Save ${business.name}`} className="min-w-0 px-2">
+              💾
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleShare} aria-label={`Share ${business.name}`} className="min-w-0 px-2">
+              🔗
+            </Button>
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

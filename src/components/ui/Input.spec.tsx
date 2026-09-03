@@ -4,6 +4,12 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Input from './Input';
 
+// Current component notes (source of truth: Input.tsx):
+// - No `size` prop (old sm/md/lg size tests removed); the input is always
+//   px-4 py-2.5 text-base, with pl-10/pr-10 added when icons are present.
+// - No disabled styling classes were ever part of the redesign; the native
+//   `disabled` attribute (tested below) is the only disabled behavior.
+
 describe('Input', () => {
   it('renders with placeholder', () => {
     render(<Input placeholder="Enter text" />);
@@ -20,48 +26,36 @@ describe('Input', () => {
     expect(screen.getByText(/this is an error/i)).toBeInTheDocument();
   });
 
-  it('applies default size (md)', () => {
+  it('applies default padding and font size', () => {
     const { container } = render(<Input />);
     const input = container.querySelector('input');
     expect(input).toHaveClass('px-4');
-    expect(input).toHaveClass('py-2');
-  });
-
-  it('applies small size', () => {
-    const { container } = render(<Input size="sm" />);
-    const input = container.querySelector('input');
-    expect(input).toHaveClass('px-3');
-    expect(input).toHaveClass('py-1.5');
-    expect(input).toHaveClass('text-sm');
-  });
-
-  it('applies medium size', () => {
-    const { container } = render(<Input size="md" />);
-    const input = container.querySelector('input');
-    expect(input).toHaveClass('px-4');
-    expect(input).toHaveClass('py-2');
+    expect(input).toHaveClass('py-2.5');
     expect(input).toHaveClass('text-base');
   });
 
-  it('applies large size', () => {
-    const { container } = render(<Input size="lg" />);
+  it('adds left padding when leftIcon is provided', () => {
+    const { container } = render(<Input leftIcon={<span>icon</span>} />);
     const input = container.querySelector('input');
-    expect(input).toHaveClass('px-5');
-    expect(input).toHaveClass('py-3');
-    expect(input).toHaveClass('text-lg');
+    expect(input).toHaveClass('pl-10');
+  });
+
+  it('adds right padding when rightIcon is provided', () => {
+    const { container } = render(<Input rightIcon={<span>icon</span>} />);
+    const input = container.querySelector('input');
+    expect(input).toHaveClass('pr-10');
+  });
+
+  it('renders left and right icons', () => {
+    render(<Input leftIcon={<span>left</span>} rightIcon={<span>right</span>} />);
+    expect(screen.getByText('left')).toBeInTheDocument();
+    expect(screen.getByText('right')).toBeInTheDocument();
   });
 
   it('applies error styles when error is provided', () => {
     const { container } = render(<Input error="Error message" />);
     const input = container.querySelector('input');
     expect(input).toHaveClass('border-heritage-crimson');
-  });
-
-  it('applies disabled styles when disabled', () => {
-    const { container } = render(<Input disabled />);
-    const input = container.querySelector('input');
-    expect(input).toHaveClass('bg-neutral-100');
-    expect(input).toHaveClass('cursor-not-allowed');
   });
 
   it('is disabled when disabled prop is true', () => {
@@ -131,8 +125,8 @@ describe('Input', () => {
   it('has transition styles', () => {
     const { container } = render(<Input />);
     const input = container.querySelector('input');
-    expect(input).toHaveClass('transition-colors');
-    expect(input).toHaveClass('duration-200');
+    expect(input).toHaveClass('transition-all');
+    expect(input).toHaveClass('duration-150');
   });
 
   it('renders with value', () => {

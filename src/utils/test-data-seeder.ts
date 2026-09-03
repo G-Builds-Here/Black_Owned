@@ -17,6 +17,7 @@ export interface TestBusiness {
   name: string;
   formattedName: string;
   description?: string;
+  category?: string;
 }
 
 export type UserRole = "customer" | "business_owner" | "admin";

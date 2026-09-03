@@ -2,8 +2,20 @@
  * GraphQL Client for frontend API calls
  */
 
+import { SocialUrls } from '../../services/social-discovery';
+
 function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  // Same-origin by default: the Next app hosts the resolvers at /api/graphql.
+  return process.env.NEXT_PUBLIC_API_URL || '';
+}
+
+export interface BusinessLocation {
+  id: string;
+  label?: string | null;
+  address: string;
+  lat?: number | null;
+  lng?: number | null;
+  isPrimary: boolean;
 }
 
 export interface GraphQLResponse<T> {
@@ -17,7 +29,37 @@ export interface Business {
   id: string;
   name: string;
   categoryId: string;
+  category?: string | null;
+  description?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  menuUrl?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  ratingSource?: string | null;
+  siteReviewCount: number;
+  siteRating: number | null;
+  siteReviews: SiteReview[];
+  imageUrl?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  tags?: string[] | null;
+  source?: string | null;
   verified: boolean;
+  socialUrls?: SocialUrls | null;
+  createdAt: {
+    timestamp: number;
+  };
+  locations: BusinessLocation[];
+}
+
+export interface SiteReview {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  locationLabel?: string | null;
   createdAt: {
     timestamp: number;
   };
@@ -34,7 +76,7 @@ export async function graphqlQuery<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}/graphql`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/graphql`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -72,7 +114,42 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
         id
         name
         categoryId
+        category
+        description
+        location
+        phone
+        website
+        menuUrl
+        rating
+        reviewCount
+        ratingSource
+        siteReviewCount
+        siteRating
+        siteReviews {
+          id
+          rating
+          comment
+          reviewerName
+          locationLabel
+          createdAt {
+            timestamp
+          }
+        }
+        imageUrl
+        lat
+        lng
+        tags
+        source
+        locations {
+          id
+          label
+          address
+          lat
+          lng
+          isPrimary
+        }
         verified
+        socialUrls
         createdAt {
           timestamp
         }

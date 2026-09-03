@@ -1,3 +1,7 @@
+---
+name: luke
+description: Read-only repo context subagent. Answers focused codebase questions from survey artifacts (AIDLC docs) without running a full /luke session.
+---
 # Luke — Repo Context Subagent
 
 > **Context Subagent — read-only.** Called by Lucius, Damian, Bruce for focused artifact lookup.

@@ -1,0 +1,392 @@
+{
+  "projects": [
+    {
+      "path": "package.json",
+      "name": "black-owned-frontend",
+      "type": "npm",
+      "target_framework": null,
+      "output_type": null,
+      "packages": [
+        {
+          "name": "@graphql-tools/schema",
+          "version": "dep"
+        },
+        {
+          "name": "@types/leaflet",
+          "version": "dep"
+        },
+        {
+          "name": "bcryptjs",
+          "version": "dep"
+        },
+        {
+          "name": "graphql",
+          "version": "dep"
+        },
+        {
+          "name": "jsonwebtoken",
+          "version": "dep"
+        },
+        {
+          "name": "leaflet",
+          "version": "dep"
+        },
+        {
+          "name": "minio",
+          "version": "dep"
+        },
+        {
+          "name": "nats.ws",
+          "version": "dep"
+        },
+        {
+          "name": "next",
+          "version": "dep"
+        },
+        {
+          "name": "pg",
+          "version": "dep"
+        },
+        {
+          "name": "react",
+          "version": "dep"
+        },
+        {
+          "name": "react-dom",
+          "version": "dep"
+        },
+        {
+          "name": "@playwright/test",
+          "version": "devDep"
+        },
+        {
+          "name": "@tailwindcss/postcss",
+          "version": "devDep"
+        },
+        {
+          "name": "@testing-library/jest-dom",
+          "version": "devDep"
+        },
+        {
+          "name": "@testing-library/react",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/bcryptjs",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/jest",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/js-yaml",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/jsonwebtoken",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/minio",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/node",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/pg",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/puppeteer",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/react",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/react-dom",
+          "version": "devDep"
+        },
+        {
+          "name": "autoprefixer",
+          "version": "devDep"
+        },
+        {
+          "name": "eslint",
+          "version": "devDep"
+        },
+        {
+          "name": "eslint-config-next",
+          "version": "devDep"
+        },
+        {
+          "name": "jest",
+          "version": "devDep"
+        },
+        {
+          "name": "jest-environment-jsdom",
+          "version": "devDep"
+        },
+        {
+          "name": "js-yaml",
+          "version": "devDep"
+        },
+        {
+          "name": "playwright",
+          "version": "devDep"
+        },
+        {
+          "name": "postcss",
+          "version": "devDep"
+        },
+        {
+          "name": "puppeteer",
+          "version": "devDep"
+        },
+        {
+          "name": "tailwindcss",
+          "version": "devDep"
+        },
+        {
+          "name": "testcontainers",
+          "version": "devDep"
+        },
+        {
+          "name": "ts-jest",
+          "version": "devDep"
+        },
+        {
+          "name": "typescript",
+          "version": "devDep"
+        }
+      ],
+      "excluded_dirs": []
+    },
+    {
+      "path": ".next\\package.json",
+      "name": ".next",
+      "type": "npm",
+      "target_framework": null,
+      "output_type": null,
+      "packages": [],
+      "excluded_dirs": []
+    },
+    {
+      "path": ".next\\build\\package.json",
+      "name": "build",
+      "type": "npm",
+      "target_framework": null,
+      "output_type": null,
+      "packages": [],
+      "excluded_dirs": []
+    },
+    {
+      "path": ".next\\dev\\package.json",
+      "name": "dev",
+      "type": "npm",
+      "target_framework": null,
+      "output_type": null,
+      "packages": [],
+      "excluded_dirs": []
+    },
+    {
+      "path": ".next\\dev\\build\\package.json",
+      "name": "build",
+      "type": "npm",
+      "target_framework": null,
+      "output_type": null,
+      "packages": [],
+      "excluded_dirs": []
+    },
+    {
+      "path": ".worktrees\\epic-jest\\package.json",
+      "name": "black-owned-frontend",
+      "type": "npm",
+      "target_framework": null,
+      "output_type": null,
+      "packages": [
+        {
+          "name": "@graphql-tools/schema",
+          "version": "dep"
+        },
+        {
+          "name": "bcryptjs",
+          "version": "dep"
+        },
+        {
+          "name": "graphql",
+          "version": "dep"
+        },
+        {
+          "name": "jsonwebtoken",
+          "version": "dep"
+        },
+        {
+          "name": "minio",
+          "version": "dep"
+        },
+        {
+          "name": "next",
+          "version": "dep"
+        },
+        {
+          "name": "pg",
+          "version": "dep"
+        },
+        {
+          "name": "react",
+          "version": "dep"
+        },
+        {
+          "name": "react-dom",
+          "version": "dep"
+        },
+        {
+          "name": "@playwright/test",
+          "version": "devDep"
+        },
+        {
+          "name": "@tailwindcss/postcss",
+          "version": "devDep"
+        },
+        {
+          "name": "@testing-library/jest-dom",
+          "version": "devDep"
+        },
+        {
+          "name": "@testing-library/react",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/bcryptjs",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/jest",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/js-yaml",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/jsonwebtoken",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/minio",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/node",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/pg",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/puppeteer",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/react",
+          "version": "devDep"
+        },
+        {
+          "name": "@types/react-dom",
+          "version": "devDep"
+        },
+        {
+          "name": "autoprefixer",
+          "version": "devDep"
+        },
+        {
+          "name": "eslint",
+          "version": "devDep"
+        },
+        {
+          "name": "eslint-config-next",
+          "version": "devDep"
+        },
+        {
+          "name": "jest",
+          "version": "devDep"
+        },
+        {
+          "name": "jest-environment-jsdom",
+          "version": "devDep"
+        },
+        {
+          "name": "js-yaml",
+          "version": "devDep"
+        },
+        {
+          "name": "playwright",
+          "version": "devDep"
+        },
+        {
+          "name": "postcss",
+          "version": "devDep"
+        },
+        {
+          "name": "puppeteer",
+          "version": "devDep"
+        },
+        {
+          "name": "tailwindcss",
+          "version": "devDep"
+        },
+        {
+          "name": "testcontainers",
+          "version": "devDep"
+        },
+        {
+          "name": "ts-jest",
+          "version": "devDep"
+        },
+        {
+          "name": "typescript",
+          "version": "devDep"
+        }
+      ],
+      "excluded_dirs": []
+    }
+  ],
+  "config_files": [],
+  "environments": [],
+  "env_resolution": [],
+  "test_groups": [],
+  "static_state": [],
+  "base_classes": [],
+  "fixtures": [],
+  "env_var_reads": [],
+  "endpoints": [],
+  "directory_tree": "/\n  README.md\n  docker-compose.yml\n  package-lock.json\n  package.json\n  tsconfig.json\n  __mocks__/\n  aidlc-docs/\n    audit.md\n    construction/\n      code/\n      loc-0056/\n    inception/\n      application-design/\n      planning/\n      reverse-engineering/\n  bw-api/\n    src/\n      graphql/\n      middleware/\n      routes/\n  bw-ingestion/\n    src/\n      etl/\n    tests/\n  bw-scraper/\n    src/\n    tests/\n  bw-types/\n    src/\n  clickhouse/\n  config/\n    jwt/\n      README.md\n  db/\n    seed/\n  docs/\n    TEST-DATA-CONVENTIONS.md\n    design-drift-audit-2026-08-20.md\n    pipeline-gaps-improvements-2026-08-20.md\n  e2e/\n  handoffs/\n    damian/\n      LOC-0037-AC2.md\n    dupin/\n      LOC-0035/\n      LOC-0038/\n      LOC-0040/\n      LOC-0050/\n      LOC-0051/\n      LOC-0060/\n      LOC-0068/\n  migrations/\n    clickhouse/\n    postgresql/\n  nats/\n  playwright-report/\n  scripts/\n    tests/\n      qa-results-LOC-0033-AC2.md\n  src/\n    app/\n      about/\n      admin/\n      analytics/\n      api/\n      business/\n      chat/\n      directory/\n      help/\n      login/\n      owner/\n      privacy/\n      register/\n      search/\n      terms/\n    components/\n      admin/\n      ui/\n    lib/\n      auth/\n      chat/\n      db/\n      design-tokens/\n      graphql/\n      minio/\n      nats/\n      utils/\n      valkey/\n    qa/\n    services/\n    types/\n    utils/\n  target/\n    .future-incompat-report.json\n    .rustc_info.json\n    debug/\n      build/\n      deps/\n      examples/\n      incremental/\n    release/\n      build/\n      deps/\n      examples/\n      incremental/\n    tmp/\n  test-results/\n    .last-run.json\n  tests/",
+  "class_inventory": {},
+  "test_class_urls": [],
+  "serialization_usage": {
+    "newtonsoft": [],
+    "system_text_json": [],
+    "both": []
+  },
+  "sql_access": [],
+  "helper_surface": {},
+  "init_sequence": [],
+  "using_namespaces": {},
+  "summary": {
+    "project_count": 6,
+    "config_count": 0,
+    "environment_count": 0,
+    "test_group_count": 0,
+    "static_members": 0,
+    "endpoint_count": 0,
+    "cs_files": 0,
+    "helper_classes": 0,
+    "sql_access_files": 0
+  }
+}

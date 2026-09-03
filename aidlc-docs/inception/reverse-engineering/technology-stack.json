@@ -1,0 +1,33 @@
+{
+  "artifact": "technology-stack.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Web App (package.json)",
+      "content": "| Item | Version | Purpose |\n|---|---|---|\n| TypeScript | ^5 | language |\n| Next.js | 16.0.0 | App Router UI + API (all HTTP surface) |\n| React / react-dom | 19.0.0 | UI |\n| Tailwind CSS | ^4.0.0 | styling |\n| pg | ^8.11.0 | Postgres client (module-level Pool via `getPool()`) |\n| jsonwebtoken | ^9.0.0 | JWT RS256 sign/verify (key material in `config/jwt`) |\n| bcryptjs | ^2.4.3 | password hashing |\n| ioredis | ^5.4.1 | Valkey client (refresh tokens, cache) |\n| nats / nats.ws | ^2.28 / ^1.30 | server event bus / browser chat WebSocket |\n| minio | ^8.0.0 | presigned upload URLs |\n| leaflet | ^1.9.4 | directory + detail-page maps |\n| puppeteer | ^24.0.0 | Playwright-based Google Maps/Yelp/Facebook scrapers (src/services) |\n| graphql + @graphql-tools/schema | ^16.8 / ^10 | [DEAD DEPS] declared but the `/api/graphql` route is a hand-rolled regex parser that never imports them \u2014 see anti-patterns |",
+      "type": "table"
+    },
+    {
+      "heading": "Rust Workspace (Cargo.toml, edition 2021)",
+      "content": "| Crate | Role | Notable deps |\n|---|---|---|\n| bw-types | shared domain types | serde, uuid, chrono |\n| bw-scraper | axum HTTP worker (SearXNG discovery + ETL \u2192 Postgres) | tokio, sqlx 0.7 (postgres), axum 0.7, reqwest 0.12, redis 0.24, clickhouse 0.12, async-nats |\n| bw-ingestion | library: ETL + NATS consumers + cache invalidation (no binary, no in-repo consumer) | redis 0.27, minio-rsc, image, lettre (optional) |\n| bw-api | axum + GraphQL service, RETIRED from compose, currently not compiling (task #71) | async-graphql 7.0, jsonwebtoken 9.3, tower-http |\n\nNote: workspace `dependencies` pins (async-nats 0.33, redis 0.24, clickhouse 0.12, axum 0.7) are bypassed by per-crate versions (0.40 / 0.27 / 0.13 / 0.8) \u2014 the sharing is nominal only.",
+      "type": "table"
+    },
+    {
+      "heading": "Infrastructure (docker-compose.yml)",
+      "content": "| Service | Version | Ports (host) |\n|---|---|---|\n| PostgreSQL | 15-alpine | 5432 |\n| NATS (JetStream) | 2.10-alpine | 4222, 8081 (WS, no_tls per nats/nats.conf), 8222 |\n| ClickHouse | 23.8-alpine | 8123, 9000 |\n| Valkey | 7.2-alpine | 6379 |\n| MinIO | latest | 9002 (console 9003) \u2014 9000 was double-mapped with ClickHouse and moved |\n| bw-scraper | built from root Dockerfile (rust:1.88 \u2192 bookworm-slim) | 8080, healthcheck /health |\n\nThe Next.js app is NOT a compose service \u2014 it runs on the host via `npm run dev`.",
+      "type": "table"
+    },
+    {
+      "heading": "Test Frameworks",
+      "content": "Jest ^29.7 (ts-jest, jsdom; unit + component, ~100 specs), Playwright ^1.62 (8 E2E suites), cargo test (Rust unit + integration), Vitest (configured but not installed \u2014 dead), plus a second Jest config (`jest.config.components.js`) not wired to any npm script. Details: `test-infrastructure.md`.",
+      "type": "prose"
+    }
+  ],
+  "summary": "Languages, frameworks, runtimes, and dependency versions with their purposes.",
+  "primary_consumers": [
+    "luke",
+    "damian"
+  ]
+}

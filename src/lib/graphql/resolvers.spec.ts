@@ -12,7 +12,6 @@ jest.mock("../db/user-repository", () => ({
   findByEmail: jest.fn(),
   create: jest.fn(),
   closePool: jest.fn(),
-  initializeUserSchema: jest.fn(),
 }));
 
 jest.mock("../auth/auth-service", () => ({

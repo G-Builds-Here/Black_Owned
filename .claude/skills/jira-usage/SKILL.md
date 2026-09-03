@@ -1,5 +1,6 @@
 ---
 name: jira-usage
+argument-hint: "[ticket-key]"
 description: Jira conventions for acceptance criteria, ticket refinement, bug reports, and description formatting. Use this skill when the user mentions Jira, acceptance criteria, Gherkin, tickets, bug reports, refinement, or when creating/updating Jira issues. This skill uses API credentials -- if prompted for a passphrase, provide the one from your 1Password setup.
 ---
 

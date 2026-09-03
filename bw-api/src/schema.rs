@@ -42,13 +42,12 @@ pub struct BusinessEdge {
 pub struct GqlBusiness {
     pub id: String,
     pub name: String,
-    pub description: Option<String>,
-    pub category_id: String,
-    pub owner_id: String,
-    pub status: String,
-    pub verified: bool,
-    pub created_at: DateTime<Utc>,
-    pub location: Option<String>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub website: Option<String>,
+    pub category: Option<String>,
+    pub rating: Option<f64>,
+    pub review_count: Option<i32>,
 }
 
 impl From<Business> for GqlBusiness {
@@ -56,13 +55,12 @@ impl From<Business> for GqlBusiness {
         Self {
             id: business.id.to_string(),
             name: business.name,
-            description: business.description,
-            category_id: business.category_id.to_string(),
-            owner_id: business.owner_id.to_string(),
-            status: if business.verified { "verified".to_string() } else { "unverified".to_string() },
-            verified: business.verified,
-            created_at: business.created_at,
-            location: business.location,
+            address: business.address,
+            phone: business.phone,
+            website: business.website,
+            category: business.category,
+            rating: business.rating,
+            review_count: business.review_count.map(|c| c as i32),
         }
     }
 }
@@ -136,8 +134,10 @@ impl From<User> for GqlUser {
 #[derive(InputObject, Clone, Debug)]
 pub struct CreateBusinessInput {
     pub name: String,
-    pub description: Option<String>,
-    pub category_id: String,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub website: Option<String>,
+    pub category: Option<String>,
 }
 
 /// Input type for updating a business
@@ -145,8 +145,10 @@ pub struct CreateBusinessInput {
 pub struct UpdateBusinessInput {
     pub id: String,
     pub name: Option<String>,
-    pub category_id: Option<String>,
-    pub verified: Option<bool>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub website: Option<String>,
+    pub category: Option<String>,
 }
 
 /// Input type for submitting a review
@@ -204,9 +206,8 @@ impl QueryRoot {
 
     /// Get a business by ID
     async fn business(&self, id: String) -> Option<GqlBusiness> {
-        let uuid = Uuid::parse_str(&id).ok()?;
+        let _uuid = Uuid::parse_str(&id).ok()?;
         // Placeholder: would query database in real implementation
-        let _business: Option<Business> = None;
         None
     }
 
@@ -230,27 +231,6 @@ impl QueryRoot {
     }
 }
 
-/// Extract user ID from JWT token in Authorization header
-fn extract_user_from_auth(ctx: &Context<'_>) -> Result<Uuid> {
-    let auth_header = ctx
-        .data::<axum::Extension<axum::headers::Authorization<axum::headers::Bearer>>>()
-        .map(|ext| ext.0.token().to_string())
-        .or_else(|| {
-            ctx.req()
-                .headers()
-                .get(axum::http::header::AUTHORIZATION)
-                .and_then(|h| h.to_str().ok())
-                .filter(|s| s.starts_with("Bearer "))
-                .map(|s| s.trim_start_matches("Bearer ").to_string())
-        });
-
-    auth_header
-        .ok_or_else(|| Error::new("Authorization header is required"))
-        .and_then(|token| {
-            Uuid::parse_str(&token).map_err(|e| Error::new(format!("Invalid user token: {:?}", e)))
-        })
-}
-
 /// Mutation root for GraphQL
 #[derive(Default)]
 pub struct MutationRoot;
@@ -258,27 +238,21 @@ pub struct MutationRoot;
 #[Object]
 impl MutationRoot {
     /// Create a new business
-    async fn create_business(&self, ctx: &Context<'_>, input: CreateBusinessInput) -> Result<GqlBusiness> {
+    async fn create_business(&self, _ctx: &Context<'_>, input: CreateBusinessInput) -> Result<GqlBusiness> {
         // Validate name is required
         if input.name.trim().is_empty() {
             return Err("Name is required".into());
         }
 
-        let category_id = Uuid::parse_str(&input.category_id)
-            .map_err(|_| "Invalid category ID format")?;
-
-        // Extract user ID from auth context
-        let owner_id = extract_user_from_auth(ctx)?;
-
         let business = Business {
             id: Uuid::new_v4(),
             name: input.name,
-            description: input.description,
-            category_id,
-            owner_id,
-            verified: false,
-            created_at: chrono::Utc::now(),
-            location: None,
+            address: input.address,
+            phone: input.phone,
+            website: input.website,
+            category: input.category,
+            rating: None,
+            review_count: None,
         };
 
         Ok(business.into())

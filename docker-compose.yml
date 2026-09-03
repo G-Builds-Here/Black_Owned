@@ -1,20 +1,55 @@
+# Fixed project name: worktree checkouts must not spawn loc-* compose
+# projects (fixed container_names collide across worktrees anyway).
+# Must match the name compose infers from the directory (lowercased
+# "Black_Owned") so existing containers/volumes stay recognized.
+name: black_owned
+
 services:
+  bw-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: black-owned-bw-scraper
+    ports:
+      - "8080:8080"
+    depends_on:
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - NATS_URL=nats://nats:4222
+      - REDIS_URL=valkey://valkey:6379
+      - CLICKHOUSE_URL=clickhouse://clickhouse:8123
+      - SEARXNG_URL=${SEARXNG_URL}
+      - RUST_LOG=${RUST_LOG:-info}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   postgres:
     image: postgres:15-alpine
     container_name: black-owned-postgres
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: black_owned
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
       start_period: 10s
 
   clickhouse:
@@ -29,7 +64,7 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8123/ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -38,13 +73,18 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: black-owned-nats
+    # WebSocket transport on 8081 so the browser chat client (nats.ws) can
+    # subscribe to live chat/notification subjects (see nats/nats.conf).
+    command: ["nats-server", "-c", "/config/nats.conf"]
     ports:
       - "4222:4222"
       - "8222:8222"
+      - "8081:8081"
     volumes:
       - nats-data:/data
+      - ./nats/nats.conf:/config/nats.conf:ro
     healthcheck:
-      test: ["CMD", "nats-server", "-sl", "ping", "localhost:4222"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -53,12 +93,14 @@ services:
   minio:
     image: minio/minio:latest
     container_name: black-owned-minio
+    # Host ports 9002/9003: 9000 was double-mapped with clickhouse,
+    # which keeps its canonical native port.
     ports:
       - "9002:9000"
       - "9003:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -94,8 +136,8 @@ services:
       start_period: 5s
 
 volumes:
-  postgres-data:
   clickhouse-data:
   nats-data:
   minio-data:
   valkey-data:
+  postgres-data:

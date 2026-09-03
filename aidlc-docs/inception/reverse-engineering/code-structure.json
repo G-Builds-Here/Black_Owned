@@ -1,0 +1,33 @@
+{
+  "artifact": "code-structure.md",
+  "generated_at": "2026-08-27T04:19:47Z",
+  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Web App (`src/`)",
+      "content": "```\nsrc/\n  app/                    # App Router\n    api/                  # 31 route.ts files (REST + hand-rolled GraphQL)\n      auth/{login,register}/   # open\n      directory/            # open; /suggest imports from /directory route\n      categories/, featured-businesses/, businesses/[id]/{view,claim,approve,reject,verification/*}\n      reviews/, reviews/[id]/moderate\n      chat/conversations/...   # live chat\n      owner/businesses/...     # claim wizard, views\n      pending-businesses/...   # admin import queue\n      scrape-jobs/, analytics/ # admin + analytics\n      users/                  # admin (PATCH /api/users role handler; /status is dead \u2014 finding H2)\n      graphql/                # regex-parsed mini-GraphQL (finding H5)\n    {directory,businesses,owner,admin,login,register,chat,about,...}/page.tsx\n  lib/\n    db/                   # pg repositories: user, business, scraped-business, scrape-job, pending-import, chat, user-management; getPool() singleton (max 20, lazy)\n    auth/                 # auth-service (RS256, config/jwt), jwt-middleware (createAuthMiddleware(roles)), client-session (localStorage)\n    valkey/               # ioredis: refresh tokens, query cache\n    nats/                 # nats-client (publish) + client (cache-invalidator subscription) \u2014 two parallel modules (anti-pattern)\n    minio/                # presigned URLs\n    chat/                 # browser NATS-WS client\n    graphql/              # business-schema.ts (types), resolvers, regex parser, valkey cache\n  services/               # Playwright scrapers, executor, dedup, social-discovery, image-service\n  components/             # ui/ + admin/ + business/\n  qa/                     # AC-level QA suites\n  types/                  # TS domain types\ne2e/                      # Playwright (8 suites) + e2e-utils\n```",
+      "type": "code"
+    },
+    {
+      "heading": "Rust Workspace",
+      "content": "```\nbw-scraper/src/   # main.rs (fail-fast: PgPool::connect at startup), api.rs, importer.rs (job lifecycle + inserts),\n                  # scraper.rs (SearXNG paging), searxng.rs, etl.rs, config.rs (from_env; DATABASE_URL required),\n                  # connectors.rs, rate_limiter.rs, robots.rs, user_agent_rotator.rs + 5 inline test mods\nbw-ingestion/src/ # lib.rs (duplicated `pub mod cache_service;` \u2014 E0584 under integration_test feature),\n                  # etl/{google_maps,yelp,facebook}, consumers/{chat,email}, email_service, image/{worker,processor,publisher},\n                  # cache_service, cache_invalidator, background_service \u2014 NO binary target\nbw-api/src/       # lib + schema/ + middleware/ (JWT, rate-limit) + routes/ (images); retired, not compiling\nbw-types/src/     # Business, Review, User, Verification, Message, Event + email types\n```",
+      "type": "code"
+    },
+    {
+      "heading": "Migrations",
+      "content": "- `migrations/postgresql/` \u2014 chain 001-019 with deliberate gaps (003/005/006/008 deleted; 012 documents why). 001 is the reconciled baseline; later files are idempotent. 009 reconciles live-DB drift; 017 backfills coords from Google Maps URL encoding; 019 adds phone/menu_url/rating_source.\n- `migrations/clickhouse/` + `clickhouse/` \u2014 analytics mirror schema (dormant).\n- `scripts/migrate-postgres.mjs` \u2014 numeric-prefix order, one file per transaction, tracked in `schema_migrations`, re-runs no-op.",
+      "type": "list"
+    },
+    {
+      "heading": "Repo Hygiene Notes",
+      "content": "- `.worktrees/epic-jest/` \u2014 a full stale worktree committed in-tree with duplicated jest configs (anti-pattern).\n- `db/seed/seed_test_data.sql` \u2014 3 users (incl. invalid role `customer`), 20 BWS-TEST businesses, 5 scrape jobs; idempotent.\n- `docs/design-drift-audit-2026-08-20.md` \u2014 the repo ships its own drift audit; many HIGH items since fixed (chat, admin auth gates, dedup wired, port 9000 collision, migration baseline).",
+      "type": "list"
+    }
+  ],
+  "summary": "Directory layout and module responsibilities.",
+  "primary_consumers": [
+    "luke",
+    "damian"
+  ]
+}
