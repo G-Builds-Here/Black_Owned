@@ -578,7 +578,7 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }
     }
 

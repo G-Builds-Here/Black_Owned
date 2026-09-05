@@ -30,6 +30,10 @@ pub struct SearxngResult {
     pub score: Option<f64>,
     #[serde(default)]
     pub img_src: Option<String>,
+    /// Pixel resolution the image engine reported (e.g. `1200x630`,
+    /// `350×75`); present on image-category results only.
+    #[serde(default)]
+    pub resolution: Option<String>,
 }
 
 /// Full JSON response from `GET /search?format=json`.

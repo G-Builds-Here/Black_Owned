@@ -42,6 +42,7 @@ export interface Business {
   siteRating: number | null;
   siteReviews: SiteReview[];
   imageUrl?: string | null;
+  cardImageUrl?: string | null;
   lat?: number | null;
   lng?: number | null;
   tags?: string[] | null;
@@ -136,6 +137,7 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
           }
         }
         imageUrl
+        cardImageUrl
         lat
         lng
         tags

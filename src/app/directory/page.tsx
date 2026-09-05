@@ -32,6 +32,7 @@ interface DirectoryBusiness {
   phone: string | null;
   source: string | null;
   imageUrl?: string | null;
+  cardImageUrl?: string | null;
   tags?: string[] | null;
   lat?: number | null;
   lng?: number | null;
@@ -81,6 +82,7 @@ function toCardBusiness(item: DirectoryBusiness): Business {
     location: item.location,
     isVerified: item.isVerified,
     imageUrl: item.imageUrl ?? '',
+    cardImageUrl: item.cardImageUrl ?? item.imageUrl ?? '',
     description: item.description || (item.website ? `Website: ${item.website}` : ''),
     tags: item.tags ?? [],
   };

@@ -12,6 +12,7 @@ export interface Business {
   location: string;
   isVerified: boolean;
   imageUrl: string;
+  cardImageUrl?: string | null;
   description: string;
   tags: string[];
 }

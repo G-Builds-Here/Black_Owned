@@ -96,6 +96,7 @@ function rowToBusiness(row: unknown): Business {
     reviewCount: r.review_count != null ? Number(r.review_count) : null,
     website: (r.website as string | null | undefined) ?? null,
     imageUrl: (r.image_url as string | null | undefined) ?? null,
+    cardImageUrl: (r.card_image_url as string | null | undefined) ?? null,
     lat: (r.lat as number | null | undefined) ?? null,
     lng: (r.lng as number | null | undefined) ?? null,
     tags: (r.tags as string[] | null | undefined) ?? null,

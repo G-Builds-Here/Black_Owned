@@ -11,11 +11,16 @@
 //! or results titled with the full business name. Menu discovery: a
 //! menu-like link on the homepage (depth 1); when the homepage fetch
 //! fails or carries no menu link, a `SearXNG` result on the website's
-//! own host that mentions a menu fills the same field. Existing values are
+//! own host that mentions a menu fills the same field. Image selection:
+//! candidate photos are scored by host, aspect ratio, and reported
+//! dimensions, stability-checked, and the best wide survivor fills
+//! `image_url` while the best square survivor fills `card_image_url`.
+//! Existing values are
 //! never clobbered;
 //! the per-business report lists what was applied, what was skipped
 //! because it already had a value, and any error.
 
+use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -201,33 +206,157 @@ pub fn find_og_image(html: &str, page_url: &str) -> Option<String> {
     twitter_image
 }
 
-/// Find a business image among `SearXNG` results: the first non-empty
-/// `img_src` in rank order, preferring an image on the website's own
-/// host (case- and `www.`-insensitive) over third-party thumbnails.
-/// Returns `None` when no result carries an image.
+/// Maximum number of image candidates that receive a live `HEAD`
+/// stability check during one enrichment run.
+const IMAGE_MAX_PROBES: usize = 4;
+
+/// A candidate scoring at least this much is accepted without probing the
+/// remaining candidates. This equals the maximum score: same host,
+/// well-shaped aspect ratio, and a large minimum dimension.
+const IMAGE_EARLY_ACCEPT_SCORE: f64 = 6.0;
+
+/// A photo candidate with its pre-probe display score (see
+/// [`image_score`]). Candidates without dimension metadata (homepage
+/// `og:image`, place-JSON photos) carry a neutral score.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageCandidate {
+    pub url: String,
+    pub score: f64,
+}
+
+/// Host of an http(s) URL, lowercased with a leading `www.` stripped;
+/// `None` when `url` is not an http(s) URL.
 #[must_use]
-pub fn find_image_result(results: &[SearxngResult], website: &str) -> Option<String> {
-    let (_, website_host, _) = split_url(website)?;
-    let website_host = website_host.to_lowercase();
-    let site_host = website_host.strip_prefix("www.").unwrap_or(&website_host);
-    let mut fallback = None;
+fn url_host(url: &str) -> Option<String> {
+    let (_, authority, _) = split_url(url)?;
+    Some(authority.to_lowercase().trim_start_matches("www.").to_string())
+}
+
+/// Case- and `www.`-insensitive host equality; `false` when either side
+/// is not a parseable http(s) URL.
+#[must_use]
+fn hosts_match(a: &str, b: &str) -> bool {
+    match (url_host(a), url_host(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Parse a `SearXNG` image `resolution` value (`"1200x630"`,
+/// `"350×75"`, optionally space-padded) into `(width, height)`.
+/// Returns `None` for missing, malformed, or non-positive dimensions.
+#[must_use]
+fn parse_resolution(resolution: &str) -> Option<(u32, u32)> {
+    let mut parts = resolution.split(['x', 'X', '\u{00D7}']);
+    let width = parts.next()?.trim().parse().ok()?;
+    let height = parts.next()?.trim().parse().ok()?;
+    (width > 0 && height > 0).then_some((width, height))
+}
+
+/// Score an image candidate for display in the directory UI. Same-host
+/// images earn 2; aspect earns 3 for near-square through 16:9
+/// (0.75–1.75), 1 for mild portrait or wide (0.5–0.75 / 1.75–3.0), 0 for
+/// extreme banners or posters; a minimum dimension of 600 px earns 1.
+/// Unknown dimensions earn 1 — they cannot be judged, but never outrank
+/// a well-shaped same-host photo (max score is 6).
+#[must_use]
+fn image_score(dims: Option<(u32, u32)>, same_host: bool) -> f64 {
+    let mut score = 0.0;
+    if same_host {
+        score += 2.0;
+    }
+    match dims {
+        Some((w, h)) if w > 0 && h > 0 => {
+            let aspect = f64::from(w) / f64::from(h);
+            if (0.75..=1.75).contains(&aspect) {
+                score += 3.0;
+            } else if (0.5..0.75).contains(&aspect) || (1.75..=3.0).contains(&aspect) {
+                score += 1.0;
+            }
+            if w.min(h) >= 600 {
+                score += 1.0;
+            }
+        }
+        _ => score += 1.0,
+    }
+    score
+}
+
+/// Score an image candidate for the wide detail-page hero. Same-host
+/// images earn 2; aspect earns 3 for hero-native wide (1.5–3.0), 2 for
+/// near-square (1.0–1.5), 1 for mild portrait or very wide (0.6–1.0 /
+/// 3.0–4.5), 0 for extreme posters; a minimum dimension of 600 px earns
+/// one point. Unknown dimensions earn one point but never outrank a
+/// well-shaped same-host photo (max score is 6).
+#[must_use]
+fn hero_image_score(dims: Option<(u32, u32)>, same_host: bool) -> f64 {
+    let mut score = 0.0;
+    if same_host {
+        score += 2.0;
+    }
+    match dims {
+        Some((w, h)) if w > 0 && h > 0 => {
+            let aspect = f64::from(w) / f64::from(h);
+            if (1.5..=3.0).contains(&aspect) {
+                score += 3.0;
+            } else if (1.0..1.5).contains(&aspect) {
+                score += 2.0;
+            } else if (0.6..1.0).contains(&aspect) || (3.0..=4.5).contains(&aspect) {
+                score += 1.0;
+            }
+            if w.min(h) >= 600 {
+                score += 1.0;
+            }
+        }
+        _ => score += 1.0,
+    }
+    score
+}
+
+/// Shared core of [`find_image_result`] and [`find_hero_result`]: picks
+/// the highest-scoring non-empty `img_src` result using `score`; rank
+/// order breaks ties. `None` when no result carries an image or
+/// `website` is empty.
+#[must_use]
+fn pick_best_image(
+    results: &[SearxngResult],
+    website: &str,
+    score: fn(Option<(u32, u32)>, bool) -> f64,
+) -> Option<ImageCandidate> {
+    let site_host = url_host(website)?;
+    let mut best: Option<ImageCandidate> = None;
     for result in results {
         let Some(img) = result.img_src.as_deref().filter(|v| !v.trim().is_empty()) else {
             continue;
         };
-        let Some((_, host, _)) = split_url(img) else {
-            continue;
+        let dims = result.resolution.as_deref().and_then(parse_resolution);
+        let candidate = ImageCandidate {
+            url: img.to_string(),
+            score: score(dims, url_host(img).is_some_and(|host| host == site_host)),
         };
-        let host = host.to_lowercase();
-        let host = host.strip_prefix("www.").unwrap_or(&host);
-        if host == site_host {
-            return Some(img.to_string());
-        }
-        if fallback.is_none() {
-            fallback = Some(img.to_string());
+        if best.as_ref().is_none_or(|cur| candidate.score > cur.score) {
+            best = Some(candidate);
         }
     }
-    fallback
+    best
+}
+
+/// Find the best business image among `SearXNG` results: candidates are
+/// the non-empty `img_src` values, scored by source host, the engine's
+/// reported `resolution` aspect, and minimum pixel dimension. The
+/// highest score wins; rank order breaks ties. Returns `None` when no
+/// result carries an image or `website` is empty.
+#[must_use]
+pub fn find_image_result(results: &[SearxngResult], website: &str) -> Option<ImageCandidate> {
+    pick_best_image(results, website, image_score)
+}
+
+/// Find the best wide hero image among `SearXNG` results: same rules as
+/// [`find_image_result`] but scored by [`hero_image_score`], so a
+/// hero-native wide asset beats a near-square logo of equal host status.
+#[must_use]
+pub fn find_hero_result(results: &[SearxngResult], website: &str) -> Option<ImageCandidate> {
+    pick_best_image(results, website, hero_image_score)
 }
 
 /// One social link ({platform, url}) carried by a place JSON.
@@ -250,6 +379,7 @@ pub struct BusinessRow {
     pub review_count: Option<i32>,
     pub menu_url: Option<String>,
     pub image_url: Option<String>,
+    pub card_image_url: Option<String>,
     pub social_urls: Option<serde_json::Value>,
 }
 
@@ -458,15 +588,15 @@ pub enum MenuOutcome {
 /// Outcome of the photo-selection pass for one business.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PhotoOutcome {
-    /// The first photo URL passed the HEAD check (success status with an
-    /// `image/*` content type); `image_url` was written (or would be
-    /// written under `dry_run`).
+    /// The highest-scoring candidate that passed the HEAD check (success
+    /// status with an `image/*` content type); `image_url` was written
+    /// (or would be written under `dry_run`).
     Selected(String),
-    /// The first photo URL failed the HEAD check — 404, non-image
+    /// Every probed candidate failed the HEAD check — 404, non-image
     /// content type, or transport failure; `image_url` is unchanged.
     CheckFailed(String),
-    /// Pass did not run: the place JSON carries no photos, or
-    /// `image_url` already has a value (fill-empty).
+    /// Pass did not run: no candidates, or `image_url` already has a
+    /// value (fill-empty).
     NotApplicable,
 }
 
@@ -721,11 +851,12 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
                   description,
                   rating::text AS rating,
                   review_count,
-                  menu_url,
-                  image_url,
-                  social_urls::text AS social_urls
-           FROM businesses
-           WHERE id = $1",
+                   menu_url,
+                   image_url,
+                   card_image_url,
+                   social_urls::text AS social_urls
+            FROM businesses
+            WHERE id = $1",
     )
     .bind(business_id)
     .fetch_optional(pool)
@@ -751,6 +882,7 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
         review_count: row.get::<Option<i32>, _>("review_count"),
         menu_url: row.get::<Option<String>, _>("menu_url"),
         image_url: row.get::<Option<String>, _>("image_url"),
+        card_image_url: row.get::<Option<String>, _>("card_image_url"),
         social_urls,
     })
 }
@@ -824,6 +956,7 @@ async fn update_field(
         "social" => "UPDATE businesses SET social_urls = $2::jsonb, updated_at = now() WHERE id = $1 AND social_urls IS NULL",
         "menu_url" => "UPDATE businesses SET menu_url = $2, updated_at = now() WHERE id = $1 AND menu_url IS NULL",
         "image_url" => "UPDATE businesses SET image_url = $2, updated_at = now() WHERE id = $1 AND image_url IS NULL",
+        "card_image_url" => "UPDATE businesses SET card_image_url = $2, updated_at = now() WHERE id = $1 AND card_image_url IS NULL",
         other => return Err(format!("unknown enrichment field: {other}")),
     };
 
@@ -876,6 +1009,7 @@ fn previous_value(row: &BusinessRow, field: &str) -> Option<String> {
         "review_count" => row.review_count.filter(|v| *v > 0).map(|v| v.to_string()),
         "menu_url" => row.menu_url.clone().filter(|v| !v.trim().is_empty()),
         "image_url" => row.image_url.clone().filter(|v| !v.trim().is_empty()),
+        "card_image_url" => row.card_image_url.clone().filter(|v| !v.trim().is_empty()),
         "social" => row
             .social_urls
             .as_ref()
@@ -957,6 +1091,40 @@ impl EnrichmentEngine {
         name: &str,
         location: &str,
     ) -> Result<Option<Vec<SearxngResult>>, String> {
+        self.fetch_search_results_categorized(None, name, location).await
+    }
+
+    /// Image-category variant of [`Self::fetch_search_results`]: requests
+    /// `categories=images` so results carry `img_src` thumbnails. Used as a
+    /// last-resort photo source when the homepage `og:image` is unreachable
+    /// (e.g. Cloudflare-blocked) and the web results carry no thumbnails.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::fetch_search_results`].
+    pub async fn fetch_image_search_results(
+        &mut self,
+        name: &str,
+        location: &str,
+    ) -> Result<Option<Vec<SearxngResult>>, String> {
+        self.fetch_search_results_categorized(Some("images"), name, location).await
+    }
+
+    /// Shared `SearXNG` search: build the query, guard with robots + rate
+    /// limit + UA rotation, fetch `/search?format=json`, optionally scoped
+    /// to `categories`. Returns `Ok(None)` when there are no results.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the robots check blocks the lookup, the
+    /// request fails, the instance answers a non-2xx status, or the
+    /// body is not valid `SearXNG` JSON.
+    async fn fetch_search_results_categorized(
+        &mut self,
+        categories: Option<&str>,
+        name: &str,
+        location: &str,
+    ) -> Result<Option<Vec<SearxngResult>>, String> {
         let mut query = name.trim().to_string();
         let loc = location.trim();
         if !loc.is_empty() {
@@ -975,10 +1143,15 @@ impl EnrichmentEngine {
         }
         self.limiter.wait_before_request().await;
         let user_agent = self.rotator.get_next_user_agent();
+        let mut params: Vec<(&str, &str)> =
+            vec![("q", query.as_str()), ("format", "json")];
+        if let Some(cat) = categories {
+            params.push(("categories", cat));
+        }
         let response = self
             .http
             .get(&url)
-            .query(&[("q", query.as_str()), ("format", "json")])
+            .query(&params)
             .header("User-Agent", user_agent)
             .header("Accept", "application/json")
             .send()
@@ -1052,9 +1225,11 @@ impl EnrichmentEngine {
     /// Enrich one business end-to-end: gate on its `google_maps` source
     /// row, look the business up on `SearXNG` (query = name + location),
     /// apply fill-empty updates, then run the menu-discovery and
-    /// photo-selection passes against the pre-run row (values written by
-    /// this run are picked up on the next run). `dry_run` reports the
-    /// fields that would apply without writing.
+    /// photo-selection passes. Fill-empty is judged on the pre-run row,
+    /// but the media passes use a website discovered by this run's
+    /// place-JSON pass when the row has none, so a first run can land
+    /// `image_url`. `dry_run` reports the fields that would apply
+    /// without writing.
     #[allow(clippy::too_many_lines)]
     pub async fn enrich(&mut self, pool: &PgPool, business_id: Uuid, dry_run: bool) -> EnrichResult {
         let with_error = |name: String, error: String| EnrichResult {
@@ -1119,12 +1294,26 @@ impl EnrichmentEngine {
             .menu_url
             .as_ref()
             .is_none_or(|v| v.trim().is_empty());
-        let image_wanted = pre_run_row
+        let hero_wanted = pre_run_row
             .image_url
             .as_ref()
             .is_none_or(|v| v.trim().is_empty());
-        let website = pre_run_row.website.clone().unwrap_or_default();
-        let homepage = if website.trim().is_empty() || (!menu_wanted && !image_wanted) {
+        let card_wanted = pre_run_row
+            .card_image_url
+            .as_ref()
+            .is_none_or(|v| v.trim().is_empty());
+        let media_wanted = hero_wanted || card_wanted;
+        // A website discovered by this run's place-JSON pass (or already
+        // on the row) drives the media passes, so the first enrichment
+        // run can pick up an `og:image` / same-host image without a
+        // second run.
+        let website = pre_run_row
+            .website
+            .clone()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| place.as_ref().and_then(|p| p.website.clone()))
+            .unwrap_or_default();
+        let homepage = if website.trim().is_empty() || (!menu_wanted && !media_wanted) {
             None
         } else {
             Some(self.fetch_homepage(&website).await)
@@ -1144,47 +1333,123 @@ impl EnrichmentEngine {
         )
         .await;
 
-        // Image-selection pass: judged on the pre-run row so an
-        // image_url written by this run is not re-checked. Candidates
-        // in priority order: place-JSON photos, the homepage og:image
-        // (when the fetch succeeded), then this run's SearXNG img_src.
-        let mut image_candidates: Vec<String> = Vec::new();
-        if let Some(photos) = place.as_ref().and_then(|p| p.photos.as_ref()) {
-            image_candidates.extend(photos.iter().cloned());
-        }
-        if let Some(Ok(html)) = homepage.as_ref() {
-            if let Some(og_image) = find_og_image(html, &website) {
-                image_candidates.push(og_image);
+        // Image-selection pass: judged on the pre-run row so an image
+        // written by this run is not re-checked. Two slots are filled
+        // from one source pool: the wide detail-page hero (`image_url`,
+        // scored hero-first so a wide banner beats a square logo) and
+        // the near-square directory card (`card_image_url`, scored
+        // square-first). Sources: place-JSON photos, the homepage
+        // og:image (when the fetch succeeded), the web-category
+        // thumbnail, then the image-category last resort.
+        let mut hero_candidates: Vec<ImageCandidate> = Vec::new();
+        let mut card_candidates: Vec<ImageCandidate> = Vec::new();
+        if media_wanted {
+            if let Some(photos) = place.as_ref().and_then(|p| p.photos.as_ref()) {
+                for url in photos.iter().take(2) {
+                    let same_host = hosts_match(url, &website);
+                    if hero_wanted {
+                        hero_candidates.push(ImageCandidate {
+                            url: url.clone(),
+                            score: hero_image_score(None, same_host),
+                        });
+                    }
+                    if card_wanted {
+                        card_candidates.push(ImageCandidate {
+                            url: url.clone(),
+                            score: image_score(None, same_host),
+                        });
+                    }
+                }
+            }
+            if let Some(Ok(html)) = homepage.as_ref() {
+                if let Some(og_image) = find_og_image(html, &website) {
+                    let same_host = hosts_match(&og_image, &website);
+                    if hero_wanted {
+                        hero_candidates.push(ImageCandidate {
+                            url: og_image.clone(),
+                            score: hero_image_score(None, same_host),
+                        });
+                    }
+                    if card_wanted {
+                        card_candidates.push(ImageCandidate {
+                            url: og_image,
+                            score: image_score(None, same_host),
+                        });
+                    }
+                }
+            }
+            if let Some(results) = search_results.as_deref() {
+                if hero_wanted {
+                    if let Some(candidate) = find_hero_result(results, &website) {
+                        hero_candidates.push(candidate);
+                    }
+                }
+                if card_wanted {
+                    if let Some(candidate) = find_image_result(results, &website) {
+                        card_candidates.push(candidate);
+                    }
+                }
+            }
+            // Last-resort photo source: a dedicated SearXNG image-category
+            // lookup. Run whenever any image slot is empty (rate-limited,
+            // one extra request per run): the homepage og:image can be
+            // unreachable (e.g. Cloudflare 403), and web-category results
+            // often carry no thumbnails or only aspect-mismatched banners.
+            if media_wanted {
+                if let Ok(Some(img_results)) = self
+                    .fetch_image_search_results(
+                        &name,
+                        &pre_run_row.location.clone().unwrap_or_default(),
+                    )
+                    .await
+                {
+                    if hero_wanted {
+                        if let Some(candidate) = find_hero_result(&img_results, &website) {
+                            hero_candidates.push(candidate);
+                        }
+                    }
+                    if card_wanted {
+                        if let Some(candidate) = find_image_result(&img_results, &website) {
+                            card_candidates.push(candidate);
+                        }
+                    }
+                }
             }
         }
-        if let Some(results) = search_results.as_deref() {
-            if let Some(img) = find_image_result(results, &website) {
-                image_candidates.push(img);
-            }
-        }
-        if !image_candidates.is_empty() {
+        if !hero_candidates.is_empty() || !card_candidates.is_empty() {
             match self
-                .discover_image_on_candidates(
+                .discover_image_pair(
                     pool,
                     business_id,
                     &pre_run_row,
-                    &image_candidates,
+                    &hero_candidates,
+                    &card_candidates,
                     dry_run,
                 )
                 .await
             {
-                Ok(PhotoOutcome::Selected(url)) => {
-                    tracing::info!(business_id = %business_id, image_url = %url, "photo selected");
-                    result.applied.push(AppliedField {
-                        field: "image_url",
-                        previous: None,
-                    });
+                Ok((hero_outcome, card_outcome)) => {
+                    if let PhotoOutcome::Selected(url) = &hero_outcome {
+                        tracing::info!(business_id = %business_id, image_url = %url, "hero photo selected");
+                        result.applied.push(AppliedField {
+                            field: "image_url",
+                            previous: None,
+                        });
+                    }
+                    if let PhotoOutcome::Selected(url) = &card_outcome {
+                        tracing::info!(business_id = %business_id, card_image_url = %url, "card photo selected");
+                        result.applied.push(AppliedField {
+                            field: "card_image_url",
+                            previous: None,
+                        });
+                    }
+                    if matches!(hero_outcome, PhotoOutcome::CheckFailed(_))
+                        || matches!(card_outcome, PhotoOutcome::CheckFailed(_))
+                    {
+                        tracing::warn!(business_id = %business_id, "photo check failed");
+                        result.notes.push("photo url failed check".to_string());
+                    }
                 }
-                Ok(PhotoOutcome::CheckFailed(detail)) => {
-                    tracing::warn!(business_id = %business_id, "photo check failed: {detail}");
-                    result.notes.push("photo url failed check".to_string());
-                }
-                Ok(PhotoOutcome::NotApplicable) => {}
                 Err(error) => {
                     tracing::warn!(business_id = %business_id, "photo selection error: {error}");
                     result.notes.push(format!("photo selection failed: {error}"));
@@ -1742,7 +2007,10 @@ impl EnrichmentEngine {
 
     /// Photo-selection pass against a pre-loaded row and a parsed place:
     /// delegates to [`Self::discover_image_on_candidates`] with the
-    /// place JSON's photo list.
+    /// place JSON's photo list scored against the row's website.
+    /// Test seam only: the live `enrich` flow uses
+    /// [`Self::discover_image_pair`] instead.
+    #[allow(dead_code)]
     async fn discover_photo_on_place(
         &mut self,
         pool: &PgPool,
@@ -1751,57 +2019,169 @@ impl EnrichmentEngine {
         place: &PlaceData,
         dry_run: bool,
     ) -> Result<PhotoOutcome, String> {
-        self.discover_image_on_candidates(
-            pool,
-            business_id,
-            row,
-            place.photos.as_deref().unwrap_or(&[]),
-            dry_run,
-        )
-        .await
+        let website = row.website.clone().unwrap_or_default();
+        let candidates = place
+            .photos
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .map(|url| ImageCandidate {
+                url: url.clone(),
+                score: image_score(None, hosts_match(url, &website)),
+            })
+            .collect::<Vec<_>>();
+        self.discover_image_on_candidates(pool, business_id, row, &candidates, dry_run)
+            .await
     }
 
-    /// Image-selection pass over an ordered candidate list: the first
-    /// URL that passes the HEAD stability check is written to
-    /// `image_url` (fill-empty: an existing `image_url` is never
-    /// overwritten). A losing write race reports `NotApplicable`.
+    /// Stability-check a scored candidate list in score order (up to
+    /// [`IMAGE_MAX_PROBES`], stopping early once a candidate reaches
+    /// [`IMAGE_EARLY_ACCEPT_SCORE`]) and return the highest-scoring
+    /// survivor. `Ok(None)` means the list is empty; `Err` carries the
+    /// latest probe failure when every probed candidate failed. HEAD
+    /// results are shared through `probe_cache` so overlapping hero and
+    /// card lists are each probed once.
+    async fn probe_best_image<'a>(
+        &mut self,
+        candidates: &'a [ImageCandidate],
+        probe_cache: &mut HashMap<String, Result<(), String>>,
+    ) -> Result<Option<&'a ImageCandidate>, String> {
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+        let mut ranked: Vec<&ImageCandidate> = candidates.iter().collect();
+        ranked.sort_by(|a, b| b.score.total_cmp(&a.score));
+        let mut best: Option<&ImageCandidate> = None;
+        let mut last_error = String::new();
+        for candidate in ranked.iter().take(IMAGE_MAX_PROBES) {
+            let probe = match probe_cache.get(&candidate.url) {
+                Some(outcome) => outcome.clone(),
+                None => {
+                    let outcome = self.head_photo(&candidate.url).await;
+                    probe_cache.insert(candidate.url.clone(), outcome.clone());
+                    outcome
+                }
+            };
+            match probe {
+                Ok(()) => {
+                    if best.is_none_or(|cur| candidate.score > cur.score) {
+                        best = Some(candidate);
+                    }
+                    if candidate.score >= IMAGE_EARLY_ACCEPT_SCORE {
+                        break;
+                    }
+                }
+                Err(detail) => {
+                    last_error = detail;
+                }
+            }
+        }
+        if best.is_none() && !last_error.is_empty() {
+            // Every probed candidate failed the stability check.
+            return Err(last_error);
+        }
+        Ok(best)
+    }
+
+    /// Image-selection pass over a scored candidate list: delegates to
+    /// [`Self::probe_best_image`] and writes the survivor to `image_url`
+    /// (fill-empty: an existing `image_url` is never overwritten). A
+    /// losing write race reports `NotApplicable`.
+    #[allow(dead_code)]
     async fn discover_image_on_candidates(
         &mut self,
         pool: &PgPool,
         business_id: Uuid,
         row: &BusinessRow,
-        candidates: &[String],
+        candidates: &[ImageCandidate],
         dry_run: bool,
     ) -> Result<PhotoOutcome, String> {
         if row.image_url.clone().as_ref().is_some_and(|v| !v.trim().is_empty()) {
             return Ok(PhotoOutcome::NotApplicable);
         }
-        let photo = match candidates.first() {
-            Some(url) => url.clone(),
-            None => return Ok(PhotoOutcome::NotApplicable),
-        };
-
-        match self.head_photo(&photo).await {
-            Ok(()) => {
-                if !dry_run {
-                    let affected = update_field(
-                        pool,
-                        business_id,
-                        "image_url",
-                        &FieldValue::Text(photo.clone()),
-                    )
-                    .await?;
-                    if !affected {
-                        // Lost the race: image_url was filled between
-                        // read and write.
-                        return Ok(PhotoOutcome::NotApplicable);
-                    }
-                }
-                Ok(PhotoOutcome::Selected(photo))
-            }
+        if candidates.is_empty() {
+            return Ok(PhotoOutcome::NotApplicable);
+        }
+        let mut probe_cache: HashMap<String, Result<(), String>> = HashMap::new();
+        match self.probe_best_image(candidates, &mut probe_cache).await {
             Err(detail) => Ok(PhotoOutcome::CheckFailed(detail)),
+            Ok(Some(candidate)) => {
+                write_image_field(pool, business_id, "image_url", &candidate.url, dry_run).await
+            }
+            Ok(None) => Ok(PhotoOutcome::NotApplicable),
         }
     }
+
+    /// Dual-slot image pass: picks a wide hero for `image_url` and a
+    /// near-square card image for `card_image_url` from their respective
+    /// scored lists, sharing HEAD probes between the two. Both writes are
+    /// fill-empty: a slot already on the row is reported
+    /// `NotApplicable` without probing.
+    async fn discover_image_pair(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        row: &BusinessRow,
+        hero_candidates: &[ImageCandidate],
+        card_candidates: &[ImageCandidate],
+        dry_run: bool,
+    ) -> Result<(PhotoOutcome, PhotoOutcome), String> {
+        let hero_wanted = row.image_url.as_ref().is_none_or(|v| v.trim().is_empty());
+        let card_wanted = row
+            .card_image_url
+            .as_ref()
+            .is_none_or(|v| v.trim().is_empty());
+        let mut probe_cache: HashMap<String, Result<(), String>> = HashMap::new();
+
+        let hero = if hero_wanted && !hero_candidates.is_empty() {
+            match self.probe_best_image(hero_candidates, &mut probe_cache).await {
+                Err(detail) => PhotoOutcome::CheckFailed(detail),
+                Ok(Some(candidate)) => {
+                    write_image_field(pool, business_id, "image_url", &candidate.url, dry_run)
+                        .await?
+                }
+                Ok(None) => PhotoOutcome::NotApplicable,
+            }
+        } else {
+            PhotoOutcome::NotApplicable
+        };
+
+        let card = if card_wanted && !card_candidates.is_empty() {
+            match self.probe_best_image(card_candidates, &mut probe_cache).await {
+                Err(detail) => PhotoOutcome::CheckFailed(detail),
+                Ok(Some(candidate)) => {
+                    write_image_field(pool, business_id, "card_image_url", &candidate.url, dry_run)
+                        .await?
+                }
+                Ok(None) => PhotoOutcome::NotApplicable,
+            }
+        } else {
+            PhotoOutcome::NotApplicable
+        };
+
+        Ok((hero, card))
+    }
+}
+
+/// Fill-empty write of a selected URL into one image column; a losing
+/// write race reports `NotApplicable`.
+async fn write_image_field(
+    pool: &PgPool,
+    business_id: Uuid,
+    field: &str,
+    url: &str,
+    dry_run: bool,
+) -> Result<PhotoOutcome, String> {
+    if dry_run {
+        return Ok(PhotoOutcome::Selected(url.to_string()));
+    }
+    let affected =
+        update_field(pool, business_id, field, &FieldValue::Text(url.to_string())).await?;
+    Ok(if affected {
+        PhotoOutcome::Selected(url.to_string())
+    } else {
+        PhotoOutcome::NotApplicable
+    })
 }
 
 /// A geocoded location-discovery group: one or more address variants that
@@ -1866,6 +2246,7 @@ mod tests {
             rating: Some(0.0),
             review_count: Some(0),
             menu_url: None,
+            card_image_url: None,
             image_url: None,
             social_urls: None,
         }
@@ -2319,6 +2700,28 @@ mod tests {
         assert_eq!(err, "searxng lookup failed: HTTP 500");
     }
 
+    /// The image-category accessor sends `categories=images`; the plain web
+    /// lookup does not. Proven with a stub that 500s only when the request
+    /// line carries `categories=images` — the plain path gets a 200 fixture,
+    /// the image path gets a 500.
+    #[tokio::test]
+    async fn test_fetch_image_search_results_sends_categories_images() {
+        let port = ac2_start_http_stub("categories=images", FIXTURE_SEARXNG_RESULT);
+        let mut engine = ac2_test_engine(port);
+
+        let web = engine
+            .fetch_search_results("ac4 categories probe", "")
+            .await
+            .expect("plain lookup must not send categories=images");
+        assert!(web.is_some(), "fixture yields results");
+
+        let img = engine
+            .fetch_image_search_results("ac4 categories probe", "")
+            .await
+            .expect_err("image lookup must send categories=images (stub 500s it)");
+        assert_eq!(img, "searxng lookup failed: HTTP 500");
+    }
+
     /// `place_from_results` maps `website`/`description` from the top
     /// result only; an empty list yields `None` (regression guard for
     /// the fetch/derive split).
@@ -2331,7 +2734,7 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }];
         let place =
             EnrichmentEngine::place_from_results(&results, "Example Kitchen")
@@ -2360,7 +2763,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://listicle.test/best-kitchens".to_string(),
@@ -2369,7 +2772,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://directory.test/example-kitchen".to_string(),
@@ -2378,7 +2781,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
         ];
         let place =
@@ -2402,7 +2805,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://listicle.test/best-kitchens".to_string(),
@@ -2411,7 +2814,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
         ];
         let place =
@@ -2429,7 +2832,7 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }];
         let place =
             EnrichmentEngine::place_from_results(&top_unmatched, "Example Kitchen")
@@ -3308,7 +3711,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://www.example.com/menu".to_string(),
@@ -3317,7 +3720,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
         ];
         assert_eq!(
@@ -3340,7 +3743,7 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }];
         assert_eq!(
             find_menu_result(&results, "https://example.com"),
@@ -3354,7 +3757,7 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }];
         assert_eq!(find_menu_result(&query_only, "https://example.com"), None);
     }
@@ -3372,7 +3775,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://www.facebook.com/twistedsoul/".to_string(),
@@ -3381,7 +3784,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://www.instagram.com/twistedsoul/?hl=en".to_string(),
@@ -3390,7 +3793,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://www.instagram.com/reel/XYZ/".to_string(),
@@ -3399,7 +3802,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
             SearxngResult {
                 url: "https://www.facebook.com/sharer.php?u=https://foo".to_string(),
@@ -3408,7 +3811,7 @@ mod tests {
                 engine: None,
                 engines: vec![],
                 score: None,
-                img_src: None,
+                img_src: None,                resolution: None,
             },
         ];
         let found = find_social_results(&results).expect("socials found");
@@ -3428,7 +3831,7 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }];
         assert!(find_social_results(&results).is_none());
         assert!(find_social_results(&[]).is_none());
@@ -3487,6 +3890,7 @@ mod tests {
                 engines: vec![],
                 score: None,
                 img_src: Some("https://cdn.aggregator.example/p.jpg".to_string()),
+                resolution: None,
             },
             SearxngResult {
                 url: "https://www.example.com/".to_string(),
@@ -3496,17 +3900,24 @@ mod tests {
                 engines: vec![],
                 score: None,
                 img_src: Some("https://www.example.com/og.jpg".to_string()),
+                resolution: None,
             },
         ];
         assert_eq!(
             find_image_result(&results, "https://example.com/"),
-            Some("https://www.example.com/og.jpg".to_string())
+            Some(ImageCandidate {
+                url: "https://www.example.com/og.jpg".to_string(),
+                score: image_score(None, true),
+            })
         );
 
         let only_foreign = vec![results[0].clone()];
         assert_eq!(
             find_image_result(&only_foreign, "https://example.com/"),
-            Some("https://cdn.aggregator.example/p.jpg".to_string())
+            Some(ImageCandidate {
+                url: "https://cdn.aggregator.example/p.jpg".to_string(),
+                score: image_score(None, false),
+            })
         );
 
         let none = vec![SearxngResult {
@@ -3516,10 +3927,113 @@ mod tests {
             engine: None,
             engines: vec![],
             score: None,
-            img_src: None,
+            img_src: None,            resolution: None,
         }];
         assert!(find_image_result(&none, "https://example.com/").is_none());
         assert!(find_image_result(&results, "").is_none());
+    }
+
+    /// `SearXNG` resolution strings parse across `x` / `X` / `×` separators
+    /// and surrounding whitespace; malformed, zero, or missing values yield
+    /// `None`. Extra segments after the second are ignored.
+    #[test]
+    fn test_parse_resolution_formats() {
+        assert_eq!(parse_resolution("1200x630"), Some((1200, 630)));
+        assert_eq!(parse_resolution("350\u{00D7}75"), Some((350, 75)));
+        assert_eq!(parse_resolution("  800 X 600  "), Some((800, 600)));
+        assert_eq!(parse_resolution("1200x630x5"), Some((1200, 630)));
+        assert_eq!(parse_resolution("1200"), None);
+        assert_eq!(parse_resolution("0x500"), None);
+        assert_eq!(parse_resolution(""), None);
+        assert_eq!(parse_resolution("abcxdef"), None);
+    }
+
+    /// Display scoring: a same-host near-square photo hits the maximum 6;
+    /// wide banners and tiny thumbnails lose ground; unknown dimensions
+    /// earn a neutral point but never outrank a scored photo.
+    #[test]
+    fn test_image_score_aspect_and_host() {
+        assert_eq!(image_score(Some((1500, 1500)), true), 6.0);
+        assert_eq!(image_score(Some((800, 800)), true), 6.0);
+        assert_eq!(image_score(Some((1200, 630)), false), 2.0);
+        assert_eq!(image_score(Some((200, 200)), true), 5.0);
+        assert_eq!(image_score(Some((2400, 600)), true), 3.0);
+        assert_eq!(image_score(Some((800, 2400)), false), 1.0);
+        assert_eq!(image_score(None, true), 3.0);
+        assert_eq!(image_score(None, false), 1.0);
+    }
+
+    /// Hero scoring: a same-host wide card hits the maximum 6; a same-host
+    /// square logo ranks below it; unknown dimensions earn a neutral point
+    /// but never outrank a scored same-host photo (max 6).
+    #[test]
+    fn test_hero_image_score_aspect_and_host() {
+        assert_eq!(hero_image_score(Some((1200, 630)), true), 6.0);
+        assert_eq!(hero_image_score(Some((1500, 1500)), true), 5.0);
+        assert_eq!(hero_image_score(Some((1200, 630)), false), 4.0);
+        assert_eq!(hero_image_score(Some((2400, 600)), true), 4.0);
+        assert_eq!(hero_image_score(Some((800, 2400)), false), 1.0);
+        assert_eq!(hero_image_score(None, true), 3.0);
+        assert_eq!(hero_image_score(None, false), 1.0);
+    }
+
+    /// A wide same-host banner beats a square same-host logo in the hero
+    /// slot even when the logo ranks first; rank order breaks ties.
+    #[test]
+    fn test_find_hero_result_prefers_wide() {
+        let mk = |img: &str, resolution: &str| SearxngResult {
+            url: "https://ac.example/".to_string(),
+            title: "ac".to_string(),
+            content: None,
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: Some(img.to_string()),
+            resolution: Some(resolution.to_string()),
+        };
+        let logo = mk("https://ac.example/logo-square.jpg", "1500x1500");
+        let banner = mk("https://ac.example/social-card.jpg", "1200x630");
+        assert_eq!(
+            find_hero_result(&[logo.clone(), banner.clone()], "https://ac.example/")
+                .map(|c| c.url),
+            Some("https://ac.example/social-card.jpg".to_string())
+        );
+        assert_eq!(
+            find_hero_result(&[banner, logo], "https://ac.example/")
+                .map(|c| c.url),
+            Some("https://ac.example/social-card.jpg".to_string())
+        );
+    }
+
+    /// A well-shaped same-host photo beats a wide same-host banner even
+    /// when the banner ranks first; rank order breaks exact score ties.
+    #[test]
+    fn test_find_image_result_prefers_better_aspect() {
+        let mk = |img: &str, resolution: &str| SearxngResult {
+            url: "https://ac.example/".to_string(),
+            title: "ac".to_string(),
+            content: None,
+            engine: None,
+            engines: vec![],
+            score: None,
+            img_src: Some(img.to_string()),
+            resolution: Some(resolution.to_string()),
+        };
+        let banner = mk("https://ac.example/social-card.jpg", "1200x630");
+        let logo = mk("https://ac.example/logo-square.jpg", "1500x1500");
+        assert_eq!(
+            find_image_result(&[banner.clone(), logo.clone()], "https://ac.example/")
+                .map(|c| c.url),
+            Some("https://ac.example/logo-square.jpg".to_string())
+        );
+
+        let first = mk("https://ac.example/first.jpg", "1000x1000");
+        let second = mk("https://ac.example/second.jpg", "1000x1000");
+        assert_eq!(
+            find_image_result(&[first, second], "https://ac.example/")
+                .map(|c| c.url),
+            Some("https://ac.example/first.jpg".to_string())
+        );
     }
 
     /// Seed an admin user and a business row with the given website;
@@ -4249,6 +4763,67 @@ mod tests {
         port
     }
 
+    /// Last-resort image fallback stub: returns `image_body(port)` for
+    /// requests whose line carries `categories=images` (the `SearXNG`
+    /// image-category lookup), `web_body` for every other `/search` request,
+    /// and `photo_status`/`photo_content_type` (no body) for any request
+    /// whose target contains `/photos/` (the HEAD stability check).
+    fn ac4_start_image_fallback_stub(
+        web_body: Box<dyn Fn(u16) -> String + Send>,
+        image_body: Box<dyn Fn(u16) -> String + Send>,
+        photo_status: u16,
+        photo_content_type: &str,
+    ) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind AC4 stub listener");
+        let port = listener.local_addr().expect("AC4 stub address").port();
+        let photo_content_type = photo_content_type.to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else {
+                    break;
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                let response = if request_line.contains("/photos/") {
+                    format!(
+                        "HTTP/1.1 {photo_status} Stub\r\nContent-Type: {photo_content_type}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                } else if request_line.contains("categories=images") {
+                    let body = image_body(port);
+                    let body_len = body.len();
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {body_len}\r\nConnection: close\r\n\r\n{body}"
+                    )
+                } else {
+                    let body = web_body(port);
+                    let len = body.len();
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len}\r\nConnection: close\r\n\r\n{body}"
+                    )
+                };
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        port
+    }
+
     /// Seed a user, a business (`image_url` NULL or preset), a scrape job,
     /// and a `google_maps` source row named after the business so
     /// `resolve_source` finds it. Returns (`user_id`, `business_id`, `job_id`).
@@ -4694,5 +5269,219 @@ mod tests {
         assert!(row.get::<Option<String>, _>("image_url").is_none());
 
         ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
+    }
+
+    /// Regression (Twisted Soul case): the web SearXNG results carry no
+    /// thumbnails and the homepage yields no og:image, so the dedicated
+    /// image-category SearXNG lookup is the last-resort candidate that
+    /// lands `image_url`.
+    #[tokio::test]
+    async fn test_enrich_fills_image_from_image_category_fallback() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let web_body = r#"{"query":"ac4","results":[{"url":"http://ac4.example/","title":"AC4 Business","content":"AC4 fixture business."}],"unresponsive_engines":[]}"#;
+        let port = ac4_start_image_fallback_stub(
+            Box::new(move |_| web_body.to_string()),
+            Box::new(|p| {
+                format!(
+                    r#"{{"query":"ac4 images","results":[{{"url":"http://ac4.example/gallery","title":"AC4 image","img_src":"http://127.0.0.1:{p}/photos/ac4.jpg"}}]}}"#
+                )
+            }),
+            200,
+            "image/jpeg",
+        );
+        let mut engine = ac2_test_engine(port);
+
+        let user_id = seed_user(&pool, "ac4-image-", "AC4 Image").await;
+        let job_id = seed_scrape_job(&pool, "ac4 image").await;
+        let business_id = seed_business(&pool, user_id, "AC4 Image Business", None).await;
+        // Pre-set a plain-HTTP website so the image pass has a host to
+        // compare against; image_url stays NULL.
+        sqlx::query("UPDATE businesses SET website = $2 WHERE id = $1")
+            .bind(business_id)
+            .bind("http://ac4.example/")
+            .execute(&pool)
+            .await
+            .expect("website preset");
+        seed_google_source(
+            &pool,
+            job_id,
+            "AC4 Image Business",
+            "http://maps.google.test/maps/ok?cid=ac4-image",
+        )
+        .await;
+
+        let report = engine.enrich_batch(&pool, &[business_id], false).await;
+        let entry = &report[0];
+        assert!(
+            entry.error.is_none(),
+            "enrich must not error: {:?}",
+            entry.error
+        );
+        assert!(
+            entry.applied.iter().any(|a| a.field == "image_url"),
+            "image_url must be applied via the image-category fallback; applied={:?}",
+            entry.applied
+        );
+
+        let row = sqlx::query("SELECT image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("row reads back");
+        let expected = format!("http://127.0.0.1:{port}/photos/ac4.jpg");
+        assert_eq!(
+            row.get::<Option<String>, _>("image_url").as_deref(),
+            Some(expected.as_str()),
+            "image_url must land from the image-category candidate"
+        );
+
+        // Cleanup: seeded rows + any primary location the discovery pass added.
+        sqlx::query("DELETE FROM business_locations WHERE business_id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    /// First-run regression: a business with no website and no image gets
+    /// the website plus both image slots from one enrichment run. The
+    /// wide banner must fill `image_url`; the square logo must fill
+    /// `card_image_url`.
+    #[tokio::test]
+    async fn test_enrich_single_pass_picks_aspect_matched_images() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        let port = ac4_start_image_fallback_stub(
+            Box::new(|p| {
+                format!(
+                    r#"{{"query":"sp","results":[{{"url":"http://sp.example/","title":"SP Business","content":"SP fixture business.","img_src":"http://127.0.0.1:{p}/photos/sp-banner.jpg","resolution":"1200x630"}}],"unresponsive_engines":[]}}"#
+                )
+            }),
+            Box::new(|p| {
+                format!(
+                    r#"{{"query":"sp images","results":[{{"url":"http://sp.example/gallery","title":"SP logo","img_src":"http://127.0.0.1:{p}/photos/sp-logo.jpg","resolution":"1500x1500"}}]}}"#
+                )
+            }),
+            200,
+            "image/jpeg",
+        );
+        let mut engine = ac2_test_engine(port);
+
+        let user_id = seed_user(&pool, "sp-image-", "SP Image").await;
+        let job_id = seed_scrape_job(&pool, "sp image").await;
+        let business_id = seed_business(&pool, user_id, "SP Image Business", None).await;
+        // No website preset: the SearXNG pass must supply it this run.
+        seed_google_source(
+            &pool,
+            job_id,
+            "SP Image Business",
+            "http://maps.google.test/maps/ok?cid=sp-image",
+        )
+        .await;
+
+        let report = engine.enrich_batch(&pool, &[business_id], false).await;
+        let entry = &report[0];
+        assert!(
+            entry.error.is_none(),
+            "enrich must not error: {:?}",
+            entry.error
+        );
+        assert!(
+            entry.applied.iter().any(|a| a.field == "website"),
+            "website must be applied in the same run; applied={:?}",
+            entry.applied
+        );
+        assert!(
+            entry.applied.iter().any(|a| a.field == "image_url"),
+            "image_url must be applied in the same run; applied={:?}",
+            entry.applied
+        );
+        assert!(
+            entry.applied.iter().any(|a| a.field == "card_image_url"),
+            "card_image_url must be applied in the same run; applied={:?}",
+            entry.applied
+        );
+
+        let row = sqlx::query("SELECT website, image_url, card_image_url FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .fetch_one(&pool)
+            .await
+            .expect("row reads back");
+        assert_eq!(
+            row.get::<Option<String>, _>("website").as_deref(),
+            Some("http://sp.example/")
+        );
+        let expected_hero = format!("http://127.0.0.1:{port}/photos/sp-banner.jpg");
+        let expected_card = format!("http://127.0.0.1:{port}/photos/sp-logo.jpg");
+        assert_eq!(
+            row.get::<Option<String>, _>("image_url").as_deref(),
+            Some(expected_hero.as_str()),
+            "the wide banner must fill the hero slot"
+        );
+        assert_eq!(
+            row.get::<Option<String>, _>("card_image_url").as_deref(),
+            Some(expected_card.as_str()),
+            "the square logo must fill the card slot"
+        );
+
+        // Cleanup: seeded rows + any primary location the discovery pass added.
+        sqlx::query("DELETE FROM business_locations WHERE business_id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(business_id)
+            .execute(&pool)
+            .await
+            .expect("business cleanup");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
     }
 }

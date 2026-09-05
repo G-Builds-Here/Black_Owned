@@ -30,6 +30,7 @@ export const businessTypeDefs = `#graphql
     reviewCount: Int
     ratingSource: String
     imageUrl: String
+    cardImageUrl: String
     siteReviewCount: Int!
     siteRating: Float
     siteReviews: [Review!]!

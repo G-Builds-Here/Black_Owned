@@ -155,6 +155,25 @@ describe('BusinessDetail', () => {
       expect(screen.getAllByText(/food dining/i)).not.toHaveLength(0);
     });
 
+    it('renders the hero image cover-fit when imageUrl is provided', () => {
+      const businessWithImage: Business = {
+        ...mockBusiness,
+        imageUrl: 'https://example.com/image.jpg',
+      };
+
+      render(
+        <BusinessDetail
+          business={businessWithImage}
+          loading={false}
+          error={null}
+        />
+      );
+
+      const img = screen.getByRole('img', { name: /photo of soul food kitchen/i });
+      expect(img).toHaveAttribute('src', 'https://example.com/image.jpg');
+      expect(img).toHaveClass('object-cover');
+    });
+
     it('does not display the raw business ID', () => {
       render(
         <BusinessDetail

@@ -31,6 +31,7 @@ export const typeDefs = `#graphql
     location: String!
     isVerified: Boolean!
     imageUrl: String
+    cardImageUrl: String
     description: String
     tags: [String!]
   }

@@ -67,6 +67,7 @@ describe("business(id:) resolver", () => {
       rating: 4.5,
       reviewCount: 12,
       imageUrl: null,
+      cardImageUrl: null,
       tags: ["Classic"],
       lat: null,
       lng: null,

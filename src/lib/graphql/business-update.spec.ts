@@ -201,6 +201,7 @@ describe("updateBusiness resolver", () => {
       rating: null,
       reviewCount: null,
       imageUrl: null,
+      cardImageUrl: null,
       lat: null,
       lng: null,
       tags: [],

@@ -202,7 +202,7 @@ const SELECT_ELIGIBLE: &str = "SELECT b.id, b.name \
   JOIN scraped_businesses s \
     ON s.name = b.name AND s.source = 'google_maps' \
   WHERE (b.phone IS NULL OR b.website IS NULL OR b.description IS NULL \
-     OR b.menu_url IS NULL OR b.image_url IS NULL OR b.review_count = 0)";
+     OR b.menu_url IS NULL OR b.image_url IS NULL OR b.card_image_url IS NULL OR b.review_count = 0)";
 
 /// POST /enrich — bounded run of the fill-empty enrichment engine,
 /// reported per business. Unauthenticated by design (operator endpoint).
@@ -253,11 +253,24 @@ async fn enrich(
             } else {
                 enriched += 1;
             }
+            let applied_fields: Vec<&str> = r.applied.iter().map(|a| a.field).collect();
+            tracing::info!(
+                business_id = %r.business_id,
+                name = %r.business_name,
+                applied = ?applied_fields,
+                skipped = ?r.skipped,
+                notes = ?r.notes,
+                reason = ?r.reason,
+                error = ?r.error,
+                "enrich result"
+            );
             json!({
                 "id": r.business_id,
                 "name": r.business_name,
-                "applied": r.applied.iter().map(|a| a.field).collect::<Vec<_>>(),
+                "applied": applied_fields,
                 "skipped": r.skipped.clone(),
+                "notes": r.notes.clone(),
+                "reason": r.reason,
                 "locations": r.locations,
                 "error": r.error,
             })
@@ -1001,12 +1014,12 @@ mod tests {
         let filled_id: Uuid = {
             let row = sqlx::query(
                 r"INSERT INTO businesses
-                   (owner_id, name, description, category_id, rating, review_count,
-                    phone, website, menu_url, image_url, social_urls)
-                   VALUES ($1, $2, 'Filled description', 'test-enrichment', 4.0, 42,
-                           '+15550004444', 'https://filled.example.com',
-                           'https://filled.example.com/menu',
-                           'https://filled.example.com/img.jpg', '[]')
+                    (owner_id, name, description, category_id, rating, review_count,
+                     phone, website, menu_url, image_url, card_image_url, social_urls)
+                    VALUES ($1, $2, 'Filled description', 'test-enrichment', 4.0, 42,
+                            '+15550004444', 'https://filled.example.com',
+                            'https://filled.example.com/menu',
+                            'https://filled.example.com/hero.jpg', 'https://filled.example.com/card.jpg', '[]')
                    RETURNING id",
             )
             .bind(user_id)
@@ -1481,14 +1494,27 @@ mod tests {
             failed.is_empty(),
             "500-business run must complete without per-business errors: {failed:?}"
         );
-        let paths_len = {
+        let (web_paths, image_paths) = {
             let paths = AC3_STUB_PATHS.lock();
-            paths.len()
+            paths.iter().fold((0, 0), |(web, image), p| {
+                if p.contains("categories=images") {
+                    (web, image + 1)
+                } else {
+                    (web + 1, image)
+                }
+            })
         };
+        // One primary web lookup per business, plus one image-category
+        // fallback lookup where no image was found (the shared fixture has
+        // no `img_src`, so the fallback fires for every business). All of it
+        // flows through the guarded engine path.
         assert_eq!(
-            paths_len,
-            500,
-            "one distinct fetch per business, all through the guarded engine path"
+            web_paths, 500,
+            "one distinct web lookup per business, all through the guarded engine path"
+        );
+        assert_eq!(
+            image_paths, 500,
+            "one image-category fallback lookup per business (fixture carries no images)"
         );
 
         cleanup_family(&pool, "AC3 Enrich 500").await;

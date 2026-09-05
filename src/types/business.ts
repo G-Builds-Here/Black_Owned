@@ -26,6 +26,7 @@ export interface Business {
   reviewCount?: number | null;
   website?: string | null;
   imageUrl?: string | null;
+  cardImageUrl?: string | null;
   lat?: number | null;
   lng?: number | null;
   tags?: string[] | null;

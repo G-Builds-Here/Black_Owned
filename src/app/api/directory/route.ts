@@ -31,6 +31,7 @@ export interface DirectoryBusiness {
   phone: string | null;
   source: string | null;
   imageUrl?: string | null;
+  cardImageUrl?: string | null;
   tags?: string[] | null;
   lat?: number | null;
   lng?: number | null;
@@ -86,6 +87,7 @@ interface CanonicalRow {
   phone: string | null;
   website: string | null;
   image_url: string | null;
+  card_image_url: string | null;
   tags: string[] | null;
   created_at: Date | string;
   lat?: number | null;
@@ -117,9 +119,9 @@ export async function fetchDirectoryItems(
        WHERE p.status = 'approved'`
     ),
     client.query(
-      `SELECT b.id, b.name, b.description, COALESCE(c.name, b.category_id) AS category,
-              b.verification_status, b.location, b.rating, b.review_count,
-              b.phone, b.website, b.image_url, b.tags, b.created_at, b.lat, b.lng
+     `SELECT b.id, b.name, b.description, COALESCE(c.name, b.category_id) AS category,
+           b.verification_status, b.location, b.rating, b.review_count,
+           b.phone, b.website, b.image_url, b.card_image_url, b.tags, b.created_at, b.lat, b.lng
        FROM ${tableName} b
        LEFT JOIN ${categoryTable} c ON c.id::text = b.category_id`
     ),
@@ -140,6 +142,7 @@ export async function fetchDirectoryItems(
       phone: typeof sd.phone === "string" ? sd.phone : null,
       source: row.source,
       imageUrl: null,
+      cardImageUrl: null,
       tags: [],
       lat: row.lat ?? null,
       lng: row.lng ?? null,
@@ -161,6 +164,7 @@ export async function fetchDirectoryItems(
     phone: row.phone ?? null,
     source: null,
     imageUrl: row.image_url ?? null,
+    cardImageUrl: row.card_image_url ?? null,
     tags: row.tags ?? [],
     lat: row.lat ?? null,
     lng: row.lng ?? null,

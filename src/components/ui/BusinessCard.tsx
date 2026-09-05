@@ -15,6 +15,7 @@ export interface Business {
   location: string;
   isVerified: boolean;
   imageUrl: string;
+  cardImageUrl?: string | null;
   description: string;
   tags: string[];
 }
@@ -94,9 +95,9 @@ export default function BusinessCard({
       <div className="flex h-full">
         {/* Image - left column */}
         <div className="relative w-2/5 flex-shrink-0 self-stretch overflow-hidden bg-neutral-200">
-          {business.imageUrl ? (
+          {business.cardImageUrl || business.imageUrl ? (
             <img
-              src={business.imageUrl}
+              src={business.cardImageUrl || business.imageUrl}
               alt={`Business photo for ${business.name}`}
               className="h-full w-full object-contain"
               loading="lazy"

@@ -30,6 +30,7 @@ export interface Business {
   siteReviewCount?: number | null;
   siteRating?: number | null;
   imageUrl?: string | null;
+  cardImageUrl?: string | null;
   tags?: string[] | null;
   verified: boolean;
   createdAt: {
@@ -268,12 +269,12 @@ export function BusinessDetail({ business, loading, error, onReviewsSubmitted }:
         </nav>
 
         {/* Hero */}
-        <div className="relative h-64 overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-700 sm:h-80 lg:h-96">
+        <div className="relative h-64 overflow-hidden rounded-2xl bg-neutral-100 sm:h-80 lg:h-96">
           {business.imageUrl && !heroImgFailed ? (
             <img
               src={business.imageUrl}
               alt={`Photo of ${business.name}`}
-              className="h-full w-full object-contain px-6 py-4"
+              className="h-full w-full object-cover"
               onError={() => setHeroImgFailed(true)}
             />
           ) : (

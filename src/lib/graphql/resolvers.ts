@@ -228,6 +228,7 @@ export async function business(
   siteRating: number | null;
   siteReviews: SiteReviewGql[];
   imageUrl?: string | null;
+  cardImageUrl?: string | null;
   lat?: number | null;
   lng?: number | null;
   tags?: string[];
@@ -353,6 +354,7 @@ export interface SearchBusiness {
   location: string;
   isVerified: boolean;
   imageUrl: string;
+  cardImageUrl: string;
   description: string;
   tags: string[];
 }
@@ -370,6 +372,7 @@ export function toSearchBusiness(item: DirectoryBusiness): SearchBusiness {
     location: item.location || "",
     isVerified: item.isVerified,
     imageUrl: "",
+    cardImageUrl: "",
     description: item.description ?? "",
     tags: [],
   };
@@ -460,6 +463,7 @@ function businessToGraphqlBusiness(business: Business, categoryName?: string) {
     rating: business.rating ?? null,
     reviewCount: business.reviewCount ?? null,
     imageUrl: business.imageUrl ?? null,
+    cardImageUrl: business.cardImageUrl ?? null,
     lat: business.lat ?? null,
     lng: business.lng ?? null,
     tags: business.tags ?? [],
