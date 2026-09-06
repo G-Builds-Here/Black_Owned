@@ -61,7 +61,7 @@ export interface DiscoverOptions {
   delayMs?: number;
 }
 
-export const DEFAULT_SEARXNG_URL = 'http://192.168.68.50:8888/search';
+export const DEFAULT_SEARXNG_URL = process.env.SEARXNG_URL ?? '';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';

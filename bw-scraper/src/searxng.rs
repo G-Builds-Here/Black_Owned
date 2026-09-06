@@ -84,6 +84,11 @@ impl SearxngClient {
     /// Returns an error if the request fails, the instance responds with a
     /// non-2xx status, or the response body is not valid JSON.
     pub async fn search(&self, query: &str, pageno: u32) -> Result<SearxngResponse> {
+        if self.base_url.is_empty() {
+            return Err(anyhow::anyhow!(
+                "SEARXNG_URL is not configured. Set the SEARXNG_URL environment variable to your SearXNG instance."
+            ));
+        }
         let url = format!(
             "{}/search?q={}&format=json&pageno={}",
             self.base_url,

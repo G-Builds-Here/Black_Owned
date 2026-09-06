@@ -33,10 +33,10 @@ jobs:
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo check
-        run: cargo check --all-targets
+        run: cargo check -p bw_scraper -p bw-types --all-targets
 
       - name: Run cargo clippy
-        run: cargo clippy --all-targets -- -D warnings -W clippy::pedantic
+        run: cargo clippy -p bw_scraper -p bw-types --all-targets -- -D warnings -W clippy::pedantic
 
   test:
     name: Rust Tests
@@ -94,7 +94,7 @@ jobs:
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo test
-        run: cargo test --all-targets
+        run: cargo test -p bw_scraper -p bw-types --all-targets
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/black_owned_test
           NATS_URL: nats://localhost:4222

@@ -72,12 +72,20 @@ async fn test_redis_invalid_url_returns_client_created() {
     assert!(result.message.contains("successful"));
 }
 
+/// Read the Valkey/Redis URL from the environment. CI provides `VALKEY_URL`;
+/// a local `.env` may set `REDIS_URL`. Prefer the CI variable, fall back to the
+/// other, then to a localhost default.
+fn valkey_url_from_env() -> String {
+    std::env::var("VALKEY_URL")
+        .or_else(|_| std::env::var("REDIS_URL"))
+        .unwrap_or_else(|_| "redis://localhost:6379".to_string())
+}
+
 /// Test Redis health check with valid connection string
 /// This test requires Redis/Valkey to be running on localhost:6379
 #[tokio::test]
 async fn test_redis_valid_url_returns_healthy() {
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_url = valkey_url_from_env();
 
     let result = check_redis(&redis_url).unwrap();
 
@@ -146,8 +154,7 @@ async fn test_all_health_checks_valid_urls() {
         .unwrap_or_else(|_| "postgresql://localhost:5432/black_owned".to_string());
     let nats_url = std::env::var("NATS_URL")
         .unwrap_or_else(|_| "nats://localhost:4222".to_string());
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_url = valkey_url_from_env();
     let clickhouse_url = std::env::var("CLICKHOUSE_URL")
         .unwrap_or_else(|_| "clickhouse://localhost:8123".to_string());
 

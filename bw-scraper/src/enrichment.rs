@@ -2054,13 +2054,12 @@ impl EnrichmentEngine {
         let mut best: Option<&ImageCandidate> = None;
         let mut last_error = String::new();
         for candidate in ranked.iter().take(IMAGE_MAX_PROBES) {
-            let probe = match probe_cache.get(&candidate.url) {
-                Some(outcome) => outcome.clone(),
-                None => {
-                    let outcome = self.head_photo(&candidate.url).await;
-                    probe_cache.insert(candidate.url.clone(), outcome.clone());
-                    outcome
-                }
+            let probe = if let Some(outcome) = probe_cache.get(&candidate.url) {
+                outcome.clone()
+            } else {
+                let outcome = self.head_photo(&candidate.url).await;
+                probe_cache.insert(candidate.url.clone(), outcome.clone());
+                outcome
             };
             match probe {
                 Ok(()) => {
@@ -3952,6 +3951,7 @@ mod tests {
     /// wide banners and tiny thumbnails lose ground; unknown dimensions
     /// earn a neutral point but never outrank a scored photo.
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_image_score_aspect_and_host() {
         assert_eq!(image_score(Some((1500, 1500)), true), 6.0);
         assert_eq!(image_score(Some((800, 800)), true), 6.0);
@@ -3967,6 +3967,7 @@ mod tests {
     /// square logo ranks below it; unknown dimensions earn a neutral point
     /// but never outrank a scored same-host photo (max 6).
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_hero_image_score_aspect_and_host() {
         assert_eq!(hero_image_score(Some((1200, 630)), true), 6.0);
         assert_eq!(hero_image_score(Some((1500, 1500)), true), 5.0);
@@ -5271,9 +5272,9 @@ mod tests {
         ac3_cleanup_photo_business(&pool, user_id, business_id, job_id).await;
     }
 
-    /// Regression (Twisted Soul case): the web SearXNG results carry no
+    /// Regression (Twisted Soul case): the web `SearXNG` results carry no
     /// thumbnails and the homepage yields no og:image, so the dedicated
-    /// image-category SearXNG lookup is the last-resort candidate that
+    /// image-category `SearXNG` lookup is the last-resort candidate that
     /// lands `image_url`.
     #[tokio::test]
     async fn test_enrich_fills_image_from_image_category_fallback() {

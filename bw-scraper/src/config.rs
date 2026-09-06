@@ -2,8 +2,8 @@
 
 use anyhow::{Context, Result};
 
-/// User-provided `SearXNG` metasearch instance.
-pub const DEFAULT_SEARXNG_URL: &str = "http://192.168.68.50:8888";
+/// No default — must be set per-environment to avoid pointing at a developer's LAN.
+pub const DEFAULT_SEARXNG_URL: &str = "";
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -39,7 +39,7 @@ impl Config {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(8080),
             nats_url: std::env::var("NATS_URL").ok(),
-            redis_url: std::env::var("REDIS_URL").ok(),
+            redis_url: std::env::var("REDIS_URL").or_else(|_| std::env::var("VALKEY_URL")).ok(),
             clickhouse_url: std::env::var("CLICKHOUSE_URL").ok(),
             log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
             nominatim_url: std::env::var("NOMINATIM_URL").ok(),

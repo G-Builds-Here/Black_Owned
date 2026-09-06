@@ -1,48 +1,64 @@
 <!--
-surveyed_at: 2026-08-27T02:40:39Z
-commit: 5a67ed37776c18bc32c9f8e783cb67e23b6c1641
+surveyed_at: 2026-09-05T19:45:00Z
+commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
 relevant_paths:
-- migrations/postgresql
-- src/types
-- src/lib/graphql/business-schema.ts
-- bw-types
-summary: Postgres schema (system of record), TypeScript types, and GraphQL type surface.
+  - migrations/postgresql
+  - src/types
+  - src/lib/graphql
+  - bw-types
+summary: Postgres schema, TypeScript types, GraphQL types, and Rust shapes with ownership and caveats.
 -->
 
 # Domain Model
 
-## Postgres Tables (system of record)
+## Postgres (system of record)
 
-| Table | Used by | Key fields | Validation | Notes |
-|---|---|---|---|---|
-| users | auth, ownership, chat | id uuid PK, email, password_hash, name, role varchar(50) default 'user', status default 'active', created/updated_at | email UNIQUE NOT NULL; indexes email/role/status | Roles in code: user \| business_owner \| admin; seed inserts `customer` (invalid — finding M3) |
-| businesses | directory, claims, reviews, views | id uuid PK, owner_id, name varchar(255), description, category_id varchar(100), verification_status default 'unverified', location, rating decimal default 0, review_count int default 0, image_url, tags text[], website, lat/lng, phone, menu_url, rating_source default 'google', social_urls jsonb | owner_id NOT NULL FK users CASCADE; category_id NOT NULL but **no FK** | rating_source records scraped-rating provenance (019) |
-| pending_import_businesses | review queue, import pipeline | id PK, name, description, category_id, status, source, source_data jsonb, job_id, rejection_reason, lat/lng | status CHECK (pending_review, approved, rejected) | job_id has **no FK** to scrape_jobs (finding M4); address/rating live in source_data JSONB |
-| scrape_jobs | app + bw-scraper (shared) | id PK, source, query, location, status, business_count, error_message, started/completed/created/updated_at | status CHECK (pending, running, completed, failed, cancelled) | Two uncoordinated writers (finding H3) |
-| scraped_businesses | bw-scraper writes; app dedup/import/featured reads | id PK, scrape_job_id FK, source, name, address, phone, website, category, rating decimal(3,2), review_count, source_id, lat/lng | scrape_job_id NOT NULL FK scrape_jobs CASCADE | 017 backfills coords from Google Maps URL encoding |
-| business_views | owner dashboard chart | id PK, business_id, viewed_at default NOW() | business_id FK businesses CASCADE | written by open POST /api/businesses/[id]/view |
-| conversations | chat | id PK, user_id, business_id, created/updated_at | FKs CASCADE; UNIQUE(user_id, business_id) | resume-not-duplicate semantics |
-| messages | chat | id PK, conversation_id, business_id, sender_user_id, body, is_read default false, created_at | conversation_id + business_id FK CASCADE; sender_user_id FK users **without** CASCADE | |
-| reviews | review UI, GraphQL | id PK, business_id, user_id, rating smallint, comment, visible default true, location_id, created_at | location_id FK business_locations ON DELETE SET NULL; **no FKs on business_id/user_id, no rating CHECK** | backfilled from live DB created by retired bw-api (013) |
-| business_locations | multi-location businesses | id PK, business_id, label, address varchar(500) NOT NULL, lat/lng, is_primary default false | business_id FK CASCADE; partial unique index (business_id) WHERE is_primary | 016 backfills one primary row per business |
-| categories | /api/categories, claim, owner list, GraphQL | id, name | **NONE — table has no Postgres migration** (finding H1); exists only in live DB from bw-api era | |
+Migrations: `migrations/postgresql/001–021`, applied by `npm run migrate`
+(idempotent, tracked in `schema_migrations`).
+
+| Table | Written By | Key Fields / Constraints | Notes |
+|-------|-----------|--------------------------|-------|
+| `users` | Next.js | `id uuid PK`, `email UNIQUE NOT NULL`, `password_hash`, `role varchar(50) DEFAULT 'user'` (user / business_owner / admin), `status` (active / inactive / suspended) | Auth + admin user management |
+| `businesses` | Next.js **and** bw-scraper (dual writer) | `owner_id FK→users CASCADE`, `name varchar(255)`, `category_id varchar(100) NOT NULL`, `verification_status DEFAULT 'unverified'`, `rating`, `image_url`, `card_image_url` (021), `website` (004), `phone`/`menu_url` (019), `social_urls jsonb` (014), `lat`/`lng` (015), `tags text[]`, `owner_description` (002) | Central table. bw-scraper `/enrich` and `/locations` UPDATE it directly, bypassing app-layer validation. |
+| `categories` | migration 020 (backfill) | `id`, `name varchar(255) UNIQUE NOT NULL` | Previously live-only (retired bw-api era); 020 seeds 6 baseline UUIDs. |
+| `pending_import_businesses` | Next.js (import pipeline) | `status DEFAULT 'pending_review'` CHECK (pending_review / approved / rejected), `source`, `source_data jsonb`, `job_id` | Admin review queue. |
+| `scrape_jobs` | Next.js **and** bw-scraper | `source`, `query`, `location`, `status` CHECK (pending / running / completed / failed / cancelled), `business_count`, `error_message` | Two pipelines write different status vocabularies (see findings). |
+| `scraped_businesses` | bw-scraper (and TS scrapers via import) | `scrape_job_id FK CASCADE`, `source varchar(20)`, `name varchar(500)`, `rating decimal(3,2)`, `coordinates` (017) | Feeds pending import + featured. |
+| `business_views` | Next.js | `business_id FK`, `viewed_at` | Powers owner view-count charts. |
+| `reviews` | Next.js | `business_id`, `user_id`, `rating smallint`, `comment text`, `location_id` (018), `visible bool DEFAULT TRUE` | Table predated migrations — created by the retired bw-api; migration 013 backfilled it. |
+| `business_locations` | Next.js **and** bw-scraper | `business_id FK CASCADE`, `address varchar(500) NOT NULL`, `lat`/`lng`, `is_primary bool`, partial `UNIQUE(business_id) WHERE is_primary` (016) | Multi-location support. |
+| `conversations` / `messages` | Next.js | `UNIQUE(user_id, business_id)`; `is_read bool DEFAULT FALSE` | Live fan-out via NATS `chat.message.<cid>`. |
+| `schema_migrations` | migrate script | applied file + timestamp | Bookkeeping. |
+
+## ClickHouse (analytics mirror)
+
+`migrations/clickhouse/001_create_tables.sql` — view/event analytics. No runtime
+write path found in the TS app or active Rust code; bw-scraper carries the client
+dependency for health checks only. [ASSUMED: analytics writes are planned/deferred.]
 
 ## TypeScript Types (`src/types/`)
 
-- `Business` + `BusinessLocation` + `BusinessProfile` + `BusinessHours` (HH:MM validators, 7-day map)
-- `VerificationStatus` (unverified | pending | verified)
-- `UserRole` / `UserStatus` + `validatePassword` / `isValidEmail`
-- `JwtPayload` / `TokenPair`
-- `ScrapeJob` / `ScrapeJobStatus` + `validateScrapeJobInput`
-- `PendingImportBusiness` — carries dead field `duplicateStatus` (column dropped in 012, finding L2)
-- `ScraperSource` (GOOGLE_MAPS | YELP | FACEBOOK), user-management event types, scraper-result types
+`user.ts` (UserRole, UserStatus), `user-management.ts` (RoleChangedEvent +
+validators), `business.ts` (VerificationStatus), `business-status.ts`, `review.ts`
+(ReviewLengthCategory), `scrape-job.ts` (ScrapeJob, ScrapeJobStatus,
+CreateScrapeJobInput), `pending-import-business.ts`, `job.ts` (JobStatus — note: TS
+executor uses `'scraping'`, Postgres CHECK uses `'running'`), `image.ts`,
+`scraper-result.ts` (ScraperResult / RawScraperData for Google|Yelp|Facebook).
+App-level validators: `business-data-validator`, `contact-validator`.
 
-## GraphQL Type Surface (`src/lib/graphql/business-schema.ts`)
+## GraphQL Types (`src/lib/graphql/schema.ts`)
 
-- Types: `Business` (incl. locations[], siteReviews[], ratingSource), `BusinessLocation`, `Review`, `CreateBusinessInput`, `CreateBusinessPayload`, `DateTimeUtc`
-- Query: `business(id)`; resolvers also implement `searchBusinesses` (relevance-ranked, Valkey-cached), `register`, `updateBusiness` (owner-checked), `submitVerification` (MinIO presigned URLs)
-- Execution is a regex mini-parser, not graphql-js (finding H5)
+Declared: `User`, `TokenPair`, `AuthResponse`, `Business`, `CategoryFacet`,
+`SearchResults`, `GQLBusiness`, `PresignedUrl`, `SubmitVerificationResponse`,
+`UpdateBusinessResponse`, `DateTimeUtc`. Query: `searchBusinesses`, `business`,
+`health`. Mutation: `register`, `createBusiness`, plus `submitVerification` and
+`updateBusiness` which are declared but **not executed** by the regex executor.
 
-## Rust Types (`bw-types`)
+## Rust Shapes
 
-Business, Review, User, Verification, Message, Event + email types — consumed only by bw-api and bw-ingestion.
+- **bw-types**: `Business`, `Category`, `Review`, email payloads (shared by
+  `bw-api` + `bw-ingestion` only — bw-scraper defines its own models).
+- **bw-scraper**: `ScrapeRequest { query, location, max_pages }`,
+  `EnrichRequest { business_ids, limit, dry_run }` (snake_case — the TS proxy sends
+  camelCase `businessIds` which serde silently drops, see findings),
+  `LocationsRequest`, `HealthStatus { service, healthy, message }`.

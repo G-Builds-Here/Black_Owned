@@ -60,7 +60,7 @@ impl EmailMessage {
     /// * `body` - Email body content
     ///
     /// # Returns
-    /// A new EmailMessage instance
+    /// A new `EmailMessage` instance
     #[must_use]
     pub fn new(to: String, subject: String, body: String) -> Self {
         Self {
@@ -87,7 +87,7 @@ impl EmailMessage {
     /// * `template_vars` - Variables for template rendering
     ///
     /// # Returns
-    /// A new EmailMessage instance
+    /// A new `EmailMessage` instance
     #[must_use]
     pub fn from_template(
         to: String,
@@ -184,7 +184,7 @@ impl NatsEmailPayload {
     /// * `body` - Email body content
     ///
     /// # Returns
-    /// A new NatsEmailPayload instance
+    /// A new `NatsEmailPayload` instance
     #[must_use]
     pub fn new(to: String, subject: String, body: String) -> Self {
         Self {
@@ -205,7 +205,7 @@ impl NatsEmailPayload {
     /// * `template_vars` - Template variables
     ///
     /// # Returns
-    /// A new NatsEmailPayload instance
+    /// A new `NatsEmailPayload` instance
     #[must_use]
     pub fn with_template(
         to: String,
@@ -265,7 +265,7 @@ impl SmtpConfig {
     /// * `from_email` - Sender email address
     ///
     /// # Returns
-    /// A new SmtpConfig instance
+    /// A new `SmtpConfig` instance
     #[must_use]
     pub fn new(host: String, port: u16, from_email: String) -> Self {
         Self {
@@ -325,7 +325,7 @@ impl EmailTemplate {
     /// * `body` - Body template
     ///
     /// # Returns
-    /// A new EmailTemplate instance
+    /// A new `EmailTemplate` instance
     #[must_use]
     pub fn new(name: String, subject: String, body: String) -> Self {
         Self {
@@ -346,7 +346,7 @@ impl EmailTemplate {
     pub fn render(&self, vars: &HashMap<String, String>) -> String {
         let mut rendered = self.body.clone();
         for (key, value) in vars {
-            let placeholder = format!("{{{{{}}}}}", key);
+            let placeholder = format!("{{{{{key}}}}}");
             rendered = rendered.replace(&placeholder, value);
         }
         rendered
@@ -363,7 +363,7 @@ impl EmailTemplate {
     pub fn render_subject(&self, vars: &HashMap<String, String>) -> String {
         let mut rendered = self.subject.clone();
         for (key, value) in vars {
-            let placeholder = format!("{{{{{}}}}}", key);
+            let placeholder = format!("{{{{{key}}}}}");
             rendered = rendered.replace(&placeholder, value);
         }
         rendered
@@ -392,7 +392,7 @@ impl DlqEmailMessage {
     /// * `attempt_count` - Number of attempts made
     ///
     /// # Returns
-    /// A new DlqEmailMessage instance
+    /// A new `DlqEmailMessage` instance
     #[must_use]
     pub fn new(payload: NatsEmailPayload, error: String, attempt_count: u32) -> Self {
         Self {
@@ -585,7 +585,7 @@ mod tests {
 
     #[test]
     fn test_email_status_default() {
-        let status: EmailStatus = Default::default();
+        let status: EmailStatus = EmailStatus::default();
         assert!(matches!(status, EmailStatus::Pending));
     }
 

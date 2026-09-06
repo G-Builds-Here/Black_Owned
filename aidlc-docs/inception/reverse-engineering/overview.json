@@ -1,36 +1,31 @@
 {
   "artifact": "overview.md",
-  "generated_at": "2026-08-27T04:19:47Z",
-  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "generated_at": "2026-09-05T21:55:00Z",
+  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
   "repo": "Black_Owned",
   "sections": [
     {
       "heading": "What This System Does",
-      "content": "Black Owned is a public directory platform connecting consumers with Black-owned businesses. Users browse and search a business directory (by category, location, rating), and business owners claim listings through a 3-step wizard, submit verification documents (MinIO presigned upload), and view per-business traffic analytics. Admins review claims and scraped imports, moderate reviews, and manage users. Listings are seeded and expanded by scraping pipelines (SearXNG meta-search in Rust, Playwright scrapers in TypeScript) whose candidates are promoted into the directory through an admin import queue.",
+      "content": "\"Black Owned\" is a public directory platform that discovers, verifies, and showcases\nBlack-owned businesses. A Rust discovery worker (`bw-scraper`) scrapes business\nlistings from a SearXNG metasearch instance, enriches them (phone, website, socials,\nlocation via Nominatim geocoding), and writes candidates to PostgreSQL; TypeScript\nPlaywright scrapers additionally cover Google Maps, Yelp, and Facebook. Admins review\nthe pending imports, and business owners register, claim their listing through a\n3-step wizard, and chat with visitors in real time. The web product (browse, search,\nmap, owner/admin consoles) is a Next.js 16 App Router app that also hosts the full\nREST + GraphQL API surface.",
       "type": "prose"
     },
     {
-      "heading": "Why the Project Is Structured This Way",
-      "content": "[ASSUMED \u2014 inferred from code layout and service boundaries]\n\n- **Browser-facing app (Next.js)**: one process owns the entire HTTP surface (directory UI, REST + GraphQL API, admin/owner consoles, live chat). Keeping routing, UI, and API in one App-Router codebase avoids a separate BFF layer at this scale.\n- **Rust scraper worker (bw-scraper)**: discovery/ETL is heavy, rate-limited, flaky network work (SearXNG paging, robots.txt checks, user-agent rotation) with its own analytics sink (ClickHouse). Isolating it as a standalone axum service deploys as a slim Docker image and keeps the web process responsive.\n- **One-shot `tsx` scripts** (`import-scraped-businesses.ts`, `run-social-discovery.ts`, `run-featured-scrape.ts`, `scripts/*.mjs`): backfill/seed jobs that only need a live `DATABASE_URL`, not a long-running service.\n- **Rust library crates** (`bw-ingestion`, `bw-types`): shared ETL/email/cache logic. [ASSUMED] `bw-ingestion` started life as the service that created the `reviews` table (per migration 013, the Rust `bw-api` was \"retired\"); it is now a library with no in-repo consumer \u2014 see findings.",
+      "heading": "Why It's Built This Way",
+      "content": "[ASSUMED \u2014 inferred from code layout and service boundaries]\n\n- **Next.js App Router doubles as the API host.** The product is a web directory, so\n  the UI and the ~50 REST/GraphQL routes live in one `src/app` codebase. There is no\n  separate BFF: server components and route handlers (`src/app/api/**/route.ts`) share\n  the same `pg` pool and auth middleware.\n- **Heavy discovery lives in Rust.** SearXNG paged discovery, rate-limited enrichment,\n  and geocoding are CPU/network-bound work that benefits from `axum` + `sqlx` +\n  `tokio`. Isolating it as a standalone container (`bw-scraper`, port 8080) keeps the\n  web process responsive and deploys as a slim image.\n- **Browser scraping stays in TypeScript.** Google Maps / Yelp / Facebook scraping\n  needs Playwright/Puppeteer, so it runs in-process inside the Next.js app\n  (`src/services/*-scraper.ts`, driven by `POST /api/scrape-jobs`).\n- **Shared Rust types in `bw-types`.** The worker, ingestion lib, and API agree on\n  domain models (`Business`, `Category`, `Review`, email payloads) via a small shared\n  crate.\n- **Migrations split by engine.** OLTP schema is `migrations/postgresql` (21 numbered\n  files); analytics mirror is `migrations/clickhouse`. Two stores because browsing\n  data (Postgres) and view/event analytics (ClickHouse) have different access\n  patterns.\n- **docker-compose pins container names to a fixed project name** (`black_owned`),\n  which is why the e2e helpers can `docker exec black-owned-postgres psql` \u2014 a\n  deliberate choice to support multiple parallel git worktrees.",
       "type": "prose"
     },
     {
-      "heading": "Entry Points",
-      "content": "| Entry point | Project | How it runs |\n|---|---|---|\n| `src/app/page.tsx` + ~30 API routes | web app | `npm run dev` / `npm run build && npm start` (port 3000) |\n| `bw-scraper/src/main.rs` | Rust worker | `cargo run -p bw_scraper` or compose service (port 8080) |\n| `import-scraped-businesses.ts` | root | `npx -y tsx import-scraped-businesses.ts` |\n| `run-social-discovery.ts` | root | `npx tsx run-social-discovery.ts [--all\\|--business <id>]` |\n| `run-featured-scrape.ts` | root | `npx tsx run-featured-scrape.ts` |\n| `scripts/migrate-postgres.mjs` | root | `npm run migrate` |\n| `scripts/geocode-locations.mjs` | root | `npm run geocode` |",
+      "heading": "First-Time Setup",
+      "content": "**Prerequisites:** Node 18+, Docker (compose v2). Rust toolchain only if building\n`bw-scraper` locally \u2014 compose builds it for you otherwise.\n\n```\nnpm install\ncp .env.example .env        # .env is gitignored; .env.example is the tracked template\ndocker compose up -d        # Postgres, ClickHouse, NATS, Valkey, MinIO, bw-scraper\nnpm run migrate             # apply migrations/postgresql (idempotent, tracked in schema_migrations)\nnpm run dev                 # Next.js on :3000\n```\n\n**Verify:**\n- `curl http://localhost:3000/api/health` \u2192 200\n- `curl http://localhost:8080/health` \u2192 `{\"status\":\"healthy\"}`\n\nOptional seed: `psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f db/seed/seed_test_data.sql`.\n\nKey env vars (source of truth = local `.env`, template = `.env.example`):\n`DATABASE_URL` (or `POSTGRES_HOST/PORT/DB/USER/PASSWORD` + `POSTGRES_SCHEMA`),\n`JWT_SECRET` (HS256) or `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH` (RS256),\n`VALKEY_HOST`/`VALKEY_PORT`, `NATS_URL`, `NEXT_PUBLIC_NATS_WS_URL`, `CLICKHOUSE_URL`,\n`SEARXNG_URL`, `MINIO_ENDPOINT`/`MINIO_PORT`/`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`/\n`MINIO_DEFAULT_BUCKET`.",
+      "type": "code"
+    },
+    {
+      "heading": "Running Modes",
+      "content": "| Mode | How | What runs where |\n|------|-----|-----------------|\n| Local dev (default) | `docker compose up -d` + `npm run dev` | Web app on host :3000; infra + `bw-scraper` in compose (bw-scraper on :8080). |\n| Rust tests | `cargo test` / `cargo test -p bw_scraper <filter>` | No infra needed for unit tests; connector integration tests want live Postgres/NATS/Valkey/ClickHouse on localhost. |\n| CI | GitHub Actions | **Rust only** \u2014 `cargo check`, `cargo test --all-targets`, clippy (`-D warnings -W clippy::pedantic`), cargo-llvm-cov coverage, Docker build, cargo audit. The TypeScript corpus (Jest + Playwright) is local-only. |\n\n**Default behavior with no env:** the web app boots and serves static content; every\nDB/Valkey/NATS route 500s lazily on first use (the `pg` Pool is lazy, `max` 20).\n`bw-scraper` is fail-fast: it exits if `DATABASE_URL` is missing or Postgres is down.",
       "type": "table"
-    },
-    {
-      "heading": "Key External Dependencies",
-      "content": "PostgreSQL (system of record), Valkey (refresh tokens + GraphQL cache), NATS (chat events + cache invalidation, browser via WebSocket 8081), MinIO (presigned uploads), ClickHouse (analytics \u2014 currently dormant), SearXNG (meta-search for discovery; default URL is a developer LAN IP \u2014 see findings). Details: `dependencies.md`.",
-      "type": "prose"
-    },
-    {
-      "heading": "Build & Test Commands",
-      "content": "- Web: `npm install`, `npm run dev` / `build` / `start`, `npm test` (Jest, no infra needed), `npm run lint`, `npm run migrate`, `npx playwright test` (E2E, needs compose stack)\n- Rust: `cargo test` (workspace), `cargo test -p bw_scraper <filter>`, `cargo clippy --all-targets -- -D warnings -W clippy::pedantic`, `cargo llvm-cov`\n- Infra: `docker compose up -d` (postgres 15, nats 2.10, clickhouse 23.8, valkey 7.2, minio, bw-scraper)\n\nFull detail: `technology-stack.md`, `test-infrastructure.md`.",
-      "type": "list"
     }
   ],
-  "summary": "Business purpose, structure rationale, and entry points for the Black_Owned repo.",
+  "summary": "Business purpose, polyglot structure rationale, entry points, and running modes for the Black_Owned repo.",
   "primary_consumers": [
     "luke",
     "damian"

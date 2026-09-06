@@ -1,37 +1,42 @@
 /**
  * NATS Client
  *
- * NATS messaging client for publishing events.
+ * Single NATS connection factory and event publishers.
+ * All NATS operations in the web app go through this module.
  */
 
-import { connect, NatsConnection } from "nats";
+import { connect, NatsConnection, Msg } from "nats";
+import { RoleChangedEvent, ROLE_CHANGED_SUBJECT } from "@/types/user-management";
 
 let natsConnection: NatsConnection | null = null;
 
 /**
- * NATS event payload for role changed event
+ * Get NATS connection URL from environment
  */
-export interface RoleChangedEvent {
-  user_id: string;
-  old_role: string;
-  new_role: string;
-  changed_by: string;
-  timestamp: string;
+function getNatsUrl(): string {
+  return process.env.NATS_URL || "nats://localhost:4222";
 }
 
 /**
- * Get or create NATS connection
+ * Get or create NATS connection.
+ * Includes reconnect support and staleness detection.
  */
 export async function getNatsConnection(): Promise<NatsConnection> {
   if (natsConnection) {
-    return natsConnection;
+    if (!natsConnection.isClosed()) {
+      return natsConnection;
+    }
+    // Reconnect attempts were exhausted: the cached connection is permanently
+    // closed and must be replaced.
+    natsConnection = null;
   }
 
-  const natsUrl = process.env.NATS_URL || "nats://localhost:4222";
-
+  const url = getNatsUrl();
   try {
     natsConnection = await connect({
-      servers: natsUrl,
+      servers: url,
+      reconnect: true,
+      maxReconnectAttempts: 10,
     });
     return natsConnection;
   } catch (error) {
@@ -41,26 +46,28 @@ export async function getNatsConnection(): Promise<NatsConnection> {
 }
 
 /**
- * Publish a role changed event to NATS
+ * Publish an arbitrary JSON payload to a NATS subject.
+ * Returns true on success, false when NATS is unreachable.
  */
-export async function publishRoleChangedEvent(
-  userId: string,
-  oldRole: string,
-  newRole: string,
-  changedBy: string
-): Promise<void> {
+export async function publishJson(subject: string, payload: unknown): Promise<boolean> {
   try {
     const nc = await getNatsConnection();
-    const event: RoleChangedEvent = {
-      user_id: userId,
-      old_role: oldRole,
-      new_role: newRole,
-      changed_by: changedBy,
-      timestamp: new Date().toISOString(),
-    };
+    await nc.publish(subject, new TextEncoder().encode(JSON.stringify(payload)));
+    return true;
+  } catch (error) {
+    console.error(`Failed to publish to NATS subject ${subject}:`, error);
+    return false;
+  }
+}
 
-    await nc.publish("user.role_changed", new TextEncoder().encode(JSON.stringify(event)));
-    console.log(`Published role_changed event for user ${userId}: ${oldRole} -> ${newRole}`);
+/**
+ * Publish a role changed event to NATS.
+ */
+export async function publishRoleChangedEvent(event: RoleChangedEvent): Promise<void> {
+  try {
+    const nc = await getNatsConnection();
+    await nc.publish(ROLE_CHANGED_SUBJECT, new TextEncoder().encode(JSON.stringify(event)));
+    console.log(`Published role_changed event for user ${event.userId}`);
   } catch (error) {
     console.error("Failed to publish role_changed event:", error);
     throw error;
@@ -91,7 +98,6 @@ export async function publishVerificationApproved(businessId: string): Promise<v
       businessId,
       timestamp: new Date().toISOString(),
     };
-
     await nc.publish("verification.approved", new TextEncoder().encode(JSON.stringify(event)));
     console.log(`Published verification.approved event for business ${businessId}`);
   } catch (error) {
@@ -111,12 +117,41 @@ export async function publishVerificationRejected(businessId: string, reason: st
       reason,
       timestamp: new Date().toISOString(),
     };
-
     await nc.publish("verification.rejected", new TextEncoder().encode(JSON.stringify(event)));
     console.log(`Published verification.rejected event for business ${businessId}`);
   } catch (error) {
     console.error("Failed to publish verification.rejected event:", error);
     throw error;
+  }
+}
+
+/**
+ * Subscribe to a NATS subject
+ */
+export async function subscribe(subject: string, callback: (msg: Msg) => void): Promise<void> {
+  const nc = await getNatsConnection();
+  const subscription = nc.subscribe(subject);
+  (async () => {
+    for await (const msg of subscription) {
+      callback(msg);
+    }
+  })().catch((err: unknown) => {
+    console.error("Subscription error:", err);
+  });
+}
+
+/**
+ * Check NATS connection health
+ */
+export async function checkNatsHealth(): Promise<boolean> {
+  try {
+    const nc = await getNatsConnection();
+    await nc.request("$SYS.REQ.SERVER.PING", new TextEncoder().encode(""), {
+      timeout: 5000,
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 

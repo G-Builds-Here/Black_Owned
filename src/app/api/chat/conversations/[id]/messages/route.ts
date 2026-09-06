@@ -19,7 +19,7 @@ import {
   getConversationAccess,
   listMessages,
 } from "@/lib/db/chat-repository";
-import { publishJson } from "@/lib/nats/nats-client";
+import { publishJson } from "@/lib/nats/client";
 
 function isValidUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);

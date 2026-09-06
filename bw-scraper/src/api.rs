@@ -52,13 +52,13 @@ pub struct ScrapeRequest {
 #[derive(Deserialize)]
 pub struct EnrichRequest {
     /// Restrict the run to these businesses (still filtered by eligibility).
-    #[serde(default)]
+    #[serde(default, alias = "businessIds")]
     pub business_ids: Option<Vec<Uuid>>,
     /// Max businesses to process in this run; defaults to 50 when omitted.
     #[serde(default)]
     pub limit: Option<i32>,
     /// Report the fields that would apply without writing (zero UPDATEs).
-    #[serde(default)]
+    #[serde(default, alias = "dryRun")]
     pub dry_run: Option<bool>,
 }
 
@@ -310,13 +310,13 @@ const SELECT_LOCATIONS: &str = "SELECT b.id, b.name \
 #[derive(Deserialize)]
 pub struct LocationsRequest {
     /// Restrict the run to these businesses.
-    #[serde(default)]
+    #[serde(default, alias = "businessIds")]
     pub business_ids: Option<Vec<Uuid>>,
     /// Max businesses to process; defaults to 25 when omitted.
     #[serde(default)]
     pub limit: Option<i32>,
     /// Report discovered locations without geocoding or writing rows.
-    #[serde(default)]
+    #[serde(default, alias = "dryRun")]
     pub dry_run: Option<bool>,
 }
 
@@ -417,6 +417,20 @@ mod tests {
     use axum::body::Body;
     use axum::http::Request;
     use crate::rate_limiter::RateLimiterConfig;
+
+    /// Regression: the web app sends camelCase `businessIds`; serde must map it
+    /// onto `business_ids` instead of silently dropping the field (which would
+    /// turn a targeted run into a full-table enrichment).
+    #[test]
+    fn enrich_request_accepts_camelcase_business_ids_alias() {
+        let id = Uuid::new_v4();
+        let body = format!(r#"{{ "businessIds": [ "{id}" ], "limit": 5, "dryRun": true }}"#);
+        let req: EnrichRequest =
+            serde_json::from_str(&body).expect("camelCase businessIds must deserialize");
+        assert_eq!(req.business_ids, Some(vec![id]));
+        assert_eq!(req.limit, Some(5));
+        assert_eq!(req.dry_run, Some(true));
+    }
 
     /// `SearXNG` search-response fixture: one result whose URL is the
     /// website and whose snippet carries the description and a US phone

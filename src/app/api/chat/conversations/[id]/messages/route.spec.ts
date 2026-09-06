@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
 import { createAuthErrorResponse } from "@/lib/auth/jwt-middleware";
-import { publishJson } from "@/lib/nats/nats-client";
+import { publishJson } from "@/lib/nats/client";
 import { GET, POST } from "./route";
 
 jest.mock("@/lib/db/user-repository", () => ({
@@ -17,7 +17,7 @@ jest.mock("@/lib/auth/jwt-middleware", () => ({
   createAuthErrorResponse: jest.fn(),
 }));
 
-jest.mock("@/lib/nats/nats-client", () => ({
+jest.mock("@/lib/nats/client", () => ({
   publishJson: jest.fn(),
 }));
 

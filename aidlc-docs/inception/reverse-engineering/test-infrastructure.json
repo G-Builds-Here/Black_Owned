@@ -1,31 +1,51 @@
 {
   "artifact": "test-infrastructure.md",
-  "generated_at": "2026-08-27T04:19:47Z",
-  "commit": "5a67ed37776c18bc32c9f8e783cb67e23b6c1641",
+  "generated_at": "2026-09-05T21:55:00Z",
+  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
   "repo": "Black_Owned",
   "sections": [
     {
-      "heading": "Toolchains",
-      "content": "1. **Jest** \u2014 main web-app unit/component suite.\n   - `npm test` runs Jest with `jest.config.js`.\n   - `roots: [src/]`, `testMatch` includes `*.spec.ts`, `*.test.ts`, `*.spec.tsx`, `*.test.tsx`.\n   - Uses `jsdom`, `ts-jest`, root `jest.setup.ts`, `__mocks__/next-server.ts`, and `__mocks__/style-mock.js`.\n   - Excludes integration/testcontainers/DB-backed specs via `testPathIgnorePatterns`.\n2. **Playwright** \u2014 E2E suite in `e2e/`.\n   - `npx playwright test` or target a file/project.\n   - `playwright.config.ts` starts `npm run dev` unless an existing server is reused.\n   - Shared helpers in `e2e/e2e-utils.ts` use direct `psql`, session seeding, route warming, and cleanup.\n3. **Cargo test** \u2014 Rust tests.\n   - `cargo test` for workspace.\n   - `cargo test -p bw_scraper` for the active scraper crate.\n   - Inline `#[cfg(test)]` modules plus `tests/` integration files.\n   - Some valid-URL connector tests require live local Postgres/NATS/Valkey/ClickHouse.\n4. **Vitest** \u2014 configured but not installed.\n   - `vitest.config.ts` + `vitest.setup.ts` exist, but `vitest` is not in `devDependencies`.\n   - `src/app/performance.test.ts` imports Vitest and therefore cannot run.\n5. **CI** \u2014 Rust-only.\n   - `ci.yml`: `cargo check`, `cargo test`, clippy, coverage, with GitHub Postgres/NATS/Valkey services.\n   - `bw-scraper-ci.yml`: lint/test/coverage for `bw_scraper`, Docker build, `cargo audit`; excludes non-compiling `bw-api`.",
+      "heading": "Test Frameworks",
+      "content": "| Layer | Framework | Runner / Config |\n|-------|-----------|-----------------|\n| TS unit + component | Jest 29 + ts-jest, jsdom env | `jest.config.js` (root, `npm test`), `jest.config.components.js` (`npx jest -c jest.config.components.js`) |\n| E2E | Playwright ^1.62.1 (chromium/firefox/webkit) | `playwright.config.ts`; `webServer: npm run dev`, `reuseExistingServer: true` |\n| Rust unit + integration | cargo test | in-file `#[cfg(test)]` modules; `bw-scraper/tests/*.rs` |\n| Rust lint/coverage | clippy + cargo-llvm-cov | CI only: `cargo clippy --all-targets -- -D warnings -W clippy::pedantic` |\n| packages/ui (standalone) | Vitest 4 + @vitest/coverage-v8, Playwright + axe | its own `package.json` (NOT a root workspace member) |\n\n**CI (.github/workflows) runs Rust only**: check, test (`--all-targets`), coverage,\nclippy, Docker build, cargo audit (bw-scraper-ci). No Jest/Playwright jobs.",
+      "type": "table"
+    },
+    {
+      "heading": "Excluded-from-default Jest Runs (`testPathIgnorePatterns`)",
+      "content": "- `src/app/performance.test.ts` \u2014 imports vitest, which is **not installed** at root.\n- `*-integration.spec.ts` \u2014 testcontainers; need Docker + Postgres.\n- `src/lib/minio/minio-service.spec.ts` \u2014 live MinIO.\n- `src/lib/db/business-repository.spec.ts`, `scrape-job-repository.spec.ts`,\n  `user-management-repository.spec.ts` \u2014 live Postgres.\n- `src/qa/scraper-e2e.spec.ts`, `src/services/scraper-job-executor.spec.ts` \u2014 live infra.\n\nRun these manually against a live compose stack when needed:\n`npx jest src/lib/db/business-repository.spec.ts`.",
       "type": "list"
     },
     {
-      "heading": "Mock Patterns",
-      "content": "- API route specs colocate next to routes: `src/app/api/<name>/route.spec.ts`.\n- Common mocks:\n  - `jest.mock('@/lib/db/user-repository', () => ({ getPool: jest.fn() }))`\n  - `jest.mock('@/lib/auth/jwt-middleware', () => ({ createAuthMiddleware: jest.fn(), createAuthErrorResponse: jest.fn() }))`\n  - `jest.mock('next/navigation')` for components.\n  - `jest.mock('@/lib/auth/client-session')` for client session behavior.\n- Requests are often plain objects cast to `Request` because routes usually call `request.json()`.\n- Component specs use `@testing-library/react`, usually organized by state: Loading, Error, Not Found, Success.",
+      "heading": "First-Time Local Setup",
+      "content": "```\ndocker compose up -d        # infra + bw-scraper\nnpm run migrate             # schema must exist before DB-backed specs / e2e\nnpm test                    # Jest \u2014 no infra needed\nnpx playwright test         # E2E \u2014 needs the stack + app on :3000\ncargo test -p bw_scraper    # Rust \u2014 unit needs nothing; connectors want live services\n```\n\nCredential/infra resolution:\n- Jest unit: none (DB + auth mocked).\n- DB-backed Jest / E2E / Rust connectors: `DATABASE_URL` (or `POSTGRES_*`), plus\n  NATS/Valkey/ClickHouse on their localhost ports; `e2e-utils.ts` shells out to\n  `docker exec black-owned-postgres psql` for seeding/teardown (requires the\n  Docker CLI + running containers).\n- Rust CI sets `VALKEY_URL`, but the connector test reads `REDIS_URL` \u2014 the CI\n  variable is therefore ineffective (see findings).",
+      "type": "code"
+    },
+    {
+      "heading": "Running Modes",
+      "content": "| Mode | Command | Infra required |\n|------|---------|----------------|\n| Unit (default) | `npm test` | none |\n| Filtered Jest | `npx jest <path> -t '<name>'` | none |\n| E2E | `npx playwright test [file]` | full compose stack + app :3000 |\n| Rust unit | `cargo test -p bw_scraper <filter>` | none |\n| Rust connectors | `cargo test -p bw_scraper` | live Postgres/NATS/Valkey/ClickHouse (localhost) |\n| CI | `.github/workflows/ci.yml` | Postgres/NATS/Valkey services (no ClickHouse) |",
+      "type": "table"
+    },
+    {
+      "heading": "Test Groups and Ordering",
+      "content": "**Ordering that matters:** compose up \u2192 migrate \u2192 app/e2e. Migrations must precede\nanything touching tables. Jest unit tests need no infra; cargo unit tests need no\nservices; connector tests are meaningful only with live services.\n\nThere is no group/trait system beyond the `testPathIgnorePatterns` exclusions and\nthe Jest `roots: [src]` scoping.",
+      "type": "prose"
+    },
+    {
+      "heading": "Adding a New Test",
+      "content": "**Jest REST route spec** (colocate with the route):\n`src/app/api/<name>/route.spec.ts` next to `route.ts`.\n- Mock the repository boundary:\n  `jest.mock(\"@/lib/db/user-repository\", () => ({ getPool: jest.fn() }))`, stub\n  `getPool().connect().query()` per call.\n- Build the request with `new NextRequest(url)` (jsdom polyfills in\n  `jest.setup.ts`); call the exported `GET`/`POST`; assert `res.status` +\n  `await res.json()`.\n- Pattern: `src/app/api/directory/route.spec.ts`.\n\n**E2E spec**: `e2e/<feature>.spec.ts`.\n- Import `test, expect` from `@playwright/test` plus helpers from `./e2e-utils`\n  (`apiJson`, `newSession`, `seedSession`, `psql`, `warmRoutes`,\n  `firstCategoryUuid`, cleanup helpers).\n- Use `RUN_SUFFIX` for unique emails; teardown via `psql` DELETE in `afterAll`;\n  call `warmRoutes([...])` before navigation to avoid cold-compile flakes.\n\n**Rust unit**: in-file `#[cfg(test)] mod tests` at the bottom of the module\n(example: `bw-scraper/src/robots.rs`); async with `#[tokio::test]`.\n\n**Rust integration**: new file `bw-scraper/tests/<name>_test.rs`; plain\n`#[tokio::test]` importing the crate's public API; read service URLs from env with\nlocalhost fallbacks (pattern: `tests/connectors_test.rs`); seed/cleanup with raw\nsqlx queries.",
+      "type": "prose"
+    },
+    {
+      "heading": "Coverage",
+      "content": "- Rust: cargo-llvm-cov in CI (`bw-scraper` only; `bw-api` excluded \"until its\n  pre-existing compile errors are fixed\" \u2014 currently `cargo check` passes, so the\n  exclusion is stale).\n- TS: none configured at root; `packages/ui` has vitest v8 coverage.",
       "type": "list"
     },
     {
-      "heading": "How To Add A Test",
-      "content": "- **New REST route**: create `src/app/api/<name>/route.spec.ts` beside the route.\n  - Mock `getPool` and auth middleware.\n  - Define `AUTH_OK` / `AUTH_FAIL` fixtures.\n  - Test 401/403, validation 400, happy path, and external/DB failure cases.\n- **New component**: create `src/components/<Name>.spec.tsx` beside the component.\n  - Mock navigation/session/auth as needed.\n  - Assert with `screen.getBy*`, `waitFor`, and state-based describe blocks.\n- **New Rust unit test**: add `#[cfg(test)] mod tests` inside the file for pure logic.\n- **New Rust integration test**: add `tests/<name>_test.rs`; if it needs live services, document required env vars and defaults.\n- **New E2E test**: add `e2e/<feature>.spec.ts` and reuse `e2e-utils.ts`.",
-      "type": "list"
-    },
-    {
-      "heading": "Known Test Risks",
-      "content": "- `npm test` green does not prove integration behavior: DB-backed and testcontainers suites are excluded.\n- Jest component config is not wired to an npm script and references a missing `__mocks__/file-mock.js`.\n- Multiple unreferenced setup files exist: root `jest.setup.js`, `src/jest.setup.ts`, and active root `jest.setup.ts`.\n- Root-level Valkey/ClickHouse/test-environment specs are not picked up by Jest because `roots` is `src/`.\n- `.worktrees/epic-jest/` contains stale duplicate test infrastructure.",
+      "heading": "Gotchas",
+      "content": "- **MinIO host port is 9002** (9000 is ClickHouse). The app default is\n  `MINIO_PORT=9000` \u2014 set `MINIO_PORT=9002` in `.env` for host-side presigned URLs.\n- **Playwright `reuseExistingServer: true`** \u2014 a stale `next dev` (e.g. from a\n  worktree) silently serves old code to the suite.\n- **Vitest at root is unrunnable** (configured but not installed); the only working\n  vitest is `packages/ui`.\n- **Rust connector \"valid URL\" tests assert only that a health message is\n  non-empty** \u2014 they pass with every service down (hollow CI signal).",
       "type": "list"
     }
   ],
-  "summary": "Test toolchains, mock patterns, and how to add tests.",
+  "summary": "How to run every test layer, how infra is resolved, and how to add a new test in each layer.",
   "primary_consumers": [
     "luke",
     "bruce",

@@ -10,12 +10,10 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getUsersPaginated,
   updateUserRole,
-  updateUserStatus,
 } from "@/lib/db/user-management-repository";
-import { publishRoleChangedEvent } from "@/lib/nats/nats-client";
+import { publishRoleChangedEvent } from "@/lib/nats/client";
 import {
   isValidRole,
-  isValidStatus,
   RoleChangedEvent,
 } from "@/types/user-management";
 import { requireRole, AuthenticatedUser } from "@/lib/auth/auth-middleware";
@@ -207,99 +205,4 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-/**
- * PATCH /api/users/status
- * Update a user's status (admin only)
- */
-export async function PATCH_STATUS(request: NextRequest): Promise<NextResponse> {
-  try {
-    // Verify authentication
-    const token = request.headers.get("authorization")?.replace("Bearer ", "");
-    if (!token) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 }
-      );
-    }
 
-    const payload = verifyTokenSafe(token);
-    if (!payload) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid or expired token",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 }
-      );
-    }
-
-    // Only admins can change status
-    if (payload.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Only administrators can modify user status",
-          code: "INSUFFICIENT_ROLE",
-        },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-    const { userId, status } = body;
-
-    // Validate required fields
-    if (!userId || !status) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "userId and status are required",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate status
-    if (!isValidStatus(status)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid status. Must be one of: active, inactive, suspended`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Update status
-    const updatedUser = await updateUserStatus(userId, status);
-
-    if (!updatedUser) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to update user status",
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedUser,
-    });
-  } catch (error) {
-    console.error("Error updating user status:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-      },
-      { status: 500 }
-    );
-  }
-}

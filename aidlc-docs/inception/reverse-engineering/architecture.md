@@ -1,63 +1,47 @@
 <!--
-surveyed_at: 2026-08-27T02:40:39Z
-commit: 5a67ed37776c18bc32c9f8e783cb67e23b6c1641
+surveyed_at: 2026-09-05T19:45:00Z
+commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
 relevant_paths:
-- src/app
-- src/lib
-- src/services
-- bw-scraper/src
-- docker-compose.yml
-summary: Component boundaries, data flows, and cross-boundary calls.
+  - src/app
+  - src/lib
+  - src/services
+  - bw-scraper/src
+  - docker-compose.yml
+summary: Component map, service boundaries, and why the polyglot split exists.
 -->
 
 # Architecture
 
-## Components
+## Why This Structure Exists
 
-| Component | Project | Responsibility |
-|---|---|---|
-| `src/app` (pages + `api/**/route.ts`) | web app | entire HTTP surface: 31 API routes + ~20 pages (directory, search, business detail, owner claim wizard, admin console, chat, auth) |
-| `src/lib` | web app | service layer: `db/` repositories, `auth/` JWT + role middleware, `valkey/`, `nats/`, `minio/`, `chat/` (browser WS client), `graphql/` (resolvers + regex mini-parser + 30s Valkey cache) |
-| `src/services` | web app | Playwright scrapers (google-maps/yelp/facebook), scraper-job-executor, duplicate-detection, social-discovery, image-service — executor is invoked **only by tests** (see findings H3) |
-| `src/components` | web app | UI: `ui/` primitives, `admin/`, `business/` |
-| `bw-scraper` | Rust | active discovery worker: SearXNG → ETL → `scraped_businesses`; owns `scrape_jobs` lifecycle rows; axum /health + POST /scrape on :8080 |
-| `bw-ingestion` | Rust | library only: ETL pipelines, NATS chat/email consumers, image pipeline, cache invalidation — no binary, no in-repo consumer |
-| `bw-api` | Rust | retired axum/GraphQL service (created `reviews` table per migration 013); still a workspace member; currently not compiling |
-| `bw-types` | Rust | shared domain types (used by bw-api + bw-ingestion only) |
-| one-shot scripts | root | `import-scraped-businesses.ts` (scraped → businesses promotion), `run-*.ts`, `scripts/*.mjs` |
-| `docker-compose.yml` | infra | postgres, nats, clickhouse, valkey, minio, bw-scraper |
+The product is a web directory, so the **Next.js App Router app owns the entire user-facing surface** (pages, REST routes, hand-rolled GraphQL, live chat). Discovery is the expensive part of the pipeline: paged metasearch, rate-limited enrichment, geocoding, and dedupe. That work runs in a **Rust axum worker** (`bw-scraper`) so the web process stays responsive and deploys as a slim container. Browser-based scraping (Google Maps, Yelp, Facebook) needs DOM automation, so it stays **in-process in TypeScript** (`src/services/`). Two storage engines split OLTP (Postgres) from analytics (ClickHouse).
 
-## Cross-Boundary Calls
+## Component Map
 
-- **web app ↔ Postgres** — direct `pg` Pool, the primary data channel; every route. Tables: users, businesses, categories, pending_import_businesses, scrape_jobs, scraped_businesses, business_views, conversations, messages, reviews, business_locations.
-- **web app ↔ bw-scraper** — **no HTTP calls at all.** Verified: nothing in `src/` fetches `:8080`. The only coupling is shared Postgres: both write `scrape_jobs`, both touch `scraped_businesses`, with no claim/lock protocol (finding H3).
-- **bw-scraper ↔ SearXNG** — outbound HTTP (`SEARXNG_URL`).
-- **web app ↔ Valkey** — refresh tokens (`refresh:{token}`) + GraphQL query cache (30s TTL).
-- **web app ↔ NATS (4222)** — publish `role_changed` (admin role PATCH), subscribe `cache.invalidate` → delete Valkey keys.
-- **browser ↔ NATS WebSocket (8081)** — live chat + notifications via nats.ws.
-- **web app ↔ MinIO** — presigned PUT URLs for owner verification documents.
-- **ClickHouse** — provisioned + health-checked + schema present (ReplacingMergeTree mirror), **zero writers** — dormant.
+| Component | Project | Type | Responsibility | Key Files |
+|-----------|---------|------|----------------|-----------|
+| Web app + REST/GraphQL API | root | Next.js App Router | All UI pages, ~50 API routes, auth, chat, admin/owner consoles | `src/app/**`, `src/components/**` |
+| Domain libs | root | Node modules | `pg` repositories, JWT auth, Valkey cache, NATS pub/sub, MinIO presigned URLs, GraphQL schema + regex executor | `src/lib/db`, `src/lib/auth`, `src/lib/valkey`, `src/lib/nats`, `src/lib/minio`, `src/lib/graphql` |
+| Browser scrapers | root | TS services | Google Maps / Yelp / Facebook scraping driven by `POST /api/scrape-jobs` | `src/services/*-scraper.ts`, `src/services/scraper-job-executor.ts` |
+| Discovery worker | bw-scraper | Rust axum service (:8080) | SearXNG discovery, bounded enrichment, Nominatim location discovery, operator API (`/scrape`, `/enrich`, `/locations`, `/health`) | `bw-scraper/src/{main,api,scraper,enrichment,locations,searxng,rate_limiter,robots,user_agent_rotator}.rs` |
+| Ingestion lib | bw-ingestion | Rust library (dormant) | NATS chat/email/image consumers, Valkey cache invalidator, ETL transformers; **no binary or compose service runs it** | `bw-ingestion/src/{chat_consumer,email_*,image_*,cache_invalidator,etl/*}.rs` |
+| Legacy API | bw-api | Rust crate (dormant) | Pre-Next.js API skeleton: axum bin (`/health` only), placeholder handlers, async-graphql schema; historically created the `reviews`/`categories` tables that migrations 013/020 later backfilled | `bw-api/src/{lib,bin/main,routes/*,middleware/*,graphql/*}.rs` |
+| Shared types | bw-types | Rust library | `Business`, `Category`, `Review`, email payload types shared by `bw-api` and `bw-ingestion` | `bw-types/src/{lib,email}.rs` |
+| Schema | root | Migrations | Postgres OLTP schema (21 numbered files) + ClickHouse analytics mirror | `migrations/postgresql`, `migrations/clickhouse` |
+| UI package | packages/ui | Standalone npm pkg | Component library with its own vitest/playwright; not a root workspace member | `packages/ui` |
 
-## Core Data Flow (directory content pipeline)
+## Service Interaction Map
 
-```
-SearXNG ──(bw-scraper, Rust)──► scraped_businesses ──(admin import / one-shot script)──► pending_import_businesses (pending_review)
-                                                                                          │
-Google Maps/Yelp/Facebook ──(src/services Playwright, test-only executor)─────────────────┤
-                                                                                          ▼
-                                          businesses (status: unverified → pending_review → approved/rejected)
-                                                                                          │
-                                  claim wizard (owner) + verification doc (MinIO) ◄───────┤
-                                                                                          ▼
-                                            admin approval / bulk-approve ──► verified listings in /directory
-```
+**Crosses a boundary:**
+- **HTTP (Next.js → bw-scraper):** only `POST /api/admin/enrichment` proxies to `POST /enrich` (`SCRAPER_BASE_URL`, default `http://localhost:8080`, 502 on failure). `POST /api/scrape-jobs` does NOT call bw-scraper — it inserts a job row and runs the in-process TS scrapers.
+- **Shared Postgres (strongest coupling):** Next.js and bw-scraper both write `businesses`, `scrape_jobs`, `scraped_businesses`, `business_locations`. bw-scraper `/enrich` and `/locations` mutate product data directly, bypassing app-layer validation.
+- **NATS:** Next.js publishes `user.role_changed`, `verification.approved/rejected`, `chat.message.<cid>`, `chat.notification.<userId>`; the Node side subscribes `cache.invalidate`. bw-scraper health-checks NATS only (no pub/sub in active code). bw-ingestion defines consumers that nothing in this repo runs.
+- **Valkey:** TS query cache + NATS cache-invalidator subscription; bw-scraper health-checks `REDIS_URL` only.
+- **MinIO:** TS presigned-URL service (active); bw-ingestion image worker (dormant).
+- **ClickHouse:** compose service + migration only; bw-scraper carries the dependency for health checks; no runtime write path found in TS.
 
-Directory merge: `approved` rows in `pending_import_businesses` are also served as directory content until promoted into `businesses` — the queue table doubles as live content (finding M5).
+**Internal:** `src/lib` repositories stay inside the web app; each Rust crate is self-contained; no Rust crate depends on the Next.js app; no circular crate dependencies.
 
-## On-Site Reviews
+## Why Components Are Bounded This Way
 
-Write path is shipped: POST /api/reviews (authenticated), admin moderation via /api/reviews/[id]/moderate (soft-hide), location-scoped via `location_id`. External Google reviews (aggregate count + snippets) are still the gap this epic addresses — no S1 enrichment pipeline exists yet.
-
-## Why These Boundaries
-
-[ASSUMED] Single Postgres as system of record keeps the directory queryable in one place at the cost of two uncoordinated writers on the scrape pipeline. NATS was chosen for chat fan-out (browser WS relay) and cross-cutting cache invalidation rather than polling. Valkey holds refresh tokens (survival across process restarts, revocable) instead of stateless-only JWTs.
+[ASSUMED — from module layout] The boundary that matters is *where network-bound, rate-limited work happens*: SearXNG/Nominatim traffic lives in Rust behind a token-bucket rate limiter and robots.txt guard; DOM automation lives in Node where Playwright lives; user-facing CRUD lives in Next.js. `bw-ingestion`/`bw-api` are the remnants of an earlier "all Rust" architecture: their consumers (NATS work queues) were superseded by in-process TS handling, which is why they ship as libraries no binary runs. The dual-writer Postgres coupling and the single enrichment proxy are the seams that would break first if either side changed its schema or status semantics.

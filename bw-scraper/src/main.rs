@@ -24,6 +24,9 @@ async fn main() -> anyhow::Result<()> {
         database = %masked_database,
         "starting bw-scraper"
     );
+    if config.searxng_url.is_empty() {
+        tracing::warn!("SEARXNG_URL is not set — /scrape and /enrich will return 503 until configured");
+    }
 
     let pool = PgPool::connect(&config.database_url)
         .await
