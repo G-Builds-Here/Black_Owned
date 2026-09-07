@@ -3,6 +3,7 @@
 //! This crate provides tools for scraping and processing business data from various sources.
 
 pub mod enrichment;
+pub mod highlights;
 pub mod scraper;
 pub mod types;
 
