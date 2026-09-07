@@ -20,6 +20,8 @@
 //!   `highlights/dictionaries.json`, loaded via `include_str!` at compile
 //!   time. A category without a v1 dictionary yields no entries and no
 //!   error.
+//! - Review mining (LOC-0087): 2-4 word phrases recurring across visible
+//!   positive reviews are mined and merged behind dictionary entries.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -70,6 +72,157 @@ pub struct HighlightsDecision {
     pub value: Option<Vec<String>>,
     /// Per-business report note; [`NO_HIGHLIGHTS_NOTE`] when `value` is `None`.
     pub note: String,
+}
+
+/// A single stored review, as read from the `reviews` table
+/// (`SELECT comment, rating, visible FROM reviews WHERE business_id = $1`).
+/// Reviewer name and location live in other tables (resolved by the
+/// GraphQL layer) and are not part of mining.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Review {
+    pub comment: String,
+    /// 1-5 scale.
+    pub rating: i32,
+    /// Moderation soft-hide flag (migration 013).
+    pub visible: bool,
+}
+
+/// Minimum rating for a review to count as "positive" for phrase mining.
+const MIN_POSITIVE_RATING: i32 = 4;
+/// Minimum number of visible positive reviews before any phrase is mined —
+/// a single review cannot establish a recurring phrase.
+const MIN_REVIEWS_FOR_MINING: usize = 2;
+/// Minimum document frequency: a phrase must appear in this many distinct
+/// positive reviews to qualify.
+const MIN_DOC_FREQUENCY: usize = 2;
+
+/// Stopwords that disqualify a candidate phrase — any window containing one
+/// is dropped ("very good" never surfaces as a highlight).
+const STOPWORDS: &[&str] = &[
+    "a", "an", "the", "and", "but", "or", "nor", "is", "am", "are", "was",
+    "were", "be", "been", "being", "do", "does", "did", "doing", "have",
+    "has", "had", "having", "will", "would", "could", "should", "may",
+    "might", "must", "shall", "can", "need", "to", "of", "in", "on", "at",
+    "by", "for", "from", "with", "without", "into", "over", "under", "up",
+    "down", "out", "off", "about", "against", "between", "through",
+    "during", "before", "after", "above", "below", "as", "if", "then",
+    "that", "this", "these", "those", "i", "you", "he", "she", "it", "we",
+    "they", "me", "him", "her", "us", "them", "my", "your", "his", "its",
+    "our", "their", "who", "whom", "which", "what", "where", "why", "how",
+    "all", "any", "some", "each", "few", "more", "most", "other", "such",
+    "than", "too", "just", "only", "also", "even", "still", "yet", "now",
+    "here", "there", "when", "while", "because", "until", "again", "once",
+    "always", "never", "very", "really", "quite", "rather", "fairly",
+];
+
+/// Split a comment into words: whitespace-split, surrounding punctuation
+/// trimmed, original casing preserved.
+fn tokenize(comment: &str) -> Vec<String> {
+    comment
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+/// Mine recurring 2-4 word phrases from visible positive reviews.
+///
+/// Pure and deterministic. A phrase qualifies when it appears in at least
+/// [`MIN_DOC_FREQUENCY`] distinct visible reviews rated
+/// [`MIN_POSITIVE_RATING`] or higher, contains no stopwords, and spans 2-4
+/// words. Ranking: document frequency desc, then word count asc (prefer the
+/// tightest recurring phrase), then alphabetical. Phrases that contain an
+/// already-selected phrase (or are contained in one) are dropped so
+/// "live music" and "live music tonight" never both surface. Capped at
+/// [`MAX_HIGHLIGHT_ENTRIES`].
+pub fn mine_review_phrases(reviews: &[Review]) -> Vec<String> {
+    let positive: Vec<&Review> = reviews
+        .iter()
+        .filter(|r| r.visible && r.rating >= MIN_POSITIVE_RATING)
+        .collect();
+
+    // One review cannot establish a recurring phrase — no mining at all.
+    if positive.len() < MIN_REVIEWS_FOR_MINING {
+        return Vec::new();
+    }
+
+    let mut doc_freq: HashMap<String, usize> = HashMap::new();
+    let mut display: HashMap<String, String> = HashMap::new();
+
+    for review in &positive {
+        let words = tokenize(&review.comment);
+        // Per-review set: a phrase repeating within one comment counts
+        // once toward document frequency.
+        let mut seen_in_review: HashSet<String> = HashSet::new();
+        for n in 2..=4 {
+            if words.len() < n {
+                break;
+            }
+            for i in 0..=words.len() - n {
+                let gram: Vec<String> = words[i..i + n].to_vec();
+                // Any stopword in the window disqualifies the phrase.
+                if gram
+                    .iter()
+                    .any(|w| STOPWORDS.contains(&w.to_lowercase().as_str()))
+                {
+                    continue;
+                }
+                let key = gram.join(" ").to_lowercase();
+                if seen_in_review.insert(key.clone()) {
+                    *doc_freq.entry(key.clone()).or_insert(0) += 1;
+                    display.entry(key).or_insert(gram.join(" "));
+                }
+            }
+        }
+    }
+
+    let mut ranked: Vec<(String, usize)> = doc_freq
+        .into_iter()
+        .filter(|(_, freq)| *freq >= MIN_DOC_FREQUENCY)
+        .collect();
+    ranked.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| a.0.split(' ').count().cmp(&b.0.split(' ').count()))
+            .then_with(|| a.0.cmp(&b.0))
+    });
+
+    let mut out: Vec<String> = Vec::new();
+    let mut selected: Vec<String> = Vec::new();
+    for (key, _) in ranked {
+        // Near-duplicate suppression: drop phrases that overlap a
+        // selected phrase by containment ("live music" vs "live music
+        // tonight"). The first (higher-ranked) of the pair wins.
+        if selected.iter().any(|s| key.contains(s.as_str()) || s.contains(key.as_str())) {
+            continue;
+        }
+        selected.push(key.clone());
+        out.push(display.remove(&key).unwrap_or_else(|| key.clone()));
+        if out.len() == MAX_HIGHLIGHT_ENTRIES {
+            break;
+        }
+    }
+    out
+}
+
+/// Merge dictionary entries and mined review phrases into the final
+/// highlight list: dictionary entries first, deduped case-insensitively,
+/// total capped at [`MAX_HIGHLIGHT_ENTRIES`] (review phrases trim at the
+/// cap, never dictionary entries).
+fn merge_entries(dictionary: Vec<String>, review_phrases: Vec<String>) -> Vec<String> {
+    let mut seen: HashSet<String> = HashSet::new();
+    for entry in &dictionary {
+        seen.insert(normalize(entry));
+    }
+    let mut out = dictionary;
+    for phrase in review_phrases {
+        if out.len() >= MAX_HIGHLIGHT_ENTRIES {
+            break;
+        }
+        if seen.insert(normalize(&phrase)) {
+            out.push(truncate_chars(&phrase, MAX_HIGHLIGHT_LEN));
+        }
+    }
+    out
 }
 
 /// A dictionary term that qualified for highlight inclusion.
@@ -158,18 +311,14 @@ pub fn terms_for_category(category_slug: &str) -> Option<&'static [String]> {
     dictionaries().get(category_slug).map(|v| v.as_slice())
 }
 
-/// Extract highlight entries for one business, per the epic contract.
+/// Dictionary-only highlight entries for one category + corpus.
 ///
-/// Pure: given the same `category_slug` and `corpus` the result is always
-/// the same. `value: None` means "no write" — the caller leaves
-/// `highlights` NULL; `note` carries the per-business report line.
-pub fn extract_highlights(category_slug: &str, corpus: &Corpus) -> HighlightsDecision {
+/// Ranked by weight desc with dictionary order breaking ties; deduped
+/// case-insensitively and capped at [`MAX_HIGHLIGHT_ENTRIES`].
+fn extract_dictionary_entries(category_slug: &str, corpus: &Corpus) -> Vec<String> {
     let Some(terms) = terms_for_category(category_slug) else {
         // Unknown category: no v1 dictionary — no entries, no error.
-        return HighlightsDecision {
-            value: None,
-            note: NO_HIGHLIGHTS_NOTE.to_string(),
-        };
+        return Vec::new();
     };
 
     let prominent_zones: [&[String]; 4] = [
@@ -232,6 +381,24 @@ pub fn extract_highlights(category_slug: &str, corpus: &Corpus) -> HighlightsDec
             break;
         }
     }
+
+    entries
+}
+
+/// Extract highlight entries for one business, per the epic contract.
+///
+/// Pure: given the same inputs the result is always the same. Dictionary
+/// entries lead; mined review phrases fill the remaining budget. `value:
+/// None` means "no write" — the caller leaves `highlights` NULL; `note`
+/// carries the per-business report line.
+pub fn extract_highlights(
+    category_slug: &str,
+    corpus: &Corpus,
+    reviews: &[Review],
+) -> HighlightsDecision {
+    let dictionary = extract_dictionary_entries(category_slug, corpus);
+    let mined = mine_review_phrases(reviews);
+    let entries = merge_entries(dictionary, mined);
 
     if entries.is_empty() {
         HighlightsDecision {
@@ -485,9 +652,10 @@ pub fn enrich_highlights(
     html: &str,
     searxng_json: Option<&str>,
     place_description: Option<&str>,
+    reviews: &[Review],
 ) -> HighlightsDecision {
     let corpus = parse_corpus(html, searxng_json, place_description);
-    extract_highlights(category_slug, &corpus)
+    extract_highlights(category_slug, &corpus, reviews)
 }
 
 #[cfg(test)]
@@ -531,7 +699,7 @@ mod tests {
             &["We host live music every Friday.", "Our live music runs until midnight."],
         );
 
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
 
         assert_eq!(
             decision.value,
@@ -555,7 +723,7 @@ mod tests {
     fn ac1_substring_is_not_a_word_boundary_match() {
         // "unbelievably soulful" must not match "soul food".
         let c = corpus(&[], &[], &[], &[], &[], &["unbelievably soulful"]);
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
         assert!(decision.value.is_none());
         assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
     }
@@ -564,7 +732,7 @@ mod tests {
     fn ac1_lively_musician_does_not_match_live_music() {
         // "lively musician" must not match "live music".
         let c = corpus(&[], &[], &[], &[], &[], &["a lively musician on stage"]);
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
         assert!(decision.value.is_none());
     }
 
@@ -580,7 +748,7 @@ mod tests {
             &[],
             &["alive music is rare", "we are live musical hosts"],
         );
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
         assert!(decision.value.is_none());
     }
 
@@ -607,7 +775,7 @@ mod tests {
             ],
         );
 
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
         let entries = decision.value.expect("entries present");
 
         assert_eq!(entries.len(), MAX_HIGHLIGHT_ENTRIES, "exactly 5 entries, 6th dropped");
@@ -641,7 +809,7 @@ mod tests {
             &["soul food every sunday"],
         );
 
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
 
         assert_eq!(
             decision.value,
@@ -658,7 +826,7 @@ mod tests {
         // nav: "Family Law" (3x) · h2: "Estate Planning" (3x).
         let c = corpus(&["Family Law"], &["Estate Planning"], &[], &[], &[], &[]);
 
-        let decision = extract_highlights("professional-services", &c);
+        let decision = extract_highlights("professional-services", &c, &[]);
 
         assert_eq!(
             decision.value,
@@ -680,7 +848,7 @@ mod tests {
             &["Our criminal defense team handles complex cases."],
         );
 
-        let decision = extract_highlights("professional-services", &c);
+        let decision = extract_highlights("professional-services", &c, &[]);
 
         assert!(decision.value.is_none());
         assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
@@ -698,7 +866,7 @@ mod tests {
             &["criminal defense consultation available. criminal defense trial support offered."],
         );
 
-        let decision = extract_highlights("professional-services", &c);
+        let decision = extract_highlights("professional-services", &c, &[]);
 
         assert_eq!(
             decision.value,
@@ -722,7 +890,7 @@ mod tests {
             &["Welcome to our kitchen. Fresh food served daily."],
         );
 
-        let decision = extract_highlights("food-dining", &c);
+        let decision = extract_highlights("food-dining", &c, &[]);
 
         assert!(decision.value.is_none(), "zero matches: no write");
         assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
@@ -741,7 +909,7 @@ mod tests {
             &["We sell fashionable clothing for everyone."],
         );
 
-        let decision = extract_highlights("retail-fashion", &c);
+        let decision = extract_highlights("retail-fashion", &c, &[]);
 
         assert!(decision.value.is_none());
         assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
@@ -749,7 +917,7 @@ mod tests {
 
     #[test]
     fn ac3_empty_corpus_produces_no_write() {
-        let decision = extract_highlights("food-dining", &Corpus::default());
+        let decision = extract_highlights("food-dining", &Corpus::default(), &[]);
         assert!(decision.value.is_none());
         assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
     }
@@ -819,7 +987,7 @@ mod tests {
     fn one_shot_food_dining_from_html_matches_ac1() {
         let json = r#"{"results": [{"title": "City Eats Guide", "snippet": "The best black owned restaurants in the city."}]}"#;
 
-        let decision = enrich_highlights("food-dining", FOOD_HTML, Some(json), None);
+        let decision = enrich_highlights("food-dining", FOOD_HTML, Some(json), None, &[]);
 
         assert_eq!(
             decision.value,
@@ -885,5 +1053,240 @@ mod tests {
     fn word_boundary_matches_returns_spans_in_original_casing() {
         let hits = word_boundary_matches("Try Soul Food today, soul food is back.", "soul food");
         assert_eq!(hits, vec!["Soul Food", "soul food"]);
+    }
+
+    /// Build a fixture [`Review`] from (comment, rating, visible).
+    fn review(comment: &str, rating: i32, visible: bool) -> Review {
+        Review {
+            comment: comment.to_string(),
+            rating,
+            visible,
+        }
+    }
+
+    // -------------------------------------------------------------
+    // AC1 — positive phrases mined from visible reviews
+    // -------------------------------------------------------------
+
+    #[test]
+    fn ac1_two_positive_reviews_mine_live_music() {
+        let reviews = vec![
+            review("The live music tonight was fantastic", 5, true),
+            review("Their live music set is worth the trip", 4, true),
+            review("Amazing staff and friendly service", 5, true),
+        ];
+
+        let decision = extract_highlights("food-dining", &Corpus::default(), &reviews);
+
+        assert_eq!(
+            decision.value,
+            Some(vec!["live music".to_string()]),
+            "phrase in 2 of 3 positive visible reviews must surface"
+        );
+        assert_eq!(decision.note, "1 highlights found");
+    }
+
+    #[test]
+    fn ac1_phrase_in_single_review_not_extracted() {
+        let reviews = vec![
+            review("The secret menu is worth asking about", 5, true),
+            review("Staff was pleasant, portions generous", 4, true),
+        ];
+
+        let decision = extract_highlights("food-dining", &Corpus::default(), &reviews);
+
+        assert!(decision.value.is_none(), "no recurring phrase: no write");
+        assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
+    }
+
+    #[test]
+    fn ac1_stopword_heavy_phrase_excluded() {
+        let reviews = vec![
+            review("The food was very good and fresh", 5, true),
+            review("Very good service last time", 4, true),
+            review("A very good experience overall", 5, true),
+        ];
+
+        let phrases = mine_review_phrases(&reviews);
+
+        assert!(
+            !phrases.iter().any(|p| normalize(p) == "very good"),
+            "stopword-heavy phrase must not surface, got {phrases:?}"
+        );
+        let decision = extract_highlights("food-dining", &Corpus::default(), &reviews);
+        assert!(decision.value.is_none(), "no valid recurring phrase: no write");
+    }
+
+    #[test]
+    fn ac1_negative_sentiment_reviews_excluded() {
+        let reviews = vec![
+            review("The slow service drove me away", 1, true),
+            review("Slow service again, never coming back", 2, true),
+        ];
+
+        let decision = extract_highlights("food-dining", &Corpus::default(), &reviews);
+
+        assert!(
+            decision.value.as_deref() != Some(&vec!["slow service".to_string()]),
+            "phrases from negative reviews must not surface"
+        );
+        assert!(decision.value.is_none());
+    }
+
+    // -------------------------------------------------------------
+    // AC2 — review phrases merge behind dictionary entries
+    // -------------------------------------------------------------
+
+    #[test]
+    fn ac2_review_phrases_merged_behind_dictionary() {
+        let c = corpus(&["Soul Food"], &["Vegan Options"], &[], &[], &[], &[]);
+        let reviews = vec![
+            review("The live music tonight was fantastic", 5, true),
+            review("Their live music set is worth the trip", 4, true),
+        ];
+
+        let decision = extract_highlights("food-dining", &c, &reviews);
+
+        assert_eq!(
+            decision.value,
+            Some(vec![
+                "Soul Food".to_string(),
+                "Vegan Options".to_string(),
+                "live music".to_string(),
+            ]),
+            "dictionary entries first, then mined review phrases"
+        );
+    }
+
+    #[test]
+    fn ac2_cap_trims_review_phrases_first() {
+        // 5 dictionary matches (same fixture as ac1_cap_at_five_entries...)
+        // plus 3 mined review phrases — the cap keeps all 5 dictionary
+        // entries and trims the review phrases.
+        let c = corpus(
+            &["Soul Food"],
+            &["Vegan Options"],
+            &["Organic Ingredients on every plate"],
+            &["Craft Cocktails"],
+            &[],
+            &[
+                "live music plays on Fridays. live music continues late. The Vegetarian Menu \
+                 is posted. Our Vegetarian Menu updates weekly. Private Dining is available. \
+                 Private Dining seats groups. An Outdoor Patio faces the street. An Outdoor \
+                 Patio is pet friendly.",
+            ],
+        );
+        let reviews = vec![
+            review("I loved the great coffee, the warm bread, and the fresh salads", 5, true),
+            review("We enjoyed great coffee, warm bread, and fresh salads too", 4, true),
+            review("The staff were incredibly friendly", 5, true),
+        ];
+        let mined = mine_review_phrases(&reviews);
+        assert_eq!(
+            mined,
+            vec![
+                "fresh salads".to_string(),
+                "great coffee".to_string(),
+                "warm bread".to_string(),
+            ],
+            "precondition: 3 phrases mined"
+        );
+
+        let decision = extract_highlights("food-dining", &c, &reviews);
+        let entries = decision.value.expect("entries present");
+
+        assert_eq!(entries.len(), MAX_HIGHLIGHT_ENTRIES, "exactly 5 entries");
+        for want in [
+            "Soul Food",
+            "Vegan Options",
+            "Organic Ingredients",
+            "Craft Cocktails",
+            "live music",
+        ] {
+            assert!(entries.iter().any(|e| e == want), "missing {want:?}");
+        }
+        for trimmed in ["great coffee", "warm bread", "fresh salads"] {
+            assert!(
+                !entries.iter().any(|e| e == trimmed),
+                "{trimmed:?} should be trimmed at the cap"
+            );
+        }
+    }
+
+    #[test]
+    fn ac2_mined_phrase_deduped_against_dictionary() {
+        // "live music" matches the dictionary (body x2) AND is mined from
+        // reviews — it must appear exactly once.
+        let c = corpus(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &["live music every friday", "live music until midnight"],
+        );
+        let reviews = vec![
+            review("The live music tonight was fantastic", 5, true),
+            review("Their live music set is worth the trip", 4, true),
+        ];
+
+        let decision = extract_highlights("food-dining", &c, &reviews);
+
+        assert_eq!(
+            decision.value,
+            Some(vec!["live music".to_string()]),
+            "each phrase appears at most once"
+        );
+    }
+
+    // -------------------------------------------------------------
+    // AC3 — insufficient reviews yield nothing
+    // -------------------------------------------------------------
+
+    #[test]
+    fn ac3_zero_visible_reviews_yield_no_review_phrases() {
+        let c = corpus(&["Soul Food"], &[], &[], &[], &[], &[]);
+
+        let decision = extract_highlights("food-dining", &c, &[]);
+
+        assert_eq!(
+            decision.value,
+            Some(vec!["Soul Food".to_string()]),
+            "dictionary-only result, no review-derived phrases"
+        );
+    }
+
+    #[test]
+    fn ac3_single_review_yields_no_review_phrases() {
+        let c = corpus(&["Soul Food"], &[], &[], &[], &[], &[]);
+        let reviews = vec![review("We love the live music here, the live music is great", 5, true)];
+
+        assert!(mine_review_phrases(&reviews).is_empty());
+        let decision = extract_highlights("food-dining", &c, &reviews);
+
+        assert_eq!(
+            decision.value,
+            Some(vec!["Soul Food".to_string()]),
+            "one review cannot establish a recurring phrase"
+        );
+    }
+
+    #[test]
+    fn ac3_hidden_reviews_ignored() {
+        let c = corpus(&["Soul Food"], &[], &[], &[], &[], &[]);
+        let reviews = vec![
+            review("The live music was great", 5, false),
+            review("Live music every week", 4, false),
+            review("Best live music around", 5, false),
+        ];
+
+        assert!(mine_review_phrases(&reviews).is_empty(), "hidden reviews are not mined");
+        let decision = extract_highlights("food-dining", &c, &reviews);
+
+        assert_eq!(
+            decision.value,
+            Some(vec!["Soul Food".to_string()]),
+            "hidden reviews must not contribute phrases"
+        );
     }
 }
