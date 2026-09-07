@@ -2,8 +2,9 @@
  * Business Content Repository
  *
  * Read/write access for the editable content fields on `businesses`
- * (website, phone, menu_url, image_url, description, social_urls) used by
- * the admin content editor (LOC-0080). Partial-update semantics: only the
+ * (website, phone, menu_url, image_url, description, social_urls,
+ * highlights) used by the admin content editor (LOC-0080, highlights
+ * LOC-0089). Partial-update semantics: only the
  * fields present in the update map are written; an explicit null clears a
  * field. Manual override is intentional — no fill-empty restriction here.
  */
@@ -21,6 +22,7 @@ export const CONTENT_FIELD_COLUMNS = {
   imageUrl: "image_url",
   description: "description",
   socialUrls: "social_urls",
+  highlights: "highlights",
 } as const;
 
 export type ContentField = keyof typeof CONTENT_FIELD_COLUMNS;
@@ -39,6 +41,7 @@ export interface BusinessContent {
   imageUrl: string | null;
   description: string | null;
   socialUrls: SocialEntry[] | null;
+  highlights: string[] | null;
 }
 
 export interface ContentUpdates {
@@ -48,6 +51,7 @@ export interface ContentUpdates {
   imageUrl?: string | null;
   description?: string | null;
   socialUrls?: SocialEntry[] | null;
+  highlights?: string[] | null;
 }
 
 /**
@@ -55,7 +59,10 @@ export interface ContentUpdates {
  * schema (migration 004), so the cap follows the column. image_url and
  * description are TEXT; their caps are app-level.
  */
-const CONTENT_LIMITS: Record<Exclude<ContentField, "socialUrls">, number> = {
+const CONTENT_LIMITS: Record<
+  Exclude<ContentField, "socialUrls" | "highlights">,
+  number
+> = {
   website: 255,
   phone: 50,
   menuUrl: 500,
@@ -67,10 +74,15 @@ const SOCIAL_URLS_MAX_ENTRIES = 10;
 const SOCIAL_PLATFORM_MAX = 50;
 const SOCIAL_URL_MAX = 500;
 
+// HIGHLIGHTS epic caps (migration 022): at most 5 entries, each at most
+// 80 chars. App-level, mirroring the socialUrls cap constants above.
+const HIGHLIGHTS_MAX_ENTRIES = 5;
+const HIGHLIGHT_ENTRY_MAX = 80;
+
 const SELECT_CONTENT_SQL =
-  "SELECT id, name, website, phone, menu_url, image_url, description, social_urls FROM businesses WHERE id = $1";
+  "SELECT id, name, website, phone, menu_url, image_url, description, social_urls, highlights FROM businesses WHERE id = $1";
 const RETURNING_COLUMNS =
-  "id, name, website, phone, menu_url, image_url, description, social_urls";
+  "id, name, website, phone, menu_url, image_url, description, social_urls, highlights";
 
 function isSocialEntry(value: unknown): value is SocialEntry {
   if (typeof value !== "object" || value === null) {
@@ -95,6 +107,22 @@ function isValidSocialUrls(value: unknown): value is SocialEntry[] {
   );
 }
 
+function isHighlightEntry(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= HIGHLIGHT_ENTRY_MAX
+  );
+}
+
+function isValidHighlights(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= HIGHLIGHTS_MAX_ENTRIES &&
+    value.every(isHighlightEntry)
+  );
+}
+
 function mapRow(row: Record<string, unknown>): BusinessContent {
   const socialUrls = row.social_urls;
   return {
@@ -106,6 +134,7 @@ function mapRow(row: Record<string, unknown>): BusinessContent {
     imageUrl: row.image_url as string | null,
     description: row.description as string | null,
     socialUrls: isValidSocialUrls(socialUrls) ? socialUrls : null,
+    highlights: isValidHighlights(row.highlights) ? row.highlights : null,
   };
 }
 
@@ -207,6 +236,17 @@ export function validateContentBody(body: unknown): ValidationOutcome {
         };
       }
       updates.socialUrls = (value as SocialEntry[] | null) ?? null;
+      continue;
+    }
+
+    if (field === "highlights") {
+      if (value !== null && !isValidHighlights(value)) {
+        return {
+          ok: false,
+          error: `highlights must be an array (max ${HIGHLIGHTS_MAX_ENTRIES}) of strings (max ${HIGHLIGHT_ENTRY_MAX} chars each)`,
+        };
+      }
+      updates.highlights = (value as string[] | null) ?? null;
       continue;
     }
 
