@@ -69,6 +69,7 @@ describe("business(id:) resolver", () => {
       imageUrl: null,
       cardImageUrl: null,
       tags: ["Classic"],
+      highlights: [],
       lat: null,
       lng: null,
       source: null,
@@ -83,6 +84,36 @@ describe("business(id:) resolver", () => {
       createdAt: { timestamp: Math.floor(new Date("2026-01-15T00:00:00Z").getTime() / 1000) },
     });
     // Should not query pending or scraped when canonical is found
+    expect(mockClient.query).not.toHaveBeenCalled();
+    expect(findScrapedBusinessById).not.toHaveBeenCalled();
+  });
+
+  it("should map NULL highlights to an empty array on the canonical path", async () => {
+    // LOC-0088 AC3: a canonical business whose highlights column is NULL in
+    // the database must come back as an empty array, never null, so the
+    // GraphQL Business type ([String!]) and the card/detail UI stay valid.
+    (findBusinessById as jest.Mock).mockResolvedValue({
+      id: BIZ_ID,
+      ownerId: "owner-1",
+      name: "No Highlights Biz",
+      description: "desc",
+      categoryId: "food-dining",
+      verificationStatus: "verified",
+      location: "12 Main St",
+      rating: 4.0,
+      reviewCount: 5,
+      website: "https://nohl.example",
+      imageUrl: null,
+      tags: [],
+      highlights: null,
+      createdAt: new Date("2026-01-15T00:00:00Z"),
+      updatedAt: new Date("2026-01-15T00:00:00Z"),
+    });
+
+    const result = await business(undefined, { id: BIZ_ID });
+
+    expect(result?.highlights).toEqual([]);
+    expect(result?.highlights).not.toBeNull();
     expect(mockClient.query).not.toHaveBeenCalled();
     expect(findScrapedBusinessById).not.toHaveBeenCalled();
   });
@@ -121,6 +152,7 @@ describe("business(id:) resolver", () => {
       website: "https://pending.example",
       rating: 4.1,
       reviewCount: 7,
+      highlights: [],
       lat: null,
       lng: null,
       source: "yelp",
@@ -178,6 +210,7 @@ describe("business(id:) resolver", () => {
       source: "yelp",
       verified: false,
       socialUrls: null,
+      highlights: [],
       locations: [],
       menuUrl: null,
       ratingSource: "google",

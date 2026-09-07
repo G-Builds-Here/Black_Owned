@@ -30,6 +30,7 @@ export interface Business {
   lat?: number | null;
   lng?: number | null;
   tags?: string[] | null;
+  highlights?: string[] | null;
   createdAt: Date;
   updatedAt: Date;
   socialUrls?: SocialUrls | null;

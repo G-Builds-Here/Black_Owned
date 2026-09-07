@@ -34,6 +34,7 @@ interface DirectoryBusiness {
   imageUrl?: string | null;
   cardImageUrl?: string | null;
   tags?: string[] | null;
+  highlights?: string[] | null;
   lat?: number | null;
   lng?: number | null;
   createdAt: string;
@@ -85,6 +86,7 @@ function toCardBusiness(item: DirectoryBusiness): Business {
     cardImageUrl: item.cardImageUrl ?? item.imageUrl ?? '',
     description: item.description || (item.website ? `Website: ${item.website}` : ''),
     tags: item.tags ?? [],
+    highlights: item.highlights ?? [],
   };
 }
 

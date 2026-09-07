@@ -227,6 +227,7 @@ export async function business(
   siteReviewCount: number;
   siteRating: number | null;
   siteReviews: SiteReviewGql[];
+  highlights: string[];
   imageUrl?: string | null;
   cardImageUrl?: string | null;
   lat?: number | null;
@@ -296,6 +297,8 @@ export async function business(
         source: typeof sd.source === "string" ? sd.source : null,
         verified: true,
         socialUrls: null,
+        // pending_import_businesses has no highlights column — stays [] until post-approval enrichment
+        highlights: [],
         createdAt: { timestamp: Math.floor(createdAt.getTime() / 1000) },
         locations: [],
         menuUrl: null,
@@ -323,16 +326,18 @@ export async function business(
         rating: scraped.rating ?? null,
         reviewCount: scraped.reviewCount ?? null,
         source: scraped.source,
-        verified: false,
-        socialUrls: null,
-        createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
-        locations: [],
-        menuUrl: null,
-        ratingSource: "google",
-        siteReviewCount: 0,
-        siteRating: null,
-        siteReviews: [],
-      };
+      verified: false,
+      socialUrls: null,
+      createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
+      locations: [],
+      menuUrl: null,
+      ratingSource: "google",
+      siteReviewCount: 0,
+      siteRating: null,
+      siteReviews: [],
+      // scraped businesses have no highlights — always [] at the API edge
+      highlights: [],
+    };
     }
 
     return null;
@@ -357,6 +362,7 @@ export interface SearchBusiness {
   cardImageUrl: string;
   description: string;
   tags: string[];
+  highlights: string[];
 }
 
 /**
@@ -375,6 +381,7 @@ export function toSearchBusiness(item: DirectoryBusiness): SearchBusiness {
     cardImageUrl: "",
     description: item.description ?? "",
     tags: [],
+    highlights: item.highlights ?? [],
   };
 }
 
@@ -467,6 +474,7 @@ function businessToGraphqlBusiness(business: Business, categoryName?: string) {
     lat: business.lat ?? null,
     lng: business.lng ?? null,
     tags: business.tags ?? [],
+    highlights: business.highlights ?? [],
     source: null,
     locations: business.locations ?? [],
     verified: business.verificationStatus === 'verified',

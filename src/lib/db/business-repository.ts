@@ -100,6 +100,7 @@ function rowToBusiness(row: unknown): Business {
     lat: (r.lat as number | null | undefined) ?? null,
     lng: (r.lng as number | null | undefined) ?? null,
     tags: (r.tags as string[] | null | undefined) ?? null,
+    highlights: (r.highlights as string[] | null | undefined) ?? null,
     createdAt: new Date(r.created_at as string),
     updatedAt: new Date(r.updated_at as string),
     socialUrls: normalizeSocialUrls(r.social_urls),

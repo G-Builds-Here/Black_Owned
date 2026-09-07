@@ -37,6 +37,7 @@ export const businessTypeDefs = `#graphql
     lat: Float
     lng: Float
     tags: [String!]
+    highlights: [String!]
     source: String
     locations: [BusinessLocation!]!
     verified: Boolean!
