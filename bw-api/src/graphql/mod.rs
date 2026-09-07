@@ -12,3 +12,6 @@ pub mod types;
 
 #[cfg(test)]
 mod tests;
+
+// Re-export Schema type and create_schema function for convenience
+pub use schema::{Schema, create_schema};

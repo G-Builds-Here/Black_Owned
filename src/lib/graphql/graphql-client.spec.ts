@@ -27,7 +27,7 @@ describe('GraphQL Client', () => {
       await graphqlQuery('{ test }', { id: '123' });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/graphql',
+        '/api/graphql',
         expect.objectContaining({
           method: 'POST',
           headers: {
@@ -179,7 +179,7 @@ describe('GraphQL Client', () => {
       await fetchBusinessById('test-id');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/graphql',
+        'https://api.example.com/api/graphql',
         expect.any(Object)
       );
 
@@ -209,7 +209,7 @@ describe('GraphQL Client', () => {
       await fetchBusinessById('test-id');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/graphql',
+        '/api/graphql',
         expect.any(Object)
       );
 

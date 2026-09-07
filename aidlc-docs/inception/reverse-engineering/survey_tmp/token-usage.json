@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "status": "mapped",
+  "repo_root": "/tmp/bo_survey",
+  "tokens": [],
+  "summary": {
+    "tokens_found": 0,
+    "files_scanned": 0
+  }
+}

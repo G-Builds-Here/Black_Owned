@@ -68,6 +68,12 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
+                    address: None,
+                    phone: None,
+                    website: None,
+                    category: None,
+                    rating: None,
+                    review_count: None,
                 };
                 let cursor = id.to_string();
                 let node = GQLBusiness::from(business);
@@ -130,6 +136,12 @@ impl QueryRoot {
             owner_id: Uuid::nil(),
             verified,
             created_at,
+            address: None,
+            phone: None,
+            website: None,
+            category: None,
+            rating: None,
+            review_count: None,
         };
 
         Ok(Some(GQLBusinessWithRatings::with_ratings(
@@ -153,7 +165,7 @@ impl QueryRoot {
             Error::new(format!("Invalid UUID: {:?}", e))
         })?;
 
-        let rows = sqlx::query_as::<_, (Uuid, Uuid, Uuid, i8, String, chrono::DateTime<Utc>)>(
+        let rows = sqlx::query_as::<_, (Uuid, Uuid, Uuid, i16, String, chrono::DateTime<Utc>)>(
             "SELECT id, business_id, user_id, rating, comment, created_at FROM reviews WHERE business_id = $1",
         )
         .bind(business_uuid)
@@ -221,6 +233,12 @@ impl QueryRoot {
                     owner_id: Uuid::nil(),
                     verified,
                     created_at,
+                    address: None,
+                    phone: None,
+                    website: None,
+                    category: None,
+                    rating: None,
+                    review_count: None,
                 })
             })
             .collect())
@@ -248,8 +266,8 @@ impl QueryRoot {
                 COUNT(*) FILTER (WHERE status = 'failed') as failed,
                 COALESCE(SUM(items_scraped), 0) as total_items,
                 AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration,
-                MIN(EXTRACT(EPOCH FROM (completed_at - started_at)))::integer as min_duration,
-                MAX(EXTRACT(EPOCH FROM (completed_at - started_at)))::integer as max_duration
+                MIN(EXTRACT(EPOCH FROM (completed_at - started_at)))::bigint as min_duration,
+                MAX(EXTRACT(EPOCH FROM (completed_at - started_at)))::bigint as max_duration
             FROM scrape_jobs
             WHERE started_at >= $1 AND completed_at IS NOT NULL
             "#,

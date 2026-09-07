@@ -6,6 +6,39 @@
 
 ---
 
+## 0. As-Built Deviations (verified 2026-08-22)
+
+This blueprint planned the scraper stack entirely in Rust. The as-built system
+splits the work differently; the original plan below is retained for
+reference. Key divergences:
+
+- **Source scraping is in TypeScript, not Rust.** Google Maps, Yelp, and
+  Facebook extraction run on Playwright in `src/services/`
+  (`google-maps-scraper.ts`, `yelp-scraper.ts`, `facebook-scraper.ts`, the
+  `business-scraper.ts` factory, and `scraper-job-executor.ts`). The planned
+  Rust `bw-scraper/src/scrapers/` directory was not created.
+- **Rust `bw-scraper` handles discovery + ETL, not raw scraping.** Its `src/`
+  holds a single `scraper.rs` plus `searxng.rs` (SearXNG metasearch discovery —
+  added after this blueprint), `etl.rs`, `importer.rs`, `connectors.rs`,
+  `models.rs`, `api.rs`, `main.rs`, and anti-bot modules
+  (`rate_limiter.rs`, `user_agent_rotator.rs`, `robots.rs`).
+- **`bw-types/src/scraping.rs` was not created** (the crate keeps `email.rs`
+  and `lib.rs` only). Scraping types live in `bw-scraper/src/models.rs` and in
+  the frontend `src/types/`.
+- **No `import_batches` table.** Import tracking uses `scrape_jobs` (Postgres)
+  plus the `pending_import_businesses` review gate.
+- **Job lifecycle** adds a fifth status: `pending | running | completed |
+  failed | cancelled` (the Behavior Decomposition table in §4 lists four,
+  omitting `cancelled`).
+- **Admin job API** is the REST route `src/app/api/scrape-jobs/` (GET/POST),
+  not the specced `POST /api/admin/scrape-jobs` + `PUT /:id/approve`; approval
+  goes through `POST /api/businesses/[id]/approve`.
+- **Fuzzy deduplication** is `src/services/duplicate-detection-service.ts`
+  (name + address + phone), wired into the import job route.
+- **AC-level QA suites** live in `src/qa/` (incl. `scraper-e2e.spec.ts`).
+
+---
+
 ## 1. Repository Mapping & Target Location
 
 | Path | Why |
@@ -14,7 +47,7 @@
 | `bw-scraper/src/scrapers/` | Source-specific scraper implementations (GoogleMaps, Yelp, Facebook) |
 | `bw-scraper/src/etl/` | Data normalization and transformation pipeline |
 | `bw-scraper/src/importer/` | PostgreSQL import logic with deduplication |
-| `src/app/admin/scraping/` | Admin UI for managing scrape jobs and reviewing imported businesses |
+| `src/app/admin/scrape/` | Admin UI for managing scrape jobs and reviewing imported businesses |
 | `bw-types/src/scraping.rs` | Shared types for scrape jobs and raw data |
 
 **Justification:** The `bw-scraper` crate follows the existing `bw-ingestion` pattern for async background workers using NATS JetStream. Admin UI placed alongside existing admin console pages.
@@ -172,7 +205,7 @@
 | Queue | NATS JetStream | 2.10+ | Async-nats with stream support |
 | Analytics | ClickHouse | 23.8+ | clickhouse-rs driver |
 | Cache | Valkey/Redis | 7.2+ | Rate limiting state |
-| Frontend | Next.js | 14 | TypeScript, Tailwind, App Router |
+| Frontend | Next.js | 16 | TypeScript, Tailwind, App Router |
 
 ---
 

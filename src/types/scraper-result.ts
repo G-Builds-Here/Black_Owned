@@ -127,9 +127,14 @@ export interface FacebookRawData {
 
 /**
  * Source enumeration for scraper origins
+ *
+ * Values use the hyphenated form ("google-maps") to match the domain
+ * convention used by PlaceDetails, the REST routes, and the DB `source`
+ * column's canonical values. (Was "google_maps"; the underscore form was the
+ * lone outlier and broke the scraper-result `source` contract.)
  */
 export enum ScraperSource {
-  GOOGLE_MAPS = "google_maps",
+  GOOGLE_MAPS = "google-maps",
   YELP = "yelp",
   FACEBOOK = "facebook",
 }
@@ -203,6 +208,15 @@ export interface ScraperOptions {
   maxPages?: number;
   delayBetweenPagesMs?: number;
   includeDuplicates?: boolean;
+  /**
+   * Credentials for platforms that gate content behind a login wall. Scrapers
+   * that support authenticated scraping detect a login prompt and log in with
+   * these; when absent, scraping stays anonymous.
+   */
+  credentials?: {
+    email: string;
+    password: string;
+  };
 }
 
 /**

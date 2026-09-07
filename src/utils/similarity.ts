@@ -90,6 +90,11 @@ export function normalizeString(str: string): string {
   return str
     .toLowerCase()
     .trim()
+    // Remove apostrophes (straight + curly) so possessives/contractions
+    // collapse before any tokenization ("joe's" -> "joes"). Done before the
+    // general punctuation pass, which would otherwise split them into
+    // separate tokens ("joe s") and deflate Jaccard similarity.
+    .replace(/['’]/g, '')
     // Remove common business suffixes
     .replace(/\b(llc|inc|corp|corporation|ltd|limited|co|company)\b/gi, '')
     // Normalize street abbreviations

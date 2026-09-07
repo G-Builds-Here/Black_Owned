@@ -15,7 +15,7 @@ export async function login(
 ): Promise<{
   success: boolean;
   tokens?: { accessToken: string; refreshToken: string };
-  user?: { id: string; email: string; name: string; createdAt: string };
+  user?: { id: string; email: string; name: string; role: string; createdAt: string };
   error?: string;
 }> {
   const { email, password } = args;
@@ -52,6 +52,7 @@ export async function login(
     id: user.id,
     email: user.email,
     name: user.name,
+    role: user.role || "user",
     createdAt: user.createdAt.toISOString(),
   };
 

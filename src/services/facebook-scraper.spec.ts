@@ -181,7 +181,11 @@ describe("FacebookScraper", () => {
       mockPage.waitForSelector.mockResolvedValue(undefined);
       mockPage.evaluate.mockImplementation(() => {
         callCount++;
-        return callCount < 2 ? [{ name: `Business ${callCount}`, source: "facebook" as const }] : [];
+        // Call #1 is the login-wall check (detectLoginPrompt); no wall present.
+        if (callCount === 1) return false;
+        return callCount === 2
+          ? [{ name: "Business 1", source: "facebook" as const }]
+          : [];
       });
       mockPage.$.mockResolvedValueOnce({ click: jest.fn() });
 
@@ -200,6 +204,7 @@ describe("FacebookScraper", () => {
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockResolvedValue(undefined);
       mockPage.evaluate
+        .mockResolvedValueOnce(false) // login-wall check (detectLoginPrompt)
         .mockResolvedValueOnce([duplicateBusiness])
         .mockResolvedValueOnce([duplicateBusiness]);
       mockPage.$.mockResolvedValue(null);

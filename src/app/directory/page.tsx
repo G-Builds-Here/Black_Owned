@@ -1,122 +1,200 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import BusinessCard, { Business } from '@/components/ui/BusinessCard';
 import FilterBar, { FilterOption, SortOption } from '@/components/ui/FilterBar';
 import { Navigation } from '@/components/ui/Navigation';
-import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import dynamic from 'next/dynamic';
+import type { MapPin } from '@/components/ui/MapView';
 
-// Mock data - in production this would come from an API
-const MOCK_BUSINESSES: Business[] = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-  {
-    id: '4',
-    name: 'Heritage Wellness Center',
-    category: 'Health & Wellness',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Chicago, IL',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
-    tags: ['Wellness', 'Massage', 'Holistic'],
-  },
-  {
-    id: '5',
-    name: 'Golden Era Barbershop',
-    category: 'Personal Services',
-    rating: 4.7,
-    reviewCount: 312,
-    location: 'Houston, TX',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
-    tags: ['Barber', 'Grooming', 'Community'],
-  },
-  {
-    id: '6',
-    name: 'Rhythm & Blues Records',
-    category: 'Entertainment',
-    rating: 4.6,
-    reviewCount: 78,
-    location: 'New Orleans, LA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
-    tags: ['Music', 'Vinyl', 'Audio'],
-  },
-];
+// MapView pulls in Leaflet, which touches `window` at module scope — load
+// it client-only so server-side rendering of this page never evaluates it.
+const MapView = dynamic(
+  () => import('@/components/ui/MapView').then((m) => m.default),
+  { ssr: false }
+);
 
-const CATEGORIES = [
-  'Food & Dining',
-  'Professional Services',
-  'Retail & Fashion',
-  'Health & Wellness',
-  'Personal Services',
-  'Entertainment',
-];
+/**
+ * Shape of a /api/directory business item
+ */
+interface DirectoryBusiness {
+  id: string;
+  name: string;
+  category: string;
+  rating: number | null;
+  reviewCount: number | null;
+  location: string;
+  isVerified: boolean;
+  description: string | null;
+  website: string | null;
+  phone: string | null;
+  source: string | null;
+  imageUrl?: string | null;
+  cardImageUrl?: string | null;
+  tags?: string[] | null;
+  lat?: number | null;
+  lng?: number | null;
+  createdAt: string;
+  /**
+   * Physical locations from business_locations (primary first). When
+   * present the map pins one marker per location instead of the single
+   * businesses.lat/lng.
+   */
+  locations?: {
+    label: string | null;
+    address: string;
+    lat: number | null;
+    lng: number | null;
+  }[] | null;
+}
 
-const LOCATIONS = [
-  'Harlem, NY',
-  'Atlanta, GA',
-  'Los Angeles, CA',
-  'Chicago, IL',
-  'Houston, TX',
-  'New Orleans, LA',
-  'Washington, DC',
-  'Philadelphia, PA',
-];
+interface DirectoryFacets {
+  categories: string[];
+  locations: string[];
+}
+
+/**
+ * Derive a place ("City, ST") from a location string.
+ * Must match the server-side deriveLocation (route.ts) so client filters
+ * agree with API facets. Returns null when no City, ST shape is present.
+ */
+function deriveLocation(address: string): string | null {
+  if (!address) return null;
+  const parts = address.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const stateMatch = parts[parts.length - 1].match(/^([A-Za-z]{2})(?:\s+\d{5})?$/);
+  if (!stateMatch) return null;
+  return `${parts[parts.length - 2]}, ${stateMatch[1]}`;
+}
+
+/**
+ * Map a directory item to the BusinessCard shape
+ */
+function toCardBusiness(item: DirectoryBusiness): Business {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    rating: item.rating ?? 0,
+    reviewCount: item.reviewCount ?? 0,
+    location: item.location,
+    isVerified: item.isVerified,
+    imageUrl: item.imageUrl ?? '',
+    cardImageUrl: item.cardImageUrl ?? item.imageUrl ?? '',
+    description: item.description || (item.website ? `Website: ${item.website}` : ''),
+    tags: item.tags ?? [],
+  };
+}
+
+/**
+ * Sort directory items by the active sort option
+ */
+function sortDirectory(items: DirectoryBusiness[], sort: SortOption): DirectoryBusiness[] {
+  const result = [...items];
+  switch (sort) {
+    case 'rating':
+      result.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+      break;
+    case 'distance':
+      result.sort((a, b) => a.location.localeCompare(b.location));
+      break;
+    case 'newest':
+      result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      break;
+    case 'relevance':
+    default:
+      result.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.name.localeCompare(b.name));
+      break;
+  }
+  return result;
+}
 
 function DirectoryContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
+  // Seed filters from the URL so shared links restore the active filters
   const [filters, setFilters] = useState<FilterOption>(() => {
+    const next: FilterOption = {};
     const category = searchParams.get('category');
-    return category ? { category } : {};
+    const location = searchParams.get('location');
+    const minRatingRaw = searchParams.get('minRating');
+    const verifiedOnly = searchParams.get('verifiedOnly');
+    if (category) next.category = category;
+    if (location) next.location = location;
+    if (minRatingRaw && !Number.isNaN(Number(minRatingRaw))) {
+      next.minRating = Number(minRatingRaw);
+    }
+    if (verifiedOnly === 'true') next.verifiedOnly = true;
+    return next;
   });
+  // Free-text search (name, location, category, tags); synced to the URL
+  const [search, setSearch] = useState<string>(() => searchParams.get('search') ?? '');
   const [sort, setSort] = useState<SortOption>('relevance');
   const [savedBusinesses, setSavedBusinesses] = useState<Set<string>>(new Set());
   const [showMap, setShowMap] = useState(true);
+  const [directory, setDirectory] = useState<DirectoryBusiness[]>([]);
+  const [facets, setFacets] = useState<DirectoryFacets>({ categories: [], locations: [] });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchDirectory = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await fetch('/api/directory');
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setDirectory(data.data.businesses);
+        setFacets(data.data.facets);
+      } else {
+        setLoadError('Failed to load the directory');
+      }
+    } catch (error) {
+      console.error('Failed to load directory:', error);
+      setLoadError('Failed to load the directory');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDirectory();
+  }, [fetchDirectory]);
+
+  // Write filters + search back to the URL so the current view is shareable
+  // and survives a reload. Uses replace (not push) so tweaks don't pile up
+  // history entries.
+  const pushUrl = (f: FilterOption, s: string) => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const setOrDelete = (key: string, value: string | null) => {
+      if (value === null || value === '') {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    };
+    setOrDelete('category', f.category ?? null);
+    setOrDelete('location', f.location ?? null);
+    setOrDelete('minRating', f.minRating ? String(f.minRating) : null);
+    setOrDelete('verifiedOnly', f.verifiedOnly ? 'true' : null);
+    setOrDelete('search', s || null);
+
+    const query = params.toString();
+    router.replace(query ? `/directory?${query}` : '/directory', { scroll: false });
+  };
 
   const handleFilterChange = (newFilters: FilterOption) => {
     setFilters(newFilters);
+    pushUrl(newFilters, search);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    pushUrl(filters, value);
   };
 
   const handleSortChange = (newSort: SortOption) => {
@@ -125,7 +203,7 @@ function DirectoryContent() {
 
   const handleViewDetails = (businessId: string) => {
     console.log('View details:', businessId);
-    // Navigate to business detail page
+    // Navigation is handled by the card link (enableLink)
   };
 
   const handleSave = (businessId: string) => {
@@ -141,7 +219,7 @@ function DirectoryContent() {
   };
 
   const handleShare = async (businessId: string) => {
-    const business = MOCK_BUSINESSES.find((b) => b.id === businessId);
+    const business = directory.find((b) => b.id === businessId);
     if (business && navigator.share) {
       try {
         await navigator.share({
@@ -159,55 +237,78 @@ function DirectoryContent() {
     }
   };
 
-  // Filter and sort businesses
-  const filteredBusinesses = useMemo(() => {
-    let result = [...MOCK_BUSINESSES];
+  // Apply filters to the fetched directory
+  const filteredDirectory = useMemo(() => {
+    let result = directory;
 
-    // Apply filters
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.name.toLowerCase().includes(q) ||
+          b.location.toLowerCase().includes(q) ||
+          b.category.toLowerCase().includes(q) ||
+          (b.tags ?? []).some((t) => t.toLowerCase().includes(q))
+      );
+    }
+
     if (filters.category) {
       result = result.filter((b) => b.category === filters.category);
     }
     if (filters.location) {
-      result = result.filter((b) => b.location === filters.location);
+      result = result.filter((b) => {
+        const loc = deriveLocation(b.location);
+        return loc !== null && loc === filters.location;
+      });
     }
     if (filters.minRating) {
-      result = result.filter((b) => b.rating >= filters.minRating!);
+      result = result.filter((b) => b.rating !== null && b.rating >= filters.minRating!);
     }
     if (filters.verifiedOnly) {
       result = result.filter((b) => b.isVerified);
     }
 
-    // Apply sort
-    switch (sort) {
-      case 'rating':
-        result.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'distance':
-        // Mock distance sorting - in production would use geolocation
-        result.sort((a, b) => a.location.localeCompare(b.location));
-        break;
-      case 'newest':
-        // Mock newest - in production would use created date
-        result.sort((a, b) => b.reviewCount - a.reviewCount);
-        break;
-      case 'relevance':
-      default:
-        // Default sort by rating as relevance proxy
-        result.sort((a, b) => b.rating - a.rating);
-        break;
-    }
-
     return result;
-  }, [filters, sort]);
+  }, [directory, filters, search]);
 
-  const savedBusinessList = useMemo(() => {
-    return MOCK_BUSINESSES.filter((b) => savedBusinesses.has(b.id));
-  }, [savedBusinesses]);
+  const sortedDirectory = useMemo(
+    () => sortDirectory(filteredDirectory, sort),
+    [filteredDirectory, sort]
+  );
 
-  const displayBusinesses = activeTab === 'all' ? filteredBusinesses : savedBusinessList;
+  const savedDirectory = useMemo(
+    () => directory.filter((b) => savedBusinesses.has(b.id)),
+    [directory, savedBusinesses]
+  );
+
+  const listSource = activeTab === 'all' ? sortedDirectory : savedDirectory;
+
+  const displayBusinesses: Business[] = listSource.map(toCardBusiness);
+
+  const mapPins = useMemo<MapPin[]>(
+    () =>
+      listSource.flatMap((b): MapPin[] => {
+        // One pin per physical location (primary first) when the business
+        // has entries in business_locations; otherwise the legacy single
+        // pin carried on the business row itself.
+        const locs = (b.locations ?? []).filter((l) => l.lat != null && l.lng != null);
+        if (locs.length > 0) {
+          return locs.map((l) => ({
+            id: b.id,
+            name: l.label ? `${b.name} — ${l.label}` : b.name,
+            lat: l.lat as number,
+            lng: l.lng as number,
+          }));
+        }
+        return b.lat != null && b.lng != null
+          ? [{ id: b.id, name: b.name, lat: b.lat as number, lng: b.lng as number }]
+          : [];
+      }),
+    [listSource]
+  );
 
   return (
-    <main className="min-h-screen bg-neutral-50">
+    <main className="min-h-screen bg-neutral-50 flex flex-col">
       {/* Navigation */}
       <Navigation
         onNavigate={(section) => {
@@ -216,38 +317,66 @@ function DirectoryContent() {
       />
 
       {/* Page Header */}
-      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold mb-4">Business Directory</h1>
-          <p className="text-xl text-neutral-100 max-w-3xl">
-            Discover Black-owned businesses in your area. Filter by category, rating, and location
-            to find exactly what you need.
+      <section className="bg-gradient-to-br from-[#E31C25] via-black to-[#009B3F] text-white py-10">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <p className="text-xs uppercase tracking-widest text-white/70 mb-2">
+            Black-owned businesses in
+          </p>
+          <h1 className="text-4xl sm:text-5xl font-bold">
+            {filters.location || "All areas"}
+          </h1>
+          <p className="mt-3 text-lg text-neutral-100">
+            {displayBusinesses.length} {displayBusinesses.length === 1 ? 'place' : 'places'}
+            {filters.category ? ` · ${filters.category}` : ''}
           </p>
         </div>
       </section>
 
+      {/* Filter Row - full width sticky band, single row like OpenTable */}
+      <div className="sticky top-16 z-30 border-b border-neutral-200 bg-white">
+        <div className="px-4 sm:px-6 lg:px-8 py-2.5">
+          <FilterBar
+            categories={facets.categories}
+            locations={facets.locations}
+            onFilterChange={handleFilterChange}
+            onSortChange={handleSortChange}
+            currentSort={sort}
+            currentFilters={filters}
+            savedCount={savedBusinesses.size}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            filteredCount={sortedDirectory.length}
+            search={search}
+            onSearchChange={handleSearchChange}
+          />
+        </div>
+      </div>
+
       {/* Main Content - Split View */}
-      <section className="flex h-[calc(100vh-140px)] overflow-hidden max-w-full">
+      <section className="relative flex h-[calc(100vh-310px)] min-h-[480px] overflow-hidden">
         {/* Business List - Left Side */}
         <div className={`${showMap ? 'lg:w-[40%]' : 'w-full'} overflow-y-auto`}>
           <div className="p-4 space-y-4">
-            {/* Filter Bar with Tabs */}
-            <FilterBar
-              categories={CATEGORIES}
-              locations={LOCATIONS}
-              onFilterChange={handleFilterChange}
-              onSortChange={handleSortChange}
-              currentSort={sort}
-              currentFilters={filters}
-              savedCount={savedBusinesses.size}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              filteredCount={filteredBusinesses.length}
-            />
 
             {/* Business List - Horizontal Cards */}
-            {displayBusinesses.length > 0 ? (
-              <div className="space-y-4">
+            {loading ? (
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-neutral-500">Loading businesses...</div>
+              </div>
+            ) : loadError && directory.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
+                <div className="text-6xl mb-4">⚠️</div>
+                <h3 className="text-2xl font-semibold text-neutral-800 mb-2">{loadError}</h3>
+                <p className="text-neutral-600 mb-6">Please try again in a moment.</p>
+                <button
+                  onClick={fetchDirectory}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : displayBusinesses.length > 0 ? (
+              <div className={showMap ? 'space-y-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
                 {displayBusinesses.map((business) => (
                   <BusinessCard
                     key={business.id}
@@ -274,7 +403,7 @@ function DirectoryContent() {
                 {activeTab === 'all' && (
                   <button
                     onClick={() => {
-                      setFilters({});
+                      handleFilterChange({});
                       setSort('relevance');
                     }}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-heritage-ochre text-white rounded-lg hover:bg-heritage-ochre/90 transition-colors"
@@ -297,31 +426,15 @@ function DirectoryContent() {
 
         {/* Map Panel - Right Side */}
         {showMap && (
-          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 bg-neutral-100 relative">
+          <div className="hidden lg:block flex-1 h-full border-l border-neutral-200 relative isolate">
             {/* Map Toggle Button */}
             <button
               onClick={() => setShowMap(false)}
-              className="absolute top-4 right-4 z-10 bg-white px-3 py-2 rounded-lg shadow-md text-sm font-medium hover:bg-neutral-50"
+              className="absolute top-4 right-4 z-[1001] bg-white px-3 py-2 rounded-lg shadow-md text-sm font-medium hover:bg-neutral-50"
             >
               Hide Map ×
             </button>
-            {/* Placeholder Map */}
-            <div className="w-full h-full flex items-center justify-center text-neutral-400">
-              <div className="text-center">
-                <div className="text-6xl mb-4">🗺️</div>
-                <p className="text-lg font-medium">Map View</p>
-                <p className="text-sm mt-2">Business locations will appear here</p>
-                {displayBusinesses.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                    {displayBusinesses.map((b) => (
-                      <div key={b.id} className="bg-white px-3 py-1 rounded-full text-sm shadow-sm">
-                        {b.location}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <MapView pins={mapPins} />
           </div>
         )}
 

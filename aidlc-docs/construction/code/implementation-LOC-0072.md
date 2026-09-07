@@ -23,3 +23,15 @@ timestamp: 2026-08-12T16:02:23Z
 **Components Created:** []
 **Agent:** dup-ac-implement-eccc
 **AC:** LOC-0072-AC5
+
+---
+
+## Correction (2026-08-22, design-drift audit)
+
+This record reports AC5 (scrape analytics on the admin dashboard) as complete,
+but at the time the backing routes (`/api/analytics/scrape-jobs` and
+`/recent`) returned hardcoded zeros / empty arrays, so the dashboard was fed
+mock data. Real aggregation over the live `scrape_jobs` table landed later in
+task #42 (commit f48db1c). AC5 now holds, but did not at the time of this
+record. See `docs/design-drift-audit-2026-08-20.md` (§5 mocks; §6
+construction-docs finding).

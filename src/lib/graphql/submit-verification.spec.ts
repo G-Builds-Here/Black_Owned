@@ -5,32 +5,39 @@
  */
 
 import { submitVerification } from "./resolvers";
-import { MinioService } from "../minio/minio-service";
 
-// Mock the MinioService
+// Mock the MinioService. The resolver maps the requested fileNames to
+// `{businessId}/{fileName}` object names and asks MinIO for one presigned PUT
+// URL per object name, so the batch mock returns one entry per object name it
+// is given rather than a fixed array. Both MinioService and
+// createMinioServiceFromEnv return the SAME instance so the resolver's
+// module-level cached service references this mock; the error tests grab the
+// exposed reference and make it throw to exercise the resolver's catch path.
 jest.mock("../minio/minio-service", () => {
-  const mockPresignedUrls = [
-    {
-      url: "https://minio.bws.local/verification-docs/biz-123/license.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature-1",
-      expiresInSeconds: 900,
-      objectName: "biz-123/license.pdf",
-      bucket: "verification-docs",
-    },
-    {
-      url: "https://minio.bws.local/verification-docs/biz-123/tax.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature-2",
-      expiresInSeconds: 900,
-      objectName: "biz-123/tax.pdf",
-      bucket: "verification-docs",
-    },
-  ];
+  const bucket = "verification-docs";
+  const generatePresignedPutUrlsBatch = jest
+    .fn()
+    .mockImplementation(
+      async (
+        _bucket: string,
+        objectNames: string[],
+        expirySeconds: number
+      ): Promise<Record<string, unknown>[]> =>
+        objectNames.map((objectName) => ({
+          url: `https://minio.bws.local/${bucket}/${objectName}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=test-signature`,
+          expiresInSeconds: expirySeconds,
+          objectName,
+          bucket,
+        }))
+    );
+  const instance = { generatePresignedPutUrlsBatch };
 
   return {
-    MinioService: jest.fn().mockImplementation(() => ({
-      generatePresignedPutUrlsBatch: jest.fn().mockResolvedValue(mockPresignedUrls),
-    })),
-    createMinioServiceFromEnv: jest.fn().mockImplementation(() => ({
-      generatePresignedPutUrlsBatch: jest.fn().mockResolvedValue(mockPresignedUrls),
-    })),
+    MinioService: jest.fn().mockImplementation(() => instance),
+    createMinioServiceFromEnv: jest.fn().mockImplementation(() => instance),
+    // Expose the shared batch mock so tests can reconfigure it (e.g. make it
+    // throw). Not part of the real module's public API.
+    _sharedBatchMock: generatePresignedPutUrlsBatch,
   };
 });
 
@@ -129,13 +136,13 @@ describe("submitVerification mutation", () => {
   });
 
   it("should handle error from MinIO service", async () => {
-    // Mock MinioService to throw an error
-    const mockMinioService = {
-      generatePresignedPutUrlsBatch: jest.fn()
-        .mockRejectedValue(new Error("MinIO connection failed")),
-    };
-
-    (MinioService as jest.Mock).mockImplementation(() => mockMinioService);
+    // Make the resolver's cached MinIO service throw on this one call.
+    const batchMock = (
+      jest.requireMock("../minio/minio-service") as {
+        _sharedBatchMock: jest.Mock;
+      }
+    )._sharedBatchMock;
+    batchMock.mockRejectedValueOnce(new Error("MinIO connection failed"));
 
     const result = await submitVerification(null, {
       businessId: "biz-error",
@@ -147,12 +154,12 @@ describe("submitVerification mutation", () => {
   });
 
   it("should handle generic error from MinIO service", async () => {
-    const mockMinioService = {
-      generatePresignedPutUrlsBatch: jest
-        .mockRejectedValue("Unknown error"),
-    };
-
-    (MinioService as jest.Mock).mockImplementation(() => mockMinioService);
+    const batchMock = (
+      jest.requireMock("../minio/minio-service") as {
+        _sharedBatchMock: jest.Mock;
+      }
+    )._sharedBatchMock;
+    batchMock.mockRejectedValueOnce(new Error("Unknown error"));
 
     const result = await submitVerification(null, {
       businessId: "biz-error",

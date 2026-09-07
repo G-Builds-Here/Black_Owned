@@ -5,12 +5,11 @@
 import {
   findByEmail,
   create,
-  initializeUserSchema,
 } from "../db/user-repository";
 import {
   hashPassword,
   generateTokenPair,
-  verifyToken
+  verifyToken,
 } from "../auth/auth-service";
 import {
   validatePassword,
@@ -27,90 +26,25 @@ import {
 } from "../minio/minio-service";
 import {
   findBusinessById,
-  createBusiness,
   updateNameById,
+  findSiteReviewStats,
+  findSiteReviews,
 } from "../db/business-repository";
+import { findScrapedBusinessById } from "../db/scraped-business-repository";
 import { getPool } from "../db/user-repository";
-import { Business } from "../../types/business";
-import { createGoogleMapsScraper } from "../../services/google-maps-scraper";
+import { Business, BusinessLocation } from "../../types/business";
+import { SocialUrls } from "../../services/social-discovery";
+import type { PoolClient } from "pg";
 
-/**
- * Mock business data for search
- */
-const MOCK_BUSINESSES = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-  {
-    id: '4',
-    name: 'Heritage Wellness Center',
-    category: 'Health & Wellness',
-    rating: 4.9,
-    reviewCount: 203,
-    location: 'Chicago, IL',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Holistic health services including massage, acupuncture, and nutrition counseling.',
-    tags: ['Wellness', 'Massage', 'Holistic'],
-  },
-  {
-    id: '5',
-    name: 'Golden Era Barbershop',
-    category: 'Personal Services',
-    rating: 4.7,
-    reviewCount: 312,
-    location: 'Houston, TX',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Classic barbershop experience with modern styling. Community hub since 1978.',
-    tags: ['Barber', 'Grooming', 'Community'],
-  },
-  {
-    id: '6',
-    name: 'Rhythm & Blues Records',
-    category: 'Entertainment',
-    rating: 4.6,
-    reviewCount: 78,
-    location: 'New Orleans, LA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Vinyl records, rare finds, and custom audio equipment. Music lovers paradise.',
-    tags: ['Music', 'Vinyl', 'Audio'],
-  },
-];
+interface SiteReviewGql {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewerName: string;
+  locationLabel: string | null;
+  createdAt: { timestamp: number };
+}
+import { fetchDirectoryItems, type DirectoryBusiness } from "@/app/api/directory/route";
 
 /**
  * Convert User record to GraphQL User type
@@ -120,6 +54,7 @@ function userToGraphqlUser(user: User) {
     id: user.id,
     email: user.email,
     name: user.name,
+    role: user.role || "user",
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -264,10 +199,190 @@ export function health(): string {
 }
 
 /**
+ * Business query resolver
+ *
+ * Resolves a business by ID across the three sources, in priority order:
+ *   1. Canonical `businesses` row (owner-submitted / verified pipeline)
+ *   2. Approved `pending_import_businesses` row (passed admin review)
+ *   3. `scraped_businesses` row (raw scrape — shown as unverified)
+ *
+ * Returns the GraphQL Business shape, or null when no source has the ID.
+ */
+export async function business(
+  _parent: unknown,
+  args: { id: string }
+): Promise<{
+  id: string;
+  name: string;
+  categoryId: string;
+  category?: string;
+  description?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  menuUrl?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  ratingSource?: string;
+  siteReviewCount: number;
+  siteRating: number | null;
+  siteReviews: SiteReviewGql[];
+  imageUrl?: string | null;
+  cardImageUrl?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  tags?: string[];
+  source?: string | null;
+  locations: BusinessLocation[];
+  verified: boolean;
+  socialUrls: SocialUrls | null;
+  createdAt: { timestamp: number };
+} | null> {
+  const { id } = args;
+  if (!id) return null;
+
+  const client = await getPool().connect();
+  try {
+    // 1. Canonical business
+    const canonical = await findBusinessById(client, id);
+    if (canonical) {
+      const reviewStats = await findSiteReviewStats(client, id);
+      const siteReviews: SiteReviewGql[] = (await findSiteReviews(client, id)).map((review) => ({
+        ...review,
+        createdAt: { timestamp: Math.floor(review.createdAt.getTime() / 1000) },
+      }));
+      return {
+        ...businessToGraphqlBusiness(canonical, await resolveCategoryName(client, canonical.categoryId)),
+        siteReviewCount: reviewStats.count,
+        siteRating: reviewStats.average,
+        siteReviews,
+      };
+    }
+
+    // 2. Approved pending import (passed review)
+    const pendingResult = await client.query(
+      `SELECT id, name, category_id, description, created_at, source_data, lat, lng
+       FROM pending_import_businesses
+       WHERE id = $1 AND status = 'approved'`,
+      [id]
+    );
+    if (pendingResult.rows[0]) {
+      const row = pendingResult.rows[0] as {
+        id: string;
+        name: string;
+        category_id: string;
+        description: string | null;
+        created_at: Date | string;
+        lat: number | null;
+        lng: number | null;
+        source_data: Record<string, unknown> | null;
+      };
+      const sd = row.source_data || {};
+      const createdAt =
+        row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
+      return {
+        id: row.id,
+        name: row.name,
+        categoryId: row.category_id,
+        category: await resolveCategoryName(client, row.category_id),
+        description: row.description ?? null,
+        location: typeof sd.address === "string" ? sd.address : null,
+        phone: typeof sd.phone === "string" ? sd.phone : null,
+        website: typeof sd.website === "string" ? sd.website : null,
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+        rating: typeof sd.rating === "number" ? sd.rating : null,
+        reviewCount: typeof sd.reviewCount === "number" ? sd.reviewCount : null,
+        source: typeof sd.source === "string" ? sd.source : null,
+        verified: true,
+        socialUrls: null,
+        createdAt: { timestamp: Math.floor(createdAt.getTime() / 1000) },
+        locations: [],
+        menuUrl: null,
+        ratingSource: "google",
+        siteReviewCount: 0,
+        siteRating: null,
+        siteReviews: [],
+      };
+    }
+
+    // 3. Raw scraped business (unverified fallback)
+    const scraped = await findScrapedBusinessById(client, id);
+    if (scraped) {
+      return {
+        id: scraped.id,
+        name: scraped.name,
+        categoryId: scraped.category || "other",
+        category: await resolveCategoryName(client, scraped.category || "other"),
+        description: null,
+        location: scraped.address || null,
+        phone: scraped.phone ?? null,
+        lat: scraped.lat ?? null,
+        lng: scraped.lng ?? null,
+        website: scraped.website ?? null,
+        rating: scraped.rating ?? null,
+        reviewCount: scraped.reviewCount ?? null,
+        source: scraped.source,
+        verified: false,
+        socialUrls: null,
+        createdAt: { timestamp: Math.floor(scraped.createdAt.getTime() / 1000) },
+        locations: [],
+        menuUrl: null,
+        ratingSource: "google",
+        siteReviewCount: 0,
+        siteRating: null,
+        siteReviews: [],
+      };
+    }
+
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Shape of a business as returned by the public search resolver
+ * (mirrors the GraphQL `Business` type).
+ */
+export interface SearchBusiness {
+  id: string;
+  name: string;
+  category: string;
+  rating: number;
+  reviewCount: number;
+  location: string;
+  isVerified: boolean;
+  imageUrl: string;
+  cardImageUrl: string;
+  description: string;
+  tags: string[];
+}
+
+/**
+ * Map a real directory item to the search business shape
+ */
+export function toSearchBusiness(item: DirectoryBusiness): SearchBusiness {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    rating: item.rating ?? 0,
+    reviewCount: item.reviewCount ?? 0,
+    location: item.location || "",
+    isVerified: item.isVerified,
+    imageUrl: "",
+    cardImageUrl: "",
+    description: item.description ?? "",
+    tags: [],
+  };
+}
+
+/**
  * Calculate relevance score for a business based on query match
  * Higher scores for matches in more prominent fields (name > description > category/location > tags)
  */
-function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: string): number {
+function calculateRelevanceScore(business: SearchBusiness, query: string): number {
   if (!query) return 0;
 
   const normalizedQuery = query.toLowerCase();
@@ -307,15 +422,55 @@ function calculateRelevanceScore(business: typeof MOCK_BUSINESSES[0], query: str
   return score;
 }
 
+const CATEGORY_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a category display name by UUID. Skips non-UUID ids (slugs like
+ * "food-dining") so callers can fall back to slug formatting.
+ */
+async function resolveCategoryName(
+  client: PoolClient,
+  categoryId: string
+): Promise<string | undefined> {
+  if (!CATEGORY_UUID_RE.test(categoryId)) return undefined;
+  const schema = process.env.POSTGRES_SCHEMA;
+  const table = schema ? `${schema}.categories` : "categories";
+  const result = await client.query<{ name: string }>(
+    `SELECT name FROM ${table} WHERE id::text = $1`,
+    [categoryId]
+  );
+  return result.rows[0]?.name;
+}
+
 /**
  * Convert business record to GraphQL Business type
  */
-function businessToGraphqlBusiness(business: Business) {
+function businessToGraphqlBusiness(business: Business, categoryName?: string) {
   return {
     id: business.id,
     name: business.name,
     categoryId: business.categoryId,
+    category: categoryName,
+    description: business.description ?? null,
+    location: business.location ?? null,
+    phone: business.phone ?? null,
+    menuUrl: business.menuUrl ?? null,
+    ratingSource: business.ratingSource ?? "google",
+    siteReviewCount: 0,
+    siteRating: null,
+    siteReviews: [],
+    website: business.website ?? null,
+    rating: business.rating ?? null,
+    reviewCount: business.reviewCount ?? null,
+    imageUrl: business.imageUrl ?? null,
+    cardImageUrl: business.cardImageUrl ?? null,
+    lat: business.lat ?? null,
+    lng: business.lng ?? null,
+    tags: business.tags ?? [],
+    source: null,
+    locations: business.locations ?? [],
     verified: business.verificationStatus === 'verified',
+    socialUrls: business.socialUrls ?? null,
     createdAt: {
       timestamp: Math.floor(business.createdAt.getTime() / 1000),
     },
@@ -373,9 +528,19 @@ export async function updateBusiness(
       };
     }
 
+    const reviewStats = await findSiteReviewStats(client, args.id);
+    const siteReviews: SiteReviewGql[] = (await findSiteReviews(client, args.id)).map((review) => ({
+      ...review,
+      createdAt: { timestamp: Math.floor(review.createdAt.getTime() / 1000) },
+    }));
     return {
       success: true,
-      business: businessToGraphqlBusiness(updatedBusiness),
+      business: {
+        ...businessToGraphqlBusiness(updatedBusiness),
+        siteReviewCount: reviewStats.count,
+        siteRating: reviewStats.average,
+        siteReviews,
+      },
     };
   } finally {
     client.release();
@@ -383,24 +548,15 @@ export async function updateBusiness(
 }
 
 /**
- * Convert scraped business to internal format
- */
-function scrapedBusinessToInternal(scraped: typeof MOCK_BUSINESSES[0]): typeof MOCK_BUSINESSES[0] {
-  return {
-    ...scraped,
-    id: scraped.id || `scraped-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-  };
-}
-
-/**
- * Search businesses resolver with pagination, relevance ranking, and caching
- * Uses Google Maps scraper for live search results
+ * Search businesses resolver with pagination, relevance ranking, and caching.
+ * Backed by the real public directory data (approved pending businesses +
+ * canonical businesses) — the same source /api/directory serves.
  */
 export async function searchBusinesses(
   _parent: unknown,
   args: { query: string; page?: number; pageSize?: number }
 ): Promise<{
-  businesses: unknown[];
+  businesses: SearchBusiness[];
   total: number;
   page: number;
   pageSize: number;
@@ -413,7 +569,7 @@ export async function searchBusinesses(
   const cached = await getCachedResponse("searchBusinesses", { query, page, pageSize });
   if (cached) {
     return cached as {
-      businesses: unknown[];
+      businesses: SearchBusiness[];
       total: number;
       page: number;
       pageSize: number;
@@ -422,86 +578,42 @@ export async function searchBusinesses(
     };
   }
 
-  const normalizedQuery = query.toLowerCase().trim();
+  const normalizedQuery = (query ?? "").toLowerCase().trim();
 
-  // If query is empty, return all businesses with no ranking
-  if (!normalizedQuery) {
-    const total = MOCK_BUSINESSES.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = MOCK_BUSINESSES.slice(startIndex, endIndex);
-
-    // Calculate facets for all businesses
-    const categoryCounts: Record<string, number> = {};
-    for (const business of MOCK_BUSINESSES) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-    }
-    const facets = Object.entries(categoryCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const result = {
-      businesses: paginatedBusinesses,
-      total,
-      page,
-      pageSize,
-      totalPages,
-      facets,
-    };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
-  }
+  const pool = getPool();
+  const client = await pool.connect();
 
   try {
-    // Use Google Maps scraper for live search
-    const scraper = createGoogleMapsScraper();
+    // Real directory data: approved pending businesses + canonical businesses
+    const items = await fetchDirectoryItems(client);
+    const all = items.map(toSearchBusiness);
 
-    const scrapedResult = await scraper.scrape(normalizedQuery, "");
+    // Empty query: return all businesses (directory order)
+    // Non-empty query: rank by relevance, drop zero-score rows
+    const ranked = !normalizedQuery
+      ? all
+      : all
+          .map((business) => ({
+            business,
+            score: calculateRelevanceScore(business, normalizedQuery),
+          }))
+          .filter((item) => item.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map((item) => item.business);
 
-    const scrapedBusinesses = scrapedResult.businesses.map((scraped, index) => ({
-      id: `scraped-${index}-${Date.now()}`,
-      name: scraped.name,
-      category: "Professional Services",
-      rating: scraped.rating ?? 0,
-      reviewCount: scraped.reviewCount ?? 0,
-      location: scraped.address,
-      isVerified: true,
-      imageUrl: "",
-      description: scraped.website ? `Verified business. Website: ${scraped.website}` : "Verified business",
-      tags: [],
-    }));
-
-    // Convert scraped businesses to internal format
-    const formattedBusinesses = scrapedBusinesses.map((scraped, index) => ({
-      id: `scraped-${index}-${Date.now()}`,
-      name: scraped.name,
-      category: scraped.category,
-      rating: scraped.rating,
-      reviewCount: scraped.reviewCount,
-      location: scraped.location,
-      isVerified: true, // Scraped businesses are from Google Maps
-      imageUrl: scraped.imageUrl,
-      description: scraped.description,
-      tags: scraped.tags,
-    }));
-
-    // Calculate facets from scraped results
     const categoryCounts: Record<string, number> = {};
-    for (const business of formattedBusinesses) {
+    for (const business of ranked) {
       categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
     }
     const facets = Object.entries(categoryCounts)
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
-    // Paginate results
-    const total = formattedBusinesses.length;
+    const total = ranked.length;
     const totalPages = Math.ceil(total / pageSize) || 0;
     const startIndex = (page - 1) * pageSize;
     const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = formattedBusinesses.slice(startIndex, endIndex);
+    const paginatedBusinesses = ranked.slice(startIndex, endIndex);
 
     const result = {
       businesses: paginatedBusinesses,
@@ -514,45 +626,8 @@ export async function searchBusinesses(
 
     await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
     return result;
-  } catch (error) {
-    console.error("Google Maps scraper failed, falling back to mock data:", error);
-
-    // Fallback to mock data if scraper fails
-    const scoredBusinesses = MOCK_BUSINESSES
-      .map((business) => ({
-        business,
-        score: calculateRelevanceScore(business, normalizedQuery),
-      }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    const categoryCounts: Record<string, number> = {};
-    for (const { business } of scoredBusinesses) {
-      categoryCounts[business.category] = (categoryCounts[business.category] || 0) + 1;
-    }
-    const facets = Object.entries(categoryCounts)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const total = scoredBusinesses.length;
-    const totalPages = Math.ceil(total / pageSize) || 0;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedBusinesses = scoredBusinesses
-      .slice(startIndex, endIndex)
-      .map((item) => item.business);
-
-    const result = {
-      businesses: paginatedBusinesses,
-      total,
-      page,
-      pageSize,
-      totalPages,
-      facets,
-    };
-
-    await cacheResponse("searchBusinesses", { query, page, pageSize }, result);
-    return result;
+  } finally {
+    client.release();
   }
 }
 
@@ -628,6 +703,12 @@ export async function createBusinessResolver(
 }
 
 /**
+ * Expose the create-business mutation resolver under its GraphQL field name so
+ * specs and direct consumers can `import { createBusiness } from "./resolvers"`.
+ */
+export const createBusiness = createBusinessResolver;
+
+/**
  * Internal function to create a business in the database
  */
 async function createBusinessInDb(
@@ -653,6 +734,7 @@ async function createBusinessInDb(
 export const resolvers = {
   Query: {
     health,
+    business,
     searchBusinesses,
   },
   Mutation: {

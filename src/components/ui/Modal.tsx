@@ -4,13 +4,13 @@ import React, { HTMLAttributes, forwardRef, useEffect, useRef, useCallback } fro
 import { createPortal } from 'react-dom';
 import Button from './Button';
 
-export interface ModalProps extends HTMLAttributes<HTMLDivElement> {
+export interface ModalProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /** Whether the modal is open */
   isOpen: boolean;
   /** Close handler */
   onClose: () => void;
   /** Modal title */
-  title?: string;
+  title?: React.ReactNode;
   /** Modal footer content */
   footer?: React.ReactNode;
   /** Size variant */

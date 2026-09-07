@@ -7,6 +7,7 @@
 export interface Review {
   id?: string;
   businessId: string;
+  locationId?: string | null;
   rating: 1 | 2 | 3 | 4 | 5;
   reviewText: string;
   reviewerName: string;

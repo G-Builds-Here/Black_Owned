@@ -5,7 +5,6 @@
  */
 
 import {
-  initializeUserManagementSchema,
   updateUserRole,
   updateUserStatus,
   findByIdWithRole,
@@ -18,7 +17,6 @@ import { UserRole, UserStatus } from '../../types/user-management';
 describe('User Management Repository', () => {
   beforeAll(async () => {
     // Initialize schema
-    await initializeUserManagementSchema();
   });
 
   afterAll(async () => {

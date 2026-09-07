@@ -25,7 +25,7 @@ export class YelpScraper {
   source: ScraperSource = ScraperSource.YELP;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
-  private options: Required<ScraperOptions>;
+  private options: Required<Omit<ScraperOptions, "credentials">>;
 
   constructor(options: ScraperOptions = {}) {
     this.options = {

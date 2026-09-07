@@ -1,0 +1,58 @@
+{
+  "artifact": "patterns.md",
+  "generated_at": "2026-09-05T21:55:00Z",
+  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Auth & Security",
+      "content": "- **JWT RS256** (primary) with **HS256 fallback** when no key material is\n  configured. Keys: `config/jwt/` via `JWT_PRIVATE_KEY_PATH` /\n  `JWT_PUBLIC_KEY_PATH`; fallback secret `JWT_SECRET`.\n- Routes guard with `createAuthMiddleware` (admin) or role + row-ownership checks\n  (owner routes). Chat routes require participant membership.\n- Passwords hashed with `bcryptjs`.\n- [NOTE] The GraphQL route performs no auth; `createBusiness` runs under a hardcoded\n  `Bearer token` context \u2014 see `findings.md` / `anti-patterns.md`.\n- [NOTE] bw-scraper exposes mutating endpoints with no auth; only `/enrich` is\n  fronted by an admin-gated proxy.",
+      "type": "list"
+    },
+    {
+      "heading": "Response Envelope",
+      "content": "- Success: `{ success: true, data: ... }`.\n- Errors: `{ error: \"...\" }` (or `{ success: false, errors: [...] }` for batch\n  imports) with a 4xx/5xx status.\n- Batch endpoints (bulk-approve, pending import) return per-item results so a\n  partial failure is actionable.\n- `405` for wrong-verb on a single-verb route (e.g. `GET /api/health` only).",
+      "type": "list"
+    },
+    {
+      "heading": "Data Access",
+      "content": "- One lazy `pg` Pool (`max` 20) per process via `getPool()` in\n  `src/lib/db/user-repository.ts`; repositories split by domain\n  (`business-repository`, `scrape-job-repository`, `chat-repository`, ...).\n- Rust side: `sqlx` with a shared pool in `bw-scraper` (`AppState`); no ORM.\n- Dual-writer tables: `businesses`, `scrape_jobs`, `scraped_businesses`,\n  `business_locations` are written by both the TS app and bw-scraper with no\n  app-level coordination \u2014 the strongest coupling in the repo.",
+      "type": "list"
+    },
+    {
+      "heading": "Caching & Invalidation",
+      "content": "- Valkey query cache in front of directory/GraphQL reads\n  (`src/lib/graphql/query-cache.ts`).\n- Invalidation is **NATS-pub/sub only on the TS side**: a `cache.invalidate`\n  subject is consumed by `src/lib/nats/cache-invalidator.ts`. Rust-side writes\n  (bw-scraper `/enrich`, `/locations`) do NOT publish invalidation, so the TS\n  query cache can serve stale rows after enrichment. `bw-ingestion` contains a\n  second, dormant `cache.invalidate` consumer.",
+      "type": "list"
+    },
+    {
+      "heading": "Error Handling",
+      "content": "- TS routes: try/catch per handler, map DB/JSON failures to 400/500 with a short\n  `error` string; 404 for missing rows; 409 for verification state conflicts.\n- The enrichment proxy distinguishes transport failure (502\n  `ENRICHMENT_WORKER_UNREACHABLE`) from worker-reported failure\n  (`ENRICHMENT_WORKER_ERROR`).\n- Rust: `Result`-based; axum handlers return JSON error objects; `/health/detailed`\n  aggregates per-service checks (`healthy` / `degraded` / 503 on Postgres down).",
+      "type": "list"
+    },
+    {
+      "heading": "Testing",
+      "content": "- Colocation: specs next to source (`route.spec.ts`, `Component.spec.tsx`).\n- DB/auth mocked at the repository boundary (`jest.mock(\"@/lib/db/...\")`), so the\n  default Jest run needs no infra.\n- E2E helpers centralize sessions, psql access, and route warm-up\n  (`e2e/e2e-utils.ts`).\n- Rust: in-file `#[cfg(test)]` modules + `tests/` integration; clippy pedantic in\n  CI.\n\nFull details: `test-infrastructure.md`.",
+      "type": "list"
+    },
+    {
+      "heading": "Naming Conventions",
+      "content": "- TS: kebab-case modules (`user-repository.ts`, `jwt-middleware.ts`), PascalCase\n  components, `*.spec.ts`/`*.spec.tsx` tests.\n- Rust: snake_case modules; request/response types as `XxxRequest` /\n  `XxxResponse` / `XxxPayload`.\n- Migrations: `NNN_description.sql`, applied in numeric order.",
+      "type": "list"
+    },
+    {
+      "heading": "Configuration",
+      "content": "- Single source of truth: root `.env` (gitignored; tracked template\n  `.env.example`).\n- TS reads `process.env` with per-variable defaults; Rust `config.rs` parses env\n  with `default` attributes (`SEARXNG_URL` defaults to a developer LAN IP).\n- `docker-compose.yml` pins the project name `black_owned` so container names are\n  stable across worktrees.",
+      "type": "list"
+    },
+    {
+      "heading": "Serialization",
+      "content": "- TS: native `JSON`; no JSON library (the declared `graphql`/`@graphql-tools/schema`\n  are unused).\n- Rust: `serde` throughout; bw-scraper request types use **snake_case** field names\n  (see the cross-language field drift finding).",
+      "type": "list"
+    }
+  ],
+  "summary": "Observed conventions \u2014 auth, response envelope, data access, caching, error handling, testing, migrations, config.",
+  "primary_consumers": [
+    "luke",
+    "damian"
+  ]
+}

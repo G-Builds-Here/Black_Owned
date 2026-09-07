@@ -204,4 +204,7 @@ pub struct ScrapeJobStats {
     pub failed_jobs: i32,
     pub total_items_scraped: i32,
     pub period_days: i32,
+    pub avg_duration_seconds: Option<f64>,
+    pub min_duration_seconds: Option<i64>,
+    pub max_duration_seconds: Option<i64>,
 }

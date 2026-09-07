@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
 import SearchResults from '@/components/SearchResults';
 import { Navigation } from '@/components/ui/Navigation';
@@ -20,44 +20,40 @@ interface Business {
   tags: string[];
 }
 
-const MOCK_BUSINESSES: Business[] = [
-  {
-    id: '1',
-    name: 'Soul Food Kitchen',
-    category: 'Food & Dining',
-    rating: 4.8,
-    reviewCount: 156,
-    location: 'Harlem, NY',
-    isVerified: true,
+/**
+ * Shape of a /api/directory business item (real data)
+ */
+interface DirectoryBusiness {
+  id: string;
+  name: string;
+  category: string;
+  rating: number | null;
+  reviewCount: number | null;
+  location: string;
+  isVerified: boolean;
+  description: string | null;
+  website: string | null;
+  phone: string | null;
+  source: string | null;
+  createdAt: string;
+}
+
+const PAGE_SIZE = 10;
+
+function toCardBusiness(item: DirectoryBusiness): Business {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    rating: item.rating ?? 0,
+    reviewCount: item.reviewCount ?? 0,
+    location: item.location,
+    isVerified: item.isVerified,
     imageUrl: '',
-    description: 'Authentic Southern cuisine with a modern twist. Family-owned since 1985.',
-    tags: ['Southern', 'Family-Friendly', 'Takeout'],
-  },
-  {
-    id: '2',
-    name: 'Black Diamond Consulting',
-    category: 'Professional Services',
-    rating: 5.0,
-    reviewCount: 42,
-    location: 'Atlanta, GA',
-    isVerified: true,
-    imageUrl: '',
-    description: 'Strategic business consulting for Black-owned enterprises and startups.',
-    tags: ['Consulting', 'Business Strategy', 'B2B'],
-  },
-  {
-    id: '3',
-    name: 'Afro Threads',
-    category: 'Retail & Fashion',
-    rating: 4.5,
-    reviewCount: 89,
-    location: 'Los Angeles, CA',
-    isVerified: false,
-    imageUrl: '',
-    description: 'Contemporary fashion inspired by African heritage and modern streetwear.',
-    tags: ['Clothing', 'Accessories', 'African-Inspired'],
-  },
-];
+    description: item.description || (item.website ? `Website: ${item.website}` : ''),
+    tags: [],
+  };
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -68,6 +64,8 @@ export default function SearchPage() {
   const [totalResults, setTotalResults] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const suggestRequestRef = useRef(0);
 
   // Debounce the search query
   useEffect(() => {
@@ -96,16 +94,19 @@ export default function SearchPage() {
     setError(null);
 
     try {
-      // Mock search - filter mock data
-      const filtered = MOCK_BUSINESSES.filter(
-        (b) =>
-          b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          b.location.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setResults(filtered);
-      setTotalPages(Math.ceil(filtered.length / 10));
-      setTotalResults(filtered.length);
+      // Real data from the public directory (approved + canonical businesses)
+      const url = `/api/directory?search=${encodeURIComponent(searchQuery)}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        throw new Error(body?.error || `Request failed (${res.status})`);
+      }
+      const items: DirectoryBusiness[] = body.data.businesses;
+      const mapped = items.map(toCardBusiness);
+      const start = (currentPage - 1) * PAGE_SIZE;
+      setResults(mapped.slice(start, start + PAGE_SIZE));
+      setTotalPages(Math.ceil(mapped.length / PAGE_SIZE));
+      setTotalResults(mapped.length);
     } catch (err) {
       console.error('Search error:', err);
       setError('Failed to search businesses. Please try again.');
@@ -120,6 +121,29 @@ export default function SearchPage() {
       performSearch(debouncedQuery, page);
     }
   }, [debouncedQuery, page, performSearch]);
+
+  // Fetch up to five autocomplete suggestions for the debounced query
+  useEffect(() => {
+    const term = debouncedQuery.trim();
+    if (term.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const requestId = ++suggestRequestRef.current;
+    fetch(`/api/directory/suggest?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
+      .then(async (res) => {
+        const body = await res.json();
+        if (requestId !== suggestRequestRef.current) return;
+        if (res.ok && body.success) {
+          setSuggestions(body.data.suggestions || []);
+        } else {
+          setSuggestions([]);
+        }
+      })
+      .catch(() => {
+        if (requestId === suggestRequestRef.current) setSuggestions([]);
+      });
+  }, [debouncedQuery]);
 
   const handleSearch = (searchQuery: string) => {
     setQuery(searchQuery);
@@ -153,7 +177,10 @@ export default function SearchPage() {
         {/* Search Bar */}
         <SearchBar
           onSearch={handleSearch}
+          onQueryChange={handleSearch}
           placeholder="Search by name, category, or location..."
+          suggestions={suggestions}
+          onSuggestionSelect={(value) => setQuery(value)}
         />
 
         {/* Results */}

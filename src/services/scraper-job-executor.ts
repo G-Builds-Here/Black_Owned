@@ -30,7 +30,8 @@ import { getScraper, getAvailableSources } from "./business-scraper";
  */
 export interface ScraperJobExecutionResult {
   success: boolean;
-  jobId: string;
+  /** The job's id, or undefined when no job row was created (pre-creation failure). */
+  jobId?: string;
   finalStatus: ScrapeJobStatus;
   businessCount?: number;
   error?: string;
@@ -71,6 +72,10 @@ export async function executeScrapeJob(
   client: PoolClient,
   input: CreateScrapeJobInput
 ): Promise<ScraperJobExecutionResult> {
+  // Tracked outside the try so the outer catch can fail-mark the real job
+  // row instead of fabricating an id.
+  let job: ScrapeJob | undefined;
+
   try {
     // Check for existing non-pending jobs with the same input
     const existingJobs = await findScrapeJobs(client, undefined, 10);
@@ -92,7 +97,7 @@ export async function executeScrapeJob(
     }
 
     // Step 1: Create job with pending status
-    const job = await createScrapeJob(client, input);
+    job = await createScrapeJob(client, input);
 
     // Step 2: Transition to running
     const runningJob = await updateScrapeJobStatus(
@@ -114,11 +119,15 @@ export async function executeScrapeJob(
     // Step 3: Validate source before getting scraper
     const validSources = getAvailableSources();
     if (!validSources.includes(input.source as any)) {
+      const errorMessage = `Invalid source: ${input.source}. Valid sources are: ${validSources.join(", ")}`;
+      // Persist the failure: returning without updating would leave the
+      // job stuck in running forever.
+      await updateScrapeJobStatus(client, job.id, "failed", undefined, errorMessage);
       return {
         success: false,
         jobId: job.id,
         finalStatus: "failed",
-        error: `Invalid source: ${input.source}. Valid sources are: ${validSources.join(", ")}`,
+        error: errorMessage,
       };
     }
 
@@ -146,6 +155,18 @@ export async function executeScrapeJob(
       };
     }
 
+    // Cancellation check: the job may have been cancelled while the scraper
+    // was running. A cancelled job is terminal and must not be overwritten.
+    const afterScrape = await findScrapeJobById(client, job.id);
+    if (afterScrape && afterScrape.status === "cancelled") {
+      return {
+        success: false,
+        jobId: job.id,
+        finalStatus: "cancelled",
+        error: "Job was cancelled while the scraper was running",
+      };
+    }
+
     // Step 4b: Store scraped businesses in database
     const businesses = scraperResult.businesses;
     for (const business of businesses) {
@@ -162,8 +183,19 @@ export async function executeScrapeJob(
       });
     }
 
-    // Step 5: Update job with business count and mark as completed
+    // Step 5: Re-check before the terminal transition, then update the job
+    // with the business count and mark it completed.
     console.log(`Scraper found ${businesses.length} businesses`);
+    const beforeComplete = await findScrapeJobById(client, job.id);
+    if (beforeComplete && beforeComplete.status === "cancelled") {
+      return {
+        success: false,
+        jobId: job.id,
+        finalStatus: "cancelled",
+        error: "Job was cancelled before completion",
+      };
+    }
+
     const completedJob = await updateScrapeJobStatus(
       client,
       job.id,
@@ -172,10 +204,14 @@ export async function executeScrapeJob(
     );
 
     if (!completedJob) {
+      // The terminal-state guard blocked the write: the job reached a
+      // terminal state concurrently (only cancellation is possible here,
+      // since completed/failed were just attempted from running).
+      const current = await findScrapeJobById(client, job.id);
       return {
         success: false,
         jobId: job.id,
-        finalStatus: "failed",
+        finalStatus: current?.status === "cancelled" ? "cancelled" : "failed",
         error: "Failed to update job to completed status",
       };
     }
@@ -187,11 +223,22 @@ export async function executeScrapeJob(
       businessCount: businesses.length,
     };
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error during job execution";
+    if (job) {
+      // Best-effort fail-mark; the terminal-state guard makes this safe even
+      // if the job already reached a terminal state.
+      try {
+        await updateScrapeJobStatus(client, job.id, "failed", undefined, errorMessage);
+      } catch {
+        // The DB is unavailable or the row is gone; nothing else to do.
+      }
+    }
     return {
       success: false,
-      jobId: input.source + "-" + Date.now(),
+      jobId: job?.id,
       finalStatus: "failed",
-      error: error instanceof Error ? error.message : "Unknown error during job execution",
+      error: errorMessage,
     };
   }
 }

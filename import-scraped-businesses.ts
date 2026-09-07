@@ -10,7 +10,7 @@
  *                          food/restaurant terms fall back to "Food & Dining")
  *   address             -> location
  *   rating / review_cnt -> rating / review_count
- *   website / phone     -> folded into a short description (no dedicated cols)
+ *   website / phone     -> website / phone (dedicated columns)
  *   verification_status -> 'unverified' (not owner-claimed yet)
  *
  * Idempotent: a scraped business is only inserted if no `businesses` row with
@@ -38,6 +38,7 @@ interface ScrapedRow {
   address: string | null;
   phone: string | null;
   website: string | null;
+  description: string | null;
   category: string | null;
   rating: number | null;
   review_count: number | null;
@@ -77,7 +78,7 @@ async function main(): Promise<void> {
     }
 
     const scrapedRes = await pool.query<ScrapedRow>(
-      `SELECT id, name, address, phone, website, category, rating, review_count
+      `SELECT id, name, address, phone, website, description, category, rating, review_count
        FROM scraped_businesses ORDER BY created_at`
     );
     const rows = scrapedRes.rows;
@@ -101,27 +102,22 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const description = [
-        r.website ? `Website: ${r.website}` : null,
-        r.phone ? `Phone: ${r.phone}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ");
-
       await pool.query(
         `INSERT INTO businesses
            (owner_id, name, description, category_id, verification_status,
-            location, rating, review_count, image_url)
-         VALUES ($1, $2, $3, $4, 'unverified', $5, $6, $7, $8)`,
+            location, rating, review_count, image_url, website, phone)
+         VALUES ($1, $2, $3, $4, 'unverified', $5, $6, $7, $8, $9, $10)`,
         [
           SEED_OWNER_ID,
           r.name,
-          description || null,
+          r.description,
           categoryId,
           location,
           r.rating ?? 0,
           r.review_count ?? 0,
           null,
+          r.website,
+          r.phone,
         ]
       );
       inserted++;

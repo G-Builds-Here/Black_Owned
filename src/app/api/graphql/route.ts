@@ -85,6 +85,20 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
       };
     }
 
+    // Handle business(id:) query
+    // The client sends variables {id}; also accept an inline literal ID.
+    if (query.includes('business(')) {
+      const inlineId = query.match(/business\s*\(\s*id:\s*"([^"]+)"/);
+      const id = (typeof variables.id === 'string' && variables.id) || (inlineId ? inlineId[1] : null);
+
+      if (!id) {
+        return { data: null, errors: [{ message: 'business query requires an id' }] };
+      }
+
+      const result = await resolvers.Query.business(undefined, { id });
+      return { data: { business: result } };
+    }
+
     // Handle register mutation
     const registerMatch = query.match(/register\s*\(\s*email:\s*"([^"]+)"\s*,\s*password:\s*"([^"]+)"\s*,\s*name:\s*"([^"]+)"\s*\)/);
     if (registerMatch) {

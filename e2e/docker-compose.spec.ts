@@ -28,13 +28,13 @@ const SERVICES = [
   },
   {
     name: 'black-owned-nats',
-    healthCommand: 'nats-server -sl ping localhost:4222',
+    healthCommand: 'wget -qO- http://localhost:8222/healthz',
     ports: [4222, 8222]
   },
   {
     name: 'black-owned-minio',
-    healthUrl: 'http://localhost:9000/minio/health/live',
-    ports: [9000, 9001]
+    healthUrl: 'http://localhost:9002/minio/health/live',
+    ports: [9002, 9003]
   },
   {
     name: 'black-owned-valkey',

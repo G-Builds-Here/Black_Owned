@@ -25,15 +25,8 @@ describe('Navigation', () => {
     expect(screen.getByRole('link', { name: /directory/i })).toBeInTheDocument();
   });
 
-  it('renders about link', () => {
-    render(<Navigation />);
-    expect(screen.getByRole('link', { name: /about/i })).toBeInTheDocument();
-  });
-
-  it('renders contact link', () => {
-    render(<Navigation />);
-    expect(screen.getByRole('link', { name: /contact/i })).toBeInTheDocument();
-  });
+  // Note: the redesigned nav only contains Home and Directory links
+  // (the old About/Contact links were removed), so they are no longer tested.
 
   it('renders admin console button', () => {
     render(<Navigation />);
@@ -97,10 +90,11 @@ describe('Navigation', () => {
 
   it('mobile menu is hidden by default on desktop', () => {
     render(<Navigation />);
-    // Mobile menu items should not be visible in default desktop view
-    const mobileMenu = screen.queryByText(/home/i);
-    // The mobile menu is conditionally rendered, so we check the button exists
-    expect(screen.getByLabelText(/toggle navigation menu/i)).toBeInTheDocument();
+    // The mobile menu is conditionally rendered; the toggle button exists and
+    // starts collapsed.
+    const menuButton = screen.getByLabelText(/toggle navigation menu/i);
+    expect(menuButton).toBeInTheDocument();
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('mobile menu button toggles menu', () => {
@@ -139,7 +133,8 @@ describe('Navigation', () => {
 
   it('has proper height', () => {
     const { container } = render(<Navigation />);
-    expect(container.querySelector('nav')).toHaveClass('h-16');
+    // The h-16 height lives on the inner header row, not the nav element.
+    expect(container.querySelector('nav .h-16')).toBeInTheDocument();
   });
 
   it('has flex layout for header', () => {

@@ -7,7 +7,6 @@ import { Pool } from "pg";
 import {
   findByEmail,
   create,
-  initializeUserSchema,
   closePool,
   getPool,
 } from "../db/user-repository";
@@ -35,7 +34,6 @@ describe("Registration Integration Tests", () => {
 
     // Initialize the pool and schema
     pool = getPool();
-    await initializeUserSchema();
   }, 60000);
 
   afterAll(async () => {

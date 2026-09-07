@@ -125,7 +125,7 @@ export class MinioService {
  */
 export function createMinioServiceFromEnv(): MinioService {
   const endpoint = process.env.MINIO_ENDPOINT || "localhost";
-  const port = parseInt(process.env.MINIO_PORT || "9000", 10);
+  const port = parseInt(process.env.MINIO_PORT || "9002", 10);
   const useSSL = process.env.MINIO_SSL === "true";
   const accessKey = process.env.MINIO_ACCESS_KEY || "minioadmin";
   const secretKey = process.env.MINIO_SECRET_KEY || "minioadmin";

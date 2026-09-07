@@ -1,0 +1,54 @@
+{
+  "artifact": "test-infrastructure.md",
+  "generated_at": "2026-09-05T21:55:00Z",
+  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Test Frameworks",
+      "content": "| Layer | Framework | Runner / Config |\n|-------|-----------|-----------------|\n| TS unit + component | Jest 29 + ts-jest, jsdom env | `jest.config.js` (root, `npm test`), `jest.config.components.js` (`npx jest -c jest.config.components.js`) |\n| E2E | Playwright ^1.62.1 (chromium/firefox/webkit) | `playwright.config.ts`; `webServer: npm run dev`, `reuseExistingServer: true` |\n| Rust unit + integration | cargo test | in-file `#[cfg(test)]` modules; `bw-scraper/tests/*.rs` |\n| Rust lint/coverage | clippy + cargo-llvm-cov | CI only: `cargo clippy --all-targets -- -D warnings -W clippy::pedantic` |\n| packages/ui (standalone) | Vitest 4 + @vitest/coverage-v8, Playwright + axe | its own `package.json` (NOT a root workspace member) |\n\n**CI (.github/workflows) runs Rust only**: check, test (`--all-targets`), coverage,\nclippy, Docker build, cargo audit (bw-scraper-ci). No Jest/Playwright jobs.",
+      "type": "table"
+    },
+    {
+      "heading": "Excluded-from-default Jest Runs (`testPathIgnorePatterns`)",
+      "content": "- `src/app/performance.test.ts` \u2014 imports vitest, which is **not installed** at root.\n- `*-integration.spec.ts` \u2014 testcontainers; need Docker + Postgres.\n- `src/lib/minio/minio-service.spec.ts` \u2014 live MinIO.\n- `src/lib/db/business-repository.spec.ts`, `scrape-job-repository.spec.ts`,\n  `user-management-repository.spec.ts` \u2014 live Postgres.\n- `src/qa/scraper-e2e.spec.ts`, `src/services/scraper-job-executor.spec.ts` \u2014 live infra.\n\nRun these manually against a live compose stack when needed:\n`npx jest src/lib/db/business-repository.spec.ts`.",
+      "type": "list"
+    },
+    {
+      "heading": "First-Time Local Setup",
+      "content": "```\ndocker compose up -d        # infra + bw-scraper\nnpm run migrate             # schema must exist before DB-backed specs / e2e\nnpm test                    # Jest \u2014 no infra needed\nnpx playwright test         # E2E \u2014 needs the stack + app on :3000\ncargo test -p bw_scraper    # Rust \u2014 unit needs nothing; connectors want live services\n```\n\nCredential/infra resolution:\n- Jest unit: none (DB + auth mocked).\n- DB-backed Jest / E2E / Rust connectors: `DATABASE_URL` (or `POSTGRES_*`), plus\n  NATS/Valkey/ClickHouse on their localhost ports; `e2e-utils.ts` shells out to\n  `docker exec black-owned-postgres psql` for seeding/teardown (requires the\n  Docker CLI + running containers).\n- Rust CI sets `VALKEY_URL`, but the connector test reads `REDIS_URL` \u2014 the CI\n  variable is therefore ineffective (see findings).",
+      "type": "code"
+    },
+    {
+      "heading": "Running Modes",
+      "content": "| Mode | Command | Infra required |\n|------|---------|----------------|\n| Unit (default) | `npm test` | none |\n| Filtered Jest | `npx jest <path> -t '<name>'` | none |\n| E2E | `npx playwright test [file]` | full compose stack + app :3000 |\n| Rust unit | `cargo test -p bw_scraper <filter>` | none |\n| Rust connectors | `cargo test -p bw_scraper` | live Postgres/NATS/Valkey/ClickHouse (localhost) |\n| CI | `.github/workflows/ci.yml` | Postgres/NATS/Valkey services (no ClickHouse) |",
+      "type": "table"
+    },
+    {
+      "heading": "Test Groups and Ordering",
+      "content": "**Ordering that matters:** compose up \u2192 migrate \u2192 app/e2e. Migrations must precede\nanything touching tables. Jest unit tests need no infra; cargo unit tests need no\nservices; connector tests are meaningful only with live services.\n\nThere is no group/trait system beyond the `testPathIgnorePatterns` exclusions and\nthe Jest `roots: [src]` scoping.",
+      "type": "prose"
+    },
+    {
+      "heading": "Adding a New Test",
+      "content": "**Jest REST route spec** (colocate with the route):\n`src/app/api/<name>/route.spec.ts` next to `route.ts`.\n- Mock the repository boundary:\n  `jest.mock(\"@/lib/db/user-repository\", () => ({ getPool: jest.fn() }))`, stub\n  `getPool().connect().query()` per call.\n- Build the request with `new NextRequest(url)` (jsdom polyfills in\n  `jest.setup.ts`); call the exported `GET`/`POST`; assert `res.status` +\n  `await res.json()`.\n- Pattern: `src/app/api/directory/route.spec.ts`.\n\n**E2E spec**: `e2e/<feature>.spec.ts`.\n- Import `test, expect` from `@playwright/test` plus helpers from `./e2e-utils`\n  (`apiJson`, `newSession`, `seedSession`, `psql`, `warmRoutes`,\n  `firstCategoryUuid`, cleanup helpers).\n- Use `RUN_SUFFIX` for unique emails; teardown via `psql` DELETE in `afterAll`;\n  call `warmRoutes([...])` before navigation to avoid cold-compile flakes.\n\n**Rust unit**: in-file `#[cfg(test)] mod tests` at the bottom of the module\n(example: `bw-scraper/src/robots.rs`); async with `#[tokio::test]`.\n\n**Rust integration**: new file `bw-scraper/tests/<name>_test.rs`; plain\n`#[tokio::test]` importing the crate's public API; read service URLs from env with\nlocalhost fallbacks (pattern: `tests/connectors_test.rs`); seed/cleanup with raw\nsqlx queries.",
+      "type": "prose"
+    },
+    {
+      "heading": "Coverage",
+      "content": "- Rust: cargo-llvm-cov in CI (`bw-scraper` only; `bw-api` excluded \"until its\n  pre-existing compile errors are fixed\" \u2014 currently `cargo check` passes, so the\n  exclusion is stale).\n- TS: none configured at root; `packages/ui` has vitest v8 coverage.",
+      "type": "list"
+    },
+    {
+      "heading": "Gotchas",
+      "content": "- **MinIO host port is 9002** (9000 is ClickHouse). The app default is\n  `MINIO_PORT=9000` \u2014 set `MINIO_PORT=9002` in `.env` for host-side presigned URLs.\n- **Playwright `reuseExistingServer: true`** \u2014 a stale `next dev` (e.g. from a\n  worktree) silently serves old code to the suite.\n- **Vitest at root is unrunnable** (configured but not installed); the only working\n  vitest is `packages/ui`.\n- **Rust connector \"valid URL\" tests assert only that a health message is\n  non-empty** \u2014 they pass with every service down (hollow CI signal).",
+      "type": "list"
+    }
+  ],
+  "summary": "How to run every test layer, how infra is resolved, and how to add a new test in each layer.",
+  "primary_consumers": [
+    "luke",
+    "bruce",
+    "damian"
+  ]
+}

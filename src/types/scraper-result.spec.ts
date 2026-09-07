@@ -17,7 +17,7 @@ import {
 describe("ScraperResult Types", () => {
   describe("ScraperSource Enum", () => {
     it("should have all required source values", () => {
-      expect(ScraperSource.GOOGLE_MAPS).toBe("google_maps");
+      expect(ScraperSource.GOOGLE_MAPS).toBe("google-maps");
       expect(ScraperSource.YELP).toBe("yelp");
       expect(ScraperSource.FACEBOOK).toBe("facebook");
     });

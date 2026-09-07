@@ -9,9 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
-import { initializeScrapeJobSchema } from "@/lib/db/scrape-job-repository";
+
 import {
-  initializeScrapedBusinessSchema,
   findFeaturedScrapedBusinesses,
 } from "@/lib/db/scraped-business-repository";
 
@@ -28,8 +27,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const client = await getPool().connect();
   try {
     // Ensure both tables exist before querying (scraped_businesses FK -> scrape_jobs).
-    await initializeScrapeJobSchema(client);
-    await initializeScrapedBusinessSchema(client);
 
     const businesses = await findFeaturedScrapedBusinesses(client, limit);
 

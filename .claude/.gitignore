@@ -1,0 +1,23 @@
+# Personal overrides — never shared
+settings.local.json
+
+# Transient session state — meaningless outside the session
+.session*
+
+# Local safety backups — not for version control
+backups/
+
+# Legacy Lucius artifacts (migrated to aidlc-docs/ by Luke)
+codebase/
+
+# Transient working files
+*.tmp
+*.bak
+
+# plans/ — uncomment to exclude planning files from version control
+# plans/
+
+# Python bytecode from hooks — auto-generated, never commit
+hooks/__pycache__/
+
+# memory/ is intentionally tracked — repo-specific knowledge shared across the team

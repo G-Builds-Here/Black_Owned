@@ -4,11 +4,11 @@
 
 import { getPool } from "./user-repository";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
   findScrapeJobById,
   updateScrapeJobStatus,
   findScrapeJobs,
+  cancelScrapeJob,
 } from "./scrape-job-repository";
 import { ScrapeJobStatus } from "../../types/scrape-job";
 
@@ -36,7 +36,6 @@ describe("Scrape Job Repository", () => {
     it("creates a scrape job with pending status", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-source`,
@@ -61,7 +60,6 @@ describe("Scrape Job Repository", () => {
     it("creates a scrape job with special characters in query", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-special`,
@@ -80,7 +78,6 @@ describe("Scrape Job Repository", () => {
     it("finds a scrape job by ID", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-find`,
@@ -113,7 +110,6 @@ describe("Scrape Job Repository", () => {
     it("updates job status from pending to running", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-running`,
@@ -136,7 +132,6 @@ describe("Scrape Job Repository", () => {
     it("updates job status to completed with result count", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-completed`,
@@ -156,7 +151,6 @@ describe("Scrape Job Repository", () => {
     it("updates job status to failed with error message", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job = await createScrapeJob(client, {
           source: `${testPrefix}-failed`,
@@ -192,13 +186,77 @@ describe("Scrape Job Repository", () => {
         client.release();
       }
     });
+
+    it("stamps started_at on transition to running and completed_at on terminal transitions", async () => {
+      const client = await getPool().connect();
+      try {
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-timestamps`,
+          query: "timestamp test",
+          location: "Kansas City, MO",
+        });
+        expect(job.startedAt).toBeUndefined();
+        expect(job.completedAt).toBeUndefined();
+
+        const running = await updateScrapeJobStatus(client, job.id, "running", 0);
+        expect(running?.status).toBe("running");
+        expect(running?.startedAt).toBeInstanceOf(Date);
+        expect(running?.completedAt).toBeUndefined();
+
+        const completed = await updateScrapeJobStatus(client, job.id, "completed", 3);
+        expect(completed?.status).toBe("completed");
+        expect(completed?.startedAt).toBeInstanceOf(Date);
+        expect(completed?.completedAt).toBeInstanceOf(Date);
+        // started_at is not overwritten on later transitions
+        expect((completed?.startedAt as Date).getTime()).toBe((running?.startedAt as Date).getTime());
+      } finally {
+        client.release();
+      }
+    });
+
+    it("allows the cancelled status and stamps completed_at", async () => {
+      const client = await getPool().connect();
+      try {
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel`,
+          query: "cancel test",
+          location: "Nashville, TN",
+        });
+        await updateScrapeJobStatus(client, job.id, "running", 0);
+
+        const cancelled = await cancelScrapeJob(job.id);
+        expect(cancelled).toBeDefined();
+        expect(cancelled?.status).toBe("cancelled");
+        expect(cancelled?.completedAt).toBeInstanceOf(Date);
+      } finally {
+        client.release();
+      }
+    });
+
+    it("refuses to cancel a job that is not running", async () => {
+      const client = await getPool().connect();
+      try {
+
+        const job = await createScrapeJob(client, {
+          source: `${testPrefix}-cancel-pending`,
+          query: "cancel pending test",
+          location: "Baltimore, MD",
+        });
+
+        const result = await cancelScrapeJob(job.id);
+        expect(result).toBeNull();
+      } finally {
+        client.release();
+      }
+    });
   });
 
   describe("findScrapeJobs", () => {
     it("returns all jobs when no filter specified", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         await createScrapeJob(client, {
           source: `${testPrefix}-all-1`,
@@ -223,7 +281,6 @@ describe("Scrape Job Repository", () => {
     it("filters jobs by status", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const pendingJob = await createScrapeJob(client, {
           source: `${testPrefix}-pending-filter`,
@@ -249,7 +306,6 @@ describe("Scrape Job Repository", () => {
     it("limits results when limit specified", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const jobs = await findScrapeJobs(client, undefined, 1);
         expect(jobs.length).toBeLessThanOrEqual(1);
@@ -261,7 +317,6 @@ describe("Scrape Job Repository", () => {
     it("returns jobs ordered by created_at descending", async () => {
       const client = await getPool().connect();
       try {
-        await initializeScrapeJobSchema(client);
 
         const job1 = await createScrapeJob(client, {
           source: `${testPrefix}-order-1`,

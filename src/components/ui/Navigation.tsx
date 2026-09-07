@@ -21,6 +21,13 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
     setMobileMenuOpen(false);
   };
 
+  // Sign In has no per-page handler, so the nav routes it itself. The login
+  // page redirects to /owner when a session already exists.
+  const handleSignIn = () => {
+    handleNavClick('user');
+    window.location.assign('/login');
+  };
+
   return (
     <nav className="bg-neutral-900 text-white sticky top-0 z-50 shadow-lg" role="navigation" aria-label="Main navigation">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -60,7 +67,7 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => handleNavClick('user')}
+              onClick={handleSignIn}
             >
               Sign In
             </Button>
@@ -124,7 +131,7 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => handleNavClick('user')}
+                  onClick={handleSignIn}
                   className="justify-center"
                 >
                   Sign In

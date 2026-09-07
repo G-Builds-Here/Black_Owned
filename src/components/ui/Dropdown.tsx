@@ -14,6 +14,8 @@ export interface DropdownItem {
 export interface DropdownProps extends HTMLAttributes<HTMLDivElement> {
   /** Trigger button label */
   trigger: React.ReactNode;
+  /** Extra classes for the trigger button (e.g. pill styling) */
+  triggerClassName?: string;
   /** Dropdown items */
   items: DropdownItem[];
   /** Whether dropdown is open (controlled) */
@@ -34,6 +36,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
   (
     {
       trigger,
+      triggerClassName,
       items,
       isOpen: controlledOpen,
       onOpenChange,
@@ -110,11 +113,18 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
     };
 
     return (
-      <div className="relative inline-block" ref={ref}>
+      <div
+        className="relative inline-block"
+        ref={(node) => {
+          containerRef.current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        }}
+      >
         <button
           type="button"
           onClick={() => handleOpenChange(!isOpen)}
-          className="inline-flex items-center gap-2"
+          className={`inline-flex items-center gap-1.5 ${triggerClassName ?? ''}`}
           aria-expanded={isOpen}
           aria-haspopup="true"
         >
@@ -130,11 +140,7 @@ const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
         </button>
         {isOpen && (
           <div
-            ref={(node) => {
-              dropdownRef.current = node;
-              if (typeof ref === 'function') ref(node);
-              else if (ref) ref.current = node;
-            }}
+            ref={dropdownRef}
             className={getPositionClasses()}
             style={{ minWidth }}
             role="menu"

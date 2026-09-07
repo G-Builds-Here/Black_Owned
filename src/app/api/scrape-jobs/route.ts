@@ -6,19 +6,45 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-  initializeScrapeJobSchema,
   createScrapeJob,
 } from "@/lib/db/scrape-job-repository";
-import { validateScrapeJobInput } from "@/types/scrape-job";
+import { validateScrapeJobInput, ScrapeJobStatus, isValidScrapeJobStatus } from "@/types/scrape-job";
+import {
+  createAuthMiddleware,
+  createAuthErrorResponse,
+} from "@/lib/auth/jwt-middleware";
 
 /**
  * GET /api/scrape-jobs
  * List scrape jobs (optional: filter by status)
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || undefined;
+    const statusParam = searchParams.get("status");
+
+    let statuses: ScrapeJobStatus[] | undefined;
+    if (statusParam) {
+      const parts = statusParam.split(",").map((s) => s.trim()).filter(Boolean);
+      const invalid = parts.find((p) => !isValidScrapeJobStatus(p));
+      if (parts.length === 0 || invalid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid status filter. Valid statuses: pending, running, completed, failed, cancelled",
+            code: "VALIDATION",
+          },
+          { status: 400 }
+        );
+      }
+      statuses = parts as ScrapeJobStatus[];
+    }
 
     // Get database pool
     const { getPool } = await import("@/lib/db/user-repository");
@@ -27,10 +53,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     try {
       // Initialize schema on first request
-      await initializeScrapeJobSchema(client);
 
       const { findScrapeJobs } = await import("@/lib/db/scrape-job-repository");
-      const jobs = await findScrapeJobs(client, status as "pending" | "running" | "completed" | "failed" | undefined);
+      const jobs = await findScrapeJobs(client, statuses);
 
       return NextResponse.json({
         success: true,
@@ -56,6 +81,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * Create a new scrape job
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const requireAdmin = createAuthMiddleware(["admin"]);
+  const authResult = await requireAdmin(request);
+  if (!authResult.authenticated) {
+    return createAuthErrorResponse(authResult.errorType!, authResult.errorMessage!);
+  }
+
   try {
     const body = await request.json();
     const { source, query, location } = body;
@@ -92,7 +123,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     try {
       // Initialize schema on first request
-      await initializeScrapeJobSchema(client);
 
       // Create the scrape job
       const job = await createScrapeJob(client, input);
@@ -101,7 +131,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         {
           success: true,
           data: job,
-          message: "Scrape job created successfully",
         },
         { status: 201 }
       );

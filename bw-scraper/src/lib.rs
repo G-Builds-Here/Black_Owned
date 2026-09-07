@@ -1,14 +1,20 @@
-//! Black Owned Scraper Crate
+//! Black Owned Scraper crate
 //!
-//! This crate provides tools for scraping and processing business data from various sources.
+//! Business discovery pipeline: `SearXNG` metasearch -> ETL extraction ->
+//! Postgres scrape records.
 
-pub mod enrichment;
-pub mod highlights;
-pub mod scraper;
-pub mod types;
-
-// Placeholder modules - to be implemented
-pub mod etl;
-pub mod importer;
 pub mod api;
+pub mod config;
+pub mod connectors;
+pub mod description;
+pub mod enrichment;
+pub mod etl;
+pub mod highlights;
+pub mod importer;
+pub mod locations;
 pub mod models;
+pub mod rate_limiter;
+pub mod robots;
+pub mod scraper;
+pub mod searxng;
+pub mod user_agent_rotator;

@@ -1,0 +1,33 @@
+{
+  "artifact": "code-structure.md",
+  "generated_at": "2026-09-05T21:55:00Z",
+  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "repo": "Black_Owned",
+  "sections": [
+    {
+      "heading": "Web App (`src/`)",
+      "content": "```\nsrc/\n  app/                    # App Router\n    api/                  # 32 route.ts files (REST + hand-rolled GraphQL)\n      auth/{login,register}/   # open\n      directory/            # open; /suggest imports from /directory route\n      categories/, featured-businesses/, health/\n      businesses/[id]/{view,claim,approve,reject,verification/{approve,reject}}, bulk-approve/\n      admin/{businesses/[id]/content, dashboard, enrichment}/   # admin content + enrichment trigger (LOC-0079)\n      reviews/, reviews/[id]/moderate\n      chat/conversations/{, [id]/{messages,read}}/   # live chat\n      owner/businesses/{, [id]/{,views}}/     # claim wizard, views\n      pending-businesses/{, import/{,job/[jobId]}}/   # admin import queue\n      scrape-jobs/, analytics/scrape-jobs/{,recent}/ # admin + analytics\n      users/                  # admin (PATCH /api/users role handler; /status is dead \u2014 finding H2)\n      graphql/                # regex-parsed mini-GraphQL (finding H5)\n    {directory,businesses,owner,admin,login,register,chat,about,...}/page.tsx\n  lib/\n    db/                   # pg repositories: user, user-management, business, business-content,\n                           # scraped-business, scrape-job (job-repository), pending-import, chat; getPool() singleton\n    auth/                 # auth-service (RS256, config/jwt), jwt-middleware (createAuthMiddleware(roles)), client-session\n    valkey/               # ioredis: refresh tokens, query cache\n    nats/                 # nats-client (publish) + client (cache-invalidator subscription) \u2014 two parallel modules (anti-pattern)\n    minio/                # presigned URLs\n    chat/                 # browser NATS-WS client\n    graphql/              # business-schema.ts (types), resolvers, regex parser, valkey cache\n    design-tokens/, utils/, index.ts\n  services/               # Playwright scrapers (google-maps, yelp, facebook), scraper-job-executor,\n                           # duplicate-detection, social-discovery, image-service, review-service\n  components/             # ui/ + admin/ + business/\n  qa/                     # AC-level QA suites\n  types/                  # TS domain types\ne2e/                      # Playwright: 9 suites (search-directory, enrichment, features, performance,\n                           # admin-console, approval-workflow, chat, claim-wizard, docker-compose) + e2e-utils\n```",
+      "type": "code"
+    },
+    {
+      "heading": "Rust Workspace (`Cargo.toml` virtual workspace, 4 members)",
+      "content": "```\nbw-scraper/src/   # main.rs (fail-fast: PgPool::connect at startup), api.rs (operator API: /scrape, /enrich,\n                  # /locations, /businesses endpoints + oneshot tests), enrichment.rs (SearXNG-primary engine,\n                  # menu/social/phone/image extraction), locations.rs (Nominatim geocoding + merge),\n                  # etl.rs, importer.rs, models.rs, scraper.rs, searxng.rs, connectors.rs,\n                  # rate_limiter.rs, robots.rs, user_agent_rotator.rs, config.rs (from_env), lib.rs\nbw-scraper/tests/ # connectors_test.rs (live-service gates), cargo_config_test.rs, fixtures/\nbw-ingestion/src/ # lib.rs, etl/{pipeline,transformer,validation,google_maps,yelp,facebook}, email_service,\n                  # email_{consumer,publisher}, chat_consumer, image_{worker,processor,publisher},\n                  # cache_service, cache_invalidator, background_service, stream_config,\n                  # scraper_rate_limiter, service_connectivity \u2014 NO binary target (dormant lib)\nbw-ingestion/tests/ # cache_service_{unit,integration}, cache_invalidator_{unit,integration} (integration gated on feature)\nbw-api/src/       # bin/main.rs + schema + graphql/{queries,mutations,types} + middleware/{auth,rate_limiter}\n                  # + routes/images; does NOT compile (task #71)\nbw-types/src/     # lib.rs (Business, Review, User, Verification, Message, Event) + email.rs (SmtpConfig,\n                  # NatsEmailPayload, EmailTemplate)\n```",
+      "type": "code"
+    },
+    {
+      "heading": "Migrations",
+      "content": "- `migrations/postgresql/` \u2014 chain 001\u2013021 with deliberate gaps (003/005/006/008 deleted; 012 documents why). 001 is the reconciled baseline; later files are idempotent. 017 backfills coords from Google Maps URL encoding; 019 adds phone/menu_url/rating_source; 020 creates categories; 021 adds card_image_url (dual image slots, LOC-0076).\n- `migrations/clickhouse/` (001, 003_chat_messages) + `clickhouse/` \u2014 analytics mirror schema (dormant).\n- `scripts/migrate-postgres.mjs` \u2014 numeric-prefix order, one file per transaction, tracked in `schema_migrations`, re-runs no-op.",
+      "type": "list"
+    },
+    {
+      "heading": "Repo Hygiene Notes",
+      "content": "- `.worktrees/` \u2014 8 git worktrees checked out in-tree; they double file counts in any naive tree walk (excluded from survey scans).\n- `db/seed/seed_test_data.sql` \u2014 test users + BWS-TEST businesses + scrape jobs; idempotent.\n- `docs/design-drift-audit-2026-08-20.md` \u2014 the repo ships its own drift audit; many HIGH items since fixed.",
+      "type": "list"
+    }
+  ],
+  "summary": "Directory layout and module responsibilities (Next.js front-end + Rust workspace + infra).",
+  "primary_consumers": [
+    "luke",
+    "damian"
+  ]
+}

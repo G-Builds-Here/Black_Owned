@@ -4,7 +4,7 @@
 # Prerequisites:
 # - MinIO server running
 # - mc (MinIO Client) installed and configured
-# - mc alias set for the MinIO server (default: minio = http://localhost:9000 admin:password)
+# - mc alias set for the MinIO server (default: minio = http://localhost:9002 admin:password)
 #
 # Usage: ./provision-minio.sh [minio-alias]
 #   minio-alias: Optional. Defaults to "minio"

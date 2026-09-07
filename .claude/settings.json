@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Skill(luke)",
+      "mcp__plugin_context-mode_context-mode__ctx_search",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(git *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/py.sh .claude/hooks/luke-session-start.py",
+            "runInBackground": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/py.sh .claude/hooks/luke-staleness-check.py"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__plugin_context-mode_context-mode__ctx_search",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/py.sh .claude/hooks/luke-auto-index-check.py",
+            "runInBackground": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/py.sh .claude/hooks/luke-edit-staleness-check.py",
+            "runInBackground": true
+          }
+        ]
+      }
+    ]
+  }
+}

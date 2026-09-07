@@ -44,6 +44,9 @@ jest.mock("../lib/db/scrape-job-repository", () => ({
       updatedAt: new Date(),
     })
   ),
+  // The executor checks for existing non-pending jobs with the same input
+  // before creating a new one. Return an empty list so the flow proceeds.
+  findScrapeJobs: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock the scraped business repository
@@ -67,6 +70,10 @@ const mockScraper = {
 
 jest.mock("./business-scraper", () => ({
   getScraper: jest.fn(() => mockScraper),
+  // The executor validates the input source against this list before scraping.
+  // Return the three real sources so the valid-source tests proceed and the
+  // "invalid-source" test fails validation.
+  getAvailableSources: jest.fn(() => ["google-maps", "yelp", "facebook"]),
 }));
 
 describe("Scraper Job Executor - Unit Tests (LOC-0054)", () => {
@@ -202,8 +209,10 @@ describe("Scraper Job Executor - Unit Tests (LOC-0054)", () => {
     });
 
     it("AC1: Handles invalid source", async () => {
-      // Configure mock to throw error for invalid source
-      mockScraper.scrape.mockRejectedValueOnce(new Error("Unknown scraper source"));
+      // No scrape stub: an invalid source is rejected by getAvailableSources()
+      // before any scraper is invoked. (Stubbing scrape here would set a
+      // mockRejectedValueOnce that is never consumed and would leak into the
+      // next test, since validation rejects before scrape is ever called.)
 
       const input: CreateScrapeJobInput = {
         source: "invalid-source" as any,
@@ -215,6 +224,159 @@ describe("Scraper Job Executor - Unit Tests (LOC-0054)", () => {
 
       expect(result.success).toBe(false);
       expect(result.finalStatus).toBe("failed");
+      expect(result.jobId).toBe("test-job-id");
+
+      // The failure must be persisted: the job may not be left stuck in running
+      const { updateScrapeJobStatus } = require("../lib/db/scrape-job-repository");
+      expect(updateScrapeJobStatus).toHaveBeenCalledWith(
+        mockClient,
+        "test-job-id",
+        "failed",
+        undefined,
+        expect.stringContaining("Invalid source")
+      );
+    });
+
+    it("fail-marks the real job when storing businesses throws", async () => {
+      const { createScrapedBusiness } = require("../lib/db/scraped-business-repository");
+      createScrapedBusiness.mockRejectedValueOnce(new Error("DB down"));
+      const { updateScrapeJobStatus } = require("../lib/db/scrape-job-repository");
+
+      const input: CreateScrapeJobInput = {
+        source: "google-maps",
+        query: "test query",
+        location: "Test City",
+      };
+
+      const result = await executeScrapeJob(mockClient, input);
+
+      expect(result.success).toBe(false);
+      expect(result.finalStatus).toBe("failed");
+      // The real job id must be reported, not a fabricated one
+      expect(result.jobId).toBe("test-job-id");
+      expect(result.error).toBe("DB down");
+      expect(updateScrapeJobStatus).toHaveBeenCalledWith(
+        mockClient,
+        "test-job-id",
+        "failed",
+        undefined,
+        "DB down"
+      );
+    });
+
+    it("returns no jobId when the job row is never created", async () => {
+      const { createScrapeJob, updateScrapeJobStatus } = require("../lib/db/scrape-job-repository");
+      createScrapeJob.mockRejectedValueOnce(new Error("insert failed"));
+
+      const input: CreateScrapeJobInput = {
+        source: "google-maps",
+        query: "test query",
+        location: "Test City",
+      };
+
+      const result = await executeScrapeJob(mockClient, input);
+
+      expect(result.success).toBe(false);
+      expect(result.finalStatus).toBe("failed");
+      expect(result.jobId).toBeUndefined();
+      expect(result.error).toBe("insert failed");
+      // Nothing to fail-mark: no job row exists
+      expect(updateScrapeJobStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Cancellation semantics", () => {
+    function jobWith(status: string) {
+      return {
+        id: "test-job-id",
+        source: "google-maps",
+        query: "test query",
+        location: "Test City",
+        status,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+
+    it("returns cancelled when the job is cancelled while the scraper is running", async () => {
+      const { findScrapeJobById, updateScrapeJobStatus } = require("../lib/db/scrape-job-repository");
+      // The post-scrape check sees the cancellation
+      findScrapeJobById.mockResolvedValueOnce(jobWith("cancelled"));
+
+      const input: CreateScrapeJobInput = {
+        source: "google-maps",
+        query: "test query",
+        location: "Test City",
+      };
+
+      const result = await executeScrapeJob(mockClient, input);
+
+      expect(result.success).toBe(false);
+      expect(result.finalStatus).toBe("cancelled");
+      expect(result.jobId).toBe("test-job-id");
+      // No terminal overwrite: only the running transition was written
+      expect(updateScrapeJobStatus).toHaveBeenCalledTimes(1);
+      expect(updateScrapeJobStatus).toHaveBeenCalledWith(
+        mockClient,
+        "test-job-id",
+        "running",
+        0
+      );
+    });
+
+    it("returns cancelled when the job is cancelled before completion", async () => {
+      const { findScrapeJobById, updateScrapeJobStatus } = require("../lib/db/scrape-job-repository");
+      // Post-scrape check sees pending; the pre-completion check sees the
+      // cancellation.
+      findScrapeJobById
+        .mockResolvedValueOnce(jobWith("pending"))
+        .mockResolvedValueOnce(jobWith("cancelled"));
+
+      const input: CreateScrapeJobInput = {
+        source: "google-maps",
+        query: "test query",
+        location: "Test City",
+      };
+
+      const result = await executeScrapeJob(mockClient, input);
+
+      expect(result.success).toBe(false);
+      expect(result.finalStatus).toBe("cancelled");
+      expect(result.jobId).toBe("test-job-id");
+      // The completed transition must not be attempted
+      expect(updateScrapeJobStatus).not.toHaveBeenCalledWith(
+        mockClient,
+        "test-job-id",
+        "completed",
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it("surfaces cancellation when the completed transition is blocked by the terminal guard", async () => {
+      const { findScrapeJobById, updateScrapeJobStatus } = require("../lib/db/scrape-job-repository");
+      // Running transition succeeds, completed transition is a no-op (guard)
+      updateScrapeJobStatus
+        .mockImplementationOnce(() => Promise.resolve(jobWith("running")))
+        .mockImplementationOnce(() => Promise.resolve(undefined));
+      // Post-scrape check and pre-completion check see pending; the re-read
+      // after the blocked update sees the cancellation.
+      findScrapeJobById
+        .mockResolvedValueOnce(jobWith("pending"))
+        .mockResolvedValueOnce(jobWith("pending"))
+        .mockResolvedValueOnce(jobWith("cancelled"));
+
+      const input: CreateScrapeJobInput = {
+        source: "google-maps",
+        query: "test query",
+        location: "Test City",
+      };
+
+      const result = await executeScrapeJob(mockClient, input);
+
+      expect(result.success).toBe(false);
+      expect(result.finalStatus).toBe("cancelled");
+      expect(result.error).toBe("Failed to update job to completed status");
     });
   });
 

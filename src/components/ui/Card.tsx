@@ -39,6 +39,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     const baseStyles = `
       rounded-xl transition-all duration-200
       flex flex-col
+      text-neutral-900
     `;
 
     const variantStyles = {

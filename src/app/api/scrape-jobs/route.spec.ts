@@ -2,7 +2,7 @@
  * Scrape Jobs API Route Tests
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST, GET } from "./route";
 
 // Mock the database modules
@@ -11,7 +11,6 @@ jest.mock("@/lib/db/user-repository", () => ({
 }));
 
 jest.mock("@/lib/db/scrape-job-repository", () => ({
-  initializeScrapeJobSchema: jest.fn().mockResolvedValue(undefined),
   createScrapeJob: jest.fn(),
   findScrapeJobs: jest.fn(),
   findScrapeJobById: jest.fn(),
@@ -19,6 +18,25 @@ jest.mock("@/lib/db/scrape-job-repository", () => ({
 }));
 
 const { createScrapeJob, findScrapeJobs } = require("@/lib/db/scrape-job-repository");
+
+jest.mock("@/lib/auth/jwt-middleware", () => ({
+  createAuthMiddleware: jest.fn(),
+  createAuthErrorResponse: jest.fn(),
+}));
+
+const { createAuthMiddleware, createAuthErrorResponse } = require("@/lib/auth/jwt-middleware");
+
+const AUTH_OK = {
+  authenticated: true,
+  user: { userId: "u-admin", email: "admin@example.com", role: "admin" },
+  statusCode: 200,
+};
+const AUTH_FAIL = {
+  authenticated: false,
+  errorType: "NO_AUTH_HEADER",
+  errorMessage: "Authorization header is required",
+  statusCode: 401,
+};
 
 describe("Scrape Jobs API Route", () => {
   const mockPool = {
@@ -32,6 +50,11 @@ describe("Scrape Jobs API Route", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_OK));
+    (createAuthErrorResponse as jest.Mock).mockReturnValue(
+      NextResponse.json({ success: false, error: "unauthenticated" }, { status: 401 })
+    );
 
     // Setup mock pool
     (require("@/lib/db/user-repository").getPool as jest.Mock).mockReturnValue(mockPool);
@@ -75,6 +98,14 @@ describe("Scrape Jobs API Route", () => {
     jest.restoreAllMocks();
   });
 
+  it("returns 401 when the request is not authenticated as admin", async () => {
+    (createAuthMiddleware as jest.Mock).mockReturnValue(jest.fn(async () => AUTH_FAIL));
+    const request = new NextRequest("http://localhost:3000/api/scrape-jobs");
+    const response = await GET(request);
+    expect(response.status).toBe(401);
+    expect((await response.json()).success).toBe(false);
+  });
+
   describe("POST /api/scrape-jobs", () => {
     it("creates a scrape job with valid input", async () => {
       const requestBody = {
@@ -98,7 +129,6 @@ describe("Scrape Jobs API Route", () => {
       expect(json.data.query).toBe("software engineer");
       expect(json.data.location).toBe("New York, NY");
       expect(json.data.status).toBe("pending");
-      expect(json.message).toBe("Scrape job created successfully");
     });
 
     it("returns 400 when source is missing", async () => {
@@ -305,6 +335,37 @@ describe("Scrape Jobs API Route", () => {
       expect(json.data.length).toBe(1);
       expect(json.data[0].status).toBe("pending");
     });
+
+    it("filters jobs by multiple comma-separated statuses", async () => {
+      findScrapeJobs.mockResolvedValueOnce([]);
+
+      const request = new NextRequest("http://localhost:3000/api/scrape-jobs?status=pending,running");
+      const response = await GET(request);
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(findScrapeJobs).toHaveBeenCalledWith(expect.anything(), ["pending", "running"]);
+    });
+
+    it.each(["bogus", "pending,bogus", "PENDING", ","])(
+      "returns 400 VALIDATION for an invalid status filter (%p)",
+      async (status) => {
+        const request = new NextRequest(
+          `http://localhost:3000/api/scrape-jobs?status=${encodeURIComponent(status)}`
+        );
+        const response = await GET(request);
+        const json = await response.json();
+
+        expect(response.status).toBe(400);
+        expect(json.success).toBe(false);
+        expect(json.error).toBe(
+          "Invalid status filter. Valid statuses: pending, running, completed, failed, cancelled"
+        );
+        expect(json.code).toBe("VALIDATION");
+        expect(findScrapeJobs).not.toHaveBeenCalled();
+      }
+    );
 
     it("returns 500 on database error", async () => {
       findScrapeJobs.mockRejectedValueOnce(new Error("Database connection failed"));

@@ -65,7 +65,7 @@ pub fn transform_to_business(
         website: raw.website.clone(),
         category: raw.category.clone(),
         rating: raw.rating,
-        review_count: raw.review_count.map(|c| c as i32),
+        review_count: raw.review_count.map(|v| v as i32),
     })
 }
 

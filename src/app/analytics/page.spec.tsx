@@ -13,14 +13,17 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        totalJobs: 0,
-        successfulJobs: 0,
-        failedJobs: 0,
-        totalItemsScraped: 0,
-        totalBusinessesScraped: 0,
-        totalBusinessesImported: 0,
-        importRate: 0,
-        periodDays: 30,
+        success: true,
+        data: {
+          totalJobs: 0,
+          successfulJobs: 0,
+          failedJobs: 0,
+          totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
+          periodDays: 30,
+        },
       }),
     });
 
@@ -34,14 +37,17 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        totalJobs: 0,
-        successfulJobs: 0,
-        failedJobs: 0,
-        totalItemsScraped: 0,
-        totalBusinessesScraped: 0,
-        totalBusinessesImported: 0,
-        importRate: 0,
-        periodDays: 30,
+        success: true,
+        data: {
+          totalJobs: 0,
+          successfulJobs: 0,
+          failedJobs: 0,
+          totalItemsScraped: 0,
+          totalBusinessesScraped: 0,
+          totalBusinessesImported: 0,
+          importRate: 0,
+          periodDays: 30,
+        },
       }),
     });
 
@@ -77,7 +83,7 @@ describe('AnalyticsPage', () => {
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => mockStats,
+      json: async () => ({ success: true, data: mockStats }),
     });
 
     render(<AnalyticsPage />);
@@ -97,19 +103,22 @@ describe('AnalyticsPage', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          totalBusinessesScraped: 0,
-          totalBusinessesImported: 0,
-          importRate: 0,
-          periodDays: 30,
+          success: true,
+          data: {
+            totalJobs: 0,
+            successfulJobs: 0,
+            failedJobs: 0,
+            totalItemsScraped: 0,
+            totalBusinessesScraped: 0,
+            totalBusinessesImported: 0,
+            importRate: 0,
+            periodDays: 30,
+          },
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [],
+        json: async () => ({ success: true, data: [] }),
       });
 
     render(<AnalyticsPage />);
@@ -134,19 +143,22 @@ describe('AnalyticsPage', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          totalJobs: 0,
-          successfulJobs: 0,
-          failedJobs: 0,
-          totalItemsScraped: 0,
-          totalBusinessesScraped: 0,
-          totalBusinessesImported: 0,
-          importRate: 0,
-          periodDays: 7,
+          success: true,
+          data: {
+            totalJobs: 0,
+            successfulJobs: 0,
+            failedJobs: 0,
+            totalItemsScraped: 0,
+            totalBusinessesScraped: 0,
+            totalBusinessesImported: 0,
+            importRate: 0,
+            periodDays: 7,
+          },
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [],
+        json: async () => ({ success: true, data: [] }),
       });
 
     (global.fetch as jest.Mock).mockImplementation(fetchMock);
@@ -155,17 +167,20 @@ describe('AnalyticsPage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('days=30')
+        expect.stringContaining('days=30'),
+        expect.objectContaining({ headers: {} })
       );
     });
 
-    // Click on "Last 7 days" button
-    const sevenDaysButton = screen.getByText('Last 7 days');
+    // Click on "Last 7 days" button (role query avoids ambiguity with the
+    // "Last 7 days" stats caption rendered when stats.periodDays is 7)
+    const sevenDaysButton = screen.getByRole('button', { name: 'Last 7 days' });
     sevenDaysButton.click();
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('days=7')
+        expect.stringContaining('days=7'),
+        expect.objectContaining({ headers: {} })
       );
     });
   });
@@ -185,32 +200,37 @@ describe('AnalyticsPage', () => {
     const mockJobs = [
       {
         id: '1',
-        jobName: 'Business Scraper',
-        targetUrl: 'https://example.com/businesses',
-        status: 'success' as const,
+        source: 'yelp',
+        query: 'black owned restaurants',
+        location: 'Atlanta, GA',
+        status: 'completed' as const,
+        businessCount: 12,
         errorMessage: null,
-        itemsScraped: 500,
         startedAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       },
     ];
 
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => mockStats,
+        json: async () => ({ success: true, data: mockStats }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => mockJobs,
+        json: async () => ({ success: true, data: mockJobs }),
       });
 
     render(<AnalyticsPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Recent Jobs')).toBeInTheDocument();
-      expect(screen.getByText('Business Scraper')).toBeInTheDocument();
-      expect(screen.getByText('success')).toBeInTheDocument();
+      expect(screen.getByText('yelp')).toBeInTheDocument();
+      expect(screen.getByText('black owned restaurants')).toBeInTheDocument();
+      expect(screen.getByText('Atlanta, GA')).toBeInTheDocument();
+      expect(screen.getByText('completed')).toBeInTheDocument();
+      expect(screen.getByText('12')).toBeInTheDocument();
     });
   });
 
@@ -229,11 +249,11 @@ describe('AnalyticsPage', () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => mockStats,
+        json: async () => ({ success: true, data: mockStats }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [],
+        json: async () => ({ success: true, data: [] }),
       });
 
     render(<AnalyticsPage />);

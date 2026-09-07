@@ -70,11 +70,17 @@ describe('LOC-0056-AC2 Docker Compose - All Services', () => {
       expect(typedConfig.services.nats.image).toMatch(/nats:2.10-alpine/);
     });
 
-    it('should have healthcheck with nats-server ping', () => {
+    // The probe command is an implementation detail. Pinning it here
+    // previously encoded a broken probe (`nats-server -sl ping`, mis-parsed
+    // on NATS 2.10) as a spec requirement. Config-level specs assert only
+    // that a healthcheck is defined; the live "container becomes healthy"
+    // behavior is verified against the running stack in
+    // e2e/docker-compose.spec.ts.
+    it('should define a healthcheck with a probe command', () => {
       const typedConfig = config as yaml.Document & { services: { nats: { healthcheck: { test: unknown } } } };
-      const testCmd = typedConfig.services.nats.healthcheck.test as string[];
-      expect(testCmd).toContain('nats-server');
-      expect(testCmd).toContain('ping');
+      const test = typedConfig.services.nats.healthcheck.test;
+      expect(Array.isArray(test)).toBe(true);
+      expect((test as string[]).length).toBeGreaterThan(0);
     });
   });
 

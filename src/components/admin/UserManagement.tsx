@@ -16,6 +16,7 @@ import {
   getStatusVariant,
 } from '@/types/user-management';
 import { Card, Badge, Button, Input, Dropdown, DropdownItem, Tabs, TabPanel, Toast } from '@/components/ui';
+import { authHeaders } from '@/lib/auth/client-session';
 
 /**
  * User table row props
@@ -248,7 +249,7 @@ export default function UserManagement({
           params.set('search', debouncedSearch);
         }
 
-        const response = await fetch(`/api/users?${params}`);
+        const response = await fetch(`/api/users?${params}`, { headers: authHeaders() });
         const result = await response.json();
 
         if (result.success) {
@@ -272,6 +273,7 @@ export default function UserManagement({
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders(),
         },
         body: JSON.stringify({ userId, role: newRole }),
       });
@@ -299,6 +301,7 @@ export default function UserManagement({
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders(),
         },
         body: JSON.stringify({ userId, status: newStatus }),
       });

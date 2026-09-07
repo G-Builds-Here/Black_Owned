@@ -38,6 +38,8 @@ export interface ScrapedBusiness {
   rating?: number;
   reviewCount?: number;
   sourceId?: string;
+  lat?: number;
+  lng?: number;
   createdAt: Date;
 }
 
@@ -52,39 +54,7 @@ function getTableName(): string {
 /**
  * Initialize the scraped_businesses table schema
  */
-export async function initializeScrapedBusinessSchema(client: PoolClient): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${getTableName()} (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      scrape_job_id UUID NOT NULL REFERENCES scrape_jobs(id) ON DELETE CASCADE,
-      source VARCHAR(20) NOT NULL,
-      name VARCHAR(500) NOT NULL,
-      address TEXT,
-      phone VARCHAR(50),
-      website VARCHAR(500),
-      category VARCHAR(255),
-      rating DECIMAL(3,2),
-      review_count INTEGER,
-      source_id VARCHAR(255),
-      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    )
-  `);
 
-  // Create index on scrape_job_id for fast lookups
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_job_id ON ${getTableName()}(scrape_job_id)
-  `);
-
-  // Create index on source for filtering
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_source ON ${getTableName()}(source)
-  `);
-
-  // Create composite index on job_id + source for common queries
-  await client.query(`
-    CREATE INDEX IF NOT EXISTS idx_scraped_businesses_job_source ON ${getTableName()}(scrape_job_id, source)
-  `);
-}
 
 /**
  * Convert database row to ScrapedBusiness entity
@@ -103,6 +73,8 @@ function rowToScrapedBusiness(row: unknown): ScrapedBusiness {
     rating: (r.rating as number | null) ?? undefined,
     reviewCount: (r.review_count as number | null) ?? undefined,
     sourceId: (r.source_id as string) ?? undefined,
+    lat: (r.lat as number | null) ?? undefined,
+    lng: (r.lng as number | null) ?? undefined,
     createdAt: new Date(r.created_at as string),
   };
 }
@@ -145,10 +117,42 @@ export async function findScrapedBusinessesByJobId(
 ): Promise<ScrapedBusiness[]> {
   const tableName = getTableName();
   const result = await client.query<ScrapedBusiness>(
-    `SELECT * FROM ${tableName} WHERE scrape_job_id = $1 ORDER BY created_at DESC`,
+    `SELECT * FROM ${tableName} WHERE scrape_job_id = $1 ORDER BY created_at, name`,
     [jobId]
   );
   return result.rows.map(rowToScrapedBusiness);
+}
+
+/**
+ * Lightweight dedup candidate rows across all jobs: id, name, address, phone.
+ */
+export interface ScrapedBusinessDedupCandidate {
+  id: string;
+  name: string;
+  address: string;
+  phone: string | undefined;
+}
+
+/**
+ * Find every scraped business's id/name/address/phone for the import
+ * route's duplicate-detection candidate pool.
+ */
+export async function findScrapedCandidatesForDedup(
+  client: PoolClient
+): Promise<ScrapedBusinessDedupCandidate[]> {
+  const tableName = getTableName();
+  const result = await client.query<{
+    id: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+  }>(`SELECT id, name, address, phone FROM ${tableName}`);
+  return result.rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    address: r.address ?? "",
+    phone: r.phone ?? undefined,
+  }));
 }
 
 /**

@@ -206,6 +206,10 @@ describe("YelpScraper", () => {
     it("handles empty results gracefully", async () => {
       mockPage.goto.mockResolvedValue(undefined);
       mockPage.waitForSelector.mockRejectedValue(new Error("Selector not found"));
+      // Stub the extraction to yield nothing — without this the mock inherits
+      // the prior test's evaluate() return value (clearAllMocks does not reset
+      // implementations), so the page would not actually be empty.
+      mockPage.evaluate.mockResolvedValue([]);
       mockPage.close.mockResolvedValue(undefined);
 
       const result = await scraper.scrape("nonexistentbusiness12345", "Nowhere City");
@@ -273,6 +277,10 @@ describe("YelpScraper", () => {
       mockContext.close.mockResolvedValue(undefined);
       mockBrowser.close.mockResolvedValue(undefined);
 
+      // close() only tears down the browser/context it actually initialized
+      // (in real usage scrape() runs first). Initialize so this.browser and
+      // this.context are populated, then verify close() releases both.
+      await scraper.initialize();
       await scraper.close();
 
       expect(mockContext.close).toHaveBeenCalled();

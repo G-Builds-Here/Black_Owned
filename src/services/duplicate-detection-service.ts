@@ -45,12 +45,16 @@ export interface DuplicateCheckResult {
   nameSimilarity: number;
   /** Similarity score for the address comparison */
   addressSimilarity: number;
+  /** 1 when both businesses share a normalized phone number, 0 otherwise */
+  phoneSimilarity: number;
   /** Combined weighted similarity score */
   combinedScore: number;
   /** Whether name exceeded threshold */
   nameAboveThreshold: boolean;
   /** Whether address exceeded threshold */
   addressAboveThreshold: boolean;
+  /** Whether both businesses have an identical normalized phone number */
+  phoneMatch: boolean;
 }
 
 /**
@@ -59,6 +63,8 @@ export interface DuplicateCheckResult {
 export interface BusinessForComparison {
   name: string;
   address: string;
+  /** Optional phone number, compared by normalized digits */
+  phone?: string;
 }
 
 /**
@@ -86,7 +92,14 @@ export function checkForDuplicate(
     jaccardWeight: 1 - config.addressWeight,
   });
 
-  // Calculate combined weighted score
+  // Calculate phone match: both businesses must have a phone and their
+  // normalized digits must be identical.
+  const phone1 = normalizePhoneNumber(business1.phone);
+  const phone2 = normalizePhoneNumber(business2.phone);
+  const phoneMatch = phone1 !== "" && phone2 !== "" && phone1 === phone2;
+  const phoneSimilarity = phoneMatch ? 1 : 0;
+
+  // Calculate combined weighted score (name + address)
   const combinedScore =
     config.nameWeight * nameSimilarity + config.addressWeight * addressSimilarity;
 
@@ -94,16 +107,20 @@ export function checkForDuplicate(
   const nameAboveThreshold = nameSimilarity >= config.nameThreshold;
   const addressAboveThreshold = addressSimilarity >= config.addressThreshold;
 
-  // Flag as potential duplicate only if BOTH name and address exceed thresholds
-  const isPotentialDuplicate = nameAboveThreshold && addressAboveThreshold;
+  // A phone match takes precedence over name/address; otherwise require BOTH
+  // name and address to exceed their thresholds.
+  const isPotentialDuplicate =
+    phoneMatch || (nameAboveThreshold && addressAboveThreshold);
 
   return {
     isPotentialDuplicate,
     nameSimilarity,
     addressSimilarity,
+    phoneSimilarity,
     combinedScore,
     nameAboveThreshold,
     addressAboveThreshold,
+    phoneMatch,
   };
 }
 
@@ -118,4 +135,20 @@ export function checkForDuplicate(
  */
 export function normalizeAddress(address: string): string {
   return normalizeString(address);
+}
+
+/**
+ * Normalizes a phone number for comparison by stripping every non-digit
+ * character (spaces, dashes, parentheses, and the leading '+' country-code
+ * marker). Leading zeros are preserved so distinct national numbers never
+ * collapse into the same key.
+ *
+ * @param phone - Phone string to normalize (null/undefined safe)
+ * @returns Digits-only phone string, or "" for null/undefined/empty input
+ */
+export function normalizePhoneNumber(phone: string | null | undefined): string {
+  if (phone === null || phone === undefined) {
+    return "";
+  }
+  return String(phone).replace(/\D+/g, "");
 }

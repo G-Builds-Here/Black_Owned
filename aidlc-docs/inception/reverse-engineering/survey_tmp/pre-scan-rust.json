@@ -1,0 +1,2961 @@
+{
+  "projects": [
+    {
+      "path": "bw-api\\Cargo.toml",
+      "name": "bw-api",
+      "type": "web",
+      "edition": "2021",
+      "version": "unknown",
+      "packages": [
+        {
+          "name": "bw-types",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "serde",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "serde_json",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "chrono",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "uuid",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "async-graphql",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "sqlx",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "tower",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "tower-layer",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "futures",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "axum",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "axum-extra",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "tokio",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "hyper",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "hyper-util",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "http-body",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "jsonwebtoken",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "tracing",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "tracing-subscriber",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "tower-http",
+          "version": "specified",
+          "is_dev": null
+        }
+      ],
+      "features": {},
+      "excluded_dirs": []
+    },
+    {
+      "path": "bw-ingestion\\Cargo.toml",
+      "name": "bw-ingestion",
+      "type": "unknown",
+      "edition": "2021",
+      "version": "unknown",
+      "packages": [
+        {
+          "name": "bw-types",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "serde",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "serde_json",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "chrono",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "uuid",
+          "version": "specified",
+          "is_dev": true
+        },
+        {
+          "name": "anyhow",
+          "version": "specified",
+          "is_dev": true
+        },
+        {
+          "name": "tokio",
+          "version": "specified",
+          "is_dev": true
+        },
+        {
+          "name": "clickhouse",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "async-nats",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "minio-rsc",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "redis",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "image",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "tracing",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "rand",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "bytes",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "futures",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "lettre",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "regex",
+          "version": "specified",
+          "is_dev": false
+        }
+      ],
+      "features": {},
+      "excluded_dirs": []
+    },
+    {
+      "path": "bw-scraper\\Cargo.toml",
+      "name": "bw_scraper",
+      "type": "web",
+      "edition": "2021",
+      "version": "unknown",
+      "packages": [
+        {
+          "name": "tokio",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "sqlx",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "async-nats",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "axum",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "serde",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "serde_json",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "tracing",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "tracing-subscriber",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "uuid",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "chrono",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "reqwest",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "regex",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "clickhouse",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "anyhow",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "redis",
+          "version": "specified",
+          "is_dev": false
+        },
+        {
+          "name": "fastrand",
+          "version": "specified",
+          "is_dev": false
+        }
+      ],
+      "features": {},
+      "excluded_dirs": []
+    },
+    {
+      "path": "bw-types\\Cargo.toml",
+      "name": "bw-types",
+      "type": "unknown",
+      "edition": "2021",
+      "version": "unknown",
+      "packages": [
+        {
+          "name": "serde",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "serde_json",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "derive_builder",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "chrono",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "uuid",
+          "version": "specified",
+          "is_dev": null
+        },
+        {
+          "name": "sqlx",
+          "version": "specified",
+          "is_dev": null
+        }
+      ],
+      "features": {},
+      "excluded_dirs": []
+    }
+  ],
+  "config_files": [
+    {
+      "path": ".env",
+      "type": "env-file",
+      "environment": "default"
+    },
+    {
+      "path": ".env.example",
+      "type": "env-file",
+      "environment": ".example"
+    },
+    {
+      "path": "docker-compose.yml",
+      "type": "docker-compose",
+      "environment": null
+    },
+    {
+      "path": "bw-ingestion\\.env.example",
+      "type": "env-file",
+      "environment": ".example"
+    }
+  ],
+  "environments": [
+    ".example"
+  ],
+  "env_resolution": [
+    {
+      "file": "bw-api\\src\\bin\\main.rs",
+      "line": 26,
+      "var_name": "API_HOST",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 12,
+      "var_name": "DATABASE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-ingestion\\tests\\cache_invalidator_integration.rs",
+      "line": 26,
+      "var_name": "VALKEY_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-ingestion\\tests\\cache_invalidator_integration.rs",
+      "line": 63,
+      "var_name": "VALKEY_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-ingestion\\tests\\cache_service_integration.rs",
+      "line": 16,
+      "var_name": "VALKEY_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-ingestion\\tests\\cache_service_integration.rs",
+      "line": 340,
+      "var_name": "VALKEY_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 476,
+      "var_name": "DATABASE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 32,
+      "var_name": "DATABASE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 34,
+      "var_name": "SEARXNG_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 36,
+      "var_name": "HOST",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 37,
+      "var_name": "PORT",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 41,
+      "var_name": "NATS_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 42,
+      "var_name": "REDIS_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 43,
+      "var_name": "CLICKHOUSE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 44,
+      "var_name": "RUST_LOG",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 45,
+      "var_name": "NOMINATIM_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2383,
+      "var_name": "DATABASE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 29,
+      "var_name": "DATABASE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 53,
+      "var_name": "NATS_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 79,
+      "var_name": "REDIS_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 103,
+      "var_name": "CLICKHOUSE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 145,
+      "var_name": "DATABASE_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 147,
+      "var_name": "NATS_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 149,
+      "var_name": "REDIS_URL",
+      "method": "std::env::var"
+    },
+    {
+      "file": "bw-scraper\\tests\\connectors_test.rs",
+      "line": 151,
+      "var_name": "CLICKHOUSE_URL",
+      "method": "std::env::var"
+    }
+  ],
+  "test_groups": [
+    {
+      "name": "tests",
+      "files": [
+        "bw-api\\src\\lib.rs",
+        "bw-api\\src\\graphql\\mod.rs",
+        "bw-api\\src\\middleware\\auth.rs",
+        "bw-api\\src\\middleware\\rate_limiter.rs",
+        "bw-api\\src\\routes\\images.rs",
+        "bw-ingestion\\src\\background_service.rs",
+        "bw-ingestion\\src\\cache_invalidator.rs",
+        "bw-ingestion\\src\\cache_service.rs",
+        "bw-ingestion\\src\\chat_consumer.rs",
+        "bw-ingestion\\src\\email_consumer.rs",
+        "bw-ingestion\\src\\email_publisher.rs",
+        "bw-ingestion\\src\\email_service.rs",
+        "bw-ingestion\\src\\image_processor.rs",
+        "bw-ingestion\\src\\image_publisher.rs",
+        "bw-ingestion\\src\\image_worker.rs",
+        "bw-ingestion\\src\\lib.rs",
+        "bw-ingestion\\src\\scraper_rate_limiter.rs",
+        "bw-ingestion\\src\\service_connectivity.rs",
+        "bw-ingestion\\src\\etl\\facebook.rs",
+        "bw-ingestion\\src\\etl\\google_maps.rs",
+        "bw-ingestion\\src\\etl\\pipeline.rs",
+        "bw-ingestion\\src\\etl\\transformer.rs",
+        "bw-ingestion\\src\\etl\\validation.rs",
+        "bw-ingestion\\src\\etl\\yelp.rs",
+        "bw-scraper\\src\\api.rs",
+        "bw-scraper\\src\\enrichment.rs",
+        "bw-scraper\\src\\etl.rs",
+        "bw-scraper\\src\\locations.rs",
+        "bw-scraper\\src\\rate_limiter.rs",
+        "bw-scraper\\src\\robots.rs",
+        "bw-scraper\\src\\searxng.rs",
+        "bw-scraper\\src\\user_agent_rotator.rs",
+        "bw-types\\src\\email.rs",
+        "bw-types\\src\\lib.rs"
+      ],
+      "test_count": 255
+    }
+  ],
+  "static_state": [
+    {
+      "class": "once_cell",
+      "member": "AC3_STUB_LOCK",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 575
+    },
+    {
+      "class": "once_cell",
+      "member": "AC3_STUB_PATHS",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 555
+    },
+    {
+      "class": "once_cell",
+      "member": "ATTR",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 151
+    },
+    {
+      "class": "once_cell",
+      "member": "A_HREF",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 614
+    },
+    {
+      "class": "once_cell",
+      "member": "FIXTURE_STUB_PORT",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 492
+    },
+    {
+      "class": "once_cell",
+      "member": "MAPS_URL_COORDS",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 119
+    },
+    {
+      "class": "once_cell",
+      "member": "META",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 149
+    },
+    {
+      "class": "once_cell",
+      "member": "RE",
+      "kind": "OnceCell/Lazy",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 152
+    },
+    {
+      "class": "static",
+      "member": "AC3_STUB_LOCK",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 575
+    },
+    {
+      "class": "static",
+      "member": "AC3_STUB_PATHS",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 555
+    },
+    {
+      "class": "static",
+      "member": "ALWAYS_DIRECTORY",
+      "kind": "static",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 75
+    },
+    {
+      "class": "static",
+      "member": "ATTR",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 151
+    },
+    {
+      "class": "static",
+      "member": "A_HREF",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 614
+    },
+    {
+      "class": "static",
+      "member": "CACHE_INVALIDATE_SUBJECT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\cache_invalidator.rs",
+      "line": 15
+    },
+    {
+      "class": "static",
+      "member": "CACHE_KEY_PREFIX",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "line": 17
+    },
+    {
+      "class": "static",
+      "member": "DEFAULT_CATEGORY_ID",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\facebook.rs",
+      "line": 12
+    },
+    {
+      "class": "static",
+      "member": "DEFAULT_CATEGORY_ID",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\google_maps.rs",
+      "line": 12
+    },
+    {
+      "class": "static",
+      "member": "DEFAULT_CATEGORY_ID",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\yelp.rs",
+      "line": 12
+    },
+    {
+      "class": "static",
+      "member": "DEFAULT_NOMINATIM_URL",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 29
+    },
+    {
+      "class": "static",
+      "member": "DEFAULT_SEARXNG_URL",
+      "kind": "static",
+      "file": "bw-scraper\\src\\config.rs",
+      "line": 6
+    },
+    {
+      "class": "static",
+      "member": "DEFAULT_TTL_SECS",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "line": 14
+    },
+    {
+      "class": "static",
+      "member": "EMAIL_DLQ_SUBJECT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "line": 18
+    },
+    {
+      "class": "static",
+      "member": "EMAIL_SEND_SUBJECT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "line": 15
+    },
+    {
+      "class": "static",
+      "member": "EMAIL_SEND_SUBJECT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\email_publisher.rs",
+      "line": 10
+    },
+    {
+      "class": "static",
+      "member": "ENRICH_DEFAULT_LIMIT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 191
+    },
+    {
+      "class": "static",
+      "member": "ENRICH_MAX_LIMIT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 195
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\searxng.rs",
+      "line": 130
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE_MENU_HOMEPAGE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3591
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE_NO_MENU_HOMEPAGE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3593
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE_PLACE_JSON",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2211
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE_SEARXNG_RESULT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 424
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE_SEARXNG_RESULT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2216
+    },
+    {
+      "class": "static",
+      "member": "FIXTURE_STUB_PORT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 492
+    },
+    {
+      "class": "static",
+      "member": "HOMEPAGE_BODY_CAP",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 1035
+    },
+    {
+      "class": "static",
+      "member": "IMAGE_EARLY_ACCEPT_SCORE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 216
+    },
+    {
+      "class": "static",
+      "member": "IMAGE_MAX_PROBES",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 211
+    },
+    {
+      "class": "static",
+      "member": "IMAGE_PROCESS_DLQ",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "line": 17
+    },
+    {
+      "class": "static",
+      "member": "IMAGE_PROCESS_SUBJECT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_publisher.rs",
+      "line": 11
+    },
+    {
+      "class": "static",
+      "member": "IMAGE_PROCESS_SUBJECT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "line": 14
+    },
+    {
+      "class": "static",
+      "member": "LOCATIONS_DEFAULT_LIMIT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 295
+    },
+    {
+      "class": "static",
+      "member": "LOCATIONS_MAX_LIMIT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 298
+    },
+    {
+      "class": "static",
+      "member": "LOC_DISCOVERY_NEAR_SEARXNG",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2930
+    },
+    {
+      "class": "static",
+      "member": "LOC_DISCOVERY_NOMINATIM",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 463
+    },
+    {
+      "class": "static",
+      "member": "LOC_DISCOVERY_NOMINATIM",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2919
+    },
+    {
+      "class": "static",
+      "member": "LOC_DISCOVERY_SEARXNG",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 445
+    },
+    {
+      "class": "static",
+      "member": "LOC_DISCOVERY_SEARXNG",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2897
+    },
+    {
+      "class": "static",
+      "member": "MAPS_URL_COORDS",
+      "kind": "static",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 119
+    },
+    {
+      "class": "static",
+      "member": "MAX_CANDIDATES_TO_GEOCODE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 36
+    },
+    {
+      "class": "static",
+      "member": "MAX_CONSECUTIVE_USES",
+      "kind": "static",
+      "file": "bw-scraper\\src\\user_agent_rotator.rs",
+      "line": 33
+    },
+    {
+      "class": "static",
+      "member": "MAX_FILE_SIZE",
+      "kind": "static",
+      "file": "bw-api\\src\\routes\\images.rs",
+      "line": 11
+    },
+    {
+      "class": "static",
+      "member": "MAX_LOCATIONS_PER_BUSINESS",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 32
+    },
+    {
+      "class": "static",
+      "member": "MAX_RETRIES",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "line": 20
+    },
+    {
+      "class": "static",
+      "member": "MAX_RETRY_ATTEMPTS",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "line": 21
+    },
+    {
+      "class": "static",
+      "member": "MERGE_DISTANCE_M",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 41
+    },
+    {
+      "class": "static",
+      "member": "META",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 149
+    },
+    {
+      "class": "static",
+      "member": "NON_PROFILE_SEGMENTS",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 86
+    },
+    {
+      "class": "static",
+      "member": "PROCESS_TIMEOUT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\cache_invalidator.rs",
+      "line": 18
+    },
+    {
+      "class": "static",
+      "member": "PROCESS_TIMEOUT",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "line": 23
+    },
+    {
+      "class": "static",
+      "member": "QUERY_CACHE_PREFIX",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "line": 20
+    },
+    {
+      "class": "static",
+      "member": "RE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 105
+    },
+    {
+      "class": "static",
+      "member": "RE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 152
+    },
+    {
+      "class": "static",
+      "member": "RETRY_DELAY_BASE",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "line": 24
+    },
+    {
+      "class": "static",
+      "member": "R_M",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 427
+    },
+    {
+      "class": "static",
+      "member": "Regex",
+      "kind": "static",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 104
+    },
+    {
+      "class": "static",
+      "member": "Regex",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 151
+    },
+    {
+      "class": "static",
+      "member": "SELECT_ELIGIBLE",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 200
+    },
+    {
+      "class": "static",
+      "member": "SELECT_LOCATIONS",
+      "kind": "static",
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 304
+    },
+    {
+      "class": "static",
+      "member": "SHORT_PAGE_THRESHOLD",
+      "kind": "static",
+      "file": "bw-scraper\\src\\scraper.rs",
+      "line": 17
+    },
+    {
+      "class": "static",
+      "member": "SUPPORTED_EXTENSIONS",
+      "kind": "static",
+      "file": "bw-api\\src\\routes\\images.rs",
+      "line": 14
+    },
+    {
+      "class": "static",
+      "member": "SUPPORTED_FORMATS",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "line": 21
+    },
+    {
+      "class": "static",
+      "member": "THUMBNAIL_SIZES",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "line": 37
+    },
+    {
+      "class": "static",
+      "member": "TITLE_LABEL_STOPWORDS",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 46
+    },
+    {
+      "class": "static",
+      "member": "UA",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 446
+    },
+    {
+      "class": "static",
+      "member": "USER_AGENT_POOL",
+      "kind": "static",
+      "file": "bw-scraper\\src\\user_agent_rotator.rs",
+      "line": 10
+    },
+    {
+      "class": "static",
+      "member": "WITH_COUNT",
+      "kind": "static",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 79
+    },
+    {
+      "class": "static",
+      "member": "fn",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "line": 31
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-api\\src\\bin\\main.rs",
+      "line": 8
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "line": 27
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "line": 31
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\service_connectivity.rs",
+      "line": 47
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\facebook.rs",
+      "line": 106
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\google_maps.rs",
+      "line": 83
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\mod.rs",
+      "line": 18
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\pipeline.rs",
+      "line": 23
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-ingestion\\src\\etl\\yelp.rs",
+      "line": 97
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 63
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 398
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 408
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 414
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 425
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 434
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 747
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 749
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 907
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 914
+    },
+    {
+      "class": "static",
+      "member": "str",
+      "kind": "static",
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 446
+    }
+  ],
+  "base_classes": [
+    {
+      "name": "AuthLayerBuilder",
+      "trait": "Default",
+      "file": "bw-api\\src\\middleware\\auth.rs",
+      "line": 171,
+      "type": "trait_impl"
+    },
+    {
+      "name": "AuthConfig",
+      "file": "bw-api\\src\\middleware\\auth.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "AuthStore",
+      "file": "bw-api\\src\\middleware\\auth.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "AuthLayer",
+      "file": "bw-api\\src\\middleware\\auth.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "AuthLayerBuilder",
+      "file": "bw-api\\src\\middleware\\auth.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RateLimitConfig",
+      "trait": "Default",
+      "file": "bw-api\\src\\middleware\\rate_limiter.rs",
+      "line": 31,
+      "type": "trait_impl"
+    },
+    {
+      "name": "RateLimiterBuilder",
+      "trait": "Default",
+      "file": "bw-api\\src\\middleware\\rate_limiter.rs",
+      "line": 272,
+      "type": "trait_impl"
+    },
+    {
+      "name": "RateLimitConfig",
+      "file": "bw-api\\src\\middleware\\rate_limiter.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RateLimitLayer",
+      "file": "bw-api\\src\\middleware\\rate_limiter.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RateLimiterBuilder",
+      "file": "bw-api\\src\\middleware\\rate_limiter.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ChatPersistenceService",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\background_service.rs",
+      "line": 116,
+      "type": "trait_impl"
+    },
+    {
+      "name": "ChatPersistenceService",
+      "file": "bw-ingestion\\src\\background_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "CacheInvalidatorConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\cache_invalidator.rs",
+      "line": 36,
+      "type": "trait_impl"
+    },
+    {
+      "name": "CacheInvalidatePayload",
+      "file": "bw-ingestion\\src\\cache_invalidator.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "CacheInvalidatorConfig",
+      "file": "bw-ingestion\\src\\cache_invalidator.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "CacheInvalidator",
+      "file": "bw-ingestion\\src\\cache_invalidator.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "CacheServiceConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "line": 31,
+      "type": "trait_impl"
+    },
+    {
+      "name": "CacheServiceConfig",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "CacheService",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "CacheInvalidationPublisher",
+      "file": "bw-ingestion\\src\\cache_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ChatConsumerConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\chat_consumer.rs",
+      "line": 20,
+      "type": "trait_impl"
+    },
+    {
+      "name": "ChatConsumerConfig",
+      "file": "bw-ingestion\\src\\chat_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ChatMessagePayload",
+      "file": "bw-ingestion\\src\\chat_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ChatMessage",
+      "file": "bw-ingestion\\src\\chat_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "DlqMessage",
+      "file": "bw-ingestion\\src\\chat_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ChatConsumer",
+      "file": "bw-ingestion\\src\\chat_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailConsumerConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "line": 80,
+      "type": "trait_impl"
+    },
+    {
+      "name": "EmailRetryRecord",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailConsumerConfig",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailConsumer",
+      "file": "bw-ingestion\\src\\email_consumer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailPublisherConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\email_publisher.rs",
+      "line": 107,
+      "type": "trait_impl"
+    },
+    {
+      "name": "EmailPublisher",
+      "file": "bw-ingestion\\src\\email_publisher.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailPublisherConfig",
+      "file": "bw-ingestion\\src\\email_publisher.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SmtpConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "line": 125,
+      "type": "trait_impl"
+    },
+    {
+      "name": "EmailMessage",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "NatsEmailPayload",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SmtpConfig",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailTemplate",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "TemplateStore",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailService",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailNatsSubscriber",
+      "file": "bw-ingestion\\src\\email_service.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ThumbnailSize",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImageProcessRequest",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImageProcessResult",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImageProcessor",
+      "file": "bw-ingestion\\src\\image_processor.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImagePublisherConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\image_publisher.rs",
+      "line": 91,
+      "type": "trait_impl"
+    },
+    {
+      "name": "ImagePublisher",
+      "file": "bw-ingestion\\src\\image_publisher.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImagePublisherConfig",
+      "file": "bw-ingestion\\src\\image_publisher.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImageWorkerConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "line": 189,
+      "type": "trait_impl"
+    },
+    {
+      "name": "ImageWorker",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImageWorkerConfig",
+      "file": "bw-ingestion\\src\\image_worker.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ScraperRateLimiter",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\scraper_rate_limiter.rs",
+      "line": 108,
+      "type": "trait_impl"
+    },
+    {
+      "name": "ScraperRateLimiter",
+      "file": "bw-ingestion\\src\\scraper_rate_limiter.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ServiceConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\service_connectivity.rs",
+      "line": 30,
+      "type": "trait_impl"
+    },
+    {
+      "name": "ServiceConfig",
+      "file": "bw-ingestion\\src\\service_connectivity.rs",
+      "constructor_params": "default()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "FacebookTransformer",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\etl\\facebook.rs",
+      "line": 94,
+      "type": "trait_impl"
+    },
+    {
+      "name": "FacebookTransformer",
+      "trait": "Transformer",
+      "file": "bw-ingestion\\src\\etl\\facebook.rs",
+      "line": 100,
+      "type": "trait_impl"
+    },
+    {
+      "name": "FacebookTransformer",
+      "file": "bw-ingestion\\src\\etl\\facebook.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "GoogleMapsTransformer",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\etl\\google_maps.rs",
+      "line": 71,
+      "type": "trait_impl"
+    },
+    {
+      "name": "GoogleMapsTransformer",
+      "trait": "Transformer",
+      "file": "bw-ingestion\\src\\etl\\google_maps.rs",
+      "line": 77,
+      "type": "trait_impl"
+    },
+    {
+      "name": "GoogleMapsTransformer",
+      "file": "bw-ingestion\\src\\etl\\google_maps.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EtlPipelineConfig",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\etl\\pipeline.rs",
+      "line": 48,
+      "type": "trait_impl"
+    },
+    {
+      "name": "EtlPipeline",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\etl\\pipeline.rs",
+      "line": 166,
+      "type": "trait_impl"
+    },
+    {
+      "name": "EtlPipelineConfig",
+      "file": "bw-ingestion\\src\\etl\\pipeline.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "TransformationResult",
+      "file": "bw-ingestion\\src\\etl\\pipeline.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EtlPipeline",
+      "file": "bw-ingestion\\src\\etl\\pipeline.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RawBusinessData",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\etl\\transformer.rs",
+      "line": 38,
+      "type": "trait_impl"
+    },
+    {
+      "name": "RawBusinessData",
+      "file": "bw-ingestion\\src\\etl\\transformer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "YelpTransformer",
+      "trait": "Default",
+      "file": "bw-ingestion\\src\\etl\\yelp.rs",
+      "line": 85,
+      "type": "trait_impl"
+    },
+    {
+      "name": "YelpTransformer",
+      "trait": "Transformer",
+      "file": "bw-ingestion\\src\\etl\\yelp.rs",
+      "line": 91,
+      "type": "trait_impl"
+    },
+    {
+      "name": "YelpTransformer",
+      "file": "bw-ingestion\\src\\etl\\yelp.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "PlaceData",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ImageCandidate",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SocialUrl",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "BusinessRow",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "PlannedField",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "FillPlan",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "AppliedField",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EnrichResult",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EnrichmentEngine",
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EtlPipeline",
+      "trait": "Default",
+      "file": "bw-scraper\\src\\etl.rs",
+      "line": 50,
+      "type": "trait_impl"
+    },
+    {
+      "name": "PostgresImporter",
+      "file": "bw-scraper\\src\\importer.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "LocationDiscovered",
+      "file": "bw-scraper\\src\\locations.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "LocationDiscoveryOutcome",
+      "file": "bw-scraper\\src\\locations.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "ParsedAddress",
+      "file": "bw-scraper\\src\\locations.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "Candidate",
+      "file": "bw-scraper\\src\\locations.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "Geocoder",
+      "file": "bw-scraper\\src\\locations.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RateLimiterConfig",
+      "trait": "Default",
+      "file": "bw-scraper\\src\\rate_limiter.rs",
+      "line": 19,
+      "type": "trait_impl"
+    },
+    {
+      "name": "RateLimiter",
+      "trait": "Default",
+      "file": "bw-scraper\\src\\rate_limiter.rs",
+      "line": 118,
+      "type": "trait_impl"
+    },
+    {
+      "name": "RateLimiterConfig",
+      "file": "bw-scraper\\src\\rate_limiter.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RateLimiter",
+      "file": "bw-scraper\\src\\rate_limiter.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "RobotsChecker",
+      "trait": "Default",
+      "file": "bw-scraper\\src\\robots.rs",
+      "line": 65,
+      "type": "trait_impl"
+    },
+    {
+      "name": "RobotsChecker",
+      "file": "bw-scraper\\src\\robots.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SearxngBusinessScraper",
+      "file": "bw-scraper\\src\\scraper.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SearxngResult",
+      "file": "bw-scraper\\src\\searxng.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SearxngResponse",
+      "file": "bw-scraper\\src\\searxng.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SearxngClient",
+      "file": "bw-scraper\\src\\searxng.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "UserAgentRotator",
+      "trait": "Default",
+      "file": "bw-scraper\\src\\user_agent_rotator.rs",
+      "line": 158,
+      "type": "trait_impl"
+    },
+    {
+      "name": "UserAgentRotator",
+      "file": "bw-scraper\\src\\user_agent_rotator.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "UserAgentStats",
+      "file": "bw-scraper\\src\\user_agent_rotator.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SmtpConfig",
+      "trait": "Default",
+      "file": "bw-types\\src\\email.rs",
+      "line": 245,
+      "type": "trait_impl"
+    },
+    {
+      "name": "EmailMessage",
+      "file": "bw-types\\src\\email.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "NatsEmailPayload",
+      "file": "bw-types\\src\\email.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "SmtpConfig",
+      "file": "bw-types\\src\\email.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "EmailTemplate",
+      "file": "bw-types\\src\\email.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    },
+    {
+      "name": "DlqEmailMessage",
+      "file": "bw-types\\src\\email.rs",
+      "constructor_params": "new()",
+      "parent": null,
+      "provides": [],
+      "type": "fixture"
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-api\\src\\graphql\\queries_test.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-api\\src\\graphql\\tests.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-api\\src\\middleware\\rate_limiter.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-ingestion\\src\\email_consumer.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-ingestion\\src\\email_service.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-ingestion\\src\\scraper_rate_limiter.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-ingestion\\src\\service_connectivity.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-ingestion\\tests\\cache_invalidator_integration.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-ingestion\\tests\\cache_service_integration.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-scraper\\src\\api.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-scraper\\src\\enrichment.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-scraper\\src\\rate_limiter.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-scraper\\tests\\cargo_config_test.rs",
+      "type": "async-runtime"
+    },
+    {
+      "name": "tokio-runtime",
+      "registration_file": "bw-scraper\\tests\\connectors_test.rs",
+      "type": "async-runtime"
+    }
+  ],
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/enrich",
+      "handler": "enrich",
+      "file": "bw-scraper\\src\\api.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "handler": "health_check",
+      "file": "bw-api\\src\\bin\\main.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/health/detailed",
+      "handler": "health_detailed",
+      "file": "bw-scraper\\src\\api.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/locations",
+      "handler": "locations",
+      "file": "bw-scraper\\src\\api.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/scrape",
+      "handler": "scrape",
+      "file": "bw-scraper\\src\\api.rs"
+    }
+  ],
+  "db_access": [
+    {
+      "file": "bw-api\\src\\graphql\\mutations.rs",
+      "line": 317,
+      "db_type": "sqlx",
+      "query": "DELETE FROM reviews WHERE id = $1"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 32,
+      "db_type": "sqlx",
+      "query": "SELECT pg_advisory_lock(42424242)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 84,
+      "db_type": "sqlx",
+      "query": "SELECT pg_advisory_unlock(42424242)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 119,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 127,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 175,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 183,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 242,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 250,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 347,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 355,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 399,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 407,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 451,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 459,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 526,
+      "db_type": "sqlx",
+      "query": "INSERT INTO categories (id, name, description) VALUES ($1, $2, $3)"
+    },
+    {
+      "file": "bw-api\\src\\graphql\\tests.rs",
+      "line": 534,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (id, name, category_id, owner_id) VALUES ($1, $2, $3, $4)"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 630,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'AC1 Enric"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 643,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scrape_jobs (source, query, location)\n                 VALUES ('ac1-test', 'ac1 enrich',"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 672,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n                 VALUES ($1,"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 690,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name LIKE $1"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 695,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE name LIKE $1"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 871,
+      "db_type": "sqlx",
+      "query": "SELECT id, phone, review_count, updated_at\n             FROM businesses WHERE name LIKE $1 ORDER BY "
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 991,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'AC1 Enric"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 1003,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scrape_jobs (source, query, location)\n                 VALUES ('ac1-test', 'ac1 enrich',"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 1032,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n             VALUES ($1, 'go"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 1188,
+      "db_type": "sqlx",
+      "query": "SELECT phone, website, description, rating::text AS rating,\n                     review_count, socia"
+    },
+    {
+      "file": "bw-scraper\\src\\api.rs",
+      "line": 1668,
+      "db_type": "sqlx",
+      "query": "UPDATE businesses SET location = $2, lat = 39.70, lng = -89.75 WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2395,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n             VALUES ($1, 'test', $2, 'admin')\n "
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2410,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scrape_jobs (source, query, location)\n             VALUES ('ac2-test', $1, 'Test')\n     "
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2442,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n             VALUES ($1, 'go"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2479,
+      "db_type": "sqlx",
+      "query": "SELECT phone, website, description, rating::text, review_count FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2513,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name IN ('Enrichment Test Business', 'Enrichment Test Business 2')"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2594,
+      "db_type": "sqlx",
+      "query": "SELECT phone, description FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2606,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = ANY($1)"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2611,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2960,
+      "db_type": "sqlx",
+      "query": "DELETE FROM business_locations WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2967,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2972,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE name = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 2991,
+      "db_type": "sqlx",
+      "query": "UPDATE businesses SET location = $2, lat = 39.70, lng = -89.75 WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3023,
+      "db_type": "sqlx",
+      "query": "SELECT label, address, is_primary FROM business_locations WHERE business_id = $1 ORDER BY is_primary"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3064,
+      "db_type": "sqlx",
+      "query": "DELETE FROM business_locations WHERE business_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3069,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3074,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3079,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3084,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3107,
+      "db_type": "sqlx",
+      "query": "DELETE FROM business_locations WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3114,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3119,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE name = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3135,
+      "db_type": "sqlx",
+      "query": "UPDATE businesses SET location = $2, lat = 39.70, lng = -89.75 WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3141,
+      "db_type": "sqlx",
+      "query": "INSERT INTO business_locations (business_id, label, address, lat, lng, is_primary)\n             VALU"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3190,
+      "db_type": "sqlx",
+      "query": "DELETE FROM business_locations WHERE business_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3195,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3200,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3205,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3210,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3229,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name IN ('AC2 Batch Business 1', 'AC2 Batch Business 3', 'AC2 Batch Bus"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3235,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE name IN ('AC2 Batch Business 1', 'AC2 Batch Business 3', 'AC2 B"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3313,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = ANY($1)"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3318,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3323,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3328,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3347,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name = 'AC2 Batch Business 4'"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3351,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE name = 'AC2 Batch Business 4'"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3364,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n             VALUES ($1, 'se"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3385,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3390,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3395,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3400,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3488,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE name = 'Enrichment Test Business 5'"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3497,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'Enrich Te"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3577,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 3582,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4045,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'AC1 Menu'"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4057,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (owner_id, name, category_id, website)\n                 VALUES ($1, $2, 'test"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4074,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4079,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4116,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4169,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4211,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4303,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'AC2 Menu "
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4315,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (owner_id, name, category_id, website)\n                 VALUES ($1, $2, 'test"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4328,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scrape_jobs (source, query, location)\n                 VALUES ('ac2-test', 'menu fallbac"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4338,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n             VALUES ($1, 'go"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4360,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4370,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4375,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4380,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4385,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4484,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'AC2 Socia"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4496,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (owner_id, name, category_id, website)\n                 VALUES ($1, $2, 'test"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4509,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scrape_jobs (source, query, location)\n                 VALUES ('ac2-test', 'socials fall"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4519,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n             VALUES ($1, 'go"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4546,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url, image_url, social_urls FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4569,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4574,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4579,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4584,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4619,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4676,
+      "db_type": "sqlx",
+      "query": "SELECT menu_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4834,
+      "db_type": "sqlx",
+      "query": "INSERT INTO users (email, password_hash, name, role)\n                 VALUES ($1, 'test', 'AC3 Photo"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4846,
+      "db_type": "sqlx",
+      "query": "INSERT INTO businesses (owner_id, name, category_id, image_url)\n                 VALUES ($1, $2, 'te"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4860,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scrape_jobs (source, query, location)\n                 VALUES ('ac3-test', 'ac3 photo', "
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4870,
+      "db_type": "sqlx",
+      "query": "INSERT INTO scraped_businesses (scrape_job_id, source, name, source_id)\n             VALUES ($1, 'go"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4883,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4888,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4893,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 4898,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5049,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5091,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5132,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5175,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5219,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5264,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5306,
+      "db_type": "sqlx",
+      "query": "UPDATE businesses SET website = $2 WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5333,
+      "db_type": "sqlx",
+      "query": "SELECT image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5346,
+      "db_type": "sqlx",
+      "query": "DELETE FROM business_locations WHERE business_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5351,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5356,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5361,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5366,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5438,
+      "db_type": "sqlx",
+      "query": "SELECT website, image_url, card_image_url FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5461,
+      "db_type": "sqlx",
+      "query": "DELETE FROM business_locations WHERE business_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5466,
+      "db_type": "sqlx",
+      "query": "DELETE FROM businesses WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5471,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scraped_businesses WHERE scrape_job_id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5476,
+      "db_type": "sqlx",
+      "query": "DELETE FROM scrape_jobs WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\enrichment.rs",
+      "line": 5481,
+      "db_type": "sqlx",
+      "query": "DELETE FROM users WHERE id = $1"
+    },
+    {
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 528,
+      "db_type": "sqlx",
+      "query": "INSERT INTO business_locations (business_id, label, address, lat, lng, is_primary)\n         VALUES ("
+    },
+    {
+      "file": "bw-scraper\\src\\locations.rs",
+      "line": 550,
+      "db_type": "sqlx",
+      "query": "INSERT INTO business_locations (business_id, label, address, lat, lng, is_primary)\n         SELECT b"
+    }
+  ],
+  "async_patterns": {
+    "tokio_runtime": true,
+    "async_std": false,
+    "actix_runtime": false,
+    "spawn_count": 4,
+    "async_fn_count": 258
+  },
+  "directory_tree": "/\n  .env\n  .env.example\n  Cargo.lock\n  Cargo.toml\n  README.md\n  __mocks__/\n  aidlc-docs/\n    construction/\n      code/\n      loc-0056/\n      loc-0076/\n    inception/\n      application-design/\n      planning/\n      requirements/\n      reverse-engineering/\n  bw-api/\n    Cargo.toml\n    src/\n      bin/\n      graphql/\n      middleware/\n      routes/\n  bw-ingestion/\n    .env.example\n    Cargo.toml\n    src/\n      etl/\n    tests/\n  bw-scraper/\n    Cargo.toml\n    src/\n    tests/\n      fixtures/\n  bw-types/\n    Cargo.toml\n    src/\n  clickhouse/\n  config/\n    jwt/\n      README.md\n  db/\n    seed/\n  docs/\n  e2e/\n  handoffs/\n    damian/\n    dupin/\n      LOC-0035/\n      LOC-0038/\n      LOC-0040/\n      LOC-0050/\n      LOC-0051/\n      LOC-0060/\n      LOC-0068/\n  migrations/\n    clickhouse/\n    postgresql/\n  nats/\n  packages/\n    ui/\n      coverage/\n      playwright-report/\n      src/\n      test-results/\n  scripts/\n    tests/\n  src/\n    app/\n      about/\n      admin/\n      analytics/\n      api/\n      business/\n      chat/\n      directory/\n      help/\n      login/\n      owner/\n      privacy/\n      register/\n      search/\n      terms/\n    components/\n      admin/\n      ui/\n    lib/\n      auth/\n      chat/\n      db/\n      design-tokens/\n      graphql/\n      minio/\n      nats/\n      utils/\n      valkey/\n    qa/\n    services/\n    types/\n    utils/\n  tests/\n  tools/",
+  "summary": {
+    "project_count": 4,
+    "config_count": 4,
+    "environment_count": 1,
+    "test_group_count": 1,
+    "static_members": 96,
+    "endpoint_count": 5,
+    "rs_files": 59,
+    "async_fn_count": 258,
+    "spawn_count": 4
+  }
+}

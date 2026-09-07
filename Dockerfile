@@ -1,44 +1,66 @@
-# Build stage
-FROM rust:1.89-slim AS builder
+# =============================================================================
+# Multi-stage Dockerfile for bw-scraper (Rust worker service)
+# =============================================================================
+# AC: LOC-0056-AC1
+# - Multi-stage build (rust builder + debian slim runtime)
+# - Final image under 200MB
+# - Runs as non-root user
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - compile the workspace crate bw_scraper
+# -----------------------------------------------------------------------------
+FROM rust:1.88 AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace files
-COPY Cargo.toml ./
-COPY Cargo.lock ./
-COPY bw-types ./bw-types
-COPY bw-ingestion ./bw-ingestion
-COPY bw-api ./bw-api
+# Workspace manifests + lockfile first (cargo needs every member manifest to
+# parse even though only bw_scraper compiles), then the crate sources.
+COPY Cargo.toml Cargo.lock ./
+COPY bw-types/ ./bw-types/
+COPY bw-ingestion/ ./bw-ingestion/
+COPY bw-api/ ./bw-api/
+COPY bw-scraper/ ./bw-scraper/
 
-# Build the application
-RUN cargo build --release --bin bw-api
+RUN cargo build --release --package bw_scraper
 
-# Production stage
-FROM debian:bookworm-slim AS production
+# -----------------------------------------------------------------------------
+# Stage 2: Runtime - slim image carrying the release binary
+# -----------------------------------------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    libpq5 \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 1000 scraper && \
+    useradd --uid 1000 --gid scraper --home-dir /app --create-home scraper
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/bw_scraper /app/bw-scraper
 
-# Copy the built binary
-COPY --from=builder /app/target/release/bw-api /app/bw-api
+RUN chown scraper:scraper /app/bw-scraper
 
-# Expose port
+USER scraper
+
 EXPOSE 8080
 
-# Health check
+ENV RUST_LOG=info
+ENV RUST_BACKTRACE=0
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Start the application
-CMD ["/app/bw-api"]
+ENTRYPOINT ["/app/bw-scraper"]
