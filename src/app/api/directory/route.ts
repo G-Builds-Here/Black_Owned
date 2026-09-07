@@ -94,6 +94,16 @@ interface CanonicalRow {
   lng?: number | null;
 }
 
+interface LocationRow {
+  business_id: string;
+  id: string;
+  label: string | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  is_primary: boolean;
+}
+
 function toCreatedAt(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -102,7 +112,7 @@ function toCreatedAt(value: Date | string): string {
  * Fetch and merge the two directory sources into unfiltered items
  */
 export async function fetchDirectoryItems(
-  client: { query: (text: string) => Promise<{ rows: unknown[] }> }
+  client: { query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[] }> }
 ): Promise<DirectoryBusiness[]> {
   const schema = process.env.POSTGRES_SCHEMA;
   const tableName = schema ? `${schema}.businesses` : "businesses";
@@ -178,22 +188,14 @@ export async function fetchDirectoryItems(
   const canonicalIds = canonicalItems.map((item) => item.id);
   const locationsByBusiness = new Map<string, DirectoryLocation[]>();
   if (canonicalIds.length > 0) {
-    const locationsResult = await client.query<{
-      business_id: string;
-      id: string;
-      label: string | null;
-      address: string;
-      lat: number | null;
-      lng: number | null;
-      is_primary: boolean;
-    }>(
+    const locationsResult = await client.query(
       `SELECT business_id, id, label, address, lat, lng, is_primary
        FROM ${locationsTable}
        WHERE business_id = ANY($1::uuid[])
        ORDER BY is_primary DESC, created_at ASC`,
       [canonicalIds]
     );
-    for (const row of locationsResult.rows) {
+    for (const row of locationsResult.rows as LocationRow[]) {
       const entry: DirectoryLocation = {
         id: row.id,
         label: row.label,
