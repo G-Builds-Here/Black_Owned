@@ -31,6 +31,7 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::etl::extract_us_phone;
+use crate::highlights;
 use crate::locations;
 use crate::rate_limiter::RateLimiter;
 use crate::robots::RobotsChecker;
@@ -381,6 +382,16 @@ pub struct BusinessRow {
     pub image_url: Option<String>,
     pub card_image_url: Option<String>,
     pub social_urls: Option<serde_json::Value>,
+    /// Raw `businesses.category_id` — a `categories.id` UUID in production,
+    /// a slug string in fixtures. Kept as-is for non-highlights uses.
+    pub category_id: String,
+    /// Resolved dictionary slug for the highlights pass: the slugified name
+    /// of the joined `categories` row when available, else the raw
+    /// `category_id` (slug-seeded test rows, orphan ids).
+    pub category_slug: String,
+    /// Existing `highlights` JSONB, if any; `None` marks the column as a
+    /// fill-empty candidate for the highlights pass.
+    pub highlights: Option<serde_json::Value>,
 }
 
 /// The value a fill-empty update would write.
@@ -842,21 +853,29 @@ async fn resolve_source(
 
 /// Load the `businesses` row fields enrichment may write.
 async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, String> {
+    // `category_name` is resolved via a LEFT JOIN against `categories`: in
+    // production `category_id` is a `categories.id` UUID, so the dictionary
+    // slug must be derived from the category *name*. The join is a no-op for
+    // fixtures that seed `category_id` with a slug string (no matching row).
     let row = sqlx::query(
-        r"SELECT id,
-                  name,
-                  location,
-                  phone,
-                  website,
-                  description,
-                  rating::text AS rating,
-                  review_count,
-                   menu_url,
-                   image_url,
-                   card_image_url,
-                   social_urls::text AS social_urls
-            FROM businesses
-            WHERE id = $1",
+        r"SELECT b.id,
+                  b.name,
+                  b.location,
+                  b.phone,
+                  b.website,
+                  b.description,
+                  b.rating::text AS rating,
+                  b.review_count,
+                  b.menu_url,
+                  b.image_url,
+                  b.card_image_url,
+                  b.social_urls::text AS social_urls,
+                  b.category_id,
+                  c.name AS category_name,
+                  b.highlights::text AS highlights
+             FROM businesses b
+             LEFT JOIN categories c ON c.id::text = b.category_id
+            WHERE b.id = $1",
     )
     .bind(business_id)
     .fetch_optional(pool)
@@ -871,6 +890,16 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
         .get::<Option<String>, _>("social_urls")
         .and_then(|raw| serde_json::from_str(&raw).ok());
 
+    let category_id = row.get::<String, _>("category_id");
+    // Dictionary slug: prefer the joined category name (production UUID case);
+    // fall back to the raw `category_id` string (slug-seeded fixtures, orphan
+    // ids) so the highlights pass still works when no `categories` row exists.
+    let category_slug = row
+        .get::<Option<String>, _>("category_name")
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| highlights::slugify_category_name(&name))
+        .unwrap_or_else(|| category_id.clone());
+
     Ok(BusinessRow {
         id: row.get::<Uuid, _>("id"),
         name: row.get::<String, _>("name"),
@@ -884,7 +913,56 @@ async fn load_business(pool: &PgPool, business_id: Uuid) -> Result<BusinessRow, 
         image_url: row.get::<Option<String>, _>("image_url"),
         card_image_url: row.get::<Option<String>, _>("card_image_url"),
         social_urls,
+        category_id,
+        category_slug,
+        highlights: row
+            .get::<Option<String>, _>("highlights")
+            .and_then(|raw| serde_json::from_str(&raw).ok()),
     })
+}
+
+/// Load one business's reviews for the highlights phrase-mining pass
+/// (LOC-0090 wiring of the reviews DB read deferred from LOC-0087).
+///
+/// # Errors
+///
+/// Returns an error when the query fails.
+async fn load_reviews(pool: &PgPool, business_id: Uuid) -> Result<Vec<highlights::Review>, String> {
+    let rows = sqlx::query(
+        r"SELECT comment,
+                  rating::int AS rating,
+                  visible
+           FROM reviews
+           WHERE business_id = $1",
+    )
+    .bind(business_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("review lookup failed: {e}"))?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in &rows {
+        out.push(highlights::Review {
+            comment: row.get::<String, _>("comment"),
+            rating: row.get::<i32, _>("rating"),
+            visible: row.get::<bool, _>("visible"),
+        });
+    }
+    Ok(out)
+}
+
+/// Serialize this run's `SearXNG` results into the JSON shape
+/// `highlights::parse_corpus` consumes: the module keys on
+/// `results[].snippet`, but the `SearXNG` wire format calls that field
+/// `content`, so the mapping happens here at the seam.
+fn searxng_results_json(results: &[SearxngResult]) -> Option<String> {
+    if results.is_empty() {
+        return None;
+    }
+    let arr: Vec<serde_json::Value> = results
+        .iter()
+        .map(|r| serde_json::json!({ "title": r.title, "snippet": r.content }))
+        .collect();
+    Some(serde_json::json!({ "results": arr }).to_string())
 }
 
 /// Apply the fill-empty plan to one business row.
@@ -1303,6 +1381,7 @@ impl EnrichmentEngine {
             .as_ref()
             .is_none_or(|v| v.trim().is_empty());
         let media_wanted = hero_wanted || card_wanted;
+        let highlights_wanted = pre_run_row.highlights.is_none();
         // A website discovered by this run's place-JSON pass (or already
         // on the row) drives the media passes, so the first enrichment
         // run can pick up an `og:image` / same-host image without a
@@ -1313,7 +1392,9 @@ impl EnrichmentEngine {
             .filter(|v| !v.trim().is_empty())
             .or_else(|| place.as_ref().and_then(|p| p.website.clone()))
             .unwrap_or_default();
-        let homepage = if website.trim().is_empty() || (!menu_wanted && !media_wanted) {
+        let homepage = if website.trim().is_empty()
+            || (!menu_wanted && !media_wanted && !highlights_wanted)
+        {
             None
         } else {
             Some(self.fetch_homepage(&website).await)
@@ -1462,6 +1543,23 @@ impl EnrichmentEngine {
         self.run_location_pass(pool, business_id, &pre_run_row, search_results.as_ref(), dry_run, &mut result)
             .await;
 
+        // Highlights pass: fill-empty write of `businesses.highlights` from
+        // the category dictionary, this run's corpus (homepage + SearXNG
+        // titles/snippets + place description), and visible reviews. A
+        // no-match leaves the column NULL; a failure is a note, never a
+        // business failure.
+        self.run_highlights_pass(
+            pool,
+            business_id,
+            &pre_run_row,
+            search_results.as_deref(),
+            homepage.as_ref(),
+            place.as_ref().and_then(|p| p.description.as_deref()),
+            dry_run,
+            &mut result,
+        )
+        .await;
+
         result
     }
 
@@ -1573,6 +1671,101 @@ impl EnrichmentEngine {
             Err(e) => {
                 tracing::warn!(business_id = %business_id, "location discovery failed: {e}");
                 result.notes.push(format!("location discovery failed: {e}"));
+            }
+        }
+    }
+
+    /// Highlights pass over the pre-run row: fill-empty write of
+    /// `businesses.highlights` from the category dictionary, this run's
+    /// corpus (homepage HTML + `SearXNG` titles/snippets + place
+    /// description), and the business's visible reviews (LOC-0086 / 0087 /
+    /// 0090). Merges the outcome (applied field, skipped marker, notes)
+    /// into `result`. A no-match decision leaves the column NULL; a failure
+    /// is a note, never a business failure.
+    async fn run_highlights_pass(
+        &mut self,
+        pool: &PgPool,
+        business_id: Uuid,
+        pre_run_row: &BusinessRow,
+        search_results: Option<&[SearxngResult]>,
+        homepage: Option<&Result<String, String>>,
+        place_description: Option<&str>,
+        dry_run: bool,
+        result: &mut EnrichResult,
+    ) {
+        // Fill-empty: already populated before this run.
+        if pre_run_row.highlights.is_some() {
+            result.skipped.push("highlights");
+            return;
+        }
+
+        let reviews = match load_reviews(pool, business_id).await {
+            Ok(reviews) => reviews,
+            Err(e) => {
+                result.notes.push(format!("review lookup failed: {e}"));
+                Vec::new()
+            }
+        };
+        // Homepage unreachable: fall back to the SearXNG-only corpus rather
+        // than aborting the pass.
+        let html = match homepage {
+            Some(Ok(html)) => html.as_str(),
+            Some(Err(e)) => {
+                result.notes.push(format!("homepage fetch failed: {e}"));
+                ""
+            }
+            None => "",
+        };
+        let searxng_json = search_results.map(searxng_results_json).flatten();
+
+        let decision = highlights::enrich_highlights(
+            &pre_run_row.category_slug,
+            html,
+            searxng_json.as_deref(),
+            place_description,
+            &reviews,
+        );
+
+        match decision.value {
+            Some(entries) => {
+                let json = serde_json::json!(entries);
+                if dry_run {
+                    // Report what would apply without issuing any UPDATE.
+                    result.applied.push(AppliedField {
+                        field: "highlights",
+                        previous: None,
+                    });
+                } else {
+                    let affected = sqlx::query(
+                        "UPDATE businesses SET highlights = $2::jsonb, updated_at = now() \
+                         WHERE id = $1 AND highlights IS NULL",
+                    )
+                    .bind(business_id)
+                    .bind(&json)
+                    .execute(pool)
+                    .await
+                    .map(|r| r.rows_affected() > 0)
+                    .unwrap_or(false);
+                    if affected {
+                        tracing::info!(business_id = %business_id, count = entries.len(), "highlights written");
+                        result.applied.push(AppliedField {
+                            field: "highlights",
+                            previous: None,
+                        });
+                    } else {
+                        // Lost the race — the column was filled between read and write.
+                        result.skipped.push("highlights");
+                    }
+                }
+            }
+            None => {
+                // No qualifying entries: leave the column NULL. Note the
+                // miss only when a v1 dictionary exists for the category —
+                // a dictionary-less category is N/A, not a miss, and must
+                // not add report noise to every enrichment run.
+                if highlights::terms_for_category(&pre_run_row.category_slug).is_some() {
+                    result.notes.push(decision.note);
+                }
             }
         }
     }
@@ -2248,6 +2441,9 @@ mod tests {
             card_image_url: None,
             image_url: None,
             social_urls: None,
+            category_id: String::new(),
+            category_slug: String::new(),
+            highlights: None,
         }
     }
 
@@ -3058,6 +3254,410 @@ mod tests {
         .await
         .expect("count reads");
         assert_eq!(count, 2, "re-run must not duplicate rows");
+
+        // Cleanup: seeded rows only.
+        sqlx::query("DELETE FROM business_locations WHERE business_id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup locations");
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    // ------------------------------------------------------------------
+    // LOC-0090: highlights pipeline integration
+    //
+    // The `highlights` column is filled by the enrichment run from the
+    // category dictionary (homepage nav "Soul Food"), the SearXNG corpus,
+    // and recurring visible-positive review phrases ("live music"). A
+    // re-run must report `highlights` skipped and leave the row
+    // unchanged.
+    // ------------------------------------------------------------------
+
+    const HL_SEARXNG: &str = r#"{
+        "query": "hl soul kitchen",
+        "number_of_results": 1,
+        "results": [
+            {
+                "url": "http://homepage.test/",
+                "title": "Soul Kitchen E2E",
+                "content": "A black owned kitchen serving comfort plates. Call (404) 555-0150.",
+                "engine": "searxng",
+                "score": 1.0
+            }
+        ],
+        "answers": [],
+        "infoboxes": [],
+        "suggestions": [],
+        "articles": []
+    }"#;
+
+    /// Stub homepage: nav carries the food-dining dictionary term "Soul
+    /// Food" (prominent zone); the body and og:description carry no other
+    /// dictionary terms, and "live music" appears ONLY in the seeded
+    /// reviews so its presence in the highlights proves review mining.
+    const HL_HOMEPAGE: &str = "<html><head>\
+<title>Soul Kitchen E2E</title>\
+<meta property=\"og:description\" content=\"A warm neighborhood kitchen with handcrafted plates and friendly daily service\"/>\
+</head><body>\
+<nav><a href=\"/menu\">Soul Food</a><a href=\"/about\">About</a></nav>\
+<h1>Soul Kitchen E2E</h1>\
+<p>Welcome to our family kitchen. We cook with care every day.</p>\
+</body></html>";
+
+    const HL_NOMINATIM: &str = "[]";
+
+    /// Three-host stub: `searxng.test` → SearXNG JSON, `homepage.test` →
+    /// HTML, `nominatim.test` → Nominatim JSON. Requests arrive in
+    /// absolute form through the proxy, so the host is visible on the
+    /// request line.
+    fn start_highlights_stub(searxng_body: &str, homepage_html: &str, nominatim_body: &str) -> u16 {
+        let listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("bind highlights stub listener");
+        let port = listener.local_addr().expect("highlights stub address").port();
+        let searxng_body = searxng_body.to_string();
+        let homepage_html = homepage_html.to_string();
+        let nominatim_body = nominatim_body.to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else {
+                    break;
+                };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            head.extend_from_slice(&buf[..n]);
+                            if head.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let request_line = String::from_utf8_lossy(&head)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                let (body, ctype) = if request_line.contains("nominatim.test") {
+                    (nominatim_body.clone(), "application/json")
+                } else if request_line.contains("homepage.test") {
+                    (homepage_html.clone(), "text/html")
+                } else {
+                    (searxng_body.clone(), "application/json")
+                };
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        port
+    }
+
+    /// Seed an empty test business with an explicit category slug
+    /// (LOC-0090 needs `food-dining` for the v1 dictionary).
+    async fn seed_business_with_category(
+        pool: &PgPool,
+        owner_id: Uuid,
+        name: &str,
+        category_slug: &str,
+    ) -> Uuid {
+        let row = sqlx::query(
+            r"INSERT INTO businesses
+               (owner_id, name, description, category_id, rating, review_count, phone, website, social_urls)
+               VALUES ($1, $2, NULL, $3, 0, 0, NULL, NULL, NULL)
+               RETURNING id",
+        )
+        .bind(owner_id)
+        .bind(name)
+        .bind(category_slug)
+        .fetch_one(pool)
+        .await
+        .expect("seed business inserts");
+        row.get::<Uuid, _>("id")
+    }
+
+    /// Seed one visible positive review (phrase-mining input).
+    async fn seed_review(pool: &PgPool, business_id: Uuid, user_id: Uuid, rating: i32, comment: &str) {
+        sqlx::query(
+            "INSERT INTO reviews (business_id, user_id, rating, comment, visible)
+             VALUES ($1, $2, $3, $4, true)",
+        )
+        .bind(business_id)
+        .bind(user_id)
+        .bind(rating)
+        .bind(comment)
+        .execute(pool)
+        .await
+        .expect("seed review inserts");
+    }
+
+    // LOC-0090 AC1 + AC2: a full enrichment run writes `highlights` from
+    // the category dictionary + visible reviews; a re-run skips the field
+    // and leaves the row byte-identical.
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn test_enrich_writes_highlights_and_rerun_is_idempotent() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        const NAME: &str = "HL Soul Kitchen";
+        // Idempotent cleanup of residue from prior runs.
+        sqlx::query(
+            "DELETE FROM business_locations WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)",
+        )
+        .bind(NAME)
+        .execute(&pool)
+        .await
+        .expect("cleanup locations");
+        sqlx::query("DELETE FROM reviews WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)")
+            .bind(NAME)
+            .execute(&pool)
+            .await
+            .expect("cleanup reviews");
+        sqlx::query("DELETE FROM businesses WHERE name = $1")
+            .bind(NAME)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE name = $1")
+            .bind(NAME)
+            .execute(&pool)
+            .await
+            .expect("cleanup scraped");
+
+        let stub_port = start_highlights_stub(HL_SEARXNG, HL_HOMEPAGE, HL_NOMINATIM);
+        let mut engine = ac2_test_engine(stub_port);
+
+        let user_id = seed_user(&pool, "hl-e2e-", "HL E2E").await;
+        let job_id = seed_scrape_job(&pool, "hl soul").await;
+        let biz_id = seed_business_with_category(&pool, user_id, NAME, "food-dining").await;
+        seed_google_source(&pool, job_id, NAME, "http://maps.google.test/maps/ok?cid=hl-soul").await;
+        // Two visible positive reviews sharing the phrase "live music" —
+        // document frequency 2 reaches the mining threshold.
+        seed_review(&pool, biz_id, user_id, 5, "The live music set every Friday was fantastic").await;
+        seed_review(&pool, biz_id, user_id, 4, "Their live music program is worth the trip").await;
+
+        // AC1: first run — highlights applied from nav term + mined phrase.
+        let result = engine.enrich(&pool, biz_id, false).await;
+        assert!(result.error.is_none(), "enrich error: {:?}", result.error);
+        assert!(
+            result.applied.iter().any(|a| a.field == "highlights"),
+            "highlights must be applied on the first run: applied={:?} notes={:?}",
+            result.applied,
+            result.notes
+        );
+
+        let row = sqlx::query(
+            "SELECT highlights::text, description, phone FROM businesses WHERE id = $1",
+        )
+        .bind(biz_id)
+        .fetch_one(&pool)
+        .await
+        .expect("row reads back");
+        let highlights_text = row
+            .get::<Option<String>, _>("highlights")
+            .expect("highlights column written");
+        let entries: Vec<String> =
+            serde_json::from_str(&highlights_text).expect("highlights is a JSON string array");
+        assert!(
+            entries.iter().any(|e| e == "Soul Food"),
+            "nav dictionary term missing: {entries:?}"
+        );
+        assert!(
+            entries.iter().any(|e| e == "live music"),
+            "mined review phrase missing: {entries:?}"
+        );
+        assert!(entries.len() <= 3, "card renders at most 3 chips: {entries:?}");
+        assert!(
+            row.get::<Option<String>, _>("description").is_some(),
+            "description must be non-NULL after enrichment"
+        );
+        assert_eq!(
+            row.get::<Option<String>, _>("phone").as_deref(),
+            Some("(404) 555-0150")
+        );
+
+        // AC2: re-run — highlights already set, so the pass skips and the
+        // value is unchanged.
+        let result2 = engine.enrich(&pool, biz_id, false).await;
+        assert!(result2.error.is_none(), "re-run error: {:?}", result2.error);
+        assert!(
+            !result2
+                .applied
+                .iter()
+                .any(|a| a.field == "highlights"),
+            "re-run must not re-apply highlights: applied={:?}",
+            result2.applied
+        );
+        assert!(
+            result2.skipped.iter().any(|s| *s == "highlights"),
+            "re-run must report highlights skipped: skipped={:?}",
+            result2.skipped
+        );
+        let row2 = sqlx::query("SELECT highlights::text FROM businesses WHERE id = $1")
+            .bind(biz_id)
+            .fetch_one(&pool)
+            .await
+            .expect("row2 reads back");
+        assert_eq!(
+            row2.get::<Option<String>, _>("highlights"),
+            Some(highlights_text.clone()),
+            "highlights value must be unchanged by the re-run"
+        );
+
+        // Cleanup: seeded rows only.
+        sqlx::query("DELETE FROM business_locations WHERE business_id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup locations");
+        sqlx::query("DELETE FROM reviews WHERE business_id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup reviews");
+        sqlx::query("DELETE FROM businesses WHERE id = $1")
+            .bind(biz_id)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE scrape_job_id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scraped businesses cleanup");
+        sqlx::query("DELETE FROM scrape_jobs WHERE id = $1")
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .expect("scrape job cleanup");
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .expect("user cleanup");
+    }
+
+    // LOC-0083-slugfix AC1: a business whose `category_id` is a `categories`
+    // UUID (the production shape) still resolves to the v1 dictionary and
+    // gets highlights — `load_business` joins `categories` and slugifies the
+    // name. Slug-seeded fixtures keep working through the fallback path
+    // (covered by the test above).
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn test_enrich_resolves_uuid_category_to_dictionary_slug() {
+        let pool = match test_pool().await {
+            Ok(pool) => pool,
+            Err(e) => {
+                eprintln!("SKIP db test (compose Postgres unavailable): {e}");
+                return;
+            }
+        };
+
+        const NAME: &str = "HL UUID Kitchen";
+        const FOOD_DINING_UUID: &str = "c7e04c6a-eba0-47d1-b4d3-94d8b4e5066d";
+        // Idempotent cleanup of residue from prior runs.
+        sqlx::query(
+            "DELETE FROM business_locations WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)",
+        )
+        .bind(NAME)
+        .execute(&pool)
+        .await
+        .expect("cleanup locations");
+        sqlx::query("DELETE FROM reviews WHERE business_id IN (SELECT id FROM businesses WHERE name = $1)")
+            .bind(NAME)
+            .execute(&pool)
+            .await
+            .expect("cleanup reviews");
+        sqlx::query("DELETE FROM businesses WHERE name = $1")
+            .bind(NAME)
+            .execute(&pool)
+            .await
+            .expect("cleanup business");
+        sqlx::query("DELETE FROM scraped_businesses WHERE name = $1")
+            .bind(NAME)
+            .execute(&pool)
+            .await
+            .expect("cleanup scraped");
+
+        // Baseline category row (present in migrated databases; seeded
+        // defensively so a scratch CI DB works too). Left in place after
+        // the test — it is shared baseline data, not a fixture.
+        sqlx::query(
+            "INSERT INTO categories (id, name) VALUES ($1::uuid, 'Food & Dining') \
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(FOOD_DINING_UUID)
+        .execute(&pool)
+        .await
+        .expect("category baseline seeds");
+
+        let stub_port = start_highlights_stub(HL_SEARXNG, HL_HOMEPAGE, HL_NOMINATIM);
+        let mut engine = ac2_test_engine(stub_port);
+
+        let user_id = seed_user(&pool, "hl-uuid-", "HL UUID").await;
+        let job_id = seed_scrape_job(&pool, "hl uuid").await;
+        let biz_id = seed_business_with_category(&pool, user_id, NAME, FOOD_DINING_UUID).await;
+        seed_google_source(&pool, job_id, NAME, "http://maps.google.test/maps/ok?cid=hl-uuid").await;
+
+        // AC1: a UUID category_id resolves to the food-dining dictionary and
+        // highlights apply exactly as they would for a slug-seeded row.
+        let result = engine.enrich(&pool, biz_id, false).await;
+        assert!(result.error.is_none(), "enrich error: {:?}", result.error);
+        assert!(
+            result.applied.iter().any(|a| a.field == "highlights"),
+            "UUID-category business must still get highlights: applied={:?} notes={:?}",
+            result.applied,
+            result.notes
+        );
+
+        let row = sqlx::query(
+            "SELECT highlights::text FROM businesses WHERE id = $1",
+        )
+        .bind(biz_id)
+        .fetch_one(&pool)
+        .await
+        .expect("row reads back");
+        let highlights_text = row
+            .get::<Option<String>, _>("highlights")
+            .expect("highlights column written");
+        let entries: Vec<String> =
+            serde_json::from_str(&highlights_text).expect("highlights is a JSON string array");
+        assert!(
+            entries.iter().any(|e| e == "Soul Food"),
+            "nav dictionary term missing for UUID category: {entries:?}"
+        );
 
         // Cleanup: seeded rows only.
         sqlx::query("DELETE FROM business_locations WHERE business_id = $1")

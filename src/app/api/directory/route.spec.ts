@@ -284,4 +284,39 @@ describe("GET /api/directory", () => {
     expect(response.status).toBe(500);
     expect(json.success).toBe(false);
   });
+
+  describe("highlights (LOC-0088 AC3)", () => {
+    it("passes through the highlights array and maps NULL to an empty array", async () => {
+      const withHighlights = { ...canonicalRow, id: "biz-h1", name: "Highlight House", highlights: ["Organic", "Vegan"] };
+      const nullHighlights = { ...canonicalRow, id: "biz-h2", name: "No Highlights Co", highlights: null };
+      mockClient.query = jest
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [withHighlights, nullHighlights] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const response = await GET(makeRequest("http://localhost/api/directory"));
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      const byId = Object.fromEntries(json.data.businesses.map((b: DirectoryBusiness) => [b.id, b]));
+      expect(byId["biz-h1"].highlights).toEqual(["Organic", "Vegan"]);
+      expect(byId["biz-h2"].highlights).toEqual([]);
+    });
+
+    it("returns an empty highlights array for approved pending businesses", async () => {
+      mockClient.query = jest
+        .fn()
+        .mockResolvedValueOnce({ rows: [pendingRow] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const response = await GET(makeRequest("http://localhost/api/directory"));
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      const byId = Object.fromEntries(json.data.businesses.map((b: DirectoryBusiness) => [b.id, b]));
+      expect(byId["pend-1"].highlights).toEqual([]);
+    });
+  });
 });

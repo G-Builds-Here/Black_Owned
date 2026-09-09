@@ -463,9 +463,10 @@ describe('BusinessDetail', () => {
     it('lists on-site reviews with reviewer, stars and location', async () => {
       render(<BusinessDetail business={withReviews} loading={false} error={null} />);
 
-      expect(await screen.findByText('Jenna L.')).toBeInTheDocument();
-      expect(screen.getByText(/best gumbo in town/i)).toBeInTheDocument();
-      expect(screen.getByText('· Smyrna')).toBeInTheDocument();
+      expect(await screen.findAllByText('Jenna L.')).not.toHaveLength(0);
+      // Comment renders in both the review list and the "Customers say" pull-quote (LOC-0088 AC2)
+      expect(screen.getAllByText(/best gumbo in town/i)).toHaveLength(2);
+      expect(screen.getAllByText('· Smyrna')).not.toHaveLength(0);
     });
 
     it('shows a sign-in prompt when signed out', async () => {
@@ -519,6 +520,88 @@ describe('BusinessDetail', () => {
       });
       await waitFor(() => expect(onReviewsSubmitted).toHaveBeenCalled());
       globalThis.fetch = originalFetch;
+    });
+  });
+
+  describe('Highlight chips (LOC-0088 AC1)', () => {
+    it('shows all 5 highlights when 5 are provided', () => {
+      const biz: Business = {
+        ...mockBusiness,
+        highlights: ['Organic', 'Locally Sourced', 'Vegan Options', 'Family-Friendly', 'Award-Winning'],
+      };
+      const { container } = render(<BusinessDetail business={biz} loading={false} error={null} />);
+      const chips = container.querySelectorAll('.highlight-chip');
+      expect(chips).toHaveLength(5);
+    });
+
+    it('shows all highlights when fewer than 5', () => {
+      const biz: Business = { ...mockBusiness, highlights: ['Organic', 'Locally Sourced', 'Vegan Options'] };
+      const { container } = render(<BusinessDetail business={biz} loading={false} error={null} />);
+      const chips = container.querySelectorAll('.highlight-chip');
+      expect(chips).toHaveLength(3);
+    });
+  });
+
+  describe('Customers say (LOC-0088 AC2)', () => {
+    const ts = (d: string) => Math.floor(new Date(d).getTime() / 1000);
+    const withReviews: Business = {
+      ...mockBusiness,
+      siteReviewCount: 3,
+      siteRating: 4.3,
+      siteReviews: [
+        { id: 'r1', rating: 3, comment: 'Meh, okay food', reviewerName: 'Amy', locationLabel: 'Midtown', createdAt: { timestamp: ts('2026-08-01') } },
+        { id: 'r2', rating: 4, comment: 'Solid experience', reviewerName: 'Bob', locationLabel: 'Smyrna', createdAt: { timestamp: ts('2026-08-05') } },
+        { id: 'r3', rating: 5, comment: 'Best gumbo in town', reviewerName: 'Jenna L.', locationLabel: 'Smyrna', createdAt: { timestamp: ts('2026-08-10') } },
+      ],
+    };
+
+    it('shows the highest-rated review in the Customers say quote', () => {
+      render(<BusinessDetail business={withReviews} loading={false} error={null} />);
+      expect(screen.getByText(/customers say/i)).toBeInTheDocument();
+      const quote = screen.getByRole('blockquote');
+      expect(within(quote).getByText(/best gumbo in town/i)).toBeInTheDocument();
+      expect(within(quote).queryByText(/meh, okay food/i)).not.toBeInTheDocument();
+      expect(within(quote).queryByText(/solid experience/i)).not.toBeInTheDocument();
+    });
+
+    it('attributes the reviewer name and location label', () => {
+      render(<BusinessDetail business={withReviews} loading={false} error={null} />);
+      const quote = screen.getByRole('blockquote');
+      expect(within(quote).getByText(/jenna/i)).toBeInTheDocument();
+      expect(within(quote).getByText(/smyrna/i)).toBeInTheDocument();
+    });
+
+    it('on a rating tie shows the most recent review', () => {
+      const tie: Business = {
+        ...mockBusiness,
+        siteReviewCount: 2,
+        siteRating: 5,
+        siteReviews: [
+          { id: 'old', rating: 5, comment: 'Older great review', reviewerName: 'Old O.', locationLabel: 'A', createdAt: { timestamp: ts('2026-07-01') } },
+          { id: 'new', rating: 5, comment: 'Newer great review', reviewerName: 'New N.', locationLabel: 'B', createdAt: { timestamp: ts('2026-08-01') } },
+        ],
+      };
+      render(<BusinessDetail business={tie} loading={false} error={null} />);
+      const quote = screen.getByRole('blockquote');
+      expect(within(quote).getByText(/newer great review/i)).toBeInTheDocument();
+      expect(within(quote).queryByText(/older great review/i)).not.toBeInTheDocument();
+    });
+
+    it('hides the Customers say section when there are no reviews', () => {
+      render(<BusinessDetail business={{ ...mockBusiness, siteReviewCount: 0, siteReviews: [] }} loading={false} error={null} />);
+      expect(screen.queryByText(/customers say/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Highlight null handling (LOC-0088 AC3)', () => {
+    it('does not render a highlight chip row when highlights is null', () => {
+      const { container } = render(<BusinessDetail business={{ ...mockBusiness, highlights: null }} loading={false} error={null} />);
+      expect(container.querySelectorAll('.highlight-chip')).toHaveLength(0);
+    });
+
+    it('does not render a highlight chip row when highlights is empty', () => {
+      const { container } = render(<BusinessDetail business={{ ...mockBusiness, highlights: [] }} loading={false} error={null} />);
+      expect(container.querySelectorAll('.highlight-chip')).toHaveLength(0);
     });
   });
 });

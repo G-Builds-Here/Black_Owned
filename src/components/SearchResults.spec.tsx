@@ -130,4 +130,27 @@ describe('SearchResults', () => {
 
     expect(screen.getByText('Showing 11-20 of 25 businesses')).toBeInTheDocument();
   });
+
+  describe('highlight chips (LOC-0088 AC1)', () => {
+    it('renders at most 3 highlight chips on each card', () => {
+      const withHighlights: Business = {
+        ...MOCK_BUSINESSES[0],
+        highlights: ['Organic', 'Locally Sourced', 'Vegan Options', 'Family-Friendly', 'Award-Winning'],
+      };
+      const { container } = render(
+        <SearchResults
+          businesses={[withHighlights]}
+          currentPage={1}
+          totalPages={1}
+          totalResults={1}
+          onPageChange={jest.fn()}
+        />
+      );
+
+      const chips = container.querySelectorAll('.highlight-chip');
+      expect(chips).toHaveLength(3);
+      expect(screen.getByText('Organic')).toBeInTheDocument();
+      expect(screen.queryByText('Award-Winning')).not.toBeInTheDocument();
+    });
+  });
 });

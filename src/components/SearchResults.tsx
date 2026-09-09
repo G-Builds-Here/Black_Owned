@@ -15,6 +15,7 @@ export interface Business {
   cardImageUrl?: string | null;
   description: string;
   tags: string[];
+  highlights?: string[] | null;
 }
 
 export interface SearchResultsProps {

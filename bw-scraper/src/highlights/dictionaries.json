@@ -1,0 +1,32 @@
+{
+  "food-dining": [
+    "Soul Food",
+    "Vegan Options",
+    "Live Music",
+    "Vegetarian Menu",
+    "Organic Ingredients",
+    "Craft Cocktails",
+    "Private Dining",
+    "Outdoor Patio",
+    "Gluten Free",
+    "Farm to Table"
+  ],
+  "professional-services": [
+    "Family Law",
+    "Estate Planning",
+    "Criminal Defense",
+    "Personal Injury",
+    "Business Law",
+    "Immigration",
+    "Real Estate",
+    "Employment Law",
+    "Corporate Law"
+  ],
+  "personal-services": [
+    "Personal Training",
+    "Massage Therapy",
+    "Acupuncture",
+    "Yoga",
+    "Nutrition Counseling"
+  ]
+}

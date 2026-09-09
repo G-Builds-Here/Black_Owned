@@ -18,6 +18,7 @@ export interface Business {
   cardImageUrl?: string | null;
   description: string;
   tags: string[];
+  highlights?: string[] | null;
 }
 
 export interface BusinessCardProps {
@@ -125,6 +126,17 @@ export default function BusinessCard({
           <h3 className="text-lg font-semibold text-neutral-900 line-clamp-1">
             {business.name}
           </h3>
+
+          {/* Highlight chips: max 3 on cards (LOC-0088 AC1) — no row when empty */}
+          {(business.highlights ?? []).length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {(business.highlights ?? []).slice(0, 3).map((highlight) => (
+                <Badge key={highlight} variant="default" size="sm" className="highlight-chip">
+                  {highlight}
+                </Badge>
+              ))}
+            </div>
+          )}
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             {renderStars(business.rating)}

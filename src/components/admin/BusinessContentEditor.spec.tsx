@@ -114,3 +114,55 @@ describe('BusinessContentEditor', () => {
     });
   });
 });
+
+// Business with pipeline-written highlights — the editor must pre-fill
+// them as removable chips (LOC-0089 AC3).
+const withHighlights: BusinessContent = { ...b9, highlights: ['a', 'b'] };
+
+describe('BusinessContentEditor highlights (LOC-0089 AC3)', () => {
+  // Gherkin: a business with highlights ["a", "b"]; an admin opens the
+  // content editor; the chip editor shows a and b as removable chips.
+  it('pre-fills removable chips from the stored highlights', () => {
+    render(<BusinessContentEditor business={withHighlights} onSaved={jest.fn()} />);
+
+    expect(screen.getByText('a')).toBeInTheDocument();
+    expect(screen.getByText('b')).toBeInTheDocument();
+    expect(screen.getByLabelText('Remove highlight a')).toBeInTheDocument();
+    expect(screen.getByLabelText('Remove highlight b')).toBeInTheDocument();
+  });
+
+  // Gherkin scenario "add and remove then save": the editor shows a and b;
+  // an admin adds "c", removes "a", and saves; the saved highlights are
+  // b and c.
+  it('adds and removes chips, then saves only the highlights field with the final set', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { business: { ...withHighlights, highlights: ['b', 'c'] } },
+      }),
+    });
+    const onSaved = jest.fn();
+    render(<BusinessContentEditor business={withHighlights} onSaved={onSaved} />);
+
+    // Add "c".
+    fireEvent.change(screen.getByLabelText('Add highlight'), {
+      target: { value: 'c' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add highlight/i }));
+    // Remove "a".
+    fireEvent.click(screen.getByLabelText('Remove highlight a'));
+
+    // Save.
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalledWith(
+        expect.objectContaining({ highlights: ['b', 'c'] })
+      );
+    });
+    const [, init] = mockFetch.mock.calls[0];
+    // Partial save: only the changed field is written.
+    expect(JSON.parse(init.body)).toEqual({ highlights: ['b', 'c'] });
+  });
+});

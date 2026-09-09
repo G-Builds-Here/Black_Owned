@@ -33,6 +33,9 @@ export interface DirectoryBusiness {
   imageUrl?: string | null;
   cardImageUrl?: string | null;
   tags?: string[] | null;
+  /** Category-specific highlights (JSONB). Always an array at this API edge:
+   *  NULL in the DB surfaces as [] so consumers never see null. */
+  highlights: string[];
   lat?: number | null;
   lng?: number | null;
   createdAt: string;
@@ -89,6 +92,7 @@ interface CanonicalRow {
   image_url: string | null;
   card_image_url: string | null;
   tags: string[] | null;
+  highlights: string[] | null;
   created_at: Date | string;
   lat?: number | null;
   lng?: number | null;
@@ -130,8 +134,8 @@ export async function fetchDirectoryItems(
     ),
     client.query(
      `SELECT b.id, b.name, b.description, COALESCE(c.name, b.category_id) AS category,
-           b.verification_status, b.location, b.rating, b.review_count,
-           b.phone, b.website, b.image_url, b.card_image_url, b.tags, b.created_at, b.lat, b.lng
+            b.verification_status, b.location, b.rating, b.review_count,
+            b.phone, b.website, b.image_url, b.card_image_url, b.tags, b.highlights, b.created_at, b.lat, b.lng
        FROM ${tableName} b
        LEFT JOIN ${categoryTable} c ON c.id::text = b.category_id`
     ),
@@ -154,6 +158,8 @@ export async function fetchDirectoryItems(
       imageUrl: null,
       cardImageUrl: null,
       tags: [],
+      // pending_import_businesses has no highlights column — stays [] until post-approval enrichment
+      highlights: [],
       lat: row.lat ?? null,
       lng: row.lng ?? null,
       createdAt: toCreatedAt(row.created_at),
@@ -176,6 +182,7 @@ export async function fetchDirectoryItems(
     imageUrl: row.image_url ?? null,
     cardImageUrl: row.card_image_url ?? null,
     tags: row.tags ?? [],
+    highlights: row.highlights ?? [],
     lat: row.lat ?? null,
     lng: row.lng ?? null,
     createdAt: toCreatedAt(row.created_at),

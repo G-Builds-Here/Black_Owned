@@ -46,6 +46,7 @@ export interface Business {
   lat?: number | null;
   lng?: number | null;
   tags?: string[] | null;
+  highlights?: string[] | null;
   source?: string | null;
   verified: boolean;
   socialUrls?: SocialUrls | null;
@@ -141,6 +142,7 @@ export async function fetchBusinessById(id: string): Promise<Business | null> {
         lat
         lng
         tags
+        highlights
         source
         locations {
           id

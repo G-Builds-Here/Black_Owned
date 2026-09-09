@@ -205,6 +205,7 @@ describe("updateBusiness resolver", () => {
       lat: null,
       lng: null,
       tags: [],
+      highlights: [],
       source: null,
       verified: false,
       socialUrls: null,

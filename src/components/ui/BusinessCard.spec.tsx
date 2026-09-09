@@ -223,4 +223,47 @@ describe('BusinessCard', () => {
     expect(name).toHaveClass('font-semibold');
     expect(name).toHaveClass('text-lg');
   });
+
+  describe('highlight chips (LOC-0088 AC1)', () => {
+    const fiveHighlights: Business = {
+      ...mockBusiness,
+      highlights: ['Organic', 'Locally Sourced', 'Vegan Options', 'Family-Friendly', 'Award-Winning'],
+    };
+
+    it('shows exactly 3 chips when 5 highlights are provided', () => {
+      const { container } = render(<BusinessCard business={fiveHighlights} onViewDetails={jest.fn()} />);
+      const chips = container.querySelectorAll('.highlight-chip');
+      expect(chips).toHaveLength(3);
+    });
+
+    it('shows the first 3 highlights and omits the rest', () => {
+      render(<BusinessCard business={fiveHighlights} onViewDetails={jest.fn()} />);
+      expect(screen.getByText('Organic')).toBeInTheDocument();
+      expect(screen.getByText('Locally Sourced')).toBeInTheDocument();
+      expect(screen.getByText('Vegan Options')).toBeInTheDocument();
+      expect(screen.queryByText('Family-Friendly')).not.toBeInTheDocument();
+      expect(screen.queryByText('Award-Winning')).not.toBeInTheDocument();
+    });
+
+    it('shows all highlights when fewer than 3', () => {
+      const twoHighlights: Business = { ...mockBusiness, highlights: ['Organic', 'Locally Sourced'] };
+      const { container } = render(<BusinessCard business={twoHighlights} onViewDetails={jest.fn()} />);
+      const chips = container.querySelectorAll('.highlight-chip');
+      expect(chips).toHaveLength(2);
+    });
+  });
+
+  describe('highlight chips null handling (LOC-0088 AC3)', () => {
+    it('does not render a chip row when highlights is null', () => {
+      const noHighlights: Business = { ...mockBusiness, highlights: null };
+      const { container } = render(<BusinessCard business={noHighlights} onViewDetails={jest.fn()} />);
+      expect(container.querySelectorAll('.highlight-chip')).toHaveLength(0);
+    });
+
+    it('does not render a chip row when highlights is an empty array', () => {
+      const emptyHighlights: Business = { ...mockBusiness, highlights: [] };
+      const { container } = render(<BusinessCard business={emptyHighlights} onViewDetails={jest.fn()} />);
+      expect(container.querySelectorAll('.highlight-chip')).toHaveLength(0);
+    });
+  });
 });

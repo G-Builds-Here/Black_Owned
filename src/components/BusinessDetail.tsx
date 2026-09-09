@@ -6,6 +6,7 @@ import { getSession, clearSession, authHeaders, type ClientSession } from '@/lib
 import { ChatButton } from './ChatButton';
 import { SocialMediaSection } from './SocialMediaSection';
 import { Navigation } from './ui/Navigation';
+import Badge from './ui/Badge';
 import { SocialUrls } from '@/services/social-discovery';
 import dynamic from 'next/dynamic';
 import { SimilarBusinesses } from './SimilarBusinesses';
@@ -32,6 +33,7 @@ export interface Business {
   imageUrl?: string | null;
   cardImageUrl?: string | null;
   tags?: string[] | null;
+  highlights?: string[] | null;
   verified: boolean;
   createdAt: {
     timestamp: number;
@@ -179,7 +181,17 @@ export function BusinessDetail({ business, loading, error, onReviewsSubmitted }:
     .replace(/\b\w/g, (c) => c.toUpperCase());
   const description = business.description ?? '';
   const tags = business.tags ?? [];
+  const highlights = business.highlights ?? [];
   const siteReviews = business.siteReviews ?? [];
+  // Pull-quote: highest rating wins, most recent on tie. Null when no reviews.
+  const topReview = siteReviews.length > 0
+    ? siteReviews.reduce<SiteReview>((best, review) =>
+        review.rating > best.rating
+        || (review.rating === best.rating && review.createdAt.timestamp > best.createdAt.timestamp)
+          ? review
+          : best,
+      siteReviews[0])
+    : null;
 
   // Multi-location: prefer the locations table; fall back to the legacy
   // single lat/lng pin carried on the business row itself.
@@ -313,6 +325,16 @@ export function BusinessDetail({ business, loading, error, onReviewsSubmitted }:
                 {business.location}
               </p>
             )}
+            {/* Highlight chips: max 5 on the detail page (LOC-0088 AC1) — no row when empty */}
+            {highlights.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {highlights.slice(0, 5).map((highlight) => (
+                  <Badge key={highlight} variant="default" size="sm" className="highlight-chip">
+                    {highlight}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
             {rating !== null && (
@@ -425,6 +447,18 @@ export function BusinessDetail({ business, loading, error, onReviewsSubmitted }:
 
           <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-6">
             <h2 className="mb-3 text-lg font-semibold text-neutral-900">Reviews</h2>
+            {topReview && (
+              <div className="mb-5">
+                <h3 className="text-sm font-semibold text-neutral-900">Customers say</h3>
+                <blockquote className="mt-2 border-l-4 border-heritage-ochre pl-4">
+                  <p className="text-sm leading-relaxed text-neutral-700">"{topReview.comment}"</p>
+                  <footer className="mt-1.5 text-xs text-neutral-500">
+                    — {topReview.reviewerName}
+                    {topReview.locationLabel ? `, ${topReview.locationLabel}` : ''}
+                  </footer>
+                </blockquote>
+              </div>
+            )}
             {siteReviews.length > 0 ? (
               <ul className="space-y-4">
                 {siteReviews.map((review) => (

@@ -1,11 +1,13 @@
 /**
- * Admin Business Content Route Tests — LOC-0080 AC1 + AC2
+ * Admin Business Content Route Tests — LOC-0080 AC1 + AC2, LOC-0089 AC1 + AC2
  *
  * Covers GET /api/admin/businesses/[id]/content (form pre-fill) and
  * PATCH /api/admin/businesses/[id]/content (save + partial save) against a
  * mocked getPool (AC1), plus AC2: field-length validation (400
  * VALIDATION_ERROR), admin auth rejection (401/403), and unknown business
  * (404 NOT_FOUND).
+ * LOC-0089 AC1: highlights array validation (caps, entry length, type, auth).
+ * LOC-0089 AC2: manual write overrides pipeline-written highlights.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -53,6 +55,7 @@ function b9Row(overrides: Record<string, unknown> = {}) {
     image_url: null,
     description: null,
     social_urls: null,
+    highlights: null,
     ...overrides,
   };
 }
@@ -68,6 +71,7 @@ function toApiShape(row: Record<string, unknown>) {
     imageUrl: row.image_url,
     description: row.description,
     socialUrls: row.social_urls,
+    highlights: row.highlights,
   };
 }
 
@@ -333,7 +337,7 @@ describe('PATCH /api/admin/businesses/[id]/content (LOC-0080 AC3)', () => {
     expect(sql).toBe(
       'UPDATE businesses SET description = $2, updated_at = NOW() ' +
         'WHERE id = $1 RETURNING id, name, website, phone, menu_url, ' +
-        'image_url, description, social_urls'
+        'image_url, description, social_urls, highlights'
     );
     expect(params).toEqual([B10_ID, 'Manual override by admin']);
     expect(mockClient.release).toHaveBeenCalled();
@@ -363,5 +367,148 @@ describe('PATCH /api/admin/businesses/[id]/content (LOC-0080 AC3)', () => {
     expect(sql).toContain('UPDATE businesses SET description = $2');
     expect(params).toEqual([B10_ID, 'Replaced by an admin']);
     expect(body.data.business.description).toBe('Replaced by an admin');
+  });
+});
+
+describe('PATCH /api/admin/businesses/[id]/content (LOC-0089 AC1)', () => {
+  // Gherkin: authenticated admin + business "biz-123" exists;
+  // PATCH {"highlights": ["soul food", "vegan options"]} -> 200, row equals submitted.
+  it('accepts a valid highlights array and returns the updated row', async () => {
+    const submitted = ['soul food', 'vegan options'];
+    mockClient.query.mockResolvedValue({
+      rows: [b9Row({ highlights: submitted })],
+    });
+
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${BUSINESS_ID}/content`, {
+        highlights: submitted,
+      }),
+      makeContext(BUSINESS_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.business.highlights).toEqual(submitted);
+    const [sql, params] = mockClient.query.mock.calls[0];
+    expect(sql).toContain('UPDATE businesses');
+    expect(sql).toContain('highlights = $2');
+    expect(params).toEqual([BUSINESS_ID, submitted]);
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it('rejects more than 5 highlights with 400 VALIDATION_ERROR and writes nothing', async () => {
+    // Gherkin scenario "too many entries": cap is 5.
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${BUSINESS_ID}/content`, {
+        highlights: ['a', 'b', 'c', 'd', 'e', 'f'],
+      }),
+      makeContext(BUSINESS_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('highlights');
+    expect(mockClient.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects an 81-character highlight with 400 VALIDATION_ERROR and writes nothing', async () => {
+    // Gherkin scenario "entry too long": each entry capped at 80 chars.
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${BUSINESS_ID}/content`, {
+        highlights: ['x'.repeat(81)],
+      }),
+      makeContext(BUSINESS_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('highlights');
+    expect(mockClient.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-array highlights value with 400 VALIDATION_ERROR and writes nothing', async () => {
+    // Gherkin scenario "wrong type": string instead of array.
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${BUSINESS_ID}/content`, {
+        highlights: 'soul food',
+      }),
+      makeContext(BUSINESS_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.error).toContain('highlights');
+    expect(mockClient.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unauthenticated highlights PATCH with 401 and writes nothing', async () => {
+    // Gherkin scenario "not an admin": same PATCH from an unauthenticated
+    // request is rejected 4xx; the row is unchanged.
+    (createAuthMiddleware as jest.Mock).mockReturnValue(
+      jest.fn(async () => ({
+        authenticated: false,
+        errorType: 'NO_AUTH_HEADER',
+        errorMessage: 'Authorization header is required',
+        statusCode: 401,
+      }))
+    );
+
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${BUSINESS_ID}/content`, {
+        highlights: ['soul food'],
+      }),
+      makeContext(BUSINESS_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.success).toBe(false);
+    expect(createAuthErrorResponse).toHaveBeenCalledWith(
+      'NO_AUTH_HEADER',
+      'Authorization header is required'
+    );
+    expect(mockClient.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/admin/businesses/[id]/content (LOC-0089 AC2)', () => {
+  // Gherkin: pipeline wrote ["a", "b"]; admin PATCHes {"highlights": ["c"]}
+  // -> row equals ["c"]. Manual override is unconditional: the admin write
+  // path carries no fill-empty guard.
+  it('replaces a pipeline-written highlights array with the manual value', async () => {
+    mockClient.query.mockResolvedValue({
+      rows: [b9Row({ highlights: ['c'] })],
+    });
+
+    const response = await PATCH(
+      makeRequest(`/api/admin/businesses/${BUSINESS_ID}/content`, {
+        highlights: ['c'],
+      }),
+      makeContext(BUSINESS_ID)
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    // The returned row carries the manual value, not the pipeline value.
+    expect(body.data.business.highlights).toEqual(['c']);
+
+    // Unconditional overwrite: a fill-empty guard would surface as
+    // COALESCE(...), an IS NULL predicate, or a pre-read in the SQL —
+    // the exact statement pins the write path against all of those.
+    const [sql, params] = mockClient.query.mock.calls[0];
+    expect(sql).toBe(
+      'UPDATE businesses SET highlights = $2, updated_at = NOW() ' +
+        'WHERE id = $1 RETURNING id, name, website, phone, menu_url, ' +
+        'image_url, description, social_urls, highlights'
+    );
+    expect(params).toEqual([BUSINESS_ID, ['c']]);
+    expect(mockClient.release).toHaveBeenCalled();
   });
 });

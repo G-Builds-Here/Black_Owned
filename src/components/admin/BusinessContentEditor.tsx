@@ -28,6 +28,7 @@ export interface BusinessContent {
   imageUrl: string | null;
   description: string | null;
   socialUrls: SocialEntry[] | null;
+  highlights?: string[] | null;
 }
 
 interface BusinessContentEditorProps {
@@ -42,6 +43,11 @@ const TEXTAREA_STYLES = `
   focus:outline-none focus:ring-2 focus:ring-offset-2
   focus:border-heritage-ochre focus:ring-heritage-ochre
 `;
+
+// HIGHLIGHTS caps mirror the server-side validator in business-content.ts
+// (LOC-0089 AC1): at most 5 chips, each at most 80 chars.
+const HIGHLIGHTS_MAX_ENTRIES = 5;
+const HIGHLIGHT_ENTRY_MAX = 80;
 
 function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor: string }) {
   return (
@@ -58,6 +64,8 @@ export default function BusinessContentEditor({ business, onSaved }: BusinessCon
   const [imageUrl, setImageUrl] = useState(business.imageUrl ?? '');
   const [description, setDescription] = useState(business.description ?? '');
   const [socials, setSocials] = useState<SocialEntry[]>(business.socialUrls ?? []);
+  const [highlights, setHighlights] = useState<string[]>(business.highlights ?? []);
+  const [newHighlight, setNewHighlight] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
 
@@ -68,14 +76,28 @@ export default function BusinessContentEditor({ business, onSaved }: BusinessCon
     setImageUrl(next.imageUrl ?? '');
     setDescription(next.description ?? '');
     setSocials(next.socialUrls ?? []);
+    setHighlights(next.highlights ?? []);
   };
 
   const updateSocial = (index: number, patch: Partial<SocialEntry>) => {
     setSocials((prev) => prev.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
   };
 
-  const buildPayload = (): Record<string, string | null | SocialEntry[] | null> => {
-    const payload: Record<string, string | null | SocialEntry[] | null> = {};
+  const addHighlight = () => {
+    const value = newHighlight.trim();
+    if (!value || highlights.length >= HIGHLIGHTS_MAX_ENTRIES) {
+      return;
+    }
+    setHighlights((prev) => [...prev, value]);
+    setNewHighlight('');
+  };
+
+  const removeHighlight = (index: number) => {
+    setHighlights((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const buildPayload = (): Record<string, string | null | SocialEntry[] | string[] | null> => {
+    const payload: Record<string, string | null | SocialEntry[] | string[] | null> = {};
     if (website !== (business.website ?? '')) payload.website = website || null;
     if (phone !== (business.phone ?? '')) payload.phone = phone || null;
     if (menuUrl !== (business.menuUrl ?? '')) payload.menuUrl = menuUrl || null;
@@ -84,6 +106,10 @@ export default function BusinessContentEditor({ business, onSaved }: BusinessCon
     const initialSocials = business.socialUrls ?? [];
     if (JSON.stringify(socials) !== JSON.stringify(initialSocials)) {
       payload.socialUrls = socials.length > 0 ? socials : null;
+    }
+    const initialHighlights = business.highlights ?? [];
+    if (JSON.stringify(highlights) !== JSON.stringify(initialHighlights)) {
+      payload.highlights = highlights.length > 0 ? highlights : null;
     }
     return payload;
   };
@@ -191,6 +217,49 @@ export default function BusinessContentEditor({ business, onSaved }: BusinessCon
           className={TEXTAREA_STYLES}
         />
         <p className="mt-1.5 text-sm text-neutral-500">Max 2000 characters</p>
+      </div>
+
+      <div>
+        <FieldLabel htmlFor="content-highlights-add">Highlights</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {highlights.map((chip, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center gap-1.5 bg-neutral-100 border border-neutral-200 rounded-md px-2.5 py-1 text-sm text-neutral-700"
+            >
+              {chip}
+              <button
+                type="button"
+                aria-label={`Remove highlight ${chip}`}
+                onClick={() => removeHighlight(index)}
+                className="text-neutral-400 hover:text-neutral-700"
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="mt-2 flex items-start gap-2">
+          <div className="flex-1">
+            <Input
+              aria-label="Add highlight"
+              value={newHighlight}
+              onChange={(e) => setNewHighlight(e.target.value)}
+              placeholder="Add a highlight"
+              maxLength={HIGHLIGHT_ENTRY_MAX}
+              helperText={`Max ${HIGHLIGHT_ENTRY_MAX} characters, up to ${HIGHLIGHTS_MAX_ENTRIES} highlights`}
+              fullWidth
+            />
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={addHighlight}
+            disabled={highlights.length >= HIGHLIGHTS_MAX_ENTRIES || newHighlight.trim().length === 0}
+          >
+            Add Highlight
+          </Button>
+        </div>
       </div>
 
       <div>
