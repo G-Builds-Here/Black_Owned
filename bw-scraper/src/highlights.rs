@@ -311,6 +311,20 @@ pub fn terms_for_category(category_slug: &str) -> Option<&'static [String]> {
     dictionaries().get(category_slug).map(|v| v.as_slice())
 }
 
+/// Deterministic category display name → dictionary slug
+/// (`"Food & Dining"` → `food-dining`). The v1 dictionaries are keyed by
+/// slug, but production `businesses.category_id` stores a `categories.id`
+/// UUID — the joined category name must be normalized before lookup.
+/// Rule: lowercase → drop `&` → collapse whitespace runs → join with `-`.
+#[must_use]
+pub fn slugify_category_name(name: &str) -> String {
+    name.to_lowercase()
+        .replace('&', "")
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join("-")
+}
+
 /// Dictionary-only highlight entries for one category + corpus.
 ///
 /// Ranked by weight desc with dictionary order breaking ties; deduped
@@ -968,6 +982,28 @@ mod tests {
     #[test]
     fn terms_for_unknown_category_is_none() {
         assert!(terms_for_category("retail-fashion").is_none());
+    }
+
+    // -----------------------------------------------------------------
+    // LOC-0083-slugfix AC1 — category display name → dictionary slug
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn slugify_category_name_maps_production_names_to_dictionary_keys() {
+        // The three v1 dictionary keys, from their `categories` names.
+        assert_eq!(slugify_category_name("Food & Dining"), "food-dining");
+        assert_eq!(
+            slugify_category_name("Professional Services"),
+            "professional-services"
+        );
+        assert_eq!(
+            slugify_category_name("Personal Services"),
+            "personal-services"
+        );
+        // Baseline categories without a v1 dictionary: still deterministic
+        // (they map to a slug that has no dictionary — N/A, not an error).
+        assert_eq!(slugify_category_name("Retail & Fashion"), "retail-fashion");
+        assert_eq!(slugify_category_name("Entertainment"), "entertainment");
     }
 
     // -------------------------------------------------------------
