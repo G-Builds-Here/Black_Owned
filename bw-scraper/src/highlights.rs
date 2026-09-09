@@ -511,6 +511,50 @@ fn collapse_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Remove the full span of every `<script ...>...</script>` and
+/// `<style ...>...</style>` element — opening tag through closing tag,
+/// case-insensitive, attribute-tolerant (same boundary rule as
+/// [`inner_ranges`]). An opening tag without a matching closing tag is
+/// stripped to end-of-document, mirroring browser parsing.
+fn strip_invisible_blocks(html: &str) -> String {
+    let chars: Vec<char> = html.chars().collect();
+    let lower = lower_chars(&chars);
+    // Precomputed, ASCII-lowercased open/close patterns — one allocation
+    // pair per tag, reused at every scan position.
+    let blocks: [(&str, Vec<char>, Vec<char>); 2] = [
+        ("script", "<script".chars().collect(), "</script>".chars().collect()),
+        ("style", "<style".chars().collect(), "</style>".chars().collect()),
+    ];
+    let mut out = String::new();
+    let mut pos = 0usize;
+    while pos < lower.len() {
+        let matched = blocks
+            .iter()
+            .find(|&(_, open, _)| {
+                pos + open.len() <= lower.len()
+                    && (0..open.len()).all(|k| lower[pos + k] == open[k])
+                    && matches!(
+                        lower.get(pos + open.len()),
+                        Some('>' | ' ' | '\t' | '\n' | '\r' | '/')
+                    )
+            });
+        match matched {
+            Some((tag, _, close)) => {
+                let from = pos + 1 + tag.len();
+                match lower[from..].windows(close.len()).position(|w| w == close.as_slice()) {
+                    Some(cs) => pos = from + cs + close.len(),
+                    None => break, // unclosed block: strip to end-of-document
+                }
+            }
+            None => {
+                out.push(chars[pos]);
+                pos += 1;
+            }
+        }
+    }
+    out
+}
+
 /// Text of every h1/h2/h3 block, in document order, tags stripped and
 /// whitespace collapsed.
 pub fn extract_headings(html: &str) -> Vec<String> {
@@ -638,11 +682,14 @@ pub fn parse_corpus(
     searxng_json: Option<&str>,
     place_description: Option<&str>,
 ) -> Corpus {
+    // Sanitize once: no HTML-derived zone may see <script>/<style> payload
+    // text (embedded JS catalogs/taxonomies poison the body corpus zone).
+    let sanitized = strip_invisible_blocks(html);
     let (titles, snippets) = searxng_json
         .map(extract_searxng_titles_and_snippets)
         .unwrap_or_default();
     let mut body = Vec::new();
-    let body_text = extract_body_text(html);
+    let body_text = extract_body_text(&sanitized);
     if !body_text.is_empty() {
         body.push(body_text);
     }
@@ -650,9 +697,9 @@ pub fn parse_corpus(
         body.push(p.to_string());
     }
     Corpus {
-        nav: extract_nav_links(html),
-        headings: extract_headings(html),
-        meta: extract_meta_descriptions(html),
+        nav: extract_nav_links(&sanitized),
+        headings: extract_headings(&sanitized),
+        meta: extract_meta_descriptions(&sanitized),
         titles,
         snippets,
         body,
@@ -1068,6 +1115,93 @@ mod tests {
             extract_meta_descriptions(html),
             vec!["Authentic soul food daily", "A neighborhood kitchen"]
         );
+    }
+
+    // -------------------------------------------------------------
+    // LOC-0083-scriptfix — script/style payload text excluded from zones
+    // -------------------------------------------------------------
+
+    /// Booksy-shaped page: the visible text has no food-dining terms; the
+    /// dictionary terms live only in an embedded JSON taxonomy payload.
+    const BOOKSY_LIKE_HTML: &str = "<html><head><title>Distinctive Kutz</title></head>\
+        <body>\
+        <h1>Distinctive Kutz</h1>\
+        <p>Barber shop in downtown Atlanta. Walk-ins welcome.</p>\
+        <script type=\"application/json\" id=\"tax\">{\"categories\":[\"Soul Food\",\"soul food\",\"live music\",\"live-music\",\"Soul Food\",\"live music\"]}</script>\
+        </body></html>";
+
+    #[test]
+    fn scriptfix_terms_only_in_script_payload_yield_no_highlights() {
+        let decision = enrich_highlights("food-dining", BOOKSY_LIKE_HTML, None, None, &[]);
+        assert!(
+            decision.value.is_none(),
+            "script payload terms must not produce highlights"
+        );
+        assert_eq!(decision.note, NO_HIGHLIGHTS_NOTE);
+    }
+
+    #[test]
+    fn scriptfix_visible_terms_still_extracted_when_script_block_present() {
+        let html = "<html><head><title>Kitchen</title></head>\
+            <body>\
+            <p>We host live music every Friday. Our live music runs late.</p>\
+            <script id=\"tax\">{\"categories\":[\"Soul Food\",\"soul food\"]}</script>\
+            </body></html>";
+        let decision = enrich_highlights("food-dining", html, None, None, &[]);
+        assert_eq!(
+            decision.value,
+            Some(vec!["live music".to_string()])
+        );
+    }
+
+    #[test]
+    fn scriptfix_unclosed_script_excludes_rest_of_document_without_panic() {
+        let html = "<html><body>\
+            <p>Real menu here.</p>\
+            <script id=\"tax\">{\"categories\":[\"Soul Food\",\"soul food\"]}\
+            </body></html>";
+        let corpus = parse_corpus(html, None, None);
+        assert_eq!(corpus.body, vec!["Real menu here.".to_string()]);
+        let decision = extract_highlights("food-dining", &corpus, &[]);
+        assert!(decision.value.is_none());
+    }
+
+    #[test]
+    fn scriptfix_meta_descriptions_unaffected_by_script_and_style_blocks() {
+        let html = "<html><head>\
+            <script id=\"tax\">{\"categories\":[\"Soul Food\"]}</script>\
+            <meta property=\"og:description\" content=\"Authentic soul food daily\"/>\
+            <style>.card { color: red; } /* soul food styling */</style>\
+            </head><body><p>Open daily.</p></body></html>";
+        assert_eq!(
+            extract_meta_descriptions(html),
+            vec!["Authentic soul food daily"]
+        );
+    }
+
+    #[test]
+    fn strip_invisible_blocks_removes_full_spans_case_insensitively() {
+        let html = "<a href=\"/x\">Soul Food</a>\
+            <SCRIPT SRC=\"tax.js\">var c = \"Soul Food\";</SCRIPT>\
+            <Style>.x{color:red} /* soul food */</Style>\
+            <p>live music</p>";
+        assert_eq!(
+            strip_invisible_blocks(html),
+            "<a href=\"/x\">Soul Food</a><p>live music</p>"
+        );
+    }
+
+    #[test]
+    fn strip_invisible_blocks_unclosed_strips_to_end_of_document() {
+        let html = "<body><p>Before.</p><script>{\"terms\":[\"Yoga\"]}";
+        assert_eq!(strip_invisible_blocks(html), "<body><p>Before.</p>");
+    }
+
+    #[test]
+    fn strip_invisible_blocks_boundary_rejects_lookalike_tags() {
+        // `<scriptx` is not a `<script` tag; nothing is stripped.
+        let html = "<scriptx>live music</scriptx>";
+        assert_eq!(strip_invisible_blocks(html), "<scriptx>live music</scriptx>");
     }
 
     #[test]
