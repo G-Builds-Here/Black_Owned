@@ -1,14 +1,32 @@
 ---
 name: jira-usage
 argument-hint: "[ticket-key]"
-description: Jira conventions for acceptance criteria, ticket refinement, bug reports, and description formatting. Use this skill when the user mentions Jira, acceptance criteria, Gherkin, tickets, bug reports, refinement, or when creating/updating Jira issues. This skill uses API credentials -- if prompted for a passphrase, provide the one from your 1Password setup.
+description: Jira conventions for acceptance criteria, ticket refinement, bug reports, and description formatting. Use this skill when the user mentions Jira, acceptance criteria, Gherkin, tickets, bug reports, refinement, or when creating/updating Jira issues. Jira API tools take --passphrase <pin> -- the credential passphrase from /onepassword-setup, never an account token.
+license: MIT
+compatibility: opencode
 ---
+**Gotham Pipeline** · Jira Usage · Reference · standalone (no persona -- shared conventions only)
 
 Apply these conventions when working with Jira tickets -- creating, refining, or updating issues.
 
+> **User's request:** $ARGUMENTS
+
+Parse a ticket key (e.g. `LOC-123`) from the request. No key given → apply the conventions to the ticket already in conversation context; ask once if none is unambiguous.
+
+## Tools
+
+All Jira I/O goes through these (credentials handled internally via `read-cred`; every call takes `--passphrase <pin>`):
+
+| Task | Command |
+|---|---|
+| Fetch ticket / JQL / any REST GET | `$UB jira-fetch --passphrase <pin> --url <url> [--output <file>]` |
+| Update issue fields or description | `$UB jira-write --passphrase <pin> --method PUT --url <url> --data-file <file>` |
+| Post a comment (markdown or ADF sections) | `$UB post-jira-comment --passphrase <pin> --issue-key <key> (--sections-file <file> \| --markdown)` |
+| Attach files | `$UB jira-attach-file --passphrase <pin> --issue-key <key> --files <f1,f2>` |
+
 ## Acceptance Criteria Format (Gherkin)
 
-Two templates depending on ticket type.
+Canonical source is `references/alfred-reference.md`; this inline copy is intentional so the skill works standalone and in repo copies. Two templates depending on ticket type.
 
 ### Implementation tickets (features, bugs, refactors)
 
@@ -66,14 +84,7 @@ When refining existing AC:
 
 ## Bug Reports
 
-Summary format: `[Component] -- [what's wrong]`
-
-Description structure:
-1. Steps to Reproduce (numbered, specific)
-2. Expected vs Actual behavior
-3. Evidence (logs, screenshots, error messages)
-4. Environment context
-5. Gherkin AC for the fix
+Summary: `[Component] -- [what's wrong]`. Description structure, in order: Steps to Reproduce (numbered, specific) → Expected vs Actual → Evidence (logs, screenshots, error messages) → Environment context → Gherkin AC for the fix.
 
 ## Description Conventions
 
@@ -92,7 +103,7 @@ When updating a description with refined AC, always preserve the original:
 Before updating a description that contains inline images:
 1. Check the existing ADF for `mediaSingle`/`media` nodes
 2. Verify image IDs exist in the attachments list
-3. If an image ID is missing, upload via `POST /rest/api/3/issue/<key>/attachments` first
+3. If an image ID is missing, upload the local file first: `$UB jira-attach-file --passphrase <pin> --issue-key <key> --files <file>`
 4. Reference inline images as `(see attachment <filename>)` in markdown
 
 ## Comment Templates
@@ -115,3 +126,21 @@ Scope split performed. The following A/C were moved to a new story:
 New story: [KEY] -- [summary]
 Remaining A/C on this ticket: [list what stays]
 ```
+
+---
+
+## RULES
+
+- Use a Tools-table command whenever one exists; raw REST only for calls no tool covers.
+- Credentials flow through `--passphrase` on the tools -- never ask for a token, never echo one. Passphrase problems route to `/onepassword-setup`.
+- Preserve the original AC verbatim on every description update (Description Conventions above).
+- Fetch before editing (`jira-fetch`) -- remembered ticket content may be stale; exception: content fetched earlier this same session.
+- Check existing ADF media nodes before any description update (Media Attachments above).
+- Full lifecycle work (refinement sessions, story maps, bug creation) is `/alfred`'s -- route, don't re-implement.
+
+## CONTEXT MANAGEMENT
+
+Standalone utility: no handoff, no session state of its own. Fetch large ticket JSON to a file (`jira-fetch --output`) rather than into context. When the Jira work is part of a pipeline run, the parent skill owns the handoffs -- this skill supplies conventions and tool calls only.
+
+---
+**Gotham Pipeline** · Jira Usage · Reference · standalone

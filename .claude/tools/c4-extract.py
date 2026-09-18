@@ -1,53 +1,41 @@
 #!/usr/bin/env python3
-"""Extract C4 architectural data from a repository.
+"""
+c4-extract.py — Extract C4 architectural data from a repository (GPTS).
 
-Produces structured JSON for C4 Level 1-3 diagrams following the C4 model specification:
+Produces structured JSON for C4 Level 1-3 diagrams following the C4 model
+specification:
 - C1 Context: System boundary, people, external software systems
 - C2 Containers: Applications and data stores within the system
 - C3 Components: Major structural building blocks within containers
+- C3.5 Types and type relationships (from C3 extraction)
 
 C4 Model Reference: https://c4model.com/
 
-Usage:
-    python c4-extract.py <repo_root>
+Rust AST parser: when tools/c4-rust-parser/target/{release,debug}/c4-rust-parser[.exe]
+exists, C3 extraction first consults the compiled parser (subprocess argv list,
+60s timeout) and falls back silently to regex detection on any failure.
 
-Output JSON schema:
-    {
-        "c1_context": {
-            "system_name": str,
-            "description": str,
-            "people": [...],
-            "external_systems": [...]
-        },
-        "c2_containers": {
-            "system_name": str,
-            "description": str,
-            "containers": [...]
-        },
-        "c3_components": {
-            "containers": {
-                "<container_name>": {
-                    "components": [...]
-                }
-            }
-        },
-        "relationships": {
-            "c1": [...],
-            "c2": [...]
-        }
-    }
+Contract:  python c4-extract.py --help   (JSON)
+Standard:  references/tooling-standards.md
+
+Output: one JSON envelope on stdout; the extracted C4 data is in .data
+(c1_context, c2_containers, c3_components, c3_5_types, relationships,
+type_relationships — c4model.com spec).
+
+Exit codes: 0 extracted · 1 usage or validation error (repo-root not a directory)
 """
 
-import argparse
 import json
 import os
 import re
 import sys
 from pathlib import Path
 
+from toolkit import Tool, UsageError
+
 SKIP_DIRS = {'bin', 'obj', 'node_modules', '.git', '.vs', '.idea', 'TestResults',
              'packages', '.next', '.nuxt', 'dist', 'build', 'target', '.claude',
-             'coverage', '.pytest_cache', '__pycache__', 'venv', '.venv',
+             '.worktrees', 'coverage', '.pytest_cache', '__pycache__', 'venv', '.venv',
              'examples', 'benchmarks'}
 
 
@@ -1803,24 +1791,42 @@ def extract_all(repo_root):
     }
 
 
-def main():
-    # Force UTF-8 output on Windows
-    if sys.platform == 'win32':
-        sys.stdout.reconfigure(encoding='utf-8')
-
-    parser = argparse.ArgumentParser(description='Extract C4 architectural data from repository')
-    parser.add_argument('repo_root', help='Path to repository root')
-    parser.add_argument('--json', action='store_true', help='Output as JSON (default)')
-    args = parser.parse_args()
-
-    repo_root = os.path.abspath(args.repo_root)
+def handle(v):
+    repo_root = os.path.abspath(v["--repo-root"])
     if not os.path.isdir(repo_root):
-        print(f"Error: {repo_root} is not a directory", file=sys.stderr)
-        sys.exit(1)
-
+        raise UsageError(
+            f"{repo_root} is not a directory",
+            "pass a valid repository directory: $UB c4-extract --repo-root <repo>",
+        )
     data = extract_all(repo_root)
-    print(json.dumps(data, indent=2))
+    return {
+        "status": "extracted",
+        "repo_root": repo_root.replace("\\", "/"),
+        "data": data,
+    }
 
 
-if __name__ == '__main__':
-    main()
+TOOL = Tool(
+    name="c4-extract",
+    version="1.0",
+    summary="Extract C4 architectural data (C1 context, C2 containers, C3 components, C3.5 types, relationships) from a repository.",
+    flags={
+        "--repo-root": {"required": True, "type": "path",
+                        "description": "Path to the repository root to extract from."},
+        "--json": {"required": False, "type": "bool",
+                   "description": "Accepted for back-compat; JSON is the only output mode (no-op)."},
+    },
+    exit_codes={"0": "extracted — C4 data in .data",
+                "1": "usage or validation error (repo-root not a directory)"},
+    examples=[
+        "$UB c4-extract --repo-root C:/repos/bw-api",
+        "$UB c4-extract --repo-root ./bw-api --json",
+    ],
+)
+
+
+if __name__ == "__main__":
+    # Force UTF-8 output on Windows
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+    TOOL.run(handle)

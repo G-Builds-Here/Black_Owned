@@ -4,15 +4,16 @@
 Scans dependency declarations and searches for actual imports/usages in source
 files. Reports dependencies with zero import hits as potentially unused.
 
-Usage:
-    python check-unused-deps.py [project_root]
-    python check-unused-deps.py [project_root] --type npm
-    python check-unused-deps.py [project_root] --type nuget
+Contract:  python check-unused-deps.py --help   (JSON)
+Standard:  references/tooling-standards.md
 
-    project_root: path to scan (defaults to current directory)
-    --type:       npm | nuget | all (default: all)
+Usage (flags only):
+    $UB check-unused-deps [--repo-root <project_root>] [--type npm|nuget|all]
 
-Output: JSON to stdout
+    --repo-root: path to scan (default: current directory)
+    --type:      npm | nuget | all (default: all)
+
+Output: JSON envelope; "data" carries the legacy document:
     {
         "npm": [
             {"project": "path/to/package.json", "unused": [
@@ -28,8 +29,9 @@ Output: JSON to stdout
 
 import json
 import re
-import sys
 from pathlib import Path
+
+from toolkit import Tool
 
 # npm packages that are build tools / runtimes — never imported in source
 NPM_TOOL_PACKAGES = {
@@ -323,13 +325,9 @@ def check_nuget(project_root):
     return results
 
 
-def main():
-    project_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
-    check_type = "all"
-
-    for i, arg in enumerate(sys.argv):
-        if arg == "--type" and i + 1 < len(sys.argv):
-            check_type = sys.argv[i + 1]
+def handle(v):
+    project_root = Path(v["--repo-root"])
+    check_type = v["--type"]
 
     npm_results = []
     nuget_results = []
@@ -343,7 +341,7 @@ def main():
     total_unused = sum(r["unused_count"] for r in npm_results + nuget_results)
     total_skipped = sum(len(r["skipped"]) for r in npm_results + nuget_results)
 
-    output = {
+    data = {
         "npm": npm_results,
         "nuget": nuget_results,
         "summary": {
@@ -353,8 +351,36 @@ def main():
         }
     }
 
-    print(json.dumps(output, indent=2))
+    return {
+        "status": "scanned",
+        "repo_root": str(project_root),
+        "data": data,
+    }
+
+
+TOOL = Tool(
+    name="check-unused-deps",
+    version="1.0",
+    summary="Check for unused dependencies in npm (package.json) and NuGet (.csproj) projects: "
+            "reports dependencies with zero import/reference hits as potentially unused.",
+    flags={
+        "--repo-root": {"required": False, "type": "path", "default": ".",
+                        "description": "Path to scan (default: current directory)."},
+        "--type": {"required": False, "type": "choice",
+                   "choices": ["npm", "nuget", "all"], "default": "all",
+                   "description": "Dependency ecosystem to check (default: all)."},
+    },
+    exit_codes={
+        "0": "scanned — payload carries 'data' (npm, nuget, summary)",
+        "1": "usage or validation error (--type must be one of npm|nuget|all)",
+    },
+    examples=[
+        "$UB check-unused-deps --repo-root .",
+        "$UB check-unused-deps --repo-root . --type nuget",
+    ],
+    idempotent="Read-only: re-running on the same repo state returns identical results.",
+)
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

@@ -9,18 +9,25 @@ Follows the C4 model specification (https://c4model.com/):
 - Interactive click-through navigation
 
 Usage:
-    python c4-render.py <c4_data.json> -o architecture.html
-    python c4-render.py <c4_data.json> --baseline baseline.json -o delta.html
+    python c4-render.py --c4-data <c4_data.json>
+    python c4-render.py --c4-data <c4_data.json> --baseline baseline.json --output c4.html
+
+Contract:  python c4-render.py --help   (JSON)
+Standard:  references/tooling-standards.md
 
 Output:
     Single self-contained HTML file with embedded CSS/JS/SVG.
+    stdout is one JSON document (GPTS §2).
+Exit codes: 0 rendered · 1 usage or validation · 4 input not found
 """
 
-import argparse
 import json
 import os
-import sys
 from pathlib import Path
+
+from toolkit import Tool, UsageError, NotFound, audit_append
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def sanitize_id(name):
@@ -2113,32 +2120,100 @@ document.addEventListener('click', (e) => {{
     return html
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Render C4 diagrams as interactive HTML')
-    parser.add_argument('c4_data', help='Path to C4 JSON from c4-extract.py')
-    parser.add_argument('--baseline', '-b', help='Baseline C4 JSON for delta highlighting')
-    parser.add_argument('--output', '-o', default='c4.html', help='Output HTML file')
-    args = parser.parse_args()
+def handle(v):
+    base = Path(v.get("--base") or BASE_DIR)
 
-    with open(args.c4_data) as f:
-        data = json.load(f)
+    c4_data = Path(v["--c4-data"])
+    if not c4_data.is_file():
+        raise NotFound(
+            f"C4 data file not found: {c4_data}",
+            "run c4-extract first, or pass --c4-data <path to an existing C4 JSON>",
+        )
+    with open(c4_data) as f:
+        try:
+            data = json.load(f)
+        except ValueError as e:
+            raise UsageError(
+                f"--c4-data is not valid JSON: {e}",
+                "regenerate the C4 JSON with c4-extract, then re-run c4-render with the same flags",
+            )
+    if not isinstance(data, dict):
+        raise UsageError(
+            "--c4-data must contain a JSON object (top-level mapping)",
+            "regenerate the C4 JSON with c4-extract, then re-run c4-render with the same flags",
+        )
 
     baseline = None
-    if args.baseline:
-        with open(args.baseline) as f:
-            baseline = json.load(f)
+    if "--baseline" in v:
+        baseline_path = Path(v["--baseline"])
+        if not baseline_path.is_file():
+            raise NotFound(
+                f"baseline file not found: {baseline_path}",
+                "pass --baseline <path to an existing baseline C4 JSON>, or drop --baseline",
+            )
+        with open(baseline_path) as f:
+            try:
+                baseline = json.load(f)
+            except ValueError as e:
+                raise UsageError(
+                    f"--baseline is not valid JSON: {e}",
+                    "fix the baseline JSON, or drop --baseline to render without deltas",
+                )
+        if not isinstance(baseline, dict):
+            raise UsageError(
+                "--baseline must contain a JSON object (top-level mapping)",
+                "fix the baseline JSON, or drop --baseline to render without deltas",
+            )
 
     deltas = classify_deltas(data, baseline)
     system_name = data.get('c1_context', {}).get('system_name', 'Architecture')
 
     html = generate_html(data, deltas, system_name)
 
-    os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
-    with open(args.output, 'w', encoding='utf-8') as f:
+    output = v["--output"]
+    os.makedirs(os.path.dirname(output) or '.', exist_ok=True)
+    with open(output, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    print(f"Rendered: {args.output}")
+    audit_append(base, "c4-render", "render", key=output, result="rendered")
+    return {
+        "status": "rendered",
+        "output": Path(output).as_posix(),
+        "bytes_written": Path(output).stat().st_size,
+    }
 
 
-if __name__ == '__main__':
-    main()
+TOOL = Tool(
+    name="c4-render",
+    version="1.0",
+    summary="Render C4 architecture data (from c4-extract) into a single self-contained "
+            "interactive HTML file with SVG diagrams, legends, and optional delta "
+            "highlighting against a baseline.",
+    flags={
+        "--c4-data": {"required": True, "type": "path",
+                      "description": "Path to the C4 JSON produced by c4-extract.py (file must exist)."},
+        "--baseline": {"required": False, "type": "path",
+                       "description": "Optional baseline C4 JSON for delta highlighting "
+                                      "(green=new, yellow=modified, red=removed)."},
+        "--output": {"required": False, "type": "path",
+                     "default": "c4.html",
+                     "description": "Output HTML file path (parent directories created as needed)."},
+    },
+    exit_codes={
+        "0": "rendered — HTML written; payload carries output path and byte count",
+        "1": "usage or validation error (missing flag, malformed JSON, top-level not an object)",
+        "4": "input file not found (--c4-data or --baseline)",
+    },
+    examples=[
+        "$UB c4-render --c4-data <repo>/.claude/codebase/c4-skeleton.json "
+        "--output <repo>/.claude/codebase/c4.html",
+        "$UB c4-render --c4-data c4-proposed.json --baseline c4-skeleton.json "
+        "--output <repo>/.claude/codebase/planning/<ticket>/c4-delta.html",
+    ],
+    idempotent="Pure function of its inputs: re-running with the same flags rewrites the same HTML bytes.",
+    base_default=BASE_DIR,
+)
+
+
+if __name__ == "__main__":
+    TOOL.run(handle)

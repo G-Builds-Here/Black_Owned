@@ -1,7 +1,7 @@
 ## Implementation Blueprint — DRAFT (pre-epic)
 
 **Epic (proposed):** HIGHLIGHTS — replace bland one-line business descriptions with category-specific highlights and review-derived copy, using only data the enrichment pipeline already fetches.
-**Repo:** C:/Users/Merlin/Documents/repos/Black_Owned · **Baseline commit:** 1de32d3 · **Survey:** `aidlc-docs/inception/reverse-engineering/`
+**Repo:** C:/Users/Merlin/Documents/repos/Black_Owned · **Baseline commit:** 1de32d3 · **Survey:** `.claude/codebase/`
 **Status:** design draft for epic conversion. Scope settled with the product owner 2026-09-05: (1) homepage `og:description` as top description candidate, (2) multi-snippet description merge, (3) review highlights ("customers say" pull-quote), (4) category-specific highlight facets (restaurant → cuisine/menu/decor/chef; law firm → practice areas; barber → services offered). No LLM in v1 — deterministic extraction only (product owner's model-cost concern).
 
 ### 0. Problem Statement

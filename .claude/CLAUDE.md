@@ -97,7 +97,7 @@ it("returns 201 when the payload is valid", async () => {
 
 ## Architecture
 
-Codebase survey artifacts are in `aidlc-docs/inception/reverse-engineering/`.
+Codebase survey artifacts are in `.claude/codebase/`.
 Each file has a metadata header showing when it was surveyed and which paths it covers —
 check the header against what you are currently editing to assess freshness.
 Read the relevant file directly when you need it. Start at `index.md`.
@@ -126,7 +126,7 @@ the artifact may be stale for that area. Run `/luke` to refresh specific artifac
 
 Before answering codebase questions, writing or editing code, or making architectural decisions, follow this fallback chain:
 
-1. **Index once per session** — run `ctx_batch_execute` over all `*.md` files in `aidlc-docs/inception/reverse-engineering/` to load them into the searchable knowledge base
+1. **Index once per session** — run `ctx_batch_execute` over all `*.md` files in `.claude/codebase/` to load them into the searchable knowledge base
 2. **Search first** — run `ctx_search` with a specific query; returns focused excerpts without reading raw files
 3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
-4. **No artifacts** — if `aidlc-docs/inception/reverse-engineering/` is empty, offer to run `/luke`
+4. **No artifacts** — if `.claude/codebase/` is empty, offer to run `/luke`

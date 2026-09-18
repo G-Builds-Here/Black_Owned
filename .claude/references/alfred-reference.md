@@ -72,7 +72,7 @@ When the user wants to create an epic from a PRD or multi-feature description, g
 
 **3. Repo detection** — After extracting deployable units, run:
 ```
-$UB repo-detect "<prd_path>" --scan-dir ~/source/repos --current-repo "<repo_root>"
+$UB repo-detect --prd-path "<prd_path>" --scan-dir ~/source/repos --current-repo "<repo_root>"
 ```
 Present results to the user.
 
@@ -125,7 +125,7 @@ When resuming an epic session (Alfred handoff exists with `Epic Phase` set):
 1. Read the handoff to get `PRD Path` and `PRD Hash`
 2. Run drift check:
 ```
-$UB check-prd-drift <ticket_key> "<prd_path>"
+$UB check-prd-drift --ticket-key <ticket_key> --prd-path "<prd_path>"
 ```
 3. If `drifted: false` — continue from saved phase
 4. If `drifted: true` — present the delta to the user:
@@ -171,7 +171,7 @@ When Alfred resumes after a Lucius design pass (handoff has `Epic Phase: story-b
 
 More granular stories are better for parallel implementation and make Dupin's job easier.
 
-**0. Load Lucius handoff** — Read the Lucius handoff (`$UB read-handoff lucius <key>`). Extract:
+**0. Load Lucius handoff** — Read the Lucius handoff (`$UB read-handoff --type lucius --key <key>`). Extract:
 - `_blocks.Stories` array (if present)
 - `technology_stack` array — tech decisions per layer, used in Step 2b3 for consistency checking
 - `blueprint_path` — full path to Implementation-Blueprint.md for reference
@@ -203,7 +203,7 @@ Record the epic key for child story creation in Step 5.
 
 **0b. Validate epic phases** — After creating the epic, verify the phase data is correct:
 
-Run: `$UB epic-tickets <epic_key> --story-level --validate`
+Run: `$UB epic-tickets --key <epic_key> --mode story-level --validate`
 
 - If validation **passes**: proceed to Step 1
 - If validation **fails**: the script will show which stories have mismatched phases. Correct the phase values in the epic ticket to match the computed values, then re-run validation.
@@ -554,13 +554,13 @@ When `JIRA_MODE=local` (no Jira credentials and no Jira MCP), Alfred works from 
    - **Implementation project**: Acceptance Criteria section, then a Gherkin Scenarios section below it. Each AC gets one or more Scenarios with specific inputs/outputs. Scenarios nest Given/When/Then at 6 spaces, And at 12 spaces.
    - Keep each scenario focused on one behavior.
 3. Build the **complete description** using the canonical template in § Standard ADF Format (below). The template defines the full section order: Story heading (open, includes story points) → CARVED Check (collapsible expand) → Acceptance Criteria (AC expands) → Original AC (collapsible expand) → Dependencies (collapsible expand). Do NOT include Example Tests or Existing Framework Reuse sections — those are Bruce/Damian's domain.
-   Write via: `$UB write-temp alfred full-description.json <<'JSON' ... JSON`
+   Write via: `$UB write-temp --skill alfred --filename full-description.json <<'JSON' ... JSON`
    **Note on nesting:** write both outer and inner levels as `expand` in the input JSON -- `build-adf-json.py` automatically promotes inner expands to `nestedExpand` (required by Jira ADF). Do not write `nestedExpand` manually.
 4. Write the full description in one call:
    - **MCP available:** `jira_update_issue` MCP tool with the complete description content
    - **REST fallback:** `jira-write` auto-detects the `sections` key — pass the sections JSON file directly. Do NOT pre-convert with `build-adf-json` separately; doing so produces raw ADF which `jira-write` cannot re-wrap, causing a Jira 400 error.
-     1. `$UB jira-write <pin> PUT <issue-url> <full-description.json>`
-     2. **Post-write verification:** fetch `$UB jira-fetch <pin> "<issue-url>?fields=description"` and confirm the expected AC headings appear in the response. If they are missing, report failure -- do not claim success.
+     1. `$UB jira-write --passphrase <pin> --method PUT --url <issue-url> --data-file <full-description.json>`
+     2. **Post-write verification:** fetch `$UB jira-fetch --passphrase <pin> --url "<issue-url>?fields=description"` and confirm the expected AC headings appear in the response. If they are missing, report failure -- do not claim success.
 5. Use `jira_add_comment` MCP tool to post a comment:
    ```
    Refined the acceptance criteria for this ticket.
@@ -587,7 +587,7 @@ When `JIRA_MODE=local` (no Jira credentials and no Jira MCP), Alfred works from 
 
 **Partial failure handling:** Step 6 makes multiple Jira calls (description update, comment, sub-tasks). If any call fails with a 4xx/5xx after earlier calls succeeded, report what landed and what didn't — e.g. *"The description was updated, sir, but the comment failed with [error]. Want me to retry, or shall I note it for later?"* Record the partial state in the handoff: `**Jira Updated:** partial (description updated, comment failed: [error])`.
 
-**For complex comments** (with bullet lists, nested structure, or multiple formatting types): If `post-jira-comment` with sections format fails or produces poor formatting, write proper ADF JSON directly using the exact structure from `build-adf-json.py` output (with `"type": "doc"`, `"version": 1`, `"content": [...]`), then POST it via `$UB jira-write <pin> POST "https://procare.atlassian.net/rest/api/3/issue/<key>/comment" <adf-file>`. The sections format is simpler but less reliable for lists. Use `PUT .../comment/<id>` to fix an existing malformed comment.
+**For complex comments** (with bullet lists, nested structure, or multiple formatting types): If `post-jira-comment` with sections format fails or produces poor formatting, write proper ADF JSON directly using the exact structure from `build-adf-json.py` output (with `"type": "doc"`, `"version": 1`, `"content": [...]`), then POST it via `$UB jira-write --passphrase <pin> --method POST --url "https://procare.atlassian.net/rest/api/3/issue/<key>/comment" --data-file <adf-file>`. The sections format is simpler but less reliable for lists. Use `PUT .../comment/<id>` to fix an existing malformed comment.
 
 ### If user says NO to updating Jira:
 
@@ -843,8 +843,9 @@ After Step 6 is complete (or skipped in paste mode), perform these inline:
 
 1. Read `Bruce-<ticket-key>.md` for: QA Result, per-AC findings.
 2. Read the ticket description for AC titles.
-3. Draft using the template below. Show to user for approval before posting.
-4. Post via `$UB post-jira-comment <pin> <issue-key> <sections-json-file>`.
+3. Draft using the template below (as plain markdown -- `###` heading, `**bold**` AC labels, `-` bullets). Show to user for approval before posting.
+4. Write the approved draft to a markdown file (Write tool), then post via `$UB post-jira-comment --passphrase <pin> --issue-key <issue-key> --sections-file <markdown-file> --markdown`. No JSON sections file needed -- the `--markdown` flag parses the draft directly (headings, bullets, bold/italic/code, rules). Delete the temp markdown file after posting. Only fall back to hand-authoring a sections JSON (`tools/build-adf-json.py` docstring) for structures markdown mode doesn't cover -- tables, panels, or nested expands.
+5. **Verify before reporting done:** `OK: <status>` only confirms the HTTP call succeeded, not that the content rendered correctly. Re-fetch the comment via `$UB jira-fetch --passphrase <pin> --url "<issue-url>/comment/<comment-id>"` and confirm every intended section is present (headings render, bullets render, no empty paragraph nodes) before telling the user it posted correctly.
 
 **Template structure:**
 

@@ -7,9 +7,6 @@ settings.local.json
 # Local safety backups — not for version control
 backups/
 
-# Legacy Lucius artifacts (migrated to aidlc-docs/ by Luke)
-codebase/
-
 # Transient working files
 *.tmp
 *.bak
@@ -17,7 +14,7 @@ codebase/
 # plans/ — uncomment to exclude planning files from version control
 # plans/
 
-# Python bytecode from hooks — auto-generated, never commit
-hooks/__pycache__/
+# Python bytecode — auto-generated, never commit (any subdir: hooks/, tools/, …)
+__pycache__/
 
 # memory/ is intentionally tracked — repo-specific knowledge shared across the team

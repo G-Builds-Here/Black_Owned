@@ -1,0 +1,64 @@
+{
+  "c3_components": {
+    "containers": {
+      "bw_scraper": {
+        "components": {
+          "add": [
+            {
+              "id": "highlights-module",
+              "name": "HighlightsModule",
+              "c4_type": "Component",
+              "description": "Pure extraction module: per-category keyword dictionaries (food-dining, professional-services, personal-services), word-boundary match scoring, review-phrase mining, and result shaping into a deduped string[] (max 5, each max 80 chars). No I/O; fully unit-testable. Lives next to enrichment.rs in bw-scraper.",
+              "technology": "Rust module",
+              "path": "bw-scraper/src/highlights.rs"
+            }
+          ]
+        }
+      },
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {
+              "id": "highlight-chips",
+              "name": "HighlightChips",
+              "c4_type": "Component",
+              "description": "Renders up to 3 highlight chips on directory cards and up to 5 on the detail page (existing Badge primitive, variant=default size=sm), plus a 'Customers say' pull-quote from the highest-rated stored review with reviewer name and location label. Hidden entirely when highlights are null or no reviews exist.",
+              "technology": "React / Next.js",
+              "path": "src/components/ui/BusinessCard.tsx"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "c3_5_types": {
+    "containers": {
+      "bw-scraper": {
+        "types": {
+          "add": [
+            {
+              "id": "highlights",
+              "name": "Highlights",
+              "type_kind": "column",
+              "rust_equivalent": "Option<serde_json::Value>",
+              "description": "businesses.highlights JSONB column: array of short highlight phrases (<=5 entries, each <=80 chars, deduped). null = never extracted. JSONB chosen over string[] so v2 facet pairs ({facet, value}) do not need a column change.",
+              "source_kind": "C4 delta"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "relationships": {
+    "c3": {
+      "add": [
+        {
+          "source": "enrichresult",
+          "target": "highlights-module",
+          "label": "Uses",
+          "technology": "Rust module call (extraction)"
+        }
+      ]
+    }
+  }
+}

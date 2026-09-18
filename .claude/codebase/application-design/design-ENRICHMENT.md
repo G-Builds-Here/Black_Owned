@@ -14,9 +14,9 @@ timestamp: 2026-08-27T05:13:19Z
 **Entry:** epic
 **Escalation From:** -
 **Confidence:** High
-**Blueprint Path:** aidlc-docs/inception/planning/ENRICHMENT/Implementation-Blueprint.md
-**Delta HTML Path:** aidlc-docs/inception/planning/ENRICHMENT/c4-delta.html
-**Delta Spec Path:** aidlc-docs/inception/planning/ENRICHMENT/delta-spec.json
+**Blueprint Path:** .claude/codebase/planning/ENRICHMENT/Implementation-Blueprint.md
+**Delta HTML Path:** .claude/codebase/planning/ENRICHMENT/c4-delta.html
+**Delta Spec Path:** .claude/codebase/planning/ENRICHMENT/delta-spec.json
 **Epic Summary:** Populate businesses.* content columns (phone, website, menu_url, description, image_url, social_urls, rating, review_count) from external sources (Google share-link JSON, SearXNG, website crawl) without paid API keys or file storage, plus an admin UI for manual enrichment and a trigger for pipeline runs. No new tables; schema already ready via migrations 014/015/017/019. Pre-epic fixes landed: categories migration 020, .env untracked.
 **Target Directories:** bw-scraper/src, src/app/api/admin, src/components/admin, e2e
 **constraints:** ['Photos and menus are external URLs only - no file storage', 'No paid API keys; Google data via share-link JSON only', 'Fill-empty rule: enrichment must not overwrite existing non-null values', 'Enrichment must be idempotent and rerunnable', 'Do NOT wire enrichment into the dead scrape_jobs queue (finding H3); execution home is bw-scraper POST /enrich']

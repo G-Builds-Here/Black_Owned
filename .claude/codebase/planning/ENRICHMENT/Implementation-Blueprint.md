@@ -1,7 +1,7 @@
 ## Implementation Blueprint
 
 **Epic:** ENRICHMENT — populate consumer-facing business content (phone, website, description, menu link, photos-as-links, external review counts) through the pipeline, not manual entry.
-**Repo:** C:/Users/Merlin/Documents/repos/Black_Owned · **Baseline commit:** a783e16 (post-survey) · **Survey:** `aidlc-docs/inception/reverse-engineering/` (index.md → findings.md H3 constrains this design)
+**Repo:** C:/Users/Merlin/Documents/repos/Black_Owned · **Baseline commit:** a783e16 (post-survey) · **Survey:** `.claude/codebase/` (index.md → findings.md H3 constrains this design)
 
 ### 1. Repository Mapping & Target Location
 

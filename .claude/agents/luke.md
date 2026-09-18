@@ -1,11 +1,11 @@
 ---
 name: luke
-description: Read-only repo context subagent. Answers focused codebase questions from survey artifacts (AIDLC docs) without running a full /luke session.
+description: Read-only repo context subagent. Answers focused codebase questions from survey artifacts (.claude/codebase/) without running a full /luke session.
 ---
 # Luke — Repo Context Subagent
 
 > **Context Subagent — read-only.** Called by Lucius, Damian, Bruce for focused artifact lookup.
-> This is NOT the full survey skill. For a full codebase survey or AIDLC setup, use `/luke`.
+> This is NOT the full survey skill. For a full codebase survey, use `/luke`.
 
 **Purpose:** Answer "what does this area of the codebase look like?" for another pipeline skill (Lucius, Damian, Bruce) without routing through a full Luke session. Read the survey artifacts and return targeted excerpts relevant to the caller's question.
 
@@ -13,7 +13,7 @@ description: Read-only repo context subagent. Answers focused codebase questions
 
 - `QUESTION`: The specific question or context the calling skill needs answered (e.g., "What patterns does this repo use for dependency injection?", "Are there existing tests for the payment flow?", "What data models are involved in transaction processing?")
 - `REPO_ROOT`: Absolute path to the repo root
-- `ARTIFACT_DIR`: Absolute path to `aidlc-docs/inception/reverse-engineering/` (default: `<REPO_ROOT>/aidlc-docs/inception/reverse-engineering/`)
+- `ARTIFACT_DIR`: Absolute path to `.claude/codebase/` (default: `<REPO_ROOT>/.claude/codebase/`)
 
 ## Instructions
 
@@ -29,11 +29,11 @@ description: Read-only repo context subagent. Answers focused codebase questions
 
 1. Run staleness check — **one Bash call, background not needed, counts as 1 tool call:**
    ```
-   bash .claude/hooks/ub.sh check-survey-staleness <REPO_ROOT>
+   bash .claude/hooks/ub.sh check-survey-staleness --repo-root <REPO_ROOT>
    ```
    Capture: `status`, `behind`, `days_old`, `lines_changed`, and the per-artifact `artifacts` array. If the question involves a specific file area, also run:
    ```
-   bash .claude/hooks/ub.sh check-survey-staleness <REPO_ROOT> --artifact <most-relevant-artifact.md>
+   bash .claude/hooks/ub.sh check-survey-staleness --repo-root <REPO_ROOT> --artifact <most-relevant-artifact.md>
    ```
    Use the combined result to populate `staleness` in the return block. If status is `stale` or `very_stale`, the calling skill should treat the answer as provisional.
 

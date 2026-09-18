@@ -1,30 +1,37 @@
 #!/usr/bin/env python3
-"""Add Luke-generated files (.claude/, aidlc-docs/) to the project and solution.
+"""Add Luke-generated files under .claude/ to the project and solution.
 
 For dotnet repos: adds <None Include> entries to the main .csproj for any
-.claude/ and aidlc-docs/ files not already included. Also adds/updates a
+.claude/ files not already included. Also adds/updates a
 solution folder in the .sln.
 
-Usage:
-    python luke-project-include.py <repo-root>
-    python luke-project-include.py <repo-root> --dry-run
+Contract:  python luke-project-include.py --help   (JSON)
+Standard:  references/tooling-standards.md
 
-Returns JSON: {"csproj_updated": bool, "sln_updated": bool, "added": [...], "skipped": [...]}
+Usage (flags only):
+    $UB luke-project-include --repo-root <repo-root>
+    $UB luke-project-include --repo-root <repo-root> --dry-run
+
+Output: JSON envelope — payload carries {"csproj_updated": bool, "sln_updated": bool,
+        "added": [...], "skipped": [...]} (plus csproj/sln notes where applicable).
+
+Exit codes: 0 included/no-op · 1 usage/validation · 3 precondition (no Luke files to include) · 4 not found (repo root)
 """
 
-import argparse
-import json
 import os
 import re
-import sys
 from pathlib import Path
+
+from toolkit import Tool, UsageError, Precondition, NotFound, audit_append
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 SKIP_EXTENSIONS = set()  # no blanket extension skips — use SKIP_FILES for specifics
 SKIP_FILES = {'settings.local.json'}
-# JSON sidecars (aidlc-docs/*.json) are excluded below by checking if a same-named .md exists
+# JSON sidecars (.claude/codebase/*.json) are excluded below by checking if a same-named .md exists
 
-LUKE_DIRS = ['.claude', 'aidlc-docs/inception/reverse-engineering', 'aidlc-docs/operations']
+LUKE_DIRS = ['.claude']
 
 
 def find_main_csproj(repo_root):
@@ -52,7 +59,7 @@ def ensure_memory_gitkeep(repo_root):
 
 
 def collect_luke_files(repo_root):
-    """Collect all .claude/ and aidlc-docs/ files that should be included."""
+    """Collect all .claude/ files that should be included (incl. .claude/codebase/ docs)."""
     ensure_memory_gitkeep(repo_root)
     files = []
     for dir_rel in LUKE_DIRS:
@@ -151,41 +158,78 @@ def update_sln(sln_path, files_to_add, dry_run=False):
     return True
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Include Luke files in dotnet project and solution')
-    parser.add_argument('repo_root', help='Path to repository root')
-    parser.add_argument('--dry-run', action='store_true', help='Report changes without writing')
-    args = parser.parse_args()
+def handle(v):
+    repo_root = Path(v["--repo-root"]).resolve()
+    if not repo_root.is_dir():
+        raise NotFound(
+            f"repo root not found: {repo_root}",
+            "pass an existing repository directory: $UB luke-project-include --repo-root <repo-root>",
+        )
 
-    repo_root = os.path.abspath(args.repo_root)
-    files = collect_luke_files(repo_root)
+    dry_run = bool(v.get("--dry-run", False))
+    base = Path(v["--base"])
+
+    files = collect_luke_files(str(repo_root))
 
     if not files:
-        print(json.dumps({'error': 'No .claude/ or aidlc-docs/ files found', 'csproj_updated': False, 'sln_updated': False}))
-        sys.exit(1)
+        raise Precondition(
+            "No .claude/ files found — nothing to include",
+            "run the Luke survey S4/S5 first ($UB survey-finalize --repo-root "
+            f"{repo_root}) so .claude/ content exists, then re-run",
+        )
 
-    result = {'csproj_updated': False, 'sln_updated': False, 'added': [], 'skipped': [], 'dry_run': args.dry_run}
+    result = {"csproj_updated": False, "sln_updated": False, "added": [], "skipped": [], "dry_run": dry_run}
 
-    csproj = find_main_csproj(repo_root)
+    csproj = find_main_csproj(str(repo_root))
     if csproj:
-        added, skipped = update_csproj(csproj, files, dry_run=args.dry_run)
-        result['csproj_updated'] = bool(added)
-        result['added'] = added
-        result['skipped'] = skipped
-        result['csproj'] = os.path.basename(csproj)
+        added, skipped = update_csproj(csproj, files, dry_run=dry_run)
+        result["csproj_updated"] = bool(added)
+        result["added"] = added
+        result["skipped"] = skipped
+        result["csproj"] = os.path.basename(csproj)
     else:
-        result['csproj_note'] = 'No .csproj found at repo root — skipped'
+        result["csproj_note"] = "No .csproj found at repo root — skipped"
 
-    sln = find_sln(repo_root)
+    sln = find_sln(str(repo_root))
     if sln:
-        updated = update_sln(sln, files, dry_run=args.dry_run)
-        result['sln_updated'] = updated
-        result['sln'] = os.path.basename(sln)
+        updated = update_sln(sln, files, dry_run=dry_run)
+        result["sln_updated"] = updated
+        result["sln"] = os.path.basename(sln)
     else:
-        result['sln_note'] = 'No .sln found at repo root — skipped'
+        result["sln_note"] = "No .sln found at repo root — skipped"
 
-    print(json.dumps(result, indent=2))
+    if not dry_run:
+        audit_append(base, "luke-project-include", "include", key=str(repo_root), result="included")
+
+    result["repo_root"] = str(repo_root)
+    result["status"] = "dry_run" if dry_run else "included"
+    return result
 
 
-if __name__ == '__main__':
-    main()
+TOOL = Tool(
+    name="luke-project-include",
+    version="1.0",
+    summary="Include Luke-generated files under .claude/ (incl. codebase/ survey docs) in a dotnet project: add <None Include> entries to the main .csproj and a 'Claude' solution folder to the .sln.",
+    flags={
+        "--repo-root": {"required": True, "type": "path",
+                        "description": "Path to the repository root (must exist)."},
+        "--dry-run": {"required": False, "type": "bool",
+                      "description": "Report changes without writing."},
+    },
+    exit_codes={
+        "0": "included (or dry-run reported) — payload carries csproj_updated, sln_updated, added, skipped",
+        "1": "usage or validation error",
+        "3": "precondition: no .claude/ files found to include",
+        "4": "not found: repo root does not exist",
+    },
+    examples=[
+        "$UB luke-project-include --repo-root /path/to/myrepo",
+        "$UB luke-project-include --repo-root /path/to/myrepo --dry-run",
+    ],
+    idempotent="Files already <None Include>d are reported in 'skipped' and not duplicated.",
+    base_default=BASE_DIR,
+)
+
+
+if __name__ == "__main__":
+    TOOL.run(handle)

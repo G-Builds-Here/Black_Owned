@@ -5,12 +5,14 @@ Produces a structured JSON summary of everything a subagent needs to know before
 doing judgment work: project layout, config files, test groups, static singletons,
 base classes, env var reads. Eliminates redundant discovery across multiple subagents.
 
-Usage:
-    python pre-scan.py <repo_root>
-    python pre-scan.py <repo_root> --json
-    python pre-scan.py <repo_root> --markdown
+Contract:  python pre-scan.py --help   (JSON)
+Standard:  references/tooling-standards.md
 
-Output (JSON by default):
+Usage (flags only):
+    $UB pre-scan --repo-root <repo_root>
+    $UB pre-scan --repo-root <repo_root> --markdown
+
+Output: JSON envelope; "data" carries the legacy scan document:
     {
         "projects": [...],
         "config_files": [...],
@@ -24,17 +26,20 @@ Output (JSON by default):
         "directory_tree": "...",
         "summary": {...}
     }
+    With --markdown the payload also carries "markdown" (legacy rendering).
+
+Exit codes: 0 scanned · 1 usage/validation · 4 not found (repo root)
 """
 
-import argparse
 import json
 import os
 import re
-import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-SKIP_DIRS = {'bin', 'obj', 'node_modules', '.git', 'packages', '.vs', '.idea', 'TestResults'}
+from toolkit import Tool, NotFound
+
+SKIP_DIRS = {'bin', 'obj', 'node_modules', '.git', 'packages', '.vs', '.idea', 'TestResults', '.worktrees'}
 
 
 def walk_files(repo_root, extensions=None):
@@ -1018,23 +1023,48 @@ def format_markdown(result):
     return '\n'.join(lines)
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Pre-scan repository for survey subagent context')
-    parser.add_argument('repo_root', help='Path to repository root')
-    parser.add_argument('--json', action='store_true', help='Output as JSON (default)')
-    parser.add_argument('--markdown', action='store_true', help='Output as markdown')
-    args = parser.parse_args()
+def handle(v):
+    repo_root = Path(v["--repo-root"]).resolve()
+    if not repo_root.is_dir():
+        raise NotFound(
+            f"repo root not found: {repo_root}",
+            "pass an existing repository directory: $UB pre-scan --repo-root <repo>",
+        )
 
-    result = scan(os.path.abspath(args.repo_root))
+    data = scan(str(repo_root))
+    payload = {"status": "scanned", "repo_root": str(repo_root), "data": data}
 
-    if args.markdown:
-        print(format_markdown(result))
-    elif args.json:
-        print(json.dumps(result, indent=2))
-    else:
-        # Default to markdown for human readability / subagent consumption
-        print(format_markdown(result))
+    if v.get("--markdown", False):
+        payload["markdown"] = format_markdown(data)
+    return payload
 
 
-if __name__ == '__main__':
-    main()
+TOOL = Tool(
+    name="pre-scan",
+    version="1.0",
+    summary="Pre-scan a repository for structural/mechanical survey data: projects, config files, "
+            "test groups, static singletons, base classes, env var reads, fixtures, entry points, "
+            "and HTTP endpoints.",
+    flags={
+        "--repo-root": {"required": True, "type": "path",
+                        "description": "Path to the repository root (must exist)."},
+        "--json": {"required": False, "type": "bool",
+                   "description": "Accepted for back-compat; the JSON envelope is the only stdout mode."},
+        "--markdown": {"required": False, "type": "bool",
+                       "description": "Include the legacy markdown rendering of the scan as 'markdown' in the payload."},
+    },
+    exit_codes={
+        "0": "scanned — payload carries 'data' (full scan document) and 'markdown' when --markdown",
+        "1": "usage or validation error",
+        "4": "not found: repo root is not a directory",
+    },
+    examples=[
+        "$UB pre-scan --repo-root .",
+        "$UB pre-scan --repo-root . --markdown",
+    ],
+    idempotent="Read-only: re-running on the same repo state returns identical data.",
+)
+
+
+if __name__ == "__main__":
+    TOOL.run(handle)

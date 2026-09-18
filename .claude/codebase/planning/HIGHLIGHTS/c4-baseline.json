@@ -1,0 +1,2084 @@
+{
+  "c1_context": {
+    "system_name": "Black Owned",
+    "description": "Directory platform for discovering and verifying Black-owned businesses: Next.js web front-end plus a Rust scraping/ETL workspace, with Postgres, ClickHouse, NATS, Valkey, and MinIO backing services.",
+    "people": [
+      {
+        "id": "business-owner",
+        "name": "Business Owner",
+        "c4_type": "Person",
+        "description": "Registers and manages their Black business profile",
+        "source": "src/utils/test-data-seeder.ts"
+      },
+      {
+        "id": "admin",
+        "name": "Admin",
+        "c4_type": "Person",
+        "description": "Moderates listings and manages the directory",
+        "source": "src/types/user-management.spec.ts"
+      },
+      {
+        "id": "visitor",
+        "name": "Directory Visitor",
+        "c4_type": "Person",
+        "description": "Browses the public directory and business detail pages",
+        "source": "src/app/directory"
+      }
+    ],
+    "external_systems": [
+      {
+        "id": "searxng",
+        "name": "SearXNG",
+        "c4_type": "Software System",
+        "description": "Metasearch API used for business and location discovery",
+        "technology": "HTTP / metasearch",
+        "source": "bw-scraper/src/config.rs"
+      },
+      {
+        "id": "nominatim",
+        "name": "Nominatim",
+        "c4_type": "Software System",
+        "description": "OpenStreetMap geocoding API used to resolve business locations",
+        "technology": "HTTP / geocoding",
+        "source": "bw-scraper/src/locations.rs"
+      }
+    ]
+  },
+  "c2_containers": {
+    "system_name": "bo survey",
+    "description": "Container view of bo survey",
+    "containers": [
+      {
+        "id": "black-owned-frontend",
+        "name": "black-owned-frontend",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "Next.js full-stack web app: React UI for directory, owner, admin and analytics; REST route handlers and a hand-rolled GraphQL endpoint; direct Postgres access, Valkey cache, NATS WebSocket chat, MinIO uploads",
+        "technology": "Next.js / React / TypeScript",
+        "path": "package.json",
+        "packages": [
+          "@graphql-tools/schema",
+          "@types/leaflet",
+          "bcryptjs",
+          "graphql",
+          "jsonwebtoken",
+          "leaflet",
+          "minio",
+          "nats.ws",
+          "next",
+          "pg",
+          "react",
+          "react-dom"
+        ]
+      },
+      {
+        "id": "bw-types",
+        "name": "bw-types",
+        "c4_type": "Container",
+        "container_type": "library",
+        "description": "Shared Rust domain types: Business, Review, User, Verification, Message, Event and email payload structs",
+        "technology": "Rust / serde / sqlx",
+        "path": "bw-types/Cargo.toml",
+        "packages": [
+          "serde",
+          "serde_json",
+          "derive_builder",
+          "chrono",
+          "uuid",
+          "sqlx"
+        ]
+      },
+      {
+        "id": "bw-scraper",
+        "name": "bw_scraper",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "Active Rust service: SearXNG discovery, website enrichment, geocoding; imports to Postgres and ClickHouse; operator API on :8080; publishes NATS email events",
+        "technology": "Rust / Axum / Tokio / sqlx",
+        "path": "bw-scraper/Cargo.toml",
+        "packages": [
+          "tokio",
+          "sqlx",
+          "async-nats",
+          "axum",
+          "serde",
+          "serde_json",
+          "tracing",
+          "tracing-subscriber",
+          "uuid",
+          "chrono",
+          "reqwest",
+          "regex",
+          "clickhouse",
+          "anyhow",
+          "redis",
+          "fastrand"
+        ]
+      },
+      {
+        "id": "bw-ingestion",
+        "name": "bw-ingestion",
+        "c4_type": "Container",
+        "container_type": "library",
+        "description": "Dormant Rust ETL library crate: NATS consumers (email, chat, image), Valkey cache service and invalidation, source-specific ETL (Google Maps, Yelp, Facebook); no binary target",
+        "technology": "Rust / Tokio / async-nats",
+        "path": "bw-ingestion/Cargo.toml",
+        "packages": [
+          "bw-types",
+          "serde",
+          "serde_json",
+          "chrono",
+          "uuid",
+          "anyhow",
+          "tokio",
+          "clickhouse",
+          "async-nats",
+          "minio-rsc",
+          "redis",
+          "image",
+          "tracing",
+          "rand",
+          "bytes",
+          "futures",
+          "lettre",
+          "regex"
+        ]
+      },
+      {
+        "id": "bw-api",
+        "name": "bw-api",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "Rust GraphQL API (axum + async-graphql) that does not currently compile (task #71); excluded from CI coverage",
+        "technology": "Rust / Axum / async-graphql",
+        "path": "bw-api/Cargo.toml",
+        "packages": [
+          "bw-types",
+          "serde",
+          "serde_json",
+          "chrono",
+          "uuid",
+          "async-graphql",
+          "sqlx",
+          "tower",
+          "tower-layer",
+          "futures",
+          "axum",
+          "axum-extra",
+          "tokio",
+          "hyper",
+          "hyper-util",
+          "http-body",
+          "jsonwebtoken",
+          "tracing",
+          "tracing-subscriber",
+          "tower-http"
+        ]
+      },
+      {
+        "id": "postgres",
+        "name": "postgres",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "Primary relational store: businesses, locations, users, scrape jobs, pending imports",
+        "technology": "PostgreSQL 15",
+        "path": "docker-compose.yml",
+        "packages": []
+      },
+      {
+        "id": "clickhouse",
+        "name": "clickhouse",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "Analytics store for enriched business rows and scraping snapshots",
+        "technology": "ClickHouse",
+        "path": "docker-compose.yml",
+        "packages": []
+      },
+      {
+        "id": "nats",
+        "name": "nats",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "Event bus: email, chat, image-processing and cache-invalidation subjects",
+        "technology": "NATS 2.10",
+        "path": "docker-compose.yml",
+        "packages": []
+      },
+      {
+        "id": "minio",
+        "name": "minio",
+        "c4_type": "Container",
+        "container_type": "database",
+        "description": "S3-compatible object storage for business logos and images",
+        "technology": "MinIO / S3",
+        "path": "docker-compose.yml",
+        "packages": []
+      },
+      {
+        "id": "valkey",
+        "name": "valkey",
+        "c4_type": "Container",
+        "container_type": "service",
+        "description": "In-memory cache: directory query cache and refresh tokens",
+        "technology": "Valkey 7.2",
+        "path": "docker-compose.yml",
+        "packages": []
+      }
+    ]
+  },
+  "c3_components": {
+    "containers": {
+      "bw-types": {
+        "components": [
+          {
+            "id": "business",
+            "name": "Business",
+            "c4_type": "Component",
+            "description": "Business entity",
+            "technology": "Domain Model",
+            "path": "bw-types/src/lib.rs"
+          },
+          {
+            "id": "review",
+            "name": "Review",
+            "c4_type": "Component",
+            "description": "Review entity",
+            "technology": "Domain Model",
+            "path": "bw-types/src/lib.rs"
+          },
+          {
+            "id": "user",
+            "name": "User",
+            "c4_type": "Component",
+            "description": "User entity",
+            "technology": "Domain Model",
+            "path": "bw-types/src/lib.rs"
+          },
+          {
+            "id": "verification",
+            "name": "Verification",
+            "c4_type": "Component",
+            "description": "Verification entity",
+            "technology": "Domain Model",
+            "path": "bw-types/src/lib.rs"
+          },
+          {
+            "id": "message",
+            "name": "Message",
+            "c4_type": "Component",
+            "description": "Message type",
+            "technology": "Event",
+            "path": "bw-types/src/lib.rs"
+          },
+          {
+            "id": "event",
+            "name": "Event",
+            "c4_type": "Component",
+            "description": "Event type",
+            "technology": "Event",
+            "path": "bw-types/src/lib.rs"
+          },
+          {
+            "id": "smtpconfig",
+            "name": "SmtpConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-types/src/email.rs"
+          },
+          {
+            "id": "natsemailpayload",
+            "name": "NatsEmailPayload",
+            "c4_type": "Component",
+            "description": "Data payload type",
+            "technology": "Rust struct",
+            "path": "bw-types/src/email.rs"
+          },
+          {
+            "id": "emailtemplate",
+            "name": "EmailTemplate",
+            "c4_type": "Component",
+            "description": "Email/template type",
+            "technology": "Rust struct",
+            "path": "bw-types/src/email.rs"
+          }
+        ]
+      },
+      "bw_scraper": {
+        "components": [
+          {
+            "id": "useragentstats",
+            "name": "UserAgentStats",
+            "c4_type": "Component",
+            "description": "Statistics data",
+            "technology": "Analytics",
+            "path": "bw-scraper/src/user_agent_rotator.rs"
+          },
+          {
+            "id": "searxngclient",
+            "name": "SearxngClient",
+            "c4_type": "Component",
+            "description": "Client for external service",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/searxng.rs"
+          },
+          {
+            "id": "searxngresponse",
+            "name": "SearxngResponse",
+            "c4_type": "Component",
+            "description": "Response data transfer object",
+            "technology": "API Response",
+            "path": "bw-scraper/src/searxng.rs"
+          },
+          {
+            "id": "searxngresult",
+            "name": "SearxngResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/searxng.rs"
+          },
+          {
+            "id": "ratelimiter",
+            "name": "RateLimiter",
+            "c4_type": "Component",
+            "description": "Rate limiting logic",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/rate_limiter.rs"
+          },
+          {
+            "id": "ratelimiterconfig",
+            "name": "RateLimiterConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/rate_limiter.rs"
+          },
+          {
+            "id": "scrapedbusinessrecord",
+            "name": "ScrapedBusinessRecord",
+            "c4_type": "Component",
+            "description": "Data record",
+            "technology": "Data Access",
+            "path": "bw-scraper/src/models.rs"
+          },
+          {
+            "id": "enrichresult",
+            "name": "EnrichResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/enrichment.rs"
+          },
+          {
+            "id": "businessrow",
+            "name": "BusinessRow",
+            "c4_type": "Component",
+            "description": "Database row type",
+            "technology": "Data Access",
+            "path": "bw-scraper/src/enrichment.rs"
+          },
+          {
+            "id": "socialurl",
+            "name": "SocialUrl",
+            "c4_type": "Component",
+            "description": "URL type",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/enrichment.rs"
+          },
+          {
+            "id": "appstate",
+            "name": "AppState",
+            "c4_type": "Component",
+            "description": "Application state container",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/api.rs"
+          },
+          {
+            "id": "businessstate",
+            "name": "BusinessState",
+            "c4_type": "Component",
+            "description": "Application state container",
+            "technology": "Rust struct",
+            "path": "bw-scraper/src/api.rs"
+          },
+          {
+            "id": "scraperequest",
+            "name": "ScrapeRequest",
+            "c4_type": "Component",
+            "description": "Request data transfer object",
+            "technology": "API Request",
+            "path": "bw-scraper/src/api.rs"
+          },
+          {
+            "id": "enrichrequest",
+            "name": "EnrichRequest",
+            "c4_type": "Component",
+            "description": "Request data transfer object",
+            "technology": "API Request",
+            "path": "bw-scraper/src/api.rs"
+          },
+          {
+            "id": "locationsrequest",
+            "name": "LocationsRequest",
+            "c4_type": "Component",
+            "description": "Request data transfer object",
+            "technology": "API Request",
+            "path": "bw-scraper/src/api.rs"
+          },
+          {
+            "id": "rowsnapshot",
+            "name": "RowSnapshot",
+            "c4_type": "Component",
+            "description": "Data snapshot",
+            "technology": "Analytics",
+            "path": "bw-scraper/src/api.rs"
+          }
+        ]
+      },
+      "bw-ingestion": {
+        "components": [
+          {
+            "id": "connectivityresult",
+            "name": "ConnectivityResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/service_connectivity.rs"
+          },
+          {
+            "id": "serviceconfig",
+            "name": "ServiceConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/service_connectivity.rs"
+          },
+          {
+            "id": "scraperratelimiter",
+            "name": "ScraperRateLimiter",
+            "c4_type": "Component",
+            "description": "Rate limiting logic",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/scraper_rate_limiter.rs"
+          },
+          {
+            "id": "businessinput",
+            "name": "BusinessInput",
+            "c4_type": "Component",
+            "description": "GraphQL input type",
+            "technology": "GraphQL input",
+            "path": "bw-ingestion/src/lib.rs"
+          },
+          {
+            "id": "ingestionresult",
+            "name": "IngestionResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/lib.rs"
+          },
+          {
+            "id": "imageworkerconfig",
+            "name": "ImageWorkerConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/image_worker.rs"
+          },
+          {
+            "id": "imagepublisherconfig",
+            "name": "ImagePublisherConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/image_publisher.rs"
+          },
+          {
+            "id": "imageprocessor",
+            "name": "ImageProcessor",
+            "c4_type": "Component",
+            "description": "Processes data and events",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/image_processor.rs"
+          },
+          {
+            "id": "imageprocessrequest",
+            "name": "ImageProcessRequest",
+            "c4_type": "Component",
+            "description": "Request data transfer object",
+            "technology": "API Request",
+            "path": "bw-ingestion/src/image_processor.rs"
+          },
+          {
+            "id": "imageprocessresult",
+            "name": "ImageProcessResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/image_processor.rs"
+          },
+          {
+            "id": "emailservice",
+            "name": "EmailService",
+            "c4_type": "Component",
+            "description": "Implements business logic and workflow",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_service.rs"
+          },
+          {
+            "id": "bounce",
+            "name": "bounce",
+            "c4_type": "Component",
+            "description": "Handles a specific operation",
+            "technology": "Rust handler function",
+            "path": "bw-ingestion/src/email_service.rs"
+          },
+          {
+            "id": "templatestore",
+            "name": "TemplateStore",
+            "c4_type": "Component",
+            "description": "Stores and retrieves data",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_service.rs"
+          },
+          {
+            "id": "smtpconfig",
+            "name": "SmtpConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_service.rs"
+          },
+          {
+            "id": "natsemailpayload",
+            "name": "NatsEmailPayload",
+            "c4_type": "Component",
+            "description": "Data payload type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_service.rs"
+          },
+          {
+            "id": "emailtemplate",
+            "name": "EmailTemplate",
+            "c4_type": "Component",
+            "description": "Email/template type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_service.rs"
+          },
+          {
+            "id": "emailpublisherconfig",
+            "name": "EmailPublisherConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_publisher.rs"
+          },
+          {
+            "id": "emailconsumer",
+            "name": "EmailConsumer",
+            "c4_type": "Component",
+            "description": "Message consumer implementation",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_consumer.rs"
+          },
+          {
+            "id": "emailconsumerconfig",
+            "name": "EmailConsumerConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/email_consumer.rs"
+          },
+          {
+            "id": "emailretryrecord",
+            "name": "EmailRetryRecord",
+            "c4_type": "Component",
+            "description": "Data record",
+            "technology": "Data Access",
+            "path": "bw-ingestion/src/email_consumer.rs"
+          },
+          {
+            "id": "chatconsumer",
+            "name": "ChatConsumer",
+            "c4_type": "Component",
+            "description": "Message consumer implementation",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/chat_consumer.rs"
+          },
+          {
+            "id": "chatconsumerconfig",
+            "name": "ChatConsumerConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/chat_consumer.rs"
+          },
+          {
+            "id": "chatmessagepayload",
+            "name": "ChatMessagePayload",
+            "c4_type": "Component",
+            "description": "Data payload type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/chat_consumer.rs"
+          },
+          {
+            "id": "cacheservice",
+            "name": "CacheService",
+            "c4_type": "Component",
+            "description": "Implements business logic and workflow",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/cache_service.rs"
+          },
+          {
+            "id": "cacheserviceconfig",
+            "name": "CacheServiceConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/cache_service.rs"
+          },
+          {
+            "id": "cacheentry",
+            "name": "CacheEntry",
+            "c4_type": "Component",
+            "description": "Log/audit entry",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/cache_service.rs"
+          },
+          {
+            "id": "rawcacheentry",
+            "name": "RawCacheEntry",
+            "c4_type": "Component",
+            "description": "Log/audit entry",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/cache_service.rs"
+          },
+          {
+            "id": "cacheinvalidatorconfig",
+            "name": "CacheInvalidatorConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/cache_invalidator.rs"
+          },
+          {
+            "id": "cacheinvalidatepayload",
+            "name": "CacheInvalidatePayload",
+            "c4_type": "Component",
+            "description": "Data payload type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/cache_invalidator.rs"
+          },
+          {
+            "id": "chatpersistenceservice",
+            "name": "ChatPersistenceService",
+            "c4_type": "Component",
+            "description": "Implements business logic and workflow",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/background_service.rs"
+          },
+          {
+            "id": "validationresult",
+            "name": "ValidationResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/etl/validation.rs"
+          },
+          {
+            "id": "transformationresult",
+            "name": "TransformationResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/etl/pipeline.rs"
+          },
+          {
+            "id": "etlpipelineconfig",
+            "name": "EtlPipelineConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-ingestion/src/etl/pipeline.rs"
+          }
+        ]
+      },
+      "bw-api": {
+        "components": [
+          {
+            "id": "createbusinessinput",
+            "name": "CreateBusinessInput",
+            "c4_type": "Component",
+            "description": "GraphQL input type",
+            "technology": "GraphQL input",
+            "path": "bw-api/src/schema.rs"
+          },
+          {
+            "id": "updatebusinessinput",
+            "name": "UpdateBusinessInput",
+            "c4_type": "Component",
+            "description": "GraphQL input type",
+            "technology": "GraphQL input",
+            "path": "bw-api/src/schema.rs"
+          },
+          {
+            "id": "submitreviewinput",
+            "name": "SubmitReviewInput",
+            "c4_type": "Component",
+            "description": "GraphQL input type",
+            "technology": "GraphQL input",
+            "path": "bw-api/src/schema.rs"
+          },
+          {
+            "id": "deletereviewinput",
+            "name": "DeleteReviewInput",
+            "c4_type": "Component",
+            "description": "GraphQL input type",
+            "technology": "GraphQL input",
+            "path": "bw-api/src/schema.rs"
+          },
+          {
+            "id": "businessconnection",
+            "name": "BusinessConnection",
+            "c4_type": "Component",
+            "description": "GraphQL connection type",
+            "technology": "GraphQL connection",
+            "path": "bw-api/src/schema.rs"
+          },
+          {
+            "id": "apiresponse",
+            "name": "ApiResponse",
+            "c4_type": "Component",
+            "description": "Response data transfer object",
+            "technology": "API Response",
+            "path": "bw-api/src/lib.rs"
+          },
+          {
+            "id": "image-upload",
+            "name": "image_upload",
+            "c4_type": "Component",
+            "description": "Handles a specific operation",
+            "technology": "Rust handler function",
+            "path": "bw-api/src/routes/images.rs"
+          },
+          {
+            "id": "imageuploadrequest",
+            "name": "ImageUploadRequest",
+            "c4_type": "Component",
+            "description": "Request data transfer object",
+            "technology": "API Request",
+            "path": "bw-api/src/routes/images.rs"
+          },
+          {
+            "id": "imageuploadresponse",
+            "name": "ImageUploadResponse",
+            "c4_type": "Component",
+            "description": "Response data transfer object",
+            "technology": "API Response",
+            "path": "bw-api/src/routes/images.rs"
+          },
+          {
+            "id": "imageprocessingpayload",
+            "name": "ImageProcessingPayload",
+            "c4_type": "Component",
+            "description": "Data payload type",
+            "technology": "Rust struct",
+            "path": "bw-api/src/routes/images.rs"
+          },
+          {
+            "id": "extract-user-from-auth",
+            "name": "extract_user_from_auth",
+            "c4_type": "Component",
+            "description": "Authentication handler",
+            "technology": "Rust async function",
+            "path": "bw-api/src/middleware/rate_limiter.rs"
+          },
+          {
+            "id": "ratelimiterstore",
+            "name": "RateLimiterStore",
+            "c4_type": "Component",
+            "description": "Stores and retrieves data",
+            "technology": "Rust struct",
+            "path": "bw-api/src/middleware/rate_limiter.rs"
+          },
+          {
+            "id": "ratelimiterbuilder",
+            "name": "RateLimiterBuilder",
+            "c4_type": "Component",
+            "description": "Builder pattern for constructing objects",
+            "technology": "Rust struct",
+            "path": "bw-api/src/middleware/rate_limiter.rs"
+          },
+          {
+            "id": "ratelimitconfig",
+            "name": "RateLimitConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-api/src/middleware/rate_limiter.rs"
+          },
+          {
+            "id": "authstore",
+            "name": "AuthStore",
+            "c4_type": "Component",
+            "description": "Stores and retrieves data",
+            "technology": "Rust struct",
+            "path": "bw-api/src/middleware/auth.rs"
+          },
+          {
+            "id": "authlayerbuilder",
+            "name": "AuthLayerBuilder",
+            "c4_type": "Component",
+            "description": "Builder pattern for constructing objects",
+            "technology": "Rust struct",
+            "path": "bw-api/src/middleware/auth.rs"
+          },
+          {
+            "id": "authconfig",
+            "name": "AuthConfig",
+            "c4_type": "Component",
+            "description": "Configuration type",
+            "technology": "Rust struct",
+            "path": "bw-api/src/middleware/auth.rs"
+          },
+          {
+            "id": "jwtclaims",
+            "name": "JwtClaims",
+            "c4_type": "Component",
+            "description": "JWT claims type",
+            "technology": "Auth",
+            "path": "bw-api/src/middleware/auth.rs"
+          },
+          {
+            "id": "submitreviewresult",
+            "name": "SubmitReviewResult",
+            "c4_type": "Component",
+            "description": "Result type",
+            "technology": "Rust struct",
+            "path": "bw-api/src/graphql/types.rs"
+          },
+          {
+            "id": "scrapejobstats",
+            "name": "ScrapeJobStats",
+            "c4_type": "Component",
+            "description": "Statistics data",
+            "technology": "Analytics",
+            "path": "bw-api/src/graphql/types.rs"
+          },
+          {
+            "id": "scrapejob",
+            "name": "ScrapeJob",
+            "c4_type": "Component",
+            "description": "Background job",
+            "technology": "Rust struct",
+            "path": "bw-api/src/graphql/types.rs"
+          }
+        ]
+      },
+      "black-owned-frontend": {
+        "components": [
+          {
+            "id": "react-pages",
+            "name": "React Pages",
+            "c4_type": "Component",
+            "description": "App Router UI: directory, business detail, owner, admin, analytics",
+            "technology": "React / Next.js app router",
+            "path": "src/app"
+          },
+          {
+            "id": "rest-api",
+            "name": "REST API Routes",
+            "c4_type": "Component",
+            "description": "Route handlers under src/app/api: directory, businesses, auth, admin, analytics",
+            "technology": "Next.js route handlers",
+            "path": "src/app/api"
+          },
+          {
+            "id": "graphql-endpoint",
+            "name": "GraphQL Endpoint",
+            "c4_type": "Component",
+            "description": "Hand-rolled regex-parsed GraphQL endpoint over business-schema resolvers",
+            "technology": "graphql / graphql-tools",
+            "path": "src/app/api/graphql"
+          },
+          {
+            "id": "auth-jwt",
+            "name": "JWT Auth",
+            "c4_type": "Component",
+            "description": "RS256 JWT auth-service, role-gated createAuthMiddleware, bcrypt password hashing",
+            "technology": "jsonwebtoken / bcryptjs",
+            "path": "src/lib/auth"
+          },
+          {
+            "id": "data-layer",
+            "name": "Data Layer",
+            "c4_type": "Component",
+            "description": "Postgres repositories (user, business, scraped-business, chat, ...) with lazy getPool() singleton and Valkey query cache",
+            "technology": "pg / valkey",
+            "path": "src/lib/db"
+          },
+          {
+            "id": "chat-service",
+            "name": "Chat Service",
+            "c4_type": "Component",
+            "description": "NATS WebSocket chat: browser client plus server-side publish/subscribe helpers",
+            "technology": "nats.ws",
+            "path": "src/lib/chat"
+          },
+          {
+            "id": "object-storage",
+            "name": "Object Storage",
+            "c4_type": "Component",
+            "description": "MinIO presigned URLs for business logo and image uploads",
+            "technology": "minio SDK",
+            "path": "src/lib/minio"
+          }
+        ]
+      }
+    }
+  },
+  "c3_5_types": {
+    "containers": {
+      "bw-ingestion": {
+        "types": [
+          {
+            "id": "smtpconfig",
+            "name": "Smtpconfig",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "natsemailpayload",
+            "name": "Natsemailpayload",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "emailtemplate",
+            "name": "Emailtemplate",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "imagepublisherconfig",
+            "name": "Imagepublisherconfig",
+            "type_kind": "function",
+            "rust_equivalent": "function",
+            "description": "Function",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "imageprocessrequest",
+            "name": "Imageprocessrequest",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "emailpublisherconfig",
+            "name": "Emailpublisherconfig",
+            "type_kind": "function",
+            "rust_equivalent": "function",
+            "description": "Function",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "emailconsumer",
+            "name": "Emailconsumer",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "emailservice",
+            "name": "Emailservice",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "emailconsumerconfig",
+            "name": "Emailconsumerconfig",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "emailretryrecord",
+            "name": "Emailretryrecord",
+            "type_kind": "function",
+            "rust_equivalent": "function",
+            "description": "Function",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "cacheservice",
+            "name": "Cacheservice",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "serviceconfig",
+            "name": "Serviceconfig",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "cacheserviceconfig",
+            "name": "Cacheserviceconfig",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "cacheentry",
+            "name": "Cacheentry",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "rawcacheentry",
+            "name": "Rawcacheentry",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "chatpersistenceservice",
+            "name": "Chatpersistenceservice",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "chatconsumer",
+            "name": "Chatconsumer",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          }
+        ]
+      },
+      "bw-types": {
+        "types": [
+          {
+            "id": "message",
+            "name": "Message",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          }
+        ]
+      },
+      "bw-scraper": {
+        "types": [
+          {
+            "id": "enrichresult",
+            "name": "Enrichresult",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "searxngresult",
+            "name": "Searxngresult",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "businessrow",
+            "name": "Businessrow",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "socialurl",
+            "name": "Socialurl",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "ratelimiter",
+            "name": "Ratelimiter",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "ratelimiterconfig",
+            "name": "Ratelimiterconfig",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "appstate",
+            "name": "Appstate",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "searxngclient",
+            "name": "Searxngclient",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "businessstate",
+            "name": "Businessstate",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "scraperequest",
+            "name": "Scraperequest",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "enrichrequest",
+            "name": "Enrichrequest",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "locationsrequest",
+            "name": "Locationsrequest",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "rowsnapshot",
+            "name": "Rowsnapshot",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          }
+        ]
+      },
+      "bw-api": {
+        "types": [
+          {
+            "id": "image-upload",
+            "name": "Image_Upload",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "apiresponse",
+            "name": "Apiresponse",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "imageuploadrequest",
+            "name": "Imageuploadrequest",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "imageuploadresponse",
+            "name": "Imageuploadresponse",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "imageprocessingpayload",
+            "name": "Imageprocessingpayload",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "submitreviewresult",
+            "name": "Submitreviewresult",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "businessconnection",
+            "name": "Businessconnection",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Data type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "scrapejobstats",
+            "name": "Scrapejobstats",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          },
+          {
+            "id": "scrapejob",
+            "name": "Scrapejob",
+            "type_kind": "struct",
+            "rust_equivalent": "struct",
+            "description": "Type",
+            "source_kind": "Rust relationship"
+          }
+        ]
+      }
+    }
+  },
+  "relationships": {
+    "c1": [
+      {
+        "source": "business-owner",
+        "target": "bo-survey",
+        "label": "Uses",
+        "technology": ""
+      },
+      {
+        "source": "admin",
+        "target": "bo-survey",
+        "label": "Uses",
+        "technology": ""
+      },
+      {
+        "source": "visitor",
+        "target": "bo-survey",
+        "label": "Uses",
+        "technology": ""
+      }
+    ],
+    "c2": [
+      {
+        "source": "black-owned-frontend",
+        "target": "postgres",
+        "label": "Reads/Writes",
+        "technology": "SQL (pg)"
+      },
+      {
+        "source": "black-owned-frontend",
+        "target": "valkey",
+        "label": "Caches",
+        "technology": "Valkey (ioredis)"
+      },
+      {
+        "source": "black-owned-frontend",
+        "target": "nats",
+        "label": "Publishes/Subscribes",
+        "technology": "NATS WebSocket"
+      },
+      {
+        "source": "black-owned-frontend",
+        "target": "minio",
+        "label": "Stores",
+        "technology": "S3 API"
+      },
+      {
+        "source": "bw-scraper",
+        "target": "postgres",
+        "label": "Reads/Writes",
+        "technology": "sqlx"
+      },
+      {
+        "source": "bw-scraper",
+        "target": "clickhouse",
+        "label": "Writes",
+        "technology": "clickhouse-rs"
+      },
+      {
+        "source": "bw-scraper",
+        "target": "valkey",
+        "label": "Caches",
+        "technology": "redis"
+      },
+      {
+        "source": "bw-scraper",
+        "target": "nats",
+        "label": "Publishes",
+        "technology": "async-nats"
+      },
+      {
+        "source": "bw-ingestion",
+        "target": "nats",
+        "label": "Consumes/Publishes",
+        "technology": "async-nats"
+      },
+      {
+        "source": "bw-ingestion",
+        "target": "clickhouse",
+        "label": "Writes",
+        "technology": "clickhouse-rs"
+      },
+      {
+        "source": "bw-ingestion",
+        "target": "valkey",
+        "label": "Caches/Invalidates",
+        "technology": "redis"
+      },
+      {
+        "source": "bw-ingestion",
+        "target": "minio",
+        "label": "Stores images",
+        "technology": "minio-rsc"
+      },
+      {
+        "source": "bw-ingestion",
+        "target": "bw-types",
+        "label": "Depends on",
+        "technology": "Cargo path"
+      },
+      {
+        "source": "bw-scraper",
+        "target": "bw-types",
+        "label": "Depends on",
+        "technology": "Cargo path"
+      },
+      {
+        "source": "bw-api",
+        "target": "bw-types",
+        "label": "Depends on",
+        "technology": "Cargo path"
+      },
+      {
+        "source": "bw-api",
+        "target": "postgres",
+        "label": "Reads/Writes (planned)",
+        "technology": "sqlx"
+      }
+    ],
+    "c3": [
+      {
+        "source": "smtpconfig",
+        "target": "message",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "natsemailpayload",
+        "target": "message",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailtemplate",
+        "target": "message",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "enrichresult",
+        "target": "searxngresult",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "businessrow",
+        "target": "searxngresult",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "socialurl",
+        "target": "searxngresult",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "enrichresult",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "businessrow",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "socialurl",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "enrichresult",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "businessrow",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "socialurl",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "appstate",
+        "target": "searxngclient",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "businessstate",
+        "target": "searxngclient",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "scraperequest",
+        "target": "searxngclient",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "enrichrequest",
+        "target": "searxngclient",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "locationsrequest",
+        "target": "searxngclient",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "rowsnapshot",
+        "target": "searxngclient",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "appstate",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "businessstate",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "scraperequest",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "enrichrequest",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "locationsrequest",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "rowsnapshot",
+        "target": "ratelimiter",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "appstate",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "businessstate",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "scraperequest",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "enrichrequest",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "locationsrequest",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "rowsnapshot",
+        "target": "ratelimiterconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "imagepublisherconfig",
+        "target": "imageprocessrequest",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailpublisherconfig",
+        "target": "natsemailpayload",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailconsumer",
+        "target": "emailservice",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailconsumerconfig",
+        "target": "emailservice",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailretryrecord",
+        "target": "emailservice",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailconsumer",
+        "target": "smtpconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailconsumerconfig",
+        "target": "smtpconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailretryrecord",
+        "target": "smtpconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailconsumer",
+        "target": "natsemailpayload",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailconsumerconfig",
+        "target": "natsemailpayload",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "emailretryrecord",
+        "target": "natsemailpayload",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "cacheservice",
+        "target": "serviceconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "cacheserviceconfig",
+        "target": "serviceconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "cacheentry",
+        "target": "serviceconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "rawcacheentry",
+        "target": "serviceconfig",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "chatpersistenceservice",
+        "target": "chatconsumer",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "image-upload",
+        "target": "apiresponse",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "imageuploadrequest",
+        "target": "apiresponse",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "imageuploadresponse",
+        "target": "apiresponse",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "imageprocessingpayload",
+        "target": "apiresponse",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "submitreviewresult",
+        "target": "businessconnection",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "scrapejobstats",
+        "target": "businessconnection",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "scrapejob",
+        "target": "businessconnection",
+        "label": "Calls",
+        "technology": "type usage"
+      },
+      {
+        "source": "react-pages",
+        "target": "rest-api",
+        "label": "Fetches",
+        "technology": "HTTP / JSON"
+      },
+      {
+        "source": "react-pages",
+        "target": "chat-service",
+        "label": "Streams via",
+        "technology": "NATS WebSocket"
+      },
+      {
+        "source": "rest-api",
+        "target": "auth-jwt",
+        "label": "Authenticates via",
+        "technology": "JWT"
+      },
+      {
+        "source": "rest-api",
+        "target": "data-layer",
+        "label": "Persists via",
+        "technology": "PostgreSQL / Valkey"
+      },
+      {
+        "source": "rest-api",
+        "target": "object-storage",
+        "label": "Stores via",
+        "technology": "S3 API (MinIO)"
+      },
+      {
+        "source": "rest-api",
+        "target": "graphql-endpoint",
+        "label": "Hosts",
+        "technology": "route"
+      },
+      {
+        "source": "graphql-endpoint",
+        "target": "data-layer",
+        "label": "Queries",
+        "technology": "PostgreSQL"
+      }
+    ]
+  },
+  "type_relationships": [
+    {
+      "source": "smtpconfig",
+      "target": "message",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "natsemailpayload",
+      "target": "message",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailtemplate",
+      "target": "message",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "enrichresult",
+      "target": "searxngresult",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "businessrow",
+      "target": "searxngresult",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "socialurl",
+      "target": "searxngresult",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "enrichresult",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "businessrow",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "socialurl",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "enrichresult",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "businessrow",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "socialurl",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "appstate",
+      "target": "searxngclient",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "businessstate",
+      "target": "searxngclient",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "scraperequest",
+      "target": "searxngclient",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "enrichrequest",
+      "target": "searxngclient",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "locationsrequest",
+      "target": "searxngclient",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "rowsnapshot",
+      "target": "searxngclient",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "appstate",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "businessstate",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "scraperequest",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "enrichrequest",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "locationsrequest",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "rowsnapshot",
+      "target": "ratelimiter",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "appstate",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "businessstate",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "scraperequest",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "enrichrequest",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "locationsrequest",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "rowsnapshot",
+      "target": "ratelimiterconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "imagepublisherconfig",
+      "target": "imageprocessrequest",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailpublisherconfig",
+      "target": "natsemailpayload",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailconsumer",
+      "target": "emailservice",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailconsumerconfig",
+      "target": "emailservice",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailretryrecord",
+      "target": "emailservice",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailconsumer",
+      "target": "smtpconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailconsumerconfig",
+      "target": "smtpconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailretryrecord",
+      "target": "smtpconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailconsumer",
+      "target": "natsemailpayload",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailconsumerconfig",
+      "target": "natsemailpayload",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "emailretryrecord",
+      "target": "natsemailpayload",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "cacheservice",
+      "target": "serviceconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "cacheserviceconfig",
+      "target": "serviceconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "cacheentry",
+      "target": "serviceconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "rawcacheentry",
+      "target": "serviceconfig",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "chatpersistenceservice",
+      "target": "chatconsumer",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "image-upload",
+      "target": "apiresponse",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "imageuploadrequest",
+      "target": "apiresponse",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "imageuploadresponse",
+      "target": "apiresponse",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "imageprocessingpayload",
+      "target": "apiresponse",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "submitreviewresult",
+      "target": "businessconnection",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "scrapejobstats",
+      "target": "businessconnection",
+      "label": "Calls",
+      "technology": "type usage"
+    },
+    {
+      "source": "scrapejob",
+      "target": "businessconnection",
+      "label": "Calls",
+      "technology": "type usage"
+    }
+  ]
+}

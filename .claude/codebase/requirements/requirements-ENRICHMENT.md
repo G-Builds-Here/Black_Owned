@@ -15,10 +15,10 @@ timestamp: 2026-08-27T05:44:21Z
 **PRD Hash:** N/A
 **PRD Version:** N/A
 **Architect Story Map:** STORY-001 to LOC-0077, STORY-002 to LOC-0078, STORY-003 to LOC-0079, STORY-004 to LOC-0080, STORY-005 to LOC-0081, STORY-006 to LOC-0082
-**Blueprint Path:** C:/Users/Merlin/Documents/repos/Black_Owned/aidlc-docs/inception/planning/ENRICHMENT/Implementation-Blueprint.md
-**Delta HTML:** C:/Users/Merlin/Documents/repos/Black_Owned/aidlc-docs/inception/planning/ENRICHMENT/c4-delta.html
+**Blueprint Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/codebase/planning/ENRICHMENT/Implementation-Blueprint.md
+**Delta HTML:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/codebase/planning/ENRICHMENT/c4-delta.html
 **Local tickets:** LOC-0076 epic, LOC-0077 through LOC-0082 stories
-**Delta Spec:** C:/Users/Merlin/Documents/repos/Black_Owned/aidlc-docs/inception/planning/ENRICHMENT/delta-spec.json
+**Delta Spec:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/codebase/planning/ENRICHMENT/delta-spec.json
 **Epic Key:** LOC-0076
 **Target directories:** bw-scraper/src, src/app/api/admin, src/components/admin, e2e
 **Constraints:** ['Photos and menus are external URLs only - no file storage', 'No paid API keys; Google data via share-link JSON only', 'Fill-empty rule: enrichment must not overwrite existing non-null values', 'Enrichment must be idempotent and rerunnable', 'Do not wire enrichment into the dead scrape_jobs queue; execution home is bw-scraper POST /enrich']
