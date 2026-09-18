@@ -1,12 +1,12 @@
 {
   "artifact": "patterns.md",
-  "generated_at": "2026-09-05T21:55:00Z",
-  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "generated_at": "2026-09-18T16:55:27Z",
+  "commit": "6067387c5757ff143d3b99eaa000af16f4b1d143",
   "repo": "Black_Owned",
   "sections": [
     {
       "heading": "Auth & Security",
-      "content": "- **JWT RS256** (primary) with **HS256 fallback** when no key material is\n  configured. Keys: `config/jwt/` via `JWT_PRIVATE_KEY_PATH` /\n  `JWT_PUBLIC_KEY_PATH`; fallback secret `JWT_SECRET`.\n- Routes guard with `createAuthMiddleware` (admin) or role + row-ownership checks\n  (owner routes). Chat routes require participant membership.\n- Passwords hashed with `bcryptjs`.\n- [NOTE] The GraphQL route performs no auth; `createBusiness` runs under a hardcoded\n  `Bearer token` context \u2014 see `findings.md` / `anti-patterns.md`.\n- [NOTE] bw-scraper exposes mutating endpoints with no auth; only `/enrich` is\n  fronted by an admin-gated proxy.",
+      "content": "- **JWT RS256** (primary) with **HS256 fallback** when no key material is\n  configured. Keys: `config/jwt/` via `JWT_PRIVATE_KEY_PATH` /\n  `JWT_PUBLIC_KEY_PATH`; fallback secret `JWT_SECRET`.\n- Routes guard with `createAuthMiddleware` (admin) or role + row-ownership checks\n  (owner routes). Chat routes require participant membership.\n- Passwords hashed with `bcryptjs` (cost 12).\n- Access tokens: RS256, 15 min, claims `{ userId, email, role }`. Refresh\n  tokens: 7 d, stored **only** as Valkey keys (`refresh:<token>` \u2192 userId) \u2014 no\n  DB table, so a Valkey flush invalidates every session.\n- The `config/jwt/` keypair is committed (dev material); production overrides via\n  `JWT_PRIVATE_KEY`/`JWT_PRIVATE_KEY_PATH` env \u2014 see findings (HIGH).\n- [NOTE] The GraphQL route performs no auth; `createBusiness` runs under a hardcoded\n  `Bearer token` context \u2014 see `findings.md` / `anti-patterns.md`.\n- [NOTE] bw-scraper exposes mutating endpoints with no auth; only `/enrich` is\n  fronted by an admin-gated proxy.",
       "type": "list"
     },
     {
@@ -41,12 +41,12 @@
     },
     {
       "heading": "Configuration",
-      "content": "- Single source of truth: root `.env` (gitignored; tracked template\n  `.env.example`).\n- TS reads `process.env` with per-variable defaults; Rust `config.rs` parses env\n  with `default` attributes (`SEARXNG_URL` defaults to a developer LAN IP).\n- `docker-compose.yml` pins the project name `black_owned` so container names are\n  stable across worktrees.",
+      "content": "- Single source of truth: root `.env` (gitignored; tracked template\n  `.env.example`).\n- TS reads `process.env` with per-variable defaults; Rust `config.rs` parses env\n  with `default` attributes (`SEARXNG_URL` now defaults to empty \u2014 configured or\n  discovery cannot run; the old developer-LAN-IP default is fixed).\n- Env-name drift is a live trap: compose injects `REDIS_URL`/`MINIO_ROOT_*`, the\n  TS app reads `VALKEY_HOST/PORT` and `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`\n  (see findings/anti-patterns).\n- `docker-compose.yml` pins the project name `black_owned` so container names are\n  stable across worktrees.",
       "type": "list"
     },
     {
       "heading": "Serialization",
-      "content": "- TS: native `JSON`; no JSON library (the declared `graphql`/`@graphql-tools/schema`\n  are unused).\n- Rust: `serde` throughout; bw-scraper request types use **snake_case** field names\n  (see the cross-language field drift finding).",
+      "content": "- TS: native `JSON`; no JSON library (the once-declared `graphql`/`@graphql-tools/schema`\n  deps have been removed from `package.json`).\n- Rust: `serde` throughout; bw-scraper request types use **snake_case** field names\n  (see the cross-language field drift finding).",
       "type": "list"
     }
   ],

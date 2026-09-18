@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - migrations/postgresql
   - src/types
@@ -56,8 +56,13 @@ Declared: `User`, `TokenPair`, `AuthResponse`, `Business`, `CategoryFacet`,
 
 ## Rust Shapes
 
-- **bw-types**: `Business`, `Category`, `Review`, email payloads (shared by
+- **bw-types**: `Business`, `Category`, `Review`, `User`, email payloads (shared by
   `bw-api` + `bw-ingestion` only — bw-scraper defines its own models).
+  **Drifted from TS/Postgres — do not use as the user model:** bw-types `User` is
+  `{ id, email, display_name, created_at }` (no `role`, no `status`; Postgres/TS
+  have `role`, `status`, and `name`), `Business.verified: bool` vs DB
+  `verification_status` string, and `Business.category_id: Uuid` vs DB
+  `category_id varchar(100)`.
 - **bw-scraper**: `ScrapeRequest { query, location, max_pages }`,
   `EnrichRequest { business_ids, limit, dry_run }` (snake_case — the TS proxy sends
   camelCase `businessIds` which serde silently drops, see findings),

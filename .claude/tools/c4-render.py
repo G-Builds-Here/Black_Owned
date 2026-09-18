@@ -384,7 +384,7 @@ def _rel_edge_cls(src, tgt, lbl, rel_deltas):
     return ''
 
 
-def render_edges_svg(edges, positions, box_width, box_height, marker_id, stroke_color='#475569', label_bg='#0a1628', label_color='#94a3b8', box_sizes=None, rel_deltas=None):
+def render_edges_svg(edges, positions, box_width, box_height, marker_id, stroke_color='#475569', label_bg='#0a1628', label_color='#94a3b8', box_sizes=None, rel_deltas=None, show_labels=True):
     """
     UNIFIED edge rendering - used by ALL layers (C1, C2, C3, C3.5).
 
@@ -426,10 +426,12 @@ def render_edges_svg(edges, positions, box_width, box_height, marker_id, stroke_
         x1, y1 = _box_edge(sx, sy, src_w, src_h, tx, ty)
         x2, y2 = _box_edge(tx, ty, tgt_w, tgt_h, sx, sy)
 
-        # Quadratic Bezier curve with perpendicular offset (unified for all layers)
+        # Quadratic Bezier curve with perpendicular offset (unified for all layers).
+        # Arc scales with distance and is capped: short gaps get a slight bend,
+        # long edges never bow over titles or neighbouring rows.
         dx, dy = x2 - x1, y2 - y1
         dist = (dx**2 + dy**2) ** 0.5 or 1
-        arc = max(30, dist * 0.35)
+        arc = min(max(6.0, dist * 0.18), 44.0)
 
         # Perpendicular offset for control point
         px, py_perp = -dy / dist, dx / dist
@@ -445,6 +447,15 @@ def render_edges_svg(edges, positions, box_width, box_height, marker_id, stroke_
         lbl_y = int((y1 + 2 * cy_ctrl + y2) / 4) - 4
         lbl_w = len(lbl) * 6 + 10
 
+        # Lift the label above both boxes when it would sit on top of one
+        # (short same-row edges put the curve peak inside the box band).
+        if show_labels:
+            for bx, by, bw_, bh_ in ((sx, sy, src_w, src_h), (tx, ty, tgt_w, tgt_h)):
+                if (lbl_x + lbl_w / 2 > bx - bw_ / 2 and lbl_x - lbl_w / 2 < bx + bw_ / 2
+                        and lbl_y + 3 > by - bh_ / 2 and lbl_y - 10 < by + bh_ / 2):
+                    lbl_y = int(min(sy - src_h / 2, ty - tgt_h / 2)) - 10
+                    break
+
         # Determine stroke style based on technology
         tech = edge.get('technology', '')
         is_sql = 'sql' in tech.lower() or 'data' in tech.lower()
@@ -453,12 +464,16 @@ def render_edges_svg(edges, positions, box_width, box_height, marker_id, stroke_
 
         delta_cls = _rel_edge_cls(src, tgt, lbl, rel_deltas)
 
+        label_svg = ''
+        if show_labels:
+            label_svg = (f'''
+            <rect x="{lbl_x - lbl_w // 2}" y="{lbl_y - 10}" width="{lbl_w}" height="13" fill="{label_bg}" rx="2" opacity="0.92"/>
+            <text x="{lbl_x}" y="{lbl_y}" text-anchor="middle" fill="{label_color}" font-size="8.5" font-family="system-ui">{lbl}</text>''')
+
         svg_parts.append(f'''
         <g class="relationship {delta_cls}" data-from="{src}" data-to="{tgt}" data-label="{lbl}">
             <path d="M {int(x1)},{int(y1)} Q {cx_ctrl},{cy_ctrl} {int(x2)},{int(y2)}"
-                  fill="none" stroke="{final_stroke}" stroke-width="1.5" {dash_attr}marker-end="url(#{marker_id})"/>
-            <rect x="{lbl_x - lbl_w // 2}" y="{lbl_y - 10}" width="{lbl_w}" height="13" fill="{label_bg}" rx="2" opacity="0.92"/>
-            <text x="{lbl_x}" y="{lbl_y}" text-anchor="middle" fill="{label_color}" font-size="8.5" font-family="system-ui">{lbl}</text>
+                  fill="none" stroke="{final_stroke}" stroke-width="1.5" {dash_attr}marker-end="url(#{marker_id})"/>{label_svg}
         </g>''')
 
     return '\n'.join(svg_parts)
@@ -582,8 +597,6 @@ def render_c2_svg(data, deltas=None):
         border_color = '#3b82f6'
         if 'web' in svc.get('technology', '').lower() or 'react' in svc.get('technology', '').lower():
             border_color = '#22d3ee'
-        elif 'api' in svc.get('name', '').lower():
-            border_color = '#f59e0b'
 
         # No textLength/spacingAndGlyphs — it stretches glyphs. Use clip-path instead.
         # max_chars=32: keeps long dotted names (e.g. Procare.Pay.IntegrationService.Cryptography) in 2 tspan lines
@@ -644,7 +657,7 @@ def render_c2_svg(data, deltas=None):
 
     # Render libraries - no hard cap, layout dynamically
     if libraries:
-        svg_parts.append(f'<rect x="{margin_x}" y="{y_lib}" width="{width - 2 * margin_x}" height="{lib_bottom - y_lib}" rx="6" fill="#22c55e06" stroke="#22c55e22" stroke-width="1"/>')
+        svg_parts.append(f'<rect x="{margin_x}" y="{y_lib}" width="{width - 2 * margin_x}" height="{lib_bottom - y_lib}" rx="6" fill="#94a3b806" stroke="#94a3b822" stroke-width="1"/>')
     n_lib = len(libraries)
     lib_cols = max(1, min(n_lib, 6))  # Up to 6 columns for libraries
     lib_width = 130
@@ -704,7 +717,7 @@ def _classify_component(comp):
     if 'middleware' in tech:
         return 'middleware', 'Middleware', '#f97316'
     if 'validator' in tech:
-        return 'validator', 'Validators', '#f59e0b'
+        return 'validator', 'Validators', '#14b8a6'
     if 'handler' in tech or 'consumer' in tech:
         return 'handler', 'Handlers', '#22d3ee'
     if 'service' in tech:
@@ -720,7 +733,7 @@ def _classify_component(comp):
     if 'analytics' in tech:
         return 'analytics', 'Analytics', '#ec4899'
     if 'event' in tech or 'message' in tech:
-        return 'events', 'Events', '#f59e0b'
+        return 'events', 'Events', '#fb7185'
     if 'api request' in tech:
         return 'request', 'Requests', '#06b6d4'
     if 'api response' in tech:
@@ -735,7 +748,7 @@ def _classify_component(comp):
     if 'middleware' in name:
         return 'middleware', 'Middleware', '#f97316'
     if 'validator' in name:
-        return 'validator', 'Validators', '#f59e0b'
+        return 'validator', 'Validators', '#14b8a6'
     if 'repository' in name or 'store' in name or 'row' in name:
         return 'repository', 'Repositories', '#a855f7'
     if 'controller' in name:
@@ -791,7 +804,7 @@ def _classify_component(comp):
     if 'query' in name or 'mutation' in name or 'subscription' in name:
         return 'graphql', 'GraphQL', '#e91e63'
     if 'event' in name or 'message' in name:
-        return 'events', 'Events', '#f59e0b'
+        return 'events', 'Events', '#fb7185'
     if 'request' in name:
         return 'request', 'Requests', '#06b6d4'
     if 'response' in name:
@@ -841,7 +854,7 @@ def _classify_component(comp):
     if 'category' in name:
         return 'other', 'Other', '#64748b'
     if 'notification' in name:
-        return 'events', 'Events', '#f59e0b'
+        return 'events', 'Events', '#fb7185'
     if 'email' in name:
         return 'other', 'Other', '#64748b'
     if 'sender' in name:
@@ -1011,35 +1024,12 @@ def render_c3_svg(data, container_id, deltas=None, rel_deltas=None):
 
     svg_parts.append('<defs><marker id="arrow-c3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>')
 
-    drawn_c3 = set()
-    for edge in c3_edges:
-        src, tgt = edge['source'], edge['target']
-        key = (src, tgt)
-        if key in drawn_c3 or src not in comp_pos or tgt not in comp_pos:
-            continue
-        drawn_c3.add(key)
-        sx, sy = comp_pos[src]
-        tx, ty = comp_pos[tgt]
-        x1, y1 = _box_edge(sx, sy, box_width, base_box_height, tx, ty)
-        x2, y2 = _box_edge(tx, ty, box_width, base_box_height, sx, ty)
-        dx, dy = x2 - x1, y2 - y1
-        dist = (dx**2 + dy**2) ** 0.5 or 1
-        arc = max(30, dist * 0.35)
-        cy_ctrl = int((y1 + y2) / 2 - arc)
-        cx_ctrl = int((x1 + x2) / 2)
-        path_d = f'M {int(x1)},{int(y1)} Q {cx_ctrl},{cy_ctrl} {int(x2)},{int(y2)}'
-
-        # Add delta class to relationship
-        rel_cls = 'relationship'
-        if rel_deltas:
-            rel_key = f'{src}->{tgt}->{edge.get("label", "")}'
-            delta_status = rel_deltas.get(rel_key)
-            if delta_status == 'new':
-                rel_cls += ' delta-new'
-            elif delta_status == 'modified':
-                rel_cls += ' delta-modified'
-
-        svg_parts.append(f'<path d="{path_d}" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arrow-c3)" class="{rel_cls}" data-from="{src}" data-to="{tgt}"/>')
+    # Shared edge renderer — same anchors/arc/marker mechanism as C2, C3.5 and
+    # the delta panel. Labels stay off here (C3 views are dense; hover reveals them).
+    svg_parts.append(render_edges_svg(
+        c3_edges, comp_pos, box_width, base_box_height, 'arrow-c3',
+        rel_deltas=rel_deltas, show_labels=False,
+    ))
 
     svg_parts.append('</svg>')
     return '\n'.join(svg_parts)
@@ -1156,7 +1146,7 @@ def render_c3_5_svg(data, container_id, deltas=None, rel_deltas=None):
     section_y = margin_top
     section_y = _render_type_group(svg_parts, structs, 'Structs/Classes/Records', '#3b82f6', section_y, cols, box_width, base_box_height, box_spacing_x, box_spacing_y, deltas, type_kind_label)
     section_y = _render_type_group(svg_parts, interfaces, 'Interfaces/Traits', '#8b5cf6', section_y, cols, box_width, base_box_height, box_spacing_x, box_spacing_y, deltas, type_kind_label)
-    section_y = _render_type_group(svg_parts, enums, 'Enums', '#f59e0b', section_y, cols, box_width, base_box_height, box_spacing_x, box_spacing_y, deltas, type_kind_label)
+    section_y = _render_type_group(svg_parts, enums, 'Enums', '#94a3b8', section_y, cols, box_width, base_box_height, box_spacing_x, box_spacing_y, deltas, type_kind_label)
     section_y = _render_type_group(svg_parts, functions, 'Functions', '#10b981', section_y, cols, box_width, base_box_height, box_spacing_x, box_spacing_y, deltas, type_kind_label)
 
     # Build position map for all types (used for relationship lines)
@@ -1226,8 +1216,8 @@ def render_delta_svg(data, deltas):
     box_w = 190
     box_h = 54
     cols = 4
-    spc_x = 24
-    spc_y = 16
+    spc_x = 36
+    spc_y = 24
 
     # --- Collect display items ---
     # (section_label, group_label, id, name, subtitle, delta_cls, is_context)
@@ -1311,6 +1301,7 @@ def render_delta_svg(data, deltas):
 
     y_cursor = margin_x + 44
     position_map = {}
+    box_sizes = {}
     ctx_box_w = 150
     ctx_box_h = 44
 
@@ -1319,7 +1310,8 @@ def render_delta_svg(data, deltas):
         # Add extra gap before new sections (not the first one)
         y_start = y + section_gap if add_top_gap else y
         parts.append(f'<text x="{margin_x}" y="{y_start + 16}" fill="#94a3b8" font-size="13" font-weight="600" font-family="system-ui">{title}</text>')
-        y_content = y_start + 32
+        # room between title and first row for lifted edge labels
+        y_content = y_start + 46
 
         # Combine items and context items
         all_items = items + [('', '', cid, name, sub, '', True) for cid, (name, sub) in ctx_items.items()]
@@ -1332,16 +1324,19 @@ def render_delta_svg(data, deltas):
         total_w = cols * box_w + (cols - 1) * spc_x
         start_x = margin_x
 
+        row_h = max(box_h, ctx_box_h)
         for i, (sec, grp, item_id, name, subtitle, dcls, is_ctx) in enumerate(all_items):
             col = i % ncols
             row = i // ncols
             bw = ctx_box_w if is_ctx else box_w
             bh = ctx_box_h if is_ctx else box_h
             x = start_x + col * (box_w + spc_x)
+            y_row = y_content + row * (row_h + spc_y)
             # center context items within the box_w grid
             cx = x + bw // 2
-            cy = y_content + row * (bh + spc_y) + bh // 2
+            cy = y_row + bh // 2
             position_map[item_id] = (cx, cy)
+            box_sizes[item_id] = (bw, bh)
 
             if is_ctx:
                 ctx_fill = {'database': '#a855f706', 'queue': '#22d3ee06', 'container': '#3b82f606',
@@ -1351,7 +1346,7 @@ def render_delta_svg(data, deltas):
                               'external': '#64748b', 'person': '#eab308', 'component': '#64748b',
                               'type': '#64748b'}.get(ctx_type_map.get(item_id, ''), '#475569')
                 ctx_type = ctx_type_map.get(item_id, 'container')
-                cy_off = y_content + row * (bh + spc_y)
+                cy_off = y_row
                 parts.append(f'<g class="element context" data-id="{item_id}" data-type="Container" data-container-type="{ctx_type}" style="cursor: pointer; opacity: 0.65;">')
                 cx_center = x + bw // 2
                 if ctx_type == 'database':
@@ -1375,16 +1370,16 @@ def render_delta_svg(data, deltas):
                 parts.append('</g>')
             else:
                 parts.append(f'<g class="element component {dcls}" data-id="{item_id}" data-type="Component" data-tech="{subtitle}" style="cursor: pointer;">')
-                parts.append(f'<rect x="{x}" y="{y_content + row * (bh + spc_y)}" width="{bw}" height="{bh}" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>')
+                parts.append(f'<rect x="{x}" y="{y_row}" width="{bw}" height="{bh}" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>')
                 if dcls:
                     dtag = dcls.replace('delta-', '').upper()
                     bc = '#d946ef' if dtag == 'NEW' else '#fbbf24'
                     parts.append(f'<g class="delta-badge">')
-                    parts.append(f'<rect x="{x + bw - 44}" y="{y_content + row * (bh + spc_y) + 4}" width="40" height="14" rx="3" fill="{bc}22" stroke="{bc}" stroke-width="1"/>')
-                    parts.append(f'<text x="{x + bw - 24}" y="{y_content + row * (bh + spc_y) + 14}" text-anchor="middle" fill="{bc}" font-size="7" font-weight="bold" font-family="system-ui">{dtag}</text>')
+                    parts.append(f'<rect x="{x + bw - 44}" y="{y_row + 4}" width="40" height="14" rx="3" fill="{bc}22" stroke="{bc}" stroke-width="1"/>')
+                    parts.append(f'<text x="{x + bw - 24}" y="{y_row + 14}" text-anchor="middle" fill="{bc}" font-size="7" font-weight="bold" font-family="system-ui">{dtag}</text>')
                     parts.append(f'</g>')
-                parts.append(f'<text x="{x + 8}" y="{y_content + row * (bh + spc_y) + 16}" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">{name[:28]}</text>')
-                parts.append(f'<text x="{x + 8}" y="{y_content + row * (bh + spc_y) + 30}" fill="#64748b" font-size="8" font-family="system-ui">[{subtitle}]</text>')
+                parts.append(f'<text x="{x + 8}" y="{y_row + 16}" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">{name[:28]}</text>')
+                parts.append(f'<text x="{x + 8}" y="{y_row + 30}" fill="#64748b" font-size="8" font-family="system-ui">[{subtitle}]</text>')
                 parts.append('</g>')
 
         rows = (n + ncols - 1) // ncols
@@ -1426,9 +1421,11 @@ def render_delta_svg(data, deltas):
             if src in position_map and tgt in position_map:
                 delta_edges.append({'source': src, 'target': tgt, 'label': lbl, 'technology': '', '_delta': status})
 
+    # Presentation identical to normal C4 views: same stroke, labels, markers,
+    # hidden-until-click behaviour. Delta-ness is carried by the element badges.
     edge_svg = render_edges_svg(
         delta_edges, position_map, box_w, box_h, 'arrow-delta',
-        stroke_color='#d946ef', label_bg='#1e293b', label_color='#d946ef',
+        box_sizes=box_sizes, rel_deltas=rel_deltas,
     )
 
     # Build viewBox with 20px padding
@@ -1436,17 +1433,22 @@ def render_delta_svg(data, deltas):
 <style>
     @keyframes delta-pulse { 0%,100% { filter: drop-shadow(0 0 3px currentColor); } 50% { filter: drop-shadow(0 0 8px currentColor); } }
     .delta-badge rect { animation: delta-pulse 1.5s ease-in-out infinite; }
-    .delta-new rect { stroke: #d946ef !important; stroke-width: 3 !important; fill: #d946ef44 !important; }
-    .delta-modified rect { stroke: #fbbf24 !important; stroke-width: 3 !important; fill: #fbbf2444 !important; }
-    .delta-removed rect { stroke: #ef4444 !important; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
-    .relationship.delta-new, .relationship.delta-modified { pointer-events: auto; }
-    .relationship.delta-new path, .relationship.delta-modified path { stroke: #d946ef !important; }
+    /* No !important here on stroke: click-highlight rules (hl-feeder /
+       hl-consumer / hl-selected, !important, in the main stylesheet) must win
+       when a delta box is also a feeds/consumes relation of the selection. */
+    .element.delta-new rect, .element.delta-new ellipse { stroke: #d946ef; stroke-width: 3; fill: #d946ef44; }
+    .delta-new.type-element rect { stroke: #d946ef; stroke-width: 3; fill: #d946ef66; }
+    .element.delta-modified rect, .element.delta-modified ellipse { stroke: #fbbf24; stroke-width: 3; fill: #fbbf2444; }
+    .type-element.delta-modified rect { stroke: #fbbf24; stroke-width: 3; fill: #fbbf2444; }
+    .element.delta-removed rect, .element.delta-removed ellipse { stroke: #ef4444; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
     .context rect { filter: opacity(0.7); }
+    /* Delta styling targets element boxes only — relationship arrows render
+       exactly as in the normal C4 views (same colour, size, hidden-until-click). */
 </style>'''
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {total_h}" width="100%" style="background: transparent;">
 <defs>
     <marker id="arrow-delta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#d946ef"/>
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
     </marker>
     {delta_style}
 </defs>
@@ -1463,14 +1465,20 @@ def style_block():
     return '''
     @keyframes delta-pulse { 0%,100% { filter: drop-shadow(0 0 3px currentColor); } 50% { filter: drop-shadow(0 0 8px currentColor); } }
     .delta-badge rect { animation: delta-pulse 1.5s ease-in-out infinite; }
-    .delta-new rect, .delta-new ellipse, .delta-new path { stroke: #d946ef !important; stroke-width: 3 !important; }
-    .delta-new rect { fill: #d946ef44 !important; }
-    .delta-new.type-element rect { fill: #d946ef66 !important; }
-    .delta-modified rect, .delta-modified ellipse, .delta-modified path { stroke: #fbbf24 !important; stroke-width: 3 !important; }
-    .delta-modified rect { fill: #fbbf2444 !important; }
-    .delta-removed rect, .delta-removed ellipse, .delta-removed path { stroke: #ef4444 !important; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
-    .relationship.delta-new, .relationship.delta-modified { pointer-events: auto; }
-    .relationship.delta-new path, .relationship.delta-modified path { stroke: #d946ef !important; }
+    /* Delta styling targets element boxes only — relationship arrows render
+       exactly as in the no-delta views (same colour, size, hidden-until-click). */
+    /* stroke/stroke-width WITHOUT !important: these rules are emitted after
+       the click-highlight rules (.hl-selected/.hl-feeder/.hl-consumer) in this
+       sheet, and !important here would outrank the click colors by order.
+       Click-highlight must win — delta-ness shows when idle, relation color on click. */
+    .element.delta-new rect, .element.delta-new ellipse, .element.delta-new path { stroke: #d946ef; stroke-width: 3; }
+    .element.delta-new rect { fill: #d946ef44 !important; }
+    .delta-new.type-element rect { stroke: #d946ef; stroke-width: 3; fill: #d946ef66 !important; }
+    .element.delta-modified rect, .element.delta-modified ellipse, .element.delta-modified path { stroke: #fbbf24; stroke-width: 3; }
+    .element.delta-modified rect { fill: #fbbf2444 !important; }
+    .delta-modified.type-element rect { stroke: #fbbf24; stroke-width: 3; }
+    .element.delta-removed rect, .element.delta-removed ellipse, .element.delta-removed path { stroke: #ef4444; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
+    .delta-removed.type-element rect { stroke: #ef4444; stroke-width: 2.5; opacity: 0.5; }
     .tab-btn.has-delta { color: #d946ef !important; }'''
 
 def generate_html(data, deltas=None, system_name='Architecture'):
@@ -1570,7 +1578,7 @@ body {{ font-family: 'Inter', system-ui, -apple-system, sans-serif; background: 
 .legend-item {{ display: flex; align-items: center; gap: 4px; }}
 .dot {{ width: 8px; height: 8px; border-radius: 50%; }}
 .dot.new {{ background: #d946ef; }}
-.dot.modified {{ background: #f59e0b; }}
+.dot.modified {{ background: #fbbf24; }}
 .dot.removed {{ background: #ef4444; opacity: 0.6; }}
 
 .shape-legend {{ display: flex; gap: 12px; flex-wrap: wrap; }}
@@ -1611,8 +1619,8 @@ body {{ font-family: 'Inter', system-ui, -apple-system, sans-serif; background: 
 .type-element.hl-feeder rect {{ stroke: #22c55e !important; stroke-width: 2.5;
     filter: drop-shadow(0 0 6px #22c55e88); }}
 .element.hl-consumer rect, .element.hl-consumer ellipse,
-.type-element.hl-consumer rect {{ stroke: #f59e0b !important; stroke-width: 2.5;
-    filter: drop-shadow(0 0 6px #f59e0b88); }}
+.type-element.hl-consumer rect {{ stroke: #22c55e !important; stroke-width: 2.5;
+    stroke-dasharray: 6 3; filter: drop-shadow(0 0 6px #22c55e88); }}
 .element.hl-dim, .type-element.hl-dim {{ opacity: 0.2; }}
 .element.highlighted rect, .element.highlighted ellipse,
 .type-element.highlighted rect {{ stroke: #ffffff !important; stroke-width: 2.5; filter: drop-shadow(0 0 8px rgba(255,255,255,0.4)); }}
@@ -1699,7 +1707,7 @@ body {{ font-family: 'Inter', system-ui, -apple-system, sans-serif; background: 
             <span class="shape-item"><span class="shape" style="border-color:#f97316;width:14px;height:10px;"></span> Middleware</span>
             <span class="shape-item"><span class="shape" style="border-color:#22d3ee;width:14px;height:10px;"></span> Handler</span>
             <span class="shape-item"><span class="shape" style="border-color:#10b981;width:14px;height:10px;"></span> Service</span>
-            <span class="shape-item"><span class="shape" style="border-color:#f59e0b;width:14px;height:10px;"></span> Validator</span>
+            <span class="shape-item"><span class="shape" style="border-color:#14b8a6;width:14px;height:10px;"></span> Validator</span>
             <span class="shape-item"><span class="shape" style="border-color:#a855f7;width:14px;height:10px;"></span> Repository</span>
             <span class="shape-item"><span class="shape" style="border-color:#e879f9;width:14px;height:10px;"></span> Mapper</span>
             <span class="shape-item"><span class="shape" style="border-color:#64748b;width:14px;height:10px;"></span> Other</span>
@@ -1708,7 +1716,7 @@ body {{ font-family: 'Inter', system-ui, -apple-system, sans-serif; background: 
             <span class="legend-title">Click:</span>
             <span class="shape-item"><span class="shape" style="border-color:#ffffff;width:14px;height:10px;"></span> Selected</span>
             <span class="shape-item"><span class="shape" style="border-color:#22c55e;width:14px;height:10px;"></span> Feeds into it</span>
-            <span class="shape-item"><span class="shape" style="border-color:#f59e0b;width:14px;height:10px;"></span> Consumes it</span>
+            <span class="shape-item"><span class="shape" style="border-style:dashed;border-color:#22c55e;width:14px;height:10px;"></span> Consumes it</span>
         </div>
         {delta_legend}
     </div>
@@ -2185,16 +2193,21 @@ def handle(v):
 
 TOOL = Tool(
     name="c4-render",
-    version="1.0",
+    version="1.2",
     summary="Render C4 architecture data (from c4-extract) into a single self-contained "
             "interactive HTML file with SVG diagrams, legends, and optional delta "
-            "highlighting against a baseline.",
+            "highlighting against a baseline. One shared edge renderer draws all arrows "
+            "(C2/C3/C3.5/delta): box-edge anchors, distance-scaled capped arcs, labels "
+            "lifted clear of boxes. Color contract: one hue = one meaning — magenta NEW, "
+            "amber MODIFIED, red REMOVED are the only delta hues; click-highlights use "
+            "green (solid = feeds into, dashed = consumes) and white (selected); no hue "
+            "is reused across those systems.",
     flags={
         "--c4-data": {"required": True, "type": "path",
                       "description": "Path to the C4 JSON produced by c4-extract.py (file must exist)."},
         "--baseline": {"required": False, "type": "path",
                        "description": "Optional baseline C4 JSON for delta highlighting "
-                                      "(green=new, yellow=modified, red=removed)."},
+                                      "(magenta=new, amber=modified, red=removed)."},
         "--output": {"required": False, "type": "path",
                      "default": "c4.html",
                      "description": "Output HTML file path (parent directories created as needed)."},
@@ -2208,7 +2221,7 @@ TOOL = Tool(
         "$UB c4-render --c4-data <repo>/.claude/codebase/c4-skeleton.json "
         "--output <repo>/.claude/codebase/c4.html",
         "$UB c4-render --c4-data c4-proposed.json --baseline c4-skeleton.json "
-        "--output <repo>/.claude/codebase/planning/<ticket>/c4-delta.html",
+        "--output <repo>/.claude/planning/<ticket>/c4-delta.html",
     ],
     idempotent="Pure function of its inputs: re-running with the same flags rewrites the same HTML bytes.",
     base_default=BASE_DIR,

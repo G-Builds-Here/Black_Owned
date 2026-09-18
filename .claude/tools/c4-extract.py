@@ -1446,12 +1446,211 @@ def extract_c3_components(repo_root):
     # Add .NET type-to-type relationships from inheritance scans
     # (already populated above during source scan)
 
+    # Next.js / TypeScript apps: routes, pages, lib modules, exports, imports
+    ts_components, ts_types, ts_edges = _extract_nextjs_apps(repo_root)
+    for cid, payload in ts_components.items():
+        bucket = components_by_container.setdefault(cid, {'components': []})
+        existing = {c['id'] for c in bucket['components']}
+        for comp in payload['components']:
+            if comp['id'] not in existing:
+                bucket['components'].append(comp)
+                existing.add(comp['id'])
+    for cid, payload in ts_types.items():
+        bucket = types_by_container.setdefault(cid, {'types': []})
+        existing = {t['id'] for t in bucket['types']}
+        for typ in payload['types']:
+            if typ['id'] not in existing:
+                bucket['types'].append(typ)
+                existing.add(typ['id'])
+    seen_edge_keys = {(e['source'], e['target'], e['label']) for e in c3_edges}
+    for edge in ts_edges:
+        key = (edge['source'], edge['target'], edge['label'])
+        if key not in seen_edge_keys:
+            seen_edge_keys.add(key)
+            c3_edges.append(edge)
+
     return {
         'containers': components_by_container,
         'relationships': c3_edges,
         'types': types_by_container,
         'type_relationships': type_relationships,
     }
+
+
+# =============================================================================
+# NEXT.JS / TYPESCRIPT APP INDEXING (C3 components + C3.5 types + import edges)
+# =============================================================================
+
+TS_FILE_SKIP = ('.spec.', '.test.', '.stories.', '__tests__', '__mocks__', '.d.ts')
+TS_MAX_COMPONENTS = 240
+TS_MAX_TYPES = 400
+TS_MAX_EDGES = 300
+# Per-kind budgets so no one file class (e.g. alphabetical order) starves
+# another out of the global cap.
+TS_KIND_MAX = {'route': 60, 'page': 50, 'lib': 60, 'components': 70}
+
+TS_EXPORT_PATTERNS = [
+    (re.compile(r'export\s+default\s+function\s+(\w+)'), 'default'),
+    (re.compile(r'export\s+(?:async\s+)?function\s+(\w+)'), 'function'),
+    (re.compile(r'export\s+(?:async\s+)?const\s+(\w+)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>'), 'function'),
+    (re.compile(r'export\s+const\s+(\w+)'), 'constant'),
+    (re.compile(r'export\s+class\s+(\w+)'), 'class'),
+    (re.compile(r'export\s+interface\s+(\w+)'), 'interface'),
+    (re.compile(r'export\s+(?:type|enum)\s+(\w+)'), 'type'),
+]
+
+TS_IMPORT_RE = re.compile(r'''(?:from|import)\s*\(?\s*['"]([^'"]+)['"]''')
+
+
+def _ts_indexable(rel_path):
+    lower = rel_path.lower().replace('\\', '/')
+    return not any(p in lower for p in TS_FILE_SKIP)
+
+
+def _ts_module_id(rel_from_src):
+    """Component id for a module path relative to src/, extension/index dropped."""
+    parts = list(Path(rel_from_src).parts)
+    if not parts:
+        return 'src'
+    parts[-1] = Path(parts[-1]).stem
+    if parts[-1] == 'index':
+        parts = parts[:-1]
+    return sanitize_id('-'.join(parts)) if parts else 'src'
+
+
+def _extract_nextjs_apps(repo_root):
+    """Index every Next.js app (package.json with a `next` dependency plus an
+    app/ or src/app/ tree): route handlers, pages, lib modules and UI
+    components become C3 components; their exports become C3.5 types; and
+    intra-app imports become C3 'imports' edges. Keys match the sanitized
+    container ids extract_c2_containers assigns to those containers."""
+    components = {}
+    types = {}
+    edges = []
+
+    for abs_path, rel_path in walk_files(repo_root, ['package.json']):
+        content = read_file(abs_path)
+        if not content:
+            continue
+        try:
+            pkg_data = json.loads(content)
+        except json.JSONDecodeError:
+            continue
+        if 'next' not in pkg_data.get('dependencies', {}):
+            continue
+        pkg_dir = Path(abs_path).parent
+        app_dir = next((d for d in (pkg_dir / 'src' / 'app', pkg_dir / 'app')
+                        if d.is_dir()), None)
+        if app_dir is None:
+            continue
+        src_dir = pkg_dir / 'src' if (pkg_dir / 'src').is_dir() else pkg_dir
+        cid = sanitize_id(pkg_data.get('name', pkg_dir.name))
+
+        entries = []  # (component_id, name, description, technology, file)
+        for ext_glob in ('route.ts', 'route.tsx', 'page.ts', 'page.tsx'):
+            for f in app_dir.rglob(ext_glob):
+                if not _ts_indexable(str(f)):
+                    continue
+                segs = list(Path(os.path.relpath(f, app_dir)).parts)[:-1]
+                route = f.name.startswith('route')
+                path_name = '/' + '/'.join(segs) if segs else '/'
+                if route:
+                    cid_local = sanitize_id('-'.join(segs + ['route']))
+                    desc = ('API route handler for ' + path_name
+                            if segs and segs[0] == 'api' else 'Route handler for ' + path_name)
+                    tech = 'Next.js route handler / TypeScript'
+                else:
+                    cid_local = sanitize_id('-'.join(segs + ['page']))
+                    desc = 'App Router page at ' + path_name
+                    tech = 'Next.js page / React component'
+                entries.append((cid_local, path_name, desc, tech,
+                                'route' if route else 'page', f))
+
+        for sub, desc, tech in (('lib', 'Shared library module', 'TypeScript module'),
+                                ('components', 'React component', 'React component / TypeScript')):
+            base = src_dir / sub
+            if not base.is_dir():
+                continue
+            for f in list(base.rglob('*.ts')) + list(base.rglob('*.tsx')):
+                rel_from_src = os.path.relpath(f, src_dir)
+                if not _ts_indexable(rel_from_src):
+                    continue
+                cid_local = _ts_module_id(rel_from_src)
+                entries.append((cid_local, Path(f).stem, desc, tech, sub, f))
+
+        entries.sort(key=lambda e: (e[4], e[0]))
+        kept, seen_ids, per_kind = [], set(), {}
+        for e in entries:
+            kind = e[4]
+            if e[0] in seen_ids or len(kept) >= TS_MAX_COMPONENTS:
+                continue
+            if per_kind.get(kind, 0) >= TS_KIND_MAX.get(kind, 999):
+                continue
+            seen_ids.add(e[0])
+            per_kind[kind] = per_kind.get(kind, 0) + 1
+            kept.append(e)
+        components[cid] = {'components': [
+            {'id': e[0], 'name': e[1], 'c4_type': 'Component',
+             'description': e[2], 'technology': e[3],
+             'path': os.path.relpath(e[5], repo_root)}
+            for e in kept]}
+
+        type_list, seen_types = [], set()
+        for e in kept:
+            src = read_file(str(e[5]))
+            if not src:
+                continue
+            consumed = set()
+            for pattern, kind in TS_EXPORT_PATTERNS:
+                for m in pattern.finditer(src):
+                    name = m.group(1)
+                    if name in consumed or name.lower().startswith(('default',)):
+                        consumed.add(name)
+                        continue
+                    consumed.add(name)
+                    tid = sanitize_id(name)
+                    if tid in seen_types or len(type_list) >= TS_MAX_TYPES:
+                        continue
+                    seen_types.add(tid)
+                    if kind == 'default':
+                        tkind = 'component' if str(e[5]).endswith('.tsx') else 'function'
+                    elif kind == 'function':
+                        tkind = 'function'
+                    else:
+                        tkind = kind
+                    type_list.append({'id': tid, 'name': name, 'type_kind': tkind,
+                                      'rust_equivalent': tkind,
+                                      'description': 'Exported ' + (
+                                          'component' if tkind == 'component'
+                                          else 'interface' if tkind == 'interface'
+                                          else 'function' if tkind == 'function'
+                                          else 'type'),
+                                      'source_kind': 'TypeScript'})
+        types[cid] = {'types': type_list}
+
+        comp_ids = {e[0] for e in kept}
+        file_edges = []
+        for e in kept:
+            src = read_file(str(e[5]))
+            if not src:
+                continue
+            for m in TS_IMPORT_RE.finditer(src):
+                spec = m.group(1)
+                if spec.startswith('@/'):
+                    target = _ts_module_id(spec[2:].replace('/', os.sep))
+                elif spec.startswith('.'):
+                    rel = os.path.normpath(os.path.join(
+                        os.path.dirname(os.path.relpath(e[5], src_dir)), spec))
+                    target = _ts_module_id(rel)
+                else:
+                    continue
+                if target in comp_ids and target != e[0]:
+                    file_edges.append((e[0], target))
+        uniq = sorted(set(file_edges))[:TS_MAX_EDGES]
+        edges.extend({'source': s, 'target': t, 'label': 'imports',
+                      'technology': 'import'} for s, t in uniq)
+
+    return components, types, edges
 
 
 # =============================================================================
@@ -1808,8 +2007,8 @@ def handle(v):
 
 TOOL = Tool(
     name="c4-extract",
-    version="1.0",
-    summary="Extract C4 architectural data (C1 context, C2 containers, C3 components, C3.5 types, relationships) from a repository.",
+    version="1.1",
+    summary="Extract C4 architectural data (C1 context, C2 containers, C3 components, C3.5 types, relationships) from a repository. Indexes .NET and Rust sources plus Next.js apps (route handlers, pages, lib/UI modules -> C3; exports -> C3.5; intra-app imports -> C3 edges).",
     flags={
         "--repo-root": {"required": True, "type": "path",
                         "description": "Path to the repository root to extract from."},

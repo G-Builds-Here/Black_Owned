@@ -315,17 +315,17 @@ Never replace a `settings.json` wholesale — always merge.
 
 **Key:** pre-scan now includes HTTP endpoint enumeration (all `[HttpGet]`/`[Route]`/`app.MapXxx` attributes). Agent 2 reads the table — it does NOT re-scan for routes.
 
-**C4 Workflow:**
-1. Run `pre-scan --repo-root <repo>` first (mandatory for all subagents)
-2. Run `c4-extract` after pre-scan (produces `c4-skeleton.json`)
-3. Run `c4-render` on the JSON output (produces self-contained HTML with SVG diagrams)
-4. Launch subagents (with pre-scan + C4 skeleton embedded)
+**C4 Workflow — orchestrated internally by `$UB survey-prep` (S2); do not run these steps individually:**
+1. `survey-prep` runs `pre-scan` first (its output feeds all 3 subagents)
+2. then `c4-extract` (produces `c4-skeleton.json`)
+3. then `c4-render` on the JSON output (self-contained HTML with SVG diagrams)
+4. Luke launches subagents (with pre-scan + C4 skeleton embedded)
 5. Subagents enrich C4 skeleton → write final C4 artifacts
 6. Run `c4-navigator` to generate index.md navigation hub
 
 Script results are deterministic and authoritative — merge into artifacts without second-guessing. Do not reference script names in artifact files (see § Artifact Hygiene).
 
-Run `pre-scan --repo-root <repo>` first. Wait for its output. Then run c4-extract and c4-render. Then launch the 3 cluster agents (with pre-scan + C4 skeleton embedded) and the 3 parallel scripts simultaneously. After all artifacts are written, run c4-navigator to generate the index.md navigation hub.
+In S2, `$UB survey-prep --repo-root <repo>` performs the whole scripted sequence in one call — pre-scan and the 3 parallel scripts, then c4-extract, c4-render, and generate-artifact-skeletons — and reports every output path in its JSON summary. Luke then launches the 3 cluster agents (with pre-scan + C4 skeleton embedded). After all artifacts are written, run `c4-navigator` to generate the index.md navigation hub. Individual scripts are called directly only for targeted re-runs.
 
 ---
 
@@ -342,6 +342,9 @@ Each subagent receives: pre-scan output scoped to its cluster + the cluster's st
 - Multi-project: tag every finding with which project it belongs to (from directory/csproj/package.json).
 - Return ONLY the LUKE_CLUSTER_RESULT block. No preamble. No explanation outside the block.
 - Fill every field. Use "none found" if genuinely absent. Never leave a field empty.
+- Write your LUKE_CLUSTER_RESULT block verbatim to `.claude/tmp/clusters/cluster-<N>.md`
+  (N given in your prompt) BEFORE returning — the file survives compaction; your returned
+  text may not. Create the directory if missing; write nothing else.
 ```
 
 ### Agent 1 — Business + Stack
@@ -483,7 +486,7 @@ Return the LUKE_CLUSTER_RESULT block using the template above. Fill every field.
 
 ## Subagent Return Formats
 
-The cluster-specific templates above are the authoritative return formats — embed each verbatim in the relevant agent prompt. For the Luke context query subagent (`agents/luke.md`), the return format is `LUKE_CONTEXT_RESULT` — see that file.
+The cluster-specific templates above are the authoritative return formats — embed each verbatim in the relevant agent prompt. For the Luke context query subagent (`agents/luke-context.md`), the return format is `LUKE_CONTEXT_RESULT` — see that file.
 
 ---
 
@@ -1088,14 +1091,23 @@ C4Component
 - If a root `CLAUDE.md` holds project content, leave it in place and record the conflict with `.claude/CLAUDE.md` in the survey findings doc (Luke augments, never removes).
 - If `.claude/CLAUDE.md` already exists with content, inject the Architecture section only — do not rewrite other sections
 
-### Required CLAUDE.md sections (when generating from scratch)
+### Content policy (when generating from scratch)
 
-1. **Setup** — prerequisites, credentials (exact env var names or SSO command), access to request, verify command
-2. **Commands** — build, test all, test filtered by group, group ordering with WHY
-3. **Environment** — running modes, default behaviour with no env vars
-4. **Adding Tests** — directory pattern, base class, shared helpers, trait, naming, one example
-5. **Gotchas** — non-obvious quirks that will bite a new developer
-6. **Architecture** — direct artifact index (see § Architecture section injection below). Claude reads these files natively — no skill invocation needed for questions about the codebase.
+CLAUDE.md carries repo identity and the Luke-artifact protocol — nothing else. Facts that
+go stale (setup, commands, environment, test patterns, gotchas) live in the survey
+artifacts under `.claude/codebase/` and are refreshed by `/luke`; duplicating them in
+CLAUDE.md guarantees drift. Required sections:
+
+1. **Project identity** — 2-3 sentences: what the repo is, who owns it, where it runs.
+2. **Architecture** — direct artifact index (see § Architecture section injection below). Claude reads these files natively — no skill invocation needed for questions about the codebase.
+3. **AI Context Protocol** — the fallback chain in the injection block below.
+
+The Luke hooks are registered in the repo's tracked `.claude/settings.json` (written and
+merged by `luke-repo-init`, committed with the survey) — hook mechanics are NOT documented
+in CLAUDE.md. When refreshing an existing CLAUDE.md that carries old fact sections
+(Setup/Commands/Environment/…), replace them with a one-line pointer to `.claude/codebase/`
+— show the diff and confirm before writing (RULES: Luke augments, never removes — the
+pointer replacement happens only on the user-confirmed diff).
 
 ### Architecture section injection (when CLAUDE.md exists but lacks it)
 
@@ -1134,7 +1146,7 @@ Before answering codebase questions, writing or editing code, or making architec
 
 1. **Index once per session** — run `ctx_batch_execute` over all `*.md` files in `.claude/codebase/` to load them into the searchable knowledge base
 2. **Search first** — run `ctx_search` with a specific query; returns focused excerpts without reading raw files
-3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
+3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke-context.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
 4. **No artifacts** — if `.claude/codebase/` is empty, offer to run `/luke`
 ```
 

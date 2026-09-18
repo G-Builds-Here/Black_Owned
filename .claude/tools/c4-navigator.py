@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def find_artifacts(directory: Path) -> dict:
-    """Find all artifacts in the codebase/planning directory, incl. ticket subdirs."""
+    """Find all artifacts in the scanned directory, incl. ticket subdirs."""
     artifacts = {
         'c4_html': False,
         'c4_json': False,

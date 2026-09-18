@@ -6,6 +6,18 @@ Run during every Luke survey (S4) and re-survey to keep repo in sync with the gl
 After copy, post-copy patches are applied to fix global-path references in a subset of files —
 see the **Patched after copy** column.
 
+**Capability gating:** integrations are per-repo and orthogonal — a GitHub repo may use Jira,
+and vice versa. Gated assets ship only when the repo profile carries their capability or
+language (see **§ Capability Gating**). The profile is auto-detected, persisted to
+`.claude/repo-profile.json`, and union-merged with manual edits on every run;
+`--capabilities github,jira` overrides the capability set exactly for one run
+(languages stay auto-detected); `--profile-only` refreshes just the profile.
+
+**Drift audit:** `--audit` compares repo `.claude/` against the gated manifest and reports
+three classes — `unknown` (repo-owned files, reported never deleted), `excluded_present`
+(manifest assets excluded by the current profile), `legacy` (retired manifest entries still
+on disk). `--audit --prune` deletes only the excluded and legacy classes.
+
 ---
 
 ## Copied Assets (49 total)
@@ -29,6 +41,7 @@ see the **Patched after copy** column.
 | `tools/luke-copy-assets.py` | `tools/luke-copy-assets.py` | No — copied so `survey-finalize` can call it in-repo |
 | `tools/luke-migrate.py` | `tools/luke-migrate.py` | No |
 | `tools/survey-prep.py` | `tools/survey-prep.py` | No |
+| `tools/survey-validate.py` | `tools/survey-validate.py` | No — S1/S4 gates must run repo-locally |
 | `tools/survey-finalize.py` | `tools/survey-finalize.py` | No |
 | `tools/write-sidecars.py` | `tools/write-sidecars.py` | No |
 | `tools/pre-scan.py` | `tools/pre-scan.py` | No |
@@ -57,14 +70,33 @@ see the **Patched after copy** column.
 | `tools/fetch-bb-comments.py` | `tools/fetch-bb-comments.py` | No |
 | `tools/classify-pr-comments.py` | `tools/classify-pr-comments.py` | No |
 | `tools/post-bb-reply.py` | `tools/post-bb-reply.py` | No |
-| `agents/luke.md` | `agents/luke.md` | Yes — `bash ~/.claude/` → `bash .claude/` |
+| `agents/luke-context.md` | `agents/luke-context.md` | Yes — `bash ~/.claude/` → `bash .claude/` |
 | `skills/luke/SKILL.md` | `skills/luke/SKILL.md` | Yes — global paths, ref filename |
 | `references/luke-survey.md` | `references/luke-reference.md` | No |
-| `references/alfred-reference.md` | `references/alfred-reference.md` | No |
 | `references/claude-rules.md` | `references/claude-rules.md` | No |
 | `skills/handoff-discipline/SKILL.md` | `skills/handoff-discipline/SKILL.md` | Yes — `~/.claude/handoffs/` → `.claude/handoffs/` |
 | `skills/jira-usage/SKILL.md` | `skills/jira-usage/SKILL.md` | No |
 | `skills/pr-management/SKILL.md` | `skills/pr-management/SKILL.md` | No |
+
+---
+
+## Capability Gating
+
+An asset ships when the repo profile carries ANY of its gate names
+(`ships()` matches against capabilities ∪ languages — gates may name an integration or a
+language). Detection probes are independent and orthogonal:
+
+| Gate | Assets | Detection |
+|------|--------|-----------|
+| `jira` | `tools/build-adf-json.py`, `tools/jira-fetch.py`, `tools/jira-write.py`, `tools/jira-attach-file.py`, `tools/post-jira-comment.py`, `skills/jira-usage/SKILL.md` | marker files only: `.jira-cli.json`, `.jira/`, `.claude/jira-config.json` (Jira is invisible to git remotes — opt-in) |
+| `bitbucket` | `tools/bb-fetch.py`, `tools/bb-post-comment.py`, `tools/fetch-bb-comments.py`, `tools/classify-pr-comments.py`, `tools/post-bb-reply.py`, `skills/pr-management/SKILL.md` | `origin` remote contains bitbucket, or `bitbucket-pipelines.yml` exists |
+| `jira` OR `bitbucket` | `tools/read-cred.py`, `tools/cred_crypto.py`, `tools/confirm-passphrase.py` | either probe above (the credential cluster exists only for ticket/PR integrations) |
+| `rust` | `tools/pre-scan-rust.py`, `tools/c4-rust-parser/**` | `Cargo.toml` at depth <= 2 |
+
+Non-gated languages (`javascript`, `typescript`, `dotnet`, `python`) are detected and stored
+in the profile for future gates. On a GitHub-only repo the jira/bitbucket/credential
+clusters never ship — and `--audit --prune` removes them if an earlier ungated copy left
+them behind.
 
 ---
 
@@ -84,12 +116,13 @@ see the **Patched after copy** column.
 | `tools/sync-1pass-creds.py` | Personal credential producer — reads each developer's own 1Password vault via the `op` CLI. Run it once globally (`$UB sync-1pass-creds`); the repo's read-cred then decrypts the resulting `~/.claude/assets/creds/` files. Never copied into a repo. |
 | All pipeline commands (`oracle`, `alfred`, `damian`, `gordon`, `harvey`, `bruce`, `signal`, `blackgate`) | Pipeline orchestration — intentionally global-only, not repo-portable |
 | `tools/talia.py`, `tools/session-state.py`, `tools/profiler-step.py`, etc. | Pipeline-only tools — not needed for repo-local operation |
+| `references/alfred-reference.md` | Retired from the manifest (Alfred reads the global copy). `--audit` flags a repo copy as `legacy`; `--audit --prune` removes it |
 
 ---
 
 ## Credential Flow in Repo Copies
 
-The copied `jira-usage` / `pr-management` skills dispatch real API tools, which need credentials. How that resolves in a repo:
+The copied `jira-usage` / `pr-management` skills dispatch real API tools, which need credentials. Both skill clusters are capability-gated — on a GitHub-only repo none of these files ship at all. Where they do ship, this is how credentials resolve:
 
 - Repo copies of `read-cred.py` / `cred_crypto.py` / `confirm-passphrase.py` are patched so `BASE_DIR` points at `~/.claude`, **not** the repo. Credentials live in one global store (`~/.claude/assets/creds/`), shared by every repo — a repo working tree is the wrong home for secrets and is typically gitignored anyway.
 - A developer runs `sync-1pass-creds` **once on their own machine** (it needs the `op` CLI + their vault). Repos never sync; they only read.
@@ -108,7 +141,7 @@ These substitutions are applied in-place after copy by `luke-copy-assets.py`:
 | `bash ~/.claude/hooks/ub.sh` | `bash .claude/hooks/ub.sh` |
 | `luke-reference.md` | `luke-survey.md` |
 
-### `agents/luke.md`
+### `agents/luke-context.md`
 | Old (global) | New (repo) |
 |---|---|
 | `bash ~/.claude/hooks/ub.sh` | `bash .claude/hooks/ub.sh` |
@@ -127,5 +160,6 @@ These substitutions are applied in-place after copy by `luke-copy-assets.py`:
 
 1. Add entry to `MANIFEST` in `~/.claude/tools/luke-copy-assets.py`
 2. If the file contains `~/.claude/` references that need fixing, add a `POST_COPY_PATCHES` entry
-3. Update the table above
-4. Re-run `$UB luke-copy-assets --repo-root <repo-root>` on any repo already initialised
+3. If it depends on an integration or language, add a `CAPABILITY_GATES` entry and document the gate in § Capability Gating above
+4. Update the table above
+5. Re-run `$UB luke-copy-assets --repo-root <repo-root>` on any repo already initialised

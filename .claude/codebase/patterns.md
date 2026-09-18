@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - src/lib
   - src/app/api
@@ -17,7 +17,12 @@ summary: Observed conventions — auth, response envelope, data access, caching,
   `JWT_PUBLIC_KEY_PATH`; fallback secret `JWT_SECRET`.
 - Routes guard with `createAuthMiddleware` (admin) or role + row-ownership checks
   (owner routes). Chat routes require participant membership.
-- Passwords hashed with `bcryptjs`.
+- Passwords hashed with `bcryptjs` (cost 12).
+- Access tokens: RS256, 15 min, claims `{ userId, email, role }`. Refresh
+  tokens: 7 d, stored **only** as Valkey keys (`refresh:<token>` → userId) — no
+  DB table, so a Valkey flush invalidates every session.
+- The `config/jwt/` keypair is committed (dev material); production overrides via
+  `JWT_PRIVATE_KEY`/`JWT_PRIVATE_KEY_PATH` env — see findings (HIGH).
 - [NOTE] The GraphQL route performs no auth; `createBusiness` runs under a hardcoded
   `Bearer token` context — see `findings.md` / `anti-patterns.md`.
 - [NOTE] bw-scraper exposes mutating endpoints with no auth; only `/enrich` is
@@ -87,13 +92,17 @@ Full details: `test-infrastructure.md`.
 - Single source of truth: root `.env` (gitignored; tracked template
   `.env.example`).
 - TS reads `process.env` with per-variable defaults; Rust `config.rs` parses env
-  with `default` attributes (`SEARXNG_URL` defaults to a developer LAN IP).
+  with `default` attributes (`SEARXNG_URL` now defaults to empty — configured or
+  discovery cannot run; the old developer-LAN-IP default is fixed).
+- Env-name drift is a live trap: compose injects `REDIS_URL`/`MINIO_ROOT_*`, the
+  TS app reads `VALKEY_HOST/PORT` and `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`
+  (see findings/anti-patterns).
 - `docker-compose.yml` pins the project name `black_owned` so container names are
   stable across worktrees.
 
 ## Serialization
 
-- TS: native `JSON`; no JSON library (the declared `graphql`/`@graphql-tools/schema`
-  are unused).
+- TS: native `JSON`; no JSON library (the once-declared `graphql`/`@graphql-tools/schema`
+  deps have been removed from `package.json`).
 - Rust: `serde` throughout; bw-scraper request types use **snake_case** field names
   (see the cross-language field drift finding).

@@ -14,9 +14,9 @@ timestamp: 2026-08-01T17:28:38Z
 **Entry:** epic
 **Escalation From:** -
 **Confidence:** High
-**Blueprint Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/codebase/planning/SCRAPER/Implementation-Blueprint.md
-**Delta HTML Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/codebase/planning/SCRAPER/c4-delta.html
-**Delta Spec Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/codebase/planning/SCRAPER/delta-spec.json
+**Blueprint Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/planning/SCRAPER/Implementation-Blueprint.md
+**Delta HTML Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/planning/SCRAPER/c4-delta.html
+**Delta Spec Path:** C:/Users/Merlin/Documents/repos/Black_Owned/.claude/planning/SCRAPER/delta-spec.json
 **Epic Summary:** Web scraper service for acquiring business listings from external sources (Google Maps, Yelp, Facebook) with automated ETL, deduplication, and admin review workflow
 **Target Directories:** bw-scraper/, bw-scraper/src/scrapers/, bw-scraper/src/etl/, bw-scraper/src/importer/, src/app/admin/scraping/, bw-types/src/scraping.rs
 **technology_stack:** [{'layer': 'Scraper Service', 'technology': 'Rust 2021', 'constraint': 'Async runtime with tokio'}, {'layer': 'Web Scraping', 'technology': 'Playwright', 'constraint': 'Headless browser for JS-heavy sites'}, {'layer': 'Database', 'technology': 'PostgreSQL', 'constraint': 'sqlx with type safety'}, {'layer': 'Queue', 'technology': 'NATS JetStream', 'constraint': 'Async-nats with stream support'}, {'layer': 'Analytics', 'technology': 'ClickHouse', 'constraint': 'clickhouse-rs driver'}, {'layer': 'Frontend', 'technology': 'Next.js', 'constraint': 'TypeScript, Tailwind, App Router'}]

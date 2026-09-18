@@ -23,7 +23,7 @@ Examples:
   $UB stamp-handoffs --ticket PAY-123 --mode standard --committed-ac AC1
   $UB preflight-check
   $UB clean-temp --skill signal
-  $UB read-reference --path oracle-reference.md --section "Handoff Template"
+  $UB read-reference oracle-reference.md --section "Handoff Template"
   $UB confirm-passphrase --passphrase mypin
   $UB archive-ticket --key PAY-123
   $UB claim-unit --ticket PAY-123 --unit PAY-0042 --agent-id dup-implement-a3f7
@@ -232,25 +232,37 @@ def main():
                 repo_root = Path(os.path.expanduser(args[rr_idx + 1]))
                 args = args[:rr_idx] + args[rr_idx + 2:]  # strip flag + value
 
+        def _resolve_short(p):
+            # Resolution chain per REGISTRY: references/ -> tools/ -> commands/ -> repo dirs
+            resolved = BASE_DIR / "references" / p.name
+            if not resolved.exists():
+                resolved = BASE_DIR / "references" / p
+            if not resolved.exists():
+                resolved = BASE_DIR / "tools" / p.name
+            if not resolved.exists():
+                resolved = BASE_DIR / "commands" / p.name
+            # Repo-scoped fallbacks when --repo-root supplied
+            if not resolved.exists() and repo_root:
+                resolved = repo_root / ".claude" / "codebase" / p.name
+            if not resolved.exists() and repo_root:
+                # audit.md lives at audits/<ticket>/audit.md — pass ticket as name
+                resolved = repo_root / "audits" / p
+            return resolved
+
         if args and not args[0].startswith("-"):
             p = Path(os.path.expanduser(args[0]))
             if not p.is_absolute():
-                resolved = BASE_DIR / "references" / p.name
-                if not resolved.exists():
-                    resolved = BASE_DIR / "references" / p
-                if not resolved.exists():
-                    resolved = BASE_DIR / "tools" / p.name
-                if not resolved.exists():
-                    resolved = BASE_DIR / "commands" / p.name
-                # Repo-scoped fallbacks when --repo-root supplied
-                if not resolved.exists() and repo_root:
-                    resolved = repo_root / ".claude" / "codebase" / p.name
-                if not resolved.exists() and repo_root:
-                    # audit.md lives at audits/<ticket>/audit.md — pass ticket as name
-                    resolved = repo_root / "audits" / p
-                args = ["--path", _posix(resolved)] + args[1:]
+                args = ["--path", _posix(_resolve_short(p))] + args[1:]
             else:
                 args = ["--path", _posix(p)] + args[1:]
+        elif "--path" in args:
+            # Flag form: a bare/relative --path value gets the same resolution as
+            # the positional form. Absolute or cwd-existing paths pass through.
+            pi = args.index("--path")
+            if pi + 1 < len(args):
+                p = Path(os.path.expanduser(args[pi + 1]))
+                if not p.is_absolute() and not p.exists():
+                    args = args[:pi + 1] + [_posix(_resolve_short(p))] + args[pi + 2:]
         run(script, args)
 
     # --- read-handoff: positional shorthand → GPTS flags ---

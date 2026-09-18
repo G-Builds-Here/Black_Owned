@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - package.json
   - Cargo.toml
@@ -20,7 +20,9 @@ summary: Languages, frameworks, runtimes, and versions for every component in th
 |-------|------|---------|---------|
 | Web app / API | Next.js (App Router) | 16.0.0 | root (`package.json`) |
 | UI | React + TypeScript + Tailwind CSS | React 19.0.0, TS ^5, Tailwind ^4 | root |
-| GraphQL | graphql + @graphql-tools/schema | graphql ^16.8 | root (declared; not yet wired into a real executor) |
+| Auth | jsonwebtoken (RS256 + HS256 fallback) + bcryptjs | jwt ^9, bcryptjs ^2.4.3 | root (`src/lib/auth/`) |
+| GraphQL | hand-rolled regex executor — **no `graphql` package installed** (declared deps were removed since the last survey) | – | root (`src/lib/graphql/`) |
+| Maps UI | leaflet | ^1.9.4 | root |
 | Browser scraping | Playwright, Puppeteer | Playwright ^1.62.1, Puppeteer ^24 | `src/services/` |
 | Discovery worker | Rust, axum, tokio, sqlx | Rust 1.88 (Dockerfile), axum 0.7, sqlx 0.7, async-nats 0.33 | `bw-scraper` |
 | Ingestion lib | Rust, NATS, MinIO, Redis, ClickHouse | async-nats 0.40, minio-rsc 0.2.6, redis 0.27, clickhouse 0.13 | `bw-ingestion` |

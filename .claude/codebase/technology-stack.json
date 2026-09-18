@@ -1,12 +1,12 @@
 {
   "artifact": "technology-stack.md",
-  "generated_at": "2026-09-05T21:55:00Z",
-  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "generated_at": "2026-09-18T16:55:27Z",
+  "commit": "6067387c5757ff143d3b99eaa000af16f4b1d143",
   "repo": "Black_Owned",
   "sections": [
     {
       "heading": "Core Languages & Frameworks",
-      "content": "| Layer | Tech | Version | Project |\n|-------|------|---------|---------|\n| Web app / API | Next.js (App Router) | 16.0.0 | root (`package.json`) |\n| UI | React + TypeScript + Tailwind CSS | React 19.0.0, TS ^5, Tailwind ^4 | root |\n| GraphQL | graphql + @graphql-tools/schema | graphql ^16.8 | root (declared; not yet wired into a real executor) |\n| Browser scraping | Playwright, Puppeteer | Playwright ^1.62.1, Puppeteer ^24 | `src/services/` |\n| Discovery worker | Rust, axum, tokio, sqlx | Rust 1.88 (Dockerfile), axum 0.7, sqlx 0.7, async-nats 0.33 | `bw-scraper` |\n| Ingestion lib | Rust, NATS, MinIO, Redis, ClickHouse | async-nats 0.40, minio-rsc 0.2.6, redis 0.27, clickhouse 0.13 | `bw-ingestion` |\n| Legacy API lib | Rust, axum 0.8, async-graphql 7.0 | edition 2021 | `bw-api` (dormant) |\n| Shared types | Rust (serde, sqlx, derive_builder) | edition 2021 | `bw-types` |\n| Test (TS) | Jest 29 + ts-jest, Playwright 1.62 | jsdom env | root |\n| Test (Rust) | cargo test, cargo-llvm-cov | CI only | Rust workspace |\n| Test (UI pkg) | Vitest 4 + @vitest/coverage-v8 | packages/ui (separate, not a workspace member) | `packages/ui` |",
+      "content": "| Layer | Tech | Version | Project |\n|-------|------|---------|---------|\n| Web app / API | Next.js (App Router) | 16.0.0 | root (`package.json`) |\n| UI | React + TypeScript + Tailwind CSS | React 19.0.0, TS ^5, Tailwind ^4 | root |\n| Auth | jsonwebtoken (RS256 + HS256 fallback) + bcryptjs | jwt ^9, bcryptjs ^2.4.3 | root (`src/lib/auth/`) |\n| GraphQL | hand-rolled regex executor \u2014 **no `graphql` package installed** (declared deps were removed since the last survey) | \u2013 | root (`src/lib/graphql/`) |\n| Maps UI | leaflet | ^1.9.4 | root |\n| Browser scraping | Playwright, Puppeteer | Playwright ^1.62.1, Puppeteer ^24 | `src/services/` |\n| Discovery worker | Rust, axum, tokio, sqlx | Rust 1.88 (Dockerfile), axum 0.7, sqlx 0.7, async-nats 0.33 | `bw-scraper` |\n| Ingestion lib | Rust, NATS, MinIO, Redis, ClickHouse | async-nats 0.40, minio-rsc 0.2.6, redis 0.27, clickhouse 0.13 | `bw-ingestion` |\n| Legacy API lib | Rust, axum 0.8, async-graphql 7.0 | edition 2021 | `bw-api` (dormant) |\n| Shared types | Rust (serde, sqlx, derive_builder) | edition 2021 | `bw-types` |\n| Test (TS) | Jest 29 + ts-jest, Playwright 1.62 | jsdom env | root |\n| Test (Rust) | cargo test, cargo-llvm-cov | CI only | Rust workspace |\n| Test (UI pkg) | Vitest 4 + @vitest/coverage-v8 | packages/ui (separate, not a workspace member) | `packages/ui` |",
       "type": "table"
     },
     {

@@ -1,0 +1,16 @@
+{
+  "capabilities": [
+    "github"
+  ],
+  "languages": [
+    "javascript",
+    "rust",
+    "typescript"
+  ],
+  "detected_from": {
+    "github": "repo-profile.json",
+    "javascript": "package.json",
+    "typescript": "package.json/tsconfig.json",
+    "rust": "Cargo.toml"
+  }
+}

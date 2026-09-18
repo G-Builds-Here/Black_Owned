@@ -8,7 +8,10 @@ GPTS flag-only CLI. --help / -h / no-args prints this JSON contract and exits 0.
 
 Flags:
   --dir <path>    Directory containing .md artifact files (required).
-  --force         Overwrite existing .json files (default: skip if exists).
+  --force         Overwrite existing .json files even when fresh.
+
+Fresh sidecars are skipped; a sidecar older than its source .md is refreshed
+automatically and reported under "refreshed".
 
 Repo name is derived as <dir>/../.. (i.e. <repo> for
 <repo>/.claude/codebase/).
@@ -170,11 +173,16 @@ def now_iso():
 
 
 def process_file(md_path, force, repo_name):
-    """Process a single .md file. Returns ("write"|"skip", filename)."""
+    """Process a single .md file. Returns ("write"|"refresh"|"skip", filename)."""
     json_path = md_path.with_suffix(".json")
 
-    if json_path.exists() and not force:
-        return "skip", json_path.name
+    existing = json_path.exists()
+    if existing and not force:
+        # Freshness: an .md newer than its sidecar means the sidecar is stale —
+        # refresh it. Plain skip-if-exists let hand-edited artifacts ship with a
+        # sidecar describing the old content.
+        if md_path.stat().st_mtime <= json_path.stat().st_mtime:
+            return "skip", json_path.name
 
     content = md_path.read_text(encoding="utf-8")
     meta = parse_frontmatter(content)
@@ -200,7 +208,7 @@ def process_file(md_path, force, repo_name):
     }
 
     json_path.write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
-    return "write", json_path.name
+    return ("refresh" if existing else "write"), json_path.name
 
 
 def handle(v):
@@ -230,32 +238,37 @@ def handle(v):
                 "written": [], "skipped": [], "skipped_no_header": no_header}
 
     written = []
+    refreshed = []
     skipped = []
     for md_path in md_files:
         action, name = process_file(md_path, v.get("--force"), repo_name)
         if action == "write":
             written.append(name)
+        elif action == "refresh":
+            written.append(name)
+            refreshed.append(name)
         else:
             skipped.append(name)
 
     status = "written" if written else "no_change"
     if written:
         audit_append(BASE_DIR, "write-sidecars", "write", key=repo_name,
-                     result=f"{len(written)} written, {len(skipped)} skipped")
+                     result=f"{len(written)} written ({len(refreshed)} refreshed), "
+                            f"{len(skipped)} skipped")
     return {"status": status, "dir": artifacts_dir.as_posix(),
-            "written": written, "skipped": skipped,
+            "written": written, "refreshed": refreshed, "skipped": skipped,
             "skipped_no_header": no_header}
 
 
 TOOL = Tool(
     name="write-sidecars",
-    version="2.1",
-    summary="Generate JSON sidecars for .md survey artifacts (skips index.md / .survey-meta.md and any .md lacking a commit: metadata header).",
+    version="2.2",
+    summary="Generate JSON sidecars for .md survey artifacts; skips fresh sidecars and auto-refreshes ones older than their source .md (skips index.md / .survey-meta.md and any .md lacking a commit: metadata header).",
     flags={
         "--dir": {"required": True, "type": "path",
                   "description": "Directory containing .md artifact files."},
         "--force": {"type": "bool",
-                    "description": "Overwrite existing .json files (default: skip if exists)."},
+                    "description": "Overwrite existing .json files even when fresh (default: fresh ones skip, stale ones refresh)."},
     },
     exit_codes={
         "0": "written · no_change (all skipped) · no_files (no .md to process)",
@@ -266,7 +279,7 @@ TOOL = Tool(
         "$UB write-sidecars --dir <repo-root>/.claude/codebase",
         "$UB write-sidecars --dir <repo-root>/.claude/codebase --force",
     ],
-    idempotent="Yes — existing sidecars are skipped (no_change) unless --force is given.",
+    idempotent="Yes — fresh sidecars skip (no_change); a sidecar older than its source .md refreshes automatically (reported under refreshed[]); --force refreshes all.",
 )
 
 

@@ -1,7 +1,7 @@
 {
   "artifact": "domain-model.md",
-  "generated_at": "2026-09-05T21:55:00Z",
-  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "generated_at": "2026-09-18T16:55:27Z",
+  "commit": "6067387c5757ff143d3b99eaa000af16f4b1d143",
   "repo": "Black_Owned",
   "sections": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "heading": "Rust Shapes",
-      "content": "- **bw-types**: `Business`, `Category`, `Review`, email payloads (shared by\n  `bw-api` + `bw-ingestion` only \u2014 bw-scraper defines its own models).\n- **bw-scraper**: `ScrapeRequest { query, location, max_pages }`,\n  `EnrichRequest { business_ids, limit, dry_run }` (snake_case \u2014 the TS proxy sends\n  camelCase `businessIds` which serde silently drops, see findings),\n  `LocationsRequest`, `HealthStatus { service, healthy, message }`.",
+      "content": "- **bw-types**: `Business`, `Category`, `Review`, `User`, email payloads (shared by\n  `bw-api` + `bw-ingestion` only \u2014 bw-scraper defines its own models).\n  **Drifted from TS/Postgres \u2014 do not use as the user model:** bw-types `User` is\n  `{ id, email, display_name, created_at }` (no `role`, no `status`; Postgres/TS\n  have `role`, `status`, and `name`), `Business.verified: bool` vs DB\n  `verification_status` string, and `Business.category_id: Uuid` vs DB\n  `category_id varchar(100)`.\n- **bw-scraper**: `ScrapeRequest { query, location, max_pages }`,\n  `EnrichRequest { business_ids, limit, dry_run }` (snake_case \u2014 the TS proxy sends\n  camelCase `businessIds` which serde silently drops, see findings),\n  `LocationsRequest`, `HealthStatus { service, healthy, message }`.",
       "type": "list"
     }
   ],

@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 summary: Navigation hub for the codebase survey and ticket artifacts.
 -->
 
@@ -29,28 +29,9 @@ Navigation hub for all design artifacts.
 - [technology-stack.md](technology-stack.md)
 - [test-infrastructure.md](test-infrastructure.md)
 
-## Planning & ticket artifacts
+## Planning & ticket artifacts (repo project docs — live in `.claude/`, not here)
 
-### application-design/
-
-- [design-ENRICHMENT.md](application-design/design-ENRICHMENT.md)
-- [design-SCRAPER.md](application-design/design-SCRAPER.md)
-
-### construction/
-
-- [code/implementation-LOC-0072.md](construction/code/implementation-LOC-0072.md)
-- [code/implementation-LOC-0073.md](construction/code/implementation-LOC-0073.md)
-- [loc-0056/code/implementation-summary-LOC-0056.md](construction/loc-0056/code/implementation-summary-LOC-0056.md)
-- [loc-0076/code/implementation-summary-LOC-0076.md](construction/loc-0076/code/implementation-summary-LOC-0076.md)
-- [loc-0083/code/implementation-summary-LOC-0083.md](construction/loc-0083/code/implementation-summary-LOC-0083.md)
-
-### planning/
-
-- [ENRICHMENT/Implementation-Blueprint.md](planning/ENRICHMENT/Implementation-Blueprint.md)
-- [HIGHLIGHTS/Implementation-Blueprint.md](planning/HIGHLIGHTS/Implementation-Blueprint.md)
-- [SCRAPER/Implementation-Blueprint.md](planning/SCRAPER/Implementation-Blueprint.md)
-
-### requirements/
-
-- [requirements-ENRICHMENT.md](requirements/requirements-ENRICHMENT.md)
-- [requirements-HIGHLIGHTS.md](requirements/requirements-HIGHLIGHTS.md)
+- **application-design/** — [design-ENRICHMENT.md](../application-design/design-ENRICHMENT.md), [design-SCRAPER.md](../application-design/design-SCRAPER.md)
+- **construction/** — [LOC-0072](../construction/code/implementation-LOC-0072.md), [LOC-0073](../construction/code/implementation-LOC-0073.md), [LOC-0056](../construction/loc-0056/code/implementation-summary-LOC-0056.md), [LOC-0076](../construction/loc-0076/code/implementation-summary-LOC-0076.md), [LOC-0083](../construction/loc-0083/code/implementation-summary-LOC-0083.md)
+- **planning/** — [ENRICHMENT blueprint](../planning/ENRICHMENT/Implementation-Blueprint.md), [HIGHLIGHTS blueprint](../planning/HIGHLIGHTS/Implementation-Blueprint.md), [SCRAPER blueprint](../planning/SCRAPER/Implementation-Blueprint.md)
+- **requirements/** — [requirements-ENRICHMENT.md](../requirements/requirements-ENRICHMENT.md), [requirements-HIGHLIGHTS.md](../requirements/requirements-HIGHLIGHTS.md)

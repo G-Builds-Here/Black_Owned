@@ -11,6 +11,9 @@ backups/
 *.tmp
 *.bak
 
+# Scratch from survey/tool runs (survey-prep, cluster results) — never commit
+tmp/
+
 # plans/ — uncomment to exclude planning files from version control
 # plans/
 

@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - src/app
   - src/lib
@@ -20,13 +20,13 @@ The product is a web directory, so the **Next.js App Router app owns the entire 
 
 | Component | Project | Type | Responsibility | Key Files |
 |-----------|---------|------|----------------|-----------|
-| Web app + REST/GraphQL API | root | Next.js App Router | All UI pages, ~50 API routes, auth, chat, admin/owner consoles | `src/app/**`, `src/components/**` |
+| Web app + REST/GraphQL API | root | Next.js App Router | All UI pages (19), 33 REST routes + 1 GraphQL route, auth, chat, admin/owner consoles | `src/app/**`, `src/components/**` |
 | Domain libs | root | Node modules | `pg` repositories, JWT auth, Valkey cache, NATS pub/sub, MinIO presigned URLs, GraphQL schema + regex executor | `src/lib/db`, `src/lib/auth`, `src/lib/valkey`, `src/lib/nats`, `src/lib/minio`, `src/lib/graphql` |
 | Browser scrapers | root | TS services | Google Maps / Yelp / Facebook scraping driven by `POST /api/scrape-jobs` | `src/services/*-scraper.ts`, `src/services/scraper-job-executor.ts` |
 | Discovery worker | bw-scraper | Rust axum service (:8080) | SearXNG discovery, bounded enrichment, Nominatim location discovery, operator API (`/scrape`, `/enrich`, `/locations`, `/health`) | `bw-scraper/src/{main,api,scraper,enrichment,locations,searxng,rate_limiter,robots,user_agent_rotator}.rs` |
 | Ingestion lib | bw-ingestion | Rust library (dormant) | NATS chat/email/image consumers, Valkey cache invalidator, ETL transformers; **no binary or compose service runs it** | `bw-ingestion/src/{chat_consumer,email_*,image_*,cache_invalidator,etl/*}.rs` |
 | Legacy API | bw-api | Rust crate (dormant) | Pre-Next.js API skeleton: axum bin (`/health` only), placeholder handlers, async-graphql schema; historically created the `reviews`/`categories` tables that migrations 013/020 later backfilled | `bw-api/src/{lib,bin/main,routes/*,middleware/*,graphql/*}.rs` |
-| Shared types | bw-types | Rust library | `Business`, `Category`, `Review`, email payload types shared by `bw-api` and `bw-ingestion` | `bw-types/src/{lib,email}.rs` |
+| Shared types | bw-types | Rust library | `Business`, `Category`, `Review`, `User`, email payload types shared by `bw-api` and `bw-ingestion` only (bw-scraper has its own models). **Shapes have drifted from TS/Postgres** — `User` lacks `role`/`status`; not a trustworthy user model (see findings) | `bw-types/src/{lib,email}.rs` |
 | Schema | root | Migrations | Postgres OLTP schema (21 numbered files) + ClickHouse analytics mirror | `migrations/postgresql`, `migrations/clickhouse` |
 | UI package | packages/ui | Standalone npm pkg | Component library with its own vitest/playwright; not a root workspace member | `packages/ui` |
 

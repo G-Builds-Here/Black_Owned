@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - src
   - bw-scraper
@@ -34,7 +34,7 @@ summary: Every significant module with its responsibility and key files, plus or
 | Component | Responsibility | Key Files |
 |-----------|----------------|-----------|
 | bw-scraper (service, ACTIVE) | SearXNG paged discovery → ETL → Postgres; bounded enrichment; Nominatim location discovery; operator API | `bw-scraper/src/main.rs`, `api.rs`, `scraper.rs`, `etl.rs`, `enrichment.rs` (215 KB monolith), `locations.rs`, `searxng.rs`, `rate_limiter.rs`, `robots.rs`, `user_agent_rotator.rs`, `connectors.rs`, `config.rs`, `models.rs` |
-| bw-scraper tests | 8 in-file unit modules + 2 integration files + a Dockerfile test script | `bw-scraper/src/**` (`#[cfg(test)]`), `bw-scraper/tests/{connectors_test,cargo_config_test}.rs` |
+| bw-scraper tests | 10 in-file unit modules + 2 integration files (of 34 `#[cfg(test)]` files workspace-wide: bw-ingestion 17, bw-api 5, bw-types 2 — CI runs **none** of the latter three crates' tests) | `bw-scraper/src/**` (`#[cfg(test)]`), `bw-scraper/tests/{connectors_test,cargo_config_test}.rs` |
 | bw-ingestion (library, DORMANT) | NATS chat consumer, email publisher/consumer (letra), image worker (MinIO + thumbnails), Valkey cache invalidator, ETL transformers (yelp/google_maps/facebook); no binary runs it | `bw-ingestion/src/{chat_consumer,email_publisher,email_consumer,email_service,image_worker,image_publisher,cache_invalidator,background_service,stream_config,service_connectivity,etl/*}.rs` |
 | bw-api (crate, DORMANT) | Legacy pre-Next.js API skeleton: axum bin (`/health` only), placeholder route handlers, async-graphql schema, JWT + rate-limit middleware | `bw-api/src/{lib,bin/main,routes/{mod,images},middleware/{mod,auth,rate_limiter},graphql/*}.rs` |
 | bw-types (library) | Shared `Business`, `Category`, `Review` + email payload types | `bw-types/src/{lib,email}.rs` |
@@ -43,7 +43,7 @@ summary: Every significant module with its responsibility and key files, plus or
 
 - **bw-api** — no compose service, placeholder handlers, historically created the `reviews`/`categories` tables that migrations 013/020 later backfilled. Candidate for removal or reactivation.
 - **bw-ingestion** — consumers for `chat.message`, `email.send`, `image.process` that nothing in this repo hosts; a second `cache.invalidate` consumer that duplicates the TS one.
-- **`vitest.config.ts` + `vitest.setup.ts` (root)** — configured but vitest is not a root dependency; `src/app/performance.test.ts` and `clickhouse/*.test.ts` (LOC-0032) cannot run from root. The only working vitest is in `packages/ui`.
-- **`graphql` / `@graphql-tools/schema`** — declared in `package.json`, never imported.
+- **Root vitest configs** — `vitest.config.ts`/`vitest.setup.ts` were **deleted** since the last survey (only `.bak` files remain), but `tsconfig.json` still lists them and `src/app/performance.test.ts` still imports vitest (not installed at root; the spec is excluded from the default Jest run). The only working vitest is in `packages/ui`.
+- **`graphql` / `@graphql-tools/schema`** — RESOLVED: the dead deps were removed from `package.json`; the regex executor remains (see api-documentation).
 - **`PATCH_STATUS` export** in the users route — unreachable; App Router only wires `PATCH`.
 - **ClickHouse mirror table** (`migrations/clickhouse/001_create_tables.sql`) — no runtime write path found in TS or active Rust code.

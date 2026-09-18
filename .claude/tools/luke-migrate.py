@@ -11,7 +11,7 @@ reviews with `git diff --cached`.
 
 Legacy audit.md (the dead AIDLC event log) is handled per --legacy-audit:
   archive (default) — move to .claude/backups/aidlc-audit-archive.md (untracked)
-  keep    — move to .claude/codebase/audit.md (stays tracked)
+  keep    — move to .claude/audit.md (stays tracked)
   delete  — remove
 
 Contract:  python luke-migrate.py --help   (JSON)
@@ -30,7 +30,9 @@ from toolkit import Tool, NotFound, audit_append, Conflict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# legacy subtree -> destination dir name under .claude/codebase/
+# legacy subtree -> destination dir name. Project docs (planning, requirements,
+# application-design, construction) land at the .claude/ TOP level —
+# .claude/codebase/ is reserved for generated survey artifacts only.
 DIR_MAP = [
     ("inception/reverse-engineering", None),   # merge into codebase root
     ("inception/planning", "planning"),
@@ -38,14 +40,15 @@ DIR_MAP = [
     ("inception/application-design", "application-design"),
     ("construction", "construction"),
 ]
+TOP_LEVEL_DIRS = {"planning", "requirements", "application-design", "construction"}
 LEFT_BEHIND = ["operations"]  # AIDLC-scaffold-only; nothing lives here that we write
 
 PATH_MAP = [
     ("aidlc-docs/inception/reverse-engineering", ".claude/codebase"),
-    ("aidlc-docs/inception/planning", ".claude/codebase/planning"),
-    ("aidlc-docs/inception/requirements", ".claude/codebase/requirements"),
-    ("aidlc-docs/inception/application-design", ".claude/codebase/application-design"),
-    ("aidlc-docs/construction", ".claude/codebase/construction"),
+    ("aidlc-docs/inception/planning", ".claude/planning"),
+    ("aidlc-docs/inception/requirements", ".claude/requirements"),
+    ("aidlc-docs/inception/application-design", ".claude/application-design"),
+    ("aidlc-docs/construction", ".claude/construction"),
     ("aidlc-docs/audit.md", ".claude/backups/aidlc-audit-archive.md"),
     ("aidlc-docs", ".claude/codebase"),
 ]
@@ -139,7 +142,13 @@ def handle(v):
             src = legacy / rel_src
             if not src.is_dir():
                 continue
-            t, u, c = move_dir(repo, src, dest / sub if sub else dest, dry)
+            if sub in TOP_LEVEL_DIRS:
+                target_dir = dot / sub          # project docs -> .claude/ top level
+            elif sub:
+                target_dir = dest / sub
+            else:
+                target_dir = dest               # reverse-engineering merges into codebase root
+            t, u, c = move_dir(repo, src, target_dir, dry)
             report["moved"]["tracked"] += t
             report["moved"]["untracked"] += u
             if c:
@@ -157,7 +166,7 @@ def handle(v):
                 report["legacy_audit_log"] = "deleted"
             else:
                 target = (dot / "backups" / "aidlc-audit-archive.md"
-                          if policy == "archive" else dest / "audit.md")
+                          if policy == "archive" else dot / "audit.md")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target_rel = target.relative_to(repo).as_posix()
                 was_tracked = bool(tracked_files(repo, "aidlc-docs/audit.md"))
@@ -269,7 +278,7 @@ def handle(v):
             continue
         audit_target = {
             "archive": ".claude/backups/aidlc-audit-archive.md",
-            "keep": ".claude/codebase/audit.md",
+            "keep": ".claude/audit.md",
             "delete": "the archived audit log",
         }[policy]
         new = text

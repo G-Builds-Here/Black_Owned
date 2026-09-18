@@ -1,7 +1,7 @@
 {
   "artifact": "findings.md",
-  "generated_at": "2026-09-05T21:55:00Z",
-  "commit": "1d809d37d45d649844f979496e7d7ea1d47a40ce",
+  "generated_at": "2026-09-18T16:55:27Z",
+  "commit": "6067387c5757ff143d3b99eaa000af16f4b1d143",
   "repo": "Black_Owned",
   "sections": [
     {
@@ -11,7 +11,7 @@
     },
     {
       "heading": "1. GraphQL route bypasses authentication entirely",
-      "content": "**Project:** root (Next.js)\n**Severity:** HIGH\n`POST /api/graphql` performs no JWT verification, and the `createBusiness` mutation\nresolver is invoked with a fabricated `Authorization: Bearer token` context\n(`src/app/api/graphql/route.ts`). Any anonymous caller can create businesses through\nthe GraphQL surface while every REST equivalent requires auth.\n**Operational Impact:** Unauthenticated business creation; directory data integrity\nand verification pipeline are open to abuse (spam listings, fake claims) the moment\nthis route is reachable.\n**Mitigation Sketch:** Wire the route through `createAuthMiddleware` like the REST\nroutes, pass the real request headers into the resolver context, and delete the\nhardcoded token. Until then, consider restricting `/api/graphql` to a dev-only mount.",
+      "content": "**Project:** root (Next.js)\n**Severity:** HIGH\n`POST /api/graphql` performs no JWT verification, and the `createBusiness` mutation\nresolver is invoked with a fabricated `Authorization: Bearer token` context\n(`src/app/api/graphql/route.ts:125`). Any anonymous caller can create businesses\nthrough the GraphQL surface while every REST equivalent requires auth (24 of 33\nREST route handlers import the auth guard).\n**Operational Impact:** Unauthenticated business creation; directory data integrity\nand the verification pipeline are open to abuse (spam listings, fake claims) the\nmoment this route is reachable.\n**Mitigation Sketch:** Wire the route through `createAuthMiddleware` like the REST\nroutes, pass the real request headers into the resolver context, and delete the\nhardcoded token. Until then, consider restricting `/api/graphql` to a dev-only mount.",
       "type": "prose"
     },
     {
@@ -20,8 +20,18 @@
       "type": "prose"
     },
     {
-      "heading": "3. Cross-language field-name drift silently widens enrichment scope",
-      "content": "**Project:** root (Next.js) \u2192 bw-scraper (Rust)\n**Severity:** MEDIUM\nThe TS proxy forwards `{ limit?, businessIds? }` camelCase; bw-scraper's\n`EnrichRequest` deserializes `business_ids` (snake_case). Serde silently drops the\nunknown camelCase key, so a targeted \"enrich these N businesses\" call degrades to an\nunfiltered full-table enrichment run.\n**Operational Impact:** Admin \"enrich selected\" actions actually enrich up to\n`limit` arbitrary businesses \u2014 wasted SearXNG/Nominatim quota, rate-limit pressure,\nand unexpected writes to rows the admin did not select.\n**Mitigation Sketch:** Add `#[serde(alias = \"businessIds\")]` to the Rust field (or\nrename the TS payload to snake_case) and add a regression test that asserts a\ntargeted request touches only the requested ids.",
+      "heading": "3. RS256 keypair is committed to the repository",
+      "content": "**Project:** root (Next.js)\n**Severity:** HIGH\n`config/jwt/private.pem` + `public.pem` are tracked in Git. The auth service falls\nback to these files when `JWT_PRIVATE_KEY` / `JWT_PRIVATE_KEY_PATH` are unset, and\nan HS256 fallback exists via `JWT_SECRET`. The failure mode is silent: the app boots\nand issues tokens normally with the committed dev key.\n**Operational Impact:** Anyone with repository read access (every clone, every fork,\nCI logs) can forge valid access tokens \u2014 including `role: \"admin\"` \u2014 against any\ndeployment that ships without the env override. Production compromise is one\nforged Bearer header away.\n**Mitigation Sketch:** Generate per-environment keypairs, gitignore `config/jwt/`,\nbootstrap keys at deploy time from the env vars, and rotate the committed pair\n(treat it as public). Fail startup loudly when no key material is configured\ninstead of silently using repo defaults.",
+      "type": "prose"
+    },
+    {
+      "heading": "4. CI tests only two of four Rust crates and zero TypeScript",
+      "content": "**Project:** root + bw-ingestion + bw-api + bw-scraper (CI)\n**Severity:** HIGH\n`.github/workflows/` contains only Rust jobs, and they pin `-p bw_scraper -p bw-types`.\nThere is no Jest, Playwright, or Vitest job anywhere. Consequences: ~100 TS specs +\n9 e2e suites (including the entire auth surface) are local-only \u2014 TS regressions\nmerge green; bw-ingestion's 17 `#[cfg(test)]` modules + 4 integration files and\nbw-api's 5 never execute in any workflow; no ClickHouse service exists in CI.\n**Operational Impact:** The only thing a green pipeline proves is that two crates\ncompile and their unit tests pass. Auth/route regressions, e2e breakage, and two\ncrates' test failures can all merge to main undetected.\n**Mitigation Sketch:** Add a node CI job (`npm ci && npm test`, plus a smoke e2e on\nchromium against compose services), and extend the cargo invocations to\n`--workspace` (or add the missing crates) once their warnings are clean.",
+      "type": "prose"
+    },
+    {
+      "heading": "5. Cross-language field-name drift silently widens enrichment scope",
+      "content": "**Project:** root (Next.js) \u2192 bw-scraper (Rust)\n**Severity:** MEDIUM\nThe TS proxy forwards `{ limit?, businessIds? }` camelCase; bw-scraper's\n`EnrichRequest` deserializes `business_ids` (snake_case). Serde silently drops the\nunknown camelCase key, so a targeted \"enrich these N businesses\" call degrades to an\nunfiltered enrichment run up to `limit`.\n**Operational Impact:** Admin \"enrich selected\" actions actually enrich up to\n`limit` arbitrary businesses \u2014 wasted SearXNG/Nominatim quota, rate-limit pressure,\nand unexpected writes to rows the admin did not select.\n**Mitigation Sketch:** Add `#[serde(alias = \"businessIds\")]` to the Rust field (or\nrename the TS payload to snake_case) and add a regression test that asserts a\ntargeted request touches only the requested ids.",
       "type": "prose"
     },
     {
@@ -30,18 +40,23 @@
       "type": "prose"
     },
     {
-      "heading": "4. Push directory filtering/pagination into SQL",
-      "content": "**Project:** root (Next.js)\n`GET /api/directory` and `/api/directory/suggest` load the entire directory into\nmemory and filter/sort/page in JS (`src/app/api/directory/route.ts`,\n`suggest/route.ts`). This is a performance optimisation, not a requirement \u2014\ncorrectness does not depend on it \u2014 but cost grows linearly with directory size and\n`/suggest` pays the full load on every autocomplete keystroke. Move search/category/\nrating filters and LIMIT into SQL; give suggest a dedicated\n`SELECT DISTINCT name \u2026 WHERE name ILIKE $1 LIMIT 5`.",
+      "heading": "6. Push directory filtering/pagination into SQL",
+      "content": "**Project:** root (Next.js)\n`GET /api/directory` and `/api/directory/suggest` load the entire directory into\nmemory and filter/sort/page in JS. This is a performance optimisation, not a\nrequirement \u2014 correctness does not depend on it \u2014 but cost grows linearly with\ndirectory size and `/suggest` pays the full load on every autocomplete keystroke.\nMove search/category/rating filters and LIMIT into SQL; give suggest a dedicated\n`SELECT DISTINCT name \u2026 WHERE name ILIKE $1 LIMIT 5`.",
       "type": "prose"
     },
     {
-      "heading": "5. Use or remove the declared GraphQL dependencies",
-      "content": "**Project:** root (Next.js)\n`graphql` and `@graphql-tools/schema` are in `package.json` but never imported; the\nroute uses a regex parser over raw query strings. Either wire a real executor\n(preferable \u2014 it fixes finding 1's auth story) or drop the deps so the manifest\nmatches reality.",
+      "heading": "7. Replace the regex GraphQL executor or retire GraphQL",
+      "content": "**Project:** root (Next.js)\nThe dead `graphql`/`@graphql-tools/schema` deps have since been removed from\n`package.json`, but the regex executor (finding 1) remains: `variables` are mostly\nignored, `schema.ts` declares more operations than execute, and\n`createBusiness` runs under a fake Bearer context. Either wire a real executor\n(preferable \u2014 it fixes finding 1's auth story) or delete the GraphQL surface so the\nschema file stops lying about what runs.",
       "type": "prose"
     },
     {
-      "heading": "6. Re-verify the bw-api CI exclusion",
-      "content": "**Project:** bw-api (Rust)\n`bw-scraper-ci.yml` excludes bw-api from coverage \"until its pre-existing compile\nerrors are fixed (task #71)\", but `cargo check -p bw-api --all-targets` passes today\n(5 warnings that would fail CI clippy `-D warnings`). The exclusion comment is stale;\nfix the warnings and re-include it, or drop the crate (see #8).",
+      "heading": "8. Add a server-side guard to the admin section",
+      "content": "**Project:** root (Next.js)\n`src/app/admin/*` pages guard themselves client-side only (`getSession().user.role`\nin `page.tsx`, cleared on API 401) \u2014 the admin HTML ships to anyone, and real\nenforcement lives entirely in the API routes. The API enforcement is correct; add a\nserver-side check (middleware or layout) so admin surfaces don't render for\nanonymous users and defense is layered rather than single-point.",
+      "type": "prose"
+    },
+    {
+      "heading": "9. Re-verify the bw-api CI exclusion",
+      "content": "**Project:** bw-api (Rust)\nThe coverage-exclusion comment (\"pre-existing compile errors, task #71\") is stale \u2014\n`cargo check` passes today (5 warnings would fail CI clippy `-D warnings`). Fix the\nwarnings and re-include it, or drop the crate (see #12).",
       "type": "prose"
     },
     {
@@ -50,23 +65,33 @@
       "type": "prose"
     },
     {
-      "heading": "7. `POST /api/scrape-jobs` inserts queue rows no worker consumes",
+      "heading": "10. `POST /api/scrape-jobs` inserts queue rows no worker consumes",
       "content": "**Project:** root (Next.js)\nThe endpoint inserts a `scrape_jobs` row with status `pending` and runs the\nin-process TS scrapers; nothing ever polls the queue (bw-scraper has its own\nstandalone `POST /scrape` and does not read the table). The queue semantics are\ndecorative, and the TS executor's status vocabulary (`'scraping'`) does not match\nthe Postgres CHECK values (`'running'`).",
       "type": "prose"
     },
     {
-      "heading": "8. Dormant Rust crates: bw-api and bw-ingestion",
-      "content": "**Project:** bw-api, bw-ingestion (Rust)\nNeither is run by any compose service or binary. bw-ingestion defines NATS\nconsumers (`chat.message`, `email.send`, `image.process`) that nothing hosts, a\nsecond `cache.invalidate` consumer duplicating the TS one, and pins drifted crate\nversions (async-nats 0.40, redis 0.27, axum 0.8 in bw-api vs 0.7/0.33/0.24 in\nbw-scraper). bw-scraper's `enrichment.rs` is a 215 KB single module.\nDecision needed: reactivate, delete, or quarantine with a documented rationale.",
+      "heading": "11. Dormant Rust crates: bw-api and bw-ingestion",
+      "content": "**Project:** bw-api, bw-ingestion (Rust)\nNeither is run by any compose service or binary. bw-ingestion defines NATS\nconsumers (`chat.message`, `email.send`, `image.process`) that nothing hosts, a\nsecond `cache.invalidate` consumer duplicating the TS one, and pins drifted crate\nversions (async-nats 0.40, redis 0.27; bw-api axum 0.8 vs bw-scraper 0.7) \u2014 a build\nconflict waiting if they're ever reactivated together. bw-api's `jsonwebtoken` tower\nmiddleware is compiled-but-never-served (its `router()` returns an empty Router)\nand its async-graphql mutations treat the bearer token as a raw UUID without\nsignature verification \u2014 do not cite bw-api as prior art for JWT handling. Their\ntests (22 files) never run in CI. Decision needed: reactivate, delete, or\nquarantine with a documented rationale.",
       "type": "prose"
     },
     {
-      "heading": "9. Root-level Vitest configuration with no Vitest install",
-      "content": "**Project:** root (Next.js)\n`vitest.config.ts` + `vitest.setup.ts` are tracked, `src/app/performance.test.ts`\nimports vitest, and `clickhouse/*.test.ts` (LOC-0032) are excluded from Jest \u2014 none\ncan run from root. The only working vitest is `packages/ui` (not a workspace\nmember). Either install vitest at root, move the config, or delete the root\nartifacts and relocate the tests.",
+      "heading": "12. bw-types has drifted from TS/Postgres \u2014 not a trustworthy user model",
+      "content": "**Project:** bw-types (Rust)\n`User` is `{ id, email, display_name, created_at }` \u2014 no `role`, no `status` \u2014 while\nPostgres/TS carry `role`, `status`, and `name`; `Business.verified: bool` vs DB\n`verification_status` string; `category_id: Uuid` vs `varchar(100)`. There is no\ncodegen linking the three representations. Login/auth work that reaches into the\nRust side must treat the Postgres `users` table as the only source of truth.",
       "type": "prose"
     },
     {
-      "heading": "10. Dead/unused symbols",
-      "content": "**Project:** root (Next.js)\n- `graphql`, `@graphql-tools/schema` \u2014 declared, never imported (see #5).\n- `PATCH_STATUS` export in the users route \u2014 unreachable (App Router wires `PATCH`\n  only).\n- ClickHouse mirror table (`migrations/clickhouse/001`) has no runtime write path\n  in the active code.",
+      "heading": "13. Dead test-config surface",
+      "content": "**Project:** root (Next.js)\n- Root `vitest.config.ts`/`vitest.setup.ts` were deleted since the last survey, but\n  `tsconfig.json` still lists them (stale references) and\n  `src/app/performance.test.ts` still imports vitest (not installed; the spec is\n  Jest-excluded).\n- `jest.setup.js` is dead \u2014 both configs point at `jest.setup.ts`.\n- `jest.config.components.js` is unrunnable: it maps images to\n  `__mocks__/file-mock.js`, which does not exist.\n- `packages/ui` is not a root workspace member \u2014 its vitest/playwright suite is\n  invisible to root tooling and its dev server collides on port 3000.",
+      "type": "prose"
+    },
+    {
+      "heading": "14. Dead symbols",
+      "content": "**Project:** root (Next.js)\n- `PATCH_STATUS` export in the users route \u2014 unreachable (App Router wires `PATCH`\n  only); meanwhile the admin `UserManagement` UI calls `/api/users/role` and\n  `/api/users/status`, which are not routes at all (`src/components/admin/UserManagement.tsx:272,300`).\n- ClickHouse mirror tables (`migrations/clickhouse/001`) have no runtime write path\n  in the active code.",
+      "type": "prose"
+    },
+    {
+      "heading": "15. `getPool()` process-wide singleton forces a mock-at-the-boundary test regime",
+      "content": "**Project:** root (Next.js)\nThe cached module-level `Pool` in `user-repository.ts` is shared across every spec\nfile inside a Jest worker. Every honest unit spec must `jest.mock` the repository\nboundary; a spec that forgets silently hits real infra and flakes. This is the\ncost of the lazy-singleton design choice, not a per-test bug.",
       "type": "prose"
     },
     {
@@ -75,43 +100,63 @@
       "type": "prose"
     },
     {
-      "heading": "11. MinIO host port is 9002, not 9000",
-      "content": "**Project:** root\nCompose publishes MinIO on host **9002** (9000 is ClickHouse), but the app default\nis `MINIO_PORT=9000`. Host-side presigned URLs require `MINIO_PORT=9002` in `.env`,\nor uploads break with confusing connection errors.",
+      "heading": "16. MinIO host port is 9002, not 9000",
+      "content": "**Project:** root\nCompose publishes MinIO on host **9002** (9000 is ClickHouse), but the app default\nis `MINIO_PORT=9000`. Host-side presigned URLs require `MINIO_PORT=9002` in `.env`.",
       "type": "prose"
     },
     {
-      "heading": "12. Playwright `reuseExistingServer: true` silently serves stale code",
+      "heading": "17. Playwright `reuseExistingServer` silently serves stale code",
       "content": "**Project:** root\nA long-lived `next dev` (e.g. left running from a worktree) is reused for E2E runs\nand may be serving old code. Kill/restart the dev server when results look wrong.",
       "type": "prose"
     },
     {
-      "heading": "13. CI sets `VALKEY_URL`; the connector tests read `REDIS_URL`",
-      "content": "**Project:** bw-scraper (Rust)\nThe CI workflow exports `VALKEY_URL` for the Valkey service, but\n`tests/connectors_test.rs` reads `REDIS_URL` (falling back to localhost), and the\nCI test job provides no ClickHouse service \u2014 so \"connectivity\" tests pass with\nevery service down (they only assert the health message is non-empty). CI green\ndoes not prove service connectivity.",
+      "heading": "18. Rust connector \"connectivity\" tests pass with every service down",
+      "content": "**Project:** bw-scraper (Rust)\nThe `tests/connectors_test.rs` \"valid URL\" tests assert only that the health\nmessage is non-empty. The env-name drift they used to have is partially fixed (the\ntest now prefers `VALKEY_URL`, matching CI), but `Config::from_env` keeps the\nopposite priority (`REDIS_URL` first, `VALKEY_URL` fallback) \u2014 CI green does not\nprove service connectivity.",
       "type": "prose"
     },
     {
-      "heading": "14. `SEARXNG_URL` defaults to a developer LAN IP",
-      "content": "**Project:** bw-scraper (Rust)\nThe config default is `http://192.168.68.50:8888`. Any environment without an\nexplicit `SEARXNG_URL` override points discovery at one machine's LAN.",
+      "heading": "19. E2E helpers require the Docker CLI",
+      "content": "**Project:** root (e2e)\n`e2e-utils.ts` seeds/teardowns via `docker exec black-owned-postgres psql`\n(`execSync`). E2E cannot run where the Docker CLI is absent or the container name\ndiffers (the pinned `black_owned` compose project name is what keeps this working).\nWindows: SQL passed via `-c` must avoid double quotes.",
       "type": "prose"
     },
     {
-      "heading": "15. E2E helpers require the Docker CLI",
-      "content": "**Project:** root (e2e)\n`e2e-utils.ts` seeds/teardowns via `docker exec black-owned-postgres psql`\n(`execSync`). E2E cannot run where the Docker CLI is absent or the container name\ndiffers (the pinned `black_owned` compose project name is what keeps this working).",
+      "heading": "20. E2E parallelism relies on unique-email convention, not isolation",
+      "content": "**Project:** root (e2e)\n`fullyParallel: true` runs against one shared live Postgres. Isolation is\n`RUN_SUFFIX`-unique emails plus per-file `afterAll` psql teardown \u2014 cross-file\ncollisions on non-user-keyed tables (categories, businesses) are possible.",
       "type": "prose"
     },
     {
-      "heading": "16. Survey tooling is .NET-shaped for this polyglot repo",
-      "content": "**Project:** survey infrastructure (`~/.claude/tools/`)\n`pre-scan.py` and `c4-extract.py` are built around .NET concepts: the pre-scan\nschema carries `cs_files`, `class_inventory`, `using_namespaces`, and\n`newtonsoft`/`system_text_json` fields that are vacuous here, and it detected\nonly the npm project (0 endpoints, 0 config files, 0 env-var reads, 0 static\nstate). The Rust counterpart `pre-scan-rust.py` exists in the toolset but is not\nwired into `survey-prep.py` and is not mentioned in `luke-survey.md`, so S2 of\nthis survey had to run it manually. `c4-extract.py` also emitted a placeholder\nsystem name (\"bo survey\"), boilerplate C2 descriptions, and C3 relationships\nlabeled \"Method call\". Mitigated in this survey: `survey_tmp/pre-scan-rust.json`\ngenerated (Cargo projects, env-var reads, test groups, static state for all 4\ncrates), and `c4-skeleton.json` corrected by hand (system name, C1 actors/\nexternals, C2 descriptions, TypeScript C3 components, SearXNG/Nominatim externals)\nbefore re-rendering `c4.html`.\n**Recommendation:** wire `pre-scan-rust` into `survey-prep` for polyglot repos\nand add a polyglot pass to `c4-extract` (repo-name resolution, TS component\nextraction, language-neutral relationship labels).",
+      "heading": "21. Refresh sessions live only in Valkey",
+      "content": "**Project:** root (Next.js)\nRefresh tokens are Valkey keys (`refresh:<token>` \u2192 userId, 7 d TTL) with no DB\ntable. A Valkey flush/eviction silently invalidates every session; logout is a key\ndelete. Relevant to any login/session epic: consider a DB-backed session table if\nrevocation durability matters.",
       "type": "prose"
     },
     {
-      "heading": "16. Survey tooling is .NET-shaped for this polyglot repo",
-      "content": "**Project:** survey infrastructure (`~/.claude/tools/`)\n`pre-scan.py` and `c4-extract.py` are built around .NET concepts: the pre-scan\nschema carries `cs_files`, `class_inventory`, `using_namespaces`, and\n`newtonsoft`/`system_text_json` fields that are vacuous here, and it detected\nonly the npm project (0 endpoints, 0 config files, 0 env-var reads, 0 static\nstate). The Rust counterpart `pre-scan-rust.py` exists in the toolset but is not\nwired into `survey-prep.py` and is not mentioned in `luke-survey.md`, so S2 of\nthis survey had to run it manually. `c4-extract.py` also emitted a placeholder\nsystem name (\"bo survey\"), boilerplate C2 descriptions, and C3 relationships\nlabeled \"Method call\". Mitigated in this survey: `survey_tmp/pre-scan-rust.json`\ngenerated (Cargo projects, env-var reads, test groups, static state for all 4\ncrates), and `c4-skeleton.json` corrected by hand (system name, C1 actors/\nexternals, C2 descriptions, TypeScript C3 components, SearXNG/Nominatim externals)\nbefore re-rendering `c4.html`.\n\n**Recommendation:** wire `pre-scan-rust` into `survey-prep` for polyglot repos\nand add a polyglot pass to `c4-extract` (repo-name resolution, TS component\nextraction, language-neutral relationship labels).",
+      "heading": "22. The bw-scraper test binary mutates global proxy env",
+      "content": "**Project:** bw-scraper (Rust)\nThe `api.rs` test module binds a stub HTTP server in a `LazyLock` and calls\n`std::env::set_var(\"http_proxy\"/\"HTTP_PROXY\")` for the whole binary\n(`bw-scraper/src/api.rs:558`); `AC3_STUB_PATHS` accumulates across tests with no\nreset. New tests in that binary that issue real HTTP after the stub initializes get\nrouted through it. `tests/` files are separate binaries and unaffected.",
+      "type": "prose"
+    },
+    {
+      "heading": "23. Admin user-management UI calls routes that do not exist",
+      "content": "**Project:** root (Next.js)\n`UserManagement.tsx` fetches `/api/users/role` and `/api/users/status`; neither is a\nroute (the only wired handler is `PATCH /api/users`). The role/status actions in the\nadmin console fail at runtime today \u2014 do not treat current admin UI behavior as the\nintended contract.",
+      "type": "prose"
+    },
+    {
+      "heading": "24. Survey tooling is still weak on polyglot repos",
+      "content": "**Project:** survey infrastructure (`~/.claude/tools/`)\nThe .NET-shaped static scan still returns near-empty results for this Next.js+Rust\nrepo (0 recognized endpoints/config reads); the Rust-side scan now runs alongside\nit (fixed since the July survey \u2014 that gap is closed), but the C4 extractor still\nemits placeholder system names and boilerplate component descriptions for TS repos,\nand its skeleton needed hand-correction (system name, actors, TypeScript components,\nSearXNG/Nominatim externals) before rendering. **Recommendation:** give the C4\nextraction a polyglot pass (repo-name resolution, TS component extraction,\nlanguage-neutral relationship labels).",
+      "type": "prose"
+    },
+    {
+      "heading": "25. `.worktrees/` holds 20 stale in-tree checkouts",
+      "content": "**Project:** repo hygiene\nStory-era worktrees (LOC-0077\u2026LOC-0090, epic-jest, gatefix\u2026) sit inside the working\ntree with divergent package.json/Cargo.toml content. They multiply file counts in\nnaive tree walks and grep hits, and misled parts of the July survey (the \"bw-types\nre-export?\" question and the ghost graphql dep copy both came from stale copies).\nExclude `.worktrees/` from all repo-wide tooling; prune the worktrees themselves.",
       "type": "prose"
     },
     {
       "heading": "Cross-Cutting Connections",
-      "content": "- **Dual-writer Postgres + TS-only cache invalidation**: bw-scraper writes\n  `businesses`/`business_locations` without publishing `cache.invalidate`, so the\n  Valkey query cache (invalidated only by the TS NATS subscriber) can serve stale\n  rows after enrichment \u2014 findings #2/#3 and the caching pattern in `patterns.md`\n  compound.\n- **Enrichment boundary drift**: the camelCase\u2192snake_case gap (#3) plus the missing\n  auth (#2) make the single HTTP seam between the two languages the weakest part of\n  the pipeline.\n- **Hollow CI signal** (#13): because Rust \"connectivity\" tests assert nothing\n  real, the only CI-verified layer is compilation + unit tests; integration\n  regressions in the Rust worker reach prod without a CI tripwire.\n- **Dormant crates vs. in-process TS handling** (#8): bw-ingestion's consumers were\n  superseded by in-process TS equivalents; leaving both in the tree invites\n  \"which one handles cache.invalidate?\" confusion (two consumers exist).",
+      "content": "- **The auth surface is the epic-shaped weak point**: unauthenticated GraphQL (#1),\n  committed signing keys (#3), client-side-only admin page guard (#8), Valkey-only\n  refresh sessions (#21), and the dead admin UI routes (#23) all converge on\n  login/session work \u2014 fix or wrap each while touching auth rather than building on\n  it as-is.\n- **Dual-writer Postgres + TS-only cache invalidation**: bw-scraper writes\n  `businesses`/`business_locations` without publishing `cache.invalidate`, so the\n  Valkey query cache (invalidated only by the TS NATS subscriber) can serve stale\n  rows after enrichment \u2014 compounds with #2 and #5.\n- **Enrichment boundary drift**: the camelCase\u2192snake_case gap (#5) plus the missing\n  auth (#2) make the single HTTP seam between the two languages the weakest part of\n  the pipeline.\n- **Hollow CI signal** (#4 + #18): only two crates compile-and-test in CI, and even\n  their integration coverage is vacuous \u2014 integration regressions in the Rust\n  worker and every TypeScript regression reach main without a tripwire.\n- **Static-state chain**: `getPool()` singleton (#15) \u2192 mandatory jest.mock\n  workarounds; the test-binary proxy mutation (#22) \u2192 serialized test modules;\n  E2E shared-DB convention (#20). Together they cap how far test parallelism can\n  grow without design changes.\n- **Dormant crates vs in-process TS** (#11 + #12): bw-ingestion's consumers were\n  superseded by TS equivalents, and bw-types no longer matches the schema anyone\n  actually uses \u2014 the Rust tree carries two inconsistent views of the domain.",
+      "type": "list"
+    },
+    {
+      "heading": "Resolved Since Last Survey (2026-09-05)",
+      "content": "- `SEARXNG_URL` LAN-IP default \u2192 now empty (anti-pattern removed; env template gap remains \u2014 see dependencies).\n- Root `vitest.config.ts`/`vitest.setup.ts` deleted (stale references remain \u2014 #13).\n- `graphql` + `@graphql-tools/schema` dead deps removed (executor unchanged \u2014 #7).\n- CI `VALKEY_URL` vs connector-test env drift fixed in the test (#18 drift note).\n- categories table now has a migration (020) \u2014 the old \"no Postgres migration for categories\" gotcha is obsolete.",
       "type": "list"
     }
   ],

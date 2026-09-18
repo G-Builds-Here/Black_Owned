@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - src/app/api
   - src/lib/graphql
@@ -20,8 +20,8 @@ Success envelope: `{ success: true, data: ... }`; errors: `{ error: "..." }` or
 | Method | Path | Auth | Request | Response `data` | Statuses |
 |--------|------|------|---------|-----------------|----------|
 | GET | `/api/health` | open | – | `{ status, timestamp }` | 200; 405 for other verbs |
-| POST | `/api/auth/register` | open | `{ email, password, name }` | `{ user, accessToken, refreshToken }` | 201, 400, 409 dup email, 500 |
-| POST | `/api/auth/login` | open | `{ email, password }` | `{ user, accessToken, refreshToken }` | 200, 400, 401, 500 |
+| POST | `/api/auth/register` | open | `{ email, password, name }` | `{ success, user, tokens: { accessToken, refreshToken } }` — body is the resolver result directly, **no `data` wrapper** | 201, 400, 409 dup email, 500 |
+| POST | `/api/auth/login` | open | `{ email, password }` | `{ success, user, tokens: { accessToken, refreshToken } }` — body is the resolver result directly, **no `data` wrapper** | 200, 400, 401, 500 |
 | GET | `/api/users` | admin | `?page&pageSize&search` | paginated users | 200, 400, 401/403, 500 |
 | PATCH | `/api/users` | admin | `{ userId, role }` | updated user; publishes NATS `user.role_changed` | 200, 400, 401/403, 404, 500 |
 | GET | `/api/categories` | open | – | `[{ id, name }]` | 200, 500 |
@@ -60,7 +60,8 @@ Success envelope: `{ success: true, data: ... }`; errors: `{ error: "..." }` or
 ## GraphQL Endpoint
 
 `POST /api/graphql` (open, no auth). This is a **hand-rolled regex executor over the
-raw query string** — not graphql-js (the declared `graphql` dependency is unused).
+raw query string** — there is no `graphql` package at root (the once-declared
+`graphql`/`@graphql-tools/schema` deps have been removed from `package.json`).
 
 Operations actually executable:
 
@@ -87,16 +88,29 @@ and `updateBusiness` mutations plus supporting types (`User`, `TokenPair`,
 | POST | `/enrich` | `{ business_ids?: [uuid], limit? (default 50, 1..500), dry_run? }` | `{ businesses: [{ id, name, applied[], skipped[], notes[], reason, locations, error }], summary: { total, enriched, skipped, failed } }` | 200, 400, 500 |
 | POST | `/locations` | `{ business_ids?: [uuid], limit? (default 25, 1..500), dry_run? }` | `{ businesses: [...], summary: { total, processed, locations_added, failed } }` | 200, 400, 500 |
 
-bw-api (dormant): its axum binary exposes only `GET /health` → `OK` text; lib
-handlers are placeholders returning empty/None. Not in docker-compose.
+bw-api (dormant): its axum binary exposes only `GET /health` (plain `OK` text); lib
+handlers are placeholders returning empty/None. Not in docker-compose. Its
+`jsonwebtoken` tower middleware is compiled-but-never-served, and its async-graphql
+mutations treat the bearer token as a raw UUID (`Uuid::parse_str`) without signature
+verification — do not cite bw-api as prior art for auth.
 
 ## Authentication & Authorization
 
-- **JWT RS256** issued by `/api/auth/*`; keys in `config/jwt/`
-  (`JWT_PRIVATE_KEY_PATH` / `JWT_PUBLIC_KEY_PATH`), HS256 fallback via `JWT_SECRET`.
+- **JWT RS256** issued by `/api/auth/*`; claims `{ userId, email, role }`. Access
+  tokens live 15 min, refresh tokens 7 d. Keys in `config/jwt/`
+  (`JWT_PRIVATE_KEY_PATH` / `JWT_PUBLIC_KEY_PATH`) — **both PEMs are committed**
+  (dev material; see findings) — HS256 fallback via `JWT_SECRET`.
+- Refresh tokens are opaque Valkey keys (`refresh:<token>` → userId, TTL setex)
+  with **no DB table** — a Valkey flush silently invalidates every session.
+- 24 of the 33 route handlers import the auth guard; open by design: health,
+  login, register, categories, directory (+suggest), featured-businesses,
+  business view-count POST.
 - Roles: `user`, `business_owner`, `admin` (enforced per route; admin routes 401/403).
 - Owner routes additionally enforce row ownership (`owner_id` check).
 - Chat routes enforce participant membership in the conversation.
+- **`src/app/admin/*` pages guard themselves client-side only** (`getSession().user.role`
+  in `page.tsx`, cleared on API 401) — anyone can load the admin HTML; real
+  enforcement is the API layer.
 - **bw-scraper endpoints are unauthenticated** and port 8080 is published in compose.
 - **GraphQL route performs no auth at all** (see finding: hardcoded Bearer context).
 
@@ -111,4 +125,5 @@ handlers are placeholders returning empty/None. Not in docker-compose.
   product-facing seam is the admin-gated `/api/admin/enrichment` proxy. `/scrape`
   and `/locations` have no such gate (see anti-patterns).
 - **GraphQL is a regex executor** because it was scaffolded quickly before graphql-js
-  wiring; the declared `graphql`/`@graphql-tools/schema` deps are unused (tech debt).
+  wiring; the once-declared `graphql`/`@graphql-tools/schema` deps have since been
+  removed, leaving the executor (and its fake Bearer context) as the only GraphQL path.

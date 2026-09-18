@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T20:30:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
 - src
 - bw-scraper/src
@@ -17,7 +17,7 @@ summary: Directory layout and module responsibilities (Next.js front-end + Rust 
 ```
 src/
   app/                    # App Router
-    api/                  # 32 route.ts files (REST + hand-rolled GraphQL)
+    api/                  # 33 route.ts files (REST + hand-rolled GraphQL)
       auth/{login,register}/   # open
       directory/            # open; /suggest imports from /directory route
       categories/, featured-businesses/, health/
@@ -28,7 +28,8 @@ src/
       owner/businesses/{, [id]/{,views}}/     # claim wizard, views
       pending-businesses/{, import/{,job/[jobId]}}/   # admin import queue
       scrape-jobs/, analytics/scrape-jobs/{,recent}/ # admin + analytics
-      users/                  # admin (PATCH /api/users role handler; /status is dead — finding H2)
+      users/                  # admin; PATCH /api/users is the only wired handler — the admin
+                              # UserManagement UI still calls nonexistent /api/users/role + /status
       graphql/                # regex-parsed mini-GraphQL (finding H5)
     {directory,businesses,owner,admin,login,register,chat,about,...}/page.tsx
   lib/
@@ -65,7 +66,8 @@ bw-ingestion/src/ # lib.rs, etl/{pipeline,transformer,validation,google_maps,yel
                   # scraper_rate_limiter, service_connectivity — NO binary target (dormant lib)
 bw-ingestion/tests/ # cache_service_{unit,integration}, cache_invalidator_{unit,integration} (integration gated on feature)
 bw-api/src/       # bin/main.rs + schema + graphql/{queries,mutations,types} + middleware/{auth,rate_limiter}
-                  # + routes/images; does NOT compile (task #71)
+                  # + routes/images; `cargo check` now passes (old task-#71 exclusion is stale),
+                  # but the crate is dormant: router() is empty, its JWT middleware is dead code
 bw-types/src/     # lib.rs (Business, Review, User, Verification, Message, Event) + email.rs (SmtpConfig,
                   # NatsEmailPayload, EmailTemplate)
 ```
@@ -78,6 +80,6 @@ bw-types/src/     # lib.rs (Business, Review, User, Verification, Message, Event
 
 ## Repo Hygiene Notes
 
-- `.worktrees/` — 8 git worktrees checked out in-tree; they double file counts in any naive tree walk (excluded from survey scans).
+- `.worktrees/` — 20 git worktrees checked out in-tree (LOC-00xx story copies, epic-jest, gatefix…); they multiply file counts in any naive tree walk and contain divergent stale copies of source (old package.json/Cargo.toml versions) that grep surfaces first — scope all repo-wide tooling to exclude them.
 - `db/seed/seed_test_data.sql` — test users + BWS-TEST businesses + scrape jobs; idempotent.
 - `docs/design-drift-audit-2026-08-20.md` — the repo ships its own drift audit; many HIGH items since fixed.

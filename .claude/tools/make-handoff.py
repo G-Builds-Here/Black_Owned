@@ -87,6 +87,8 @@ from dupin_shared import (
     _DUPIN_TYPES,
     build_ac_handoff_path,
     build_story_handoff_path,
+    resolve_handoff_base,
+    sanitize_handoff_key,
 )
 
 from toolkit import Tool, UsageError
@@ -628,13 +630,18 @@ def handle(v):
             "use {\"type\": ..., \"ticket_key\": ..., \"fields\": {...}}",
         )
 
-    base = Path(args.get("base_dir") or v["--base"])
     htype = args.get("type")
     key = args.get("ticket_key")
     if not htype:
         raise UsageError("'type' is required in the JSON payload", "add \"type\": \"<handoff type>\"")
     if not key:
         raise UsageError("'ticket_key' is required in the JSON payload", "add \"ticket_key\": \"<KEY>\"")
+
+    # Scope routing: repo-scoped types (session, luke) land in the repo's
+    # .claude when there is one; pipeline types go to the developer's global
+    # store even when this tool runs from a repo-local copy.
+    base = resolve_handoff_base(htype, args.get("base_dir") or v["--base"],
+                               args.get("repo_root"))
 
     # --- Flat interface: lift top-level keys into fields, apply aliases + defaults ---
     _promote_flat_keys(args)
@@ -733,6 +740,9 @@ def handle(v):
             "self_evolution": se_status,
         }
 
+    # Sanitize non-dupin keys: "N/A" must not create nested handoffs/<type>/X-N/A.md
+    # dirs. Dupin STORY/AC forms returned earlier via the dupin branch.
+    key = sanitize_handoff_key(key)
     base_filename = filename_template.replace("{key}", key).replace("{ac_id}", key.split("/")[-1] if "/" in key else key)
 
     out_path = out_dir / base_filename
@@ -755,7 +765,10 @@ def handle(v):
     _post_write(base, htype, key, str(out_path))
 
     # Self-evolution check — runs inline after handoff write
+    # A plain string is one correction, not a char list — wrap it.
     se_items = args.get("self_evolution")
+    if isinstance(se_items, str):
+        se_items = [se_items]
     if se_items is not None:
         se_status = _run_self_evolution(se_items)
 
@@ -863,7 +876,7 @@ def _run_self_evolution(corrections):
                 print(f"  {i}. {c}", file=sys.stderr)
             print(file=sys.stderr)
             print("Present these to the user:", file=sys.stderr)
-            print("  (a) Fix now — invoke /skill-creator", file=sys.stderr)
+            print("  (a) Fix now — edit the skill file directly", file=sys.stderr)
             print("  (b) Defer  — add to pipeline-notes.md", file=sys.stderr)
             return "pending"
 

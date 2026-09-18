@@ -49,6 +49,10 @@ from dupin_shared import (
     build_ac_handoff_path,
     build_story_handoff_path,
     is_handoff_complete,
+    discover_repo_base,
+    HOME_CLAUDE,
+    REPO_SCOPED_TYPES,
+    sanitize_handoff_key,
 )
 
 from toolkit import Tool, UsageError
@@ -244,6 +248,36 @@ def route_scan(base: Path, key: str, repo_root: Path | None = None) -> dict:
     return result
 
 
+def _locate(base: Path, htype: str, key: str, unit, path, repo_root):
+    """If the handoff isn't at its home base, search sibling locations: the
+    repo's .claude (session/luke handoffs from repo runs) and the developer-
+    global store — plus sanitized-key variants written by newer make-handoff
+    (e.g. Luke-N-A.md for key 'N/A'). Returns the original path when nothing
+    is found, preserving absent semantics."""
+    alt_keys = [k for k in (sanitize_handoff_key(key),) if k != key]
+    rb = discover_repo_base(str(repo_root) if repo_root else None)
+    if htype in REPO_SCOPED_TYPES and rb:
+        # Repo-scoped types are written into the repo — check the repo first so
+        # a stale global copy can't shadow the live one.
+        for k in [key, *alt_keys]:
+            p = resolve_path(rb, htype, k, unit)
+            if p and p.exists():
+                return p
+    if path.exists():
+        return path
+    bases = [base]
+    if rb and rb not in bases:
+        bases.append(rb)
+    if HOME_CLAUDE.is_dir() and HOME_CLAUDE not in bases:
+        bases.append(HOME_CLAUDE)
+    for b in bases:
+        for k in [key, *alt_keys]:
+            p = resolve_path(b, htype, k, unit)
+            if p and p.exists():
+                return p
+    return path
+
+
 def resolve_path(base: Path, htype: str, key: str, unit: str | None = None) -> Path | None:
     """Resolve handoff file path from base + type + key (+ optional AC unit)."""
     if htype not in HANDOFF_PATHS:
@@ -385,6 +419,7 @@ def handle(v):
         path = resolve_path(base, htype, key, unit)
         if path is None:
             raise UsageError(f"unknown handoff type: {htype}", "pass a valid --type, or use --path")
+        path = _locate(base, htype, key, unit, path, repo_root)
     else:
         raise UsageError(
             "no target: pass --path <file> or --type <type> --key <key>",

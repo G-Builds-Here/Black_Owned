@@ -239,7 +239,9 @@ def handle(v):
         output_dir = repo_root / ".claude" / "codebase"
 
     os.makedirs(str(output_dir), exist_ok=True)
-    tmp_dir = output_dir / "survey_tmp"
+    # Scratch lives OUTSIDE the artifact tree — survey_tmp under codebase/ used to
+    # get committed and polluted the survey's git diff (.claude/tmp/ is gitignored).
+    tmp_dir = repo_root / ".claude" / "tmp" / "survey"
 
     # Step 1: parallel analysis
     analysis = run_parallel_analysis(repo_root, tmp_dir)

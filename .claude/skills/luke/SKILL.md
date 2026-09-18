@@ -90,7 +90,7 @@ HANDOFF
 | Requirement vs optimisation | Before writing any "must", "required", or "ordering matters" claim, ask: does the code enforce this (hard failure if violated) or is it just faster/cheaper? Label accordingly: **Required:** (code enforces it) vs **Performance optimisation:** (skipping it still works, just slower or more expensive). Never infer a requirement from naming alone (e.g. `TxnDependent` sounds dependent but may just reuse existing data) |
 | HIGH findings get full treatment | Operational Impact + Mitigation Sketch required on every HIGH/Severity finding |
 | Single source | All survey artifacts go to `.claude/codebase/`. CLAUDE.md and local Luke both point there — no duplicates anywhere |
-| One CLAUDE.md | **Canonical statement for CLAUDE.md placement.** `.claude/CLAUDE.md` is the canonical home for project instructions — never create a root `CLAUDE.md` yourself. Luke only augments the repo, never removes from it: if a root `CLAUDE.md` holds project content, leave it in place and record the conflict in the survey findings doc |
+| One CLAUDE.md | **Canonical statement for CLAUDE.md placement.** `.claude/CLAUDE.md` is the canonical home for project instructions — never create a root `CLAUDE.md` yourself. Luke only augments the repo, never removes from it: if a root `CLAUDE.md` holds project content, leave it in place and record the conflict in the survey findings doc. **Content policy:** `.claude/CLAUDE.md` carries repo identity + Architecture pointer + AI Context Protocol only — no facts (setup/commands/environment/gotchas); those live in the survey artifacts, per luke-survey.md § S5 |
 | Reconcile before writing | Audit existing CLAUDE.md, legacy root `aidlc-docs/` files, and any stale untracked `.claude/codebase/` remnants before writing. Preserve accurate content, migrate legacy. Report plan to user and confirm before writing |
 | One command per Bash call | Per gotham-reference.md § Demoted Rules (Hook-Enforced or Skill-Restated) — no chaining, no pipes |
 
@@ -100,7 +100,7 @@ HANDOFF
 
 **Resolve repo root** from `$ARGUMENTS`, current working directory, or `git rev-parse --show-toplevel`.
 
-**Check for resume:** `$UB read-handoff --type luke --key N/A` — if handoff exists and `complete: false`, restore context; if the handoff has an **Open Questions** section (optional; written via `_open_questions`, read via `$UB read-handoff --section "Open Questions"`), present each item; confirm before advancing.
+**Check for resume:** `$UB read-handoff --type luke --key N/A` — if handoff exists and `status` is not `complete`, restore context; if the handoff has an **Open Questions** section (optional; written via `_open_questions`, read via `$UB read-handoff --section "Open Questions"`), present each item; confirm before advancing.
 
 **Determine mode:**
 
@@ -150,7 +150,7 @@ Before writing anything, audit what already exists:
 |-------|---------|--------|
 | `.claude/CLAUDE.md` with Architecture section | Yes | Validate it points to `.claude/codebase/` — fix if stale |
 | `.claude/CLAUDE.md` without Architecture section | Yes | Inject Architecture section only; preserve all other content |
-| `.claude/CLAUDE.md` | No | Generate full `.claude/CLAUDE.md` (Setup, Commands, Environment, Gotchas, Architecture) |
+| `.claude/CLAUDE.md` | No | Generate `.claude/CLAUDE.md` — identity + Architecture pointer + AI Context Protocol only (content policy: luke-survey.md § S5; facts live in `.claude/codebase/`) |
 | Root `CLAUDE.md` with project content | Yes | Leave it untouched; record any conflict with `.claude/CLAUDE.md` in the survey findings doc (RULES: One CLAUDE.md — Luke augments, never removes) |
 | `.claude/codebase/` with files | Yes | Read each file; reconcile with survey — preserve accurate content, update stale sections |
 | Root `aidlc-docs/` (legacy pre-migration tree) | Yes | `$UB luke-migrate --repo-root <repo-root>` — structure-preserving git mv into `.claude/codebase/`, hook repoint, pointer rewrite, hub regen, asset refresh. Staged, not committed — review plan with user first |
@@ -159,7 +159,7 @@ Before writing anything, audit what already exists:
 | `.claude/CLAUDE.md` | Yes | Keep — canonical per RULES (One CLAUDE.md); the with/without-Architecture rows above govern updates |
 | `.claude/codebase/` empty/missing | Yes | Full survey write |
 
-Report reconciliation plan to user. Confirm before proceeding to S2.
+Build the plan with `$UB survey-validate --repo-root <repo-root> --op reconcile` (`plan[]` rows match the table above); report to user. Confirm before proceeding to S2.
 
 Gate:
 - [ ] All existing assets audited
@@ -174,7 +174,7 @@ Run all analysis and skeleton generation in one call:
 $UB survey-prep --repo-root <repo-root>
 ```
 
-This creates the output dir, runs pre-scan/unused-deps/duplication/token-usage concurrently, then sequentially runs c4-extract, c4-render, and generate-artifact-skeletons. Outputs a JSON summary with paths to all generated files. Individual scripts can still be called directly for targeted re-runs. This writes deterministic skeletons to `.claude/codebase/` and a git-SHA-stamped `.survey-meta.md` before any model reasoning. Then launch the 3 cluster agents simultaneously. Each agent receives: the relevant skeleton file(s) as starting context + pre-scan scoped to its cluster + the cluster's structured return template from luke-survey.md § Survey Subagents, embedded verbatim. The agent's job is to fill in the WHY, complete non-mechanical sections, and add anything the scripts couldn't extract — not to rewrite what the skeleton already contains.
+This creates the output dir, runs pre-scan/unused-deps/duplication/token-usage concurrently, then sequentially runs c4-extract, c4-render, and generate-artifact-skeletons. Outputs a JSON summary with paths to all generated files. Individual scripts can still be called directly for targeted re-runs. This writes deterministic skeletons to `.claude/codebase/` and a git-SHA-stamped `.survey-meta.md` before any model reasoning. Then launch the 3 cluster agents simultaneously. Each agent receives: the relevant skeleton file(s) as starting context + pre-scan scoped to its cluster + the cluster's structured return template from luke-survey.md § Survey Subagents, embedded verbatim + its cluster number N (the agent writes its `LUKE_CLUSTER_RESULT` to `.claude/tmp/clusters/cluster-N.md` before returning — the file survives compaction, the returned text may not). The agent's job is to fill in the WHY, complete non-mechanical sections, and add anything the scripts couldn't extract — not to rewrite what the skeleton already contains.
 
 | Agent | Cluster | Skeleton files provided | Artifacts produced |
 |-------|---------|------------------------|-------------------|
@@ -185,12 +185,9 @@ This creates the output dir, runs pre-scan/unused-deps/duplication/token-usage c
 Cap: 3 subagents. One follow-up if `additional_findings` reveals unexpected depth.
 
 Gate:
-- [ ] Pre-scan output captured (includes HTTP endpoint table)
-- [ ] `survey-prep` internally ran pre-scan + `check-unused-deps` + `find-helper-duplication` + `map-token-usage` — verify from its JSON summary (do not re-run the individual scripts)
-- [ ] `$UB c4-extract --repo-root <repo-root>` run — C4 JSON skeleton written to `.claude/codebase/c4-skeleton.json`
-- [ ] `$UB c4-render --c4-data <c4.json> --output <c4.html>` run — C4 HTML diagram written to `.claude/codebase/c4.html`
-- [ ] `$UB generate-artifact-skeletons` run — skeleton files and `.survey-meta.md` written with correct git SHA
-- [ ] All 3 cluster agents returned `LUKE_CLUSTER_RESULT` blocks
+- [ ] `survey-prep` JSON summary ok — reports pre-scan (incl. HTTP endpoint table), `check-unused-deps`, `find-helper-duplication`, and `map-token-usage` results. Do not re-run the individual scripts.
+- [ ] Same summary reports `c4-skeleton.json`, `c4.html`, the artifact skeletons, and `.survey-meta.md` at the current git SHA — call `c4-extract` / `c4-render` / `generate-artifact-skeletons` directly only for targeted re-runs
+- [ ] All 3 cluster agents returned `LUKE_CLUSTER_RESULT` blocks and persisted them to `.claude/tmp/clusters/cluster-N.md`
 - [ ] Cluster agents received skeleton files as starting context
 
 ### S3 — Synthesis
@@ -213,9 +210,9 @@ Gate:
 Read artifact templates: `$UB read-reference --path luke-survey.md --section "Artifact Templates"`.
 
 Write to `<repo>/.claude/codebase/`:
-- 7 core artifacts (overview, components, domain-model, dependencies, patterns, test-infrastructure, findings)
+- Core artifacts (overview, technology-stack, architecture, code-structure, component-inventory, dependencies, test-infrastructure, findings)
 - `api-documentation.md` — write if any HTTP endpoints exist (controllers, routes, handlers); omit for pure libraries or batch jobs with no API surface
-- Conditional: business-overview (business-logic repos only), code-quality-assessment (repos with test suites)
+- Conditional: business-overview (business-logic repos only); `patterns.md` and `domain-model.md` (write when the repo has established cross-cutting conventions or a non-trivial domain model — synthesized in S4, templates in ref § Artifact Templates)
 - `anti-patterns.md` (every survey — no exceptions)
 - JSON sidecar for each `.md` file — generated via `$UB write-sidecars --dir <repo-root>/.claude/codebase`
 - `.survey-meta.md` with `change_triggers` table
@@ -236,7 +233,7 @@ If legacy root `aidlc-docs/` migration was planned: run `$UB luke-migrate --repo
 After `survey-finalize` completes, confirm with `git -C <repo-root> status` that the survey staged `.claude/skills/`, `.claude/hooks/`, `.claude/.gitignore`, `.claude/CLAUDE.md`, and all `.claude/codebase/` artifacts — and that the survey did not stage or add `.claude/settings.json` or `.claude/settings.local.json` (a repo's own committed settings files are fine; they must not appear as new or changed in the survey's staged diff). Do not commit — just stage and report the diff to the user.
 
 Gate:
-- [ ] All required artifact files written to `.claude/codebase/`
+- [ ] `$UB survey-validate --repo-root <repo-root> --op validate` → `status: valid` (artifact set, sidecars, `.survey-meta.md` fields, index links all checked)
 - [ ] JSON sidecars written via `$UB write-sidecars --dir <repo-root>/.claude/codebase`
 - [ ] `.survey-meta.md` written with `commit`, `date`, `files_produced`, and `change_triggers` table
 - [ ] `c4.html` written — C4 architecture diagrams present
@@ -252,13 +249,13 @@ Gate:
 
 **Then fill in content** (Luke's judgment work, after the script runs):
 
-**CLAUDE.md:** Read luke-survey.md § S5 CLAUDE.md. Apply per reconciliation plan from S1. Show diff, confirm before writing.
+**CLAUDE.md:** Read luke-survey.md § S5 CLAUDE.md (content policy: identity + Architecture pointer + protocol only — facts belong in the survey artifacts; legacy fact sections are replaced by a pointer to `.claude/codebase/` only via the user-confirmed diff). Apply per reconciliation plan from S1. Show diff, confirm before writing.
 
 **Local Luke skill:** Write `.claude/skills/luke/SKILL.md` using the template in luke-survey.md § Local Skill Template, populated with actual repo paths and artifact inventory from S4.
 
 **Handoff + routing:**
 
-Sign off in Luke's voice. Route per AUTO_FLOW flag.
+Sign off in Luke's voice. Route per the AUTO_FLOW Behavior section (by invoker: Lucius → back to `/lucius`; Oracle/direct → no onward routing).
 
 Gate:
 - [ ] `.claude/` scaffold present (written by `survey-finalize` in S4, or `luke-repo-init` directly if S4 was skipped)

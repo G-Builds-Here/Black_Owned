@@ -1,11 +1,13 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
 - src/app/api/graphql
+- src/app/admin
 - src/app/api/directory
 - src/lib/nats
 - src/services
+- config/jwt
 - bw-scraper/src
 - bw-ingestion/src
 - bw-api/src
@@ -21,7 +23,7 @@ what was found, why it's wrong, and what to do instead.
 ## 1. Fake auth context in GraphQL route
 **Project:** root (Next.js)
 **Location:** `src/app/api/graphql/route.ts`
-**Evidence:** The route sets a hardcoded `context.authorization = "Bearer token"` and performs no JWT verification before dispatching mutations.
+**Evidence:** The route sets a hardcoded `context.authorization = "Bearer token"` (`:125`) and performs no JWT verification before dispatching mutations.
 **Why it's wrong:** Any anonymous caller can execute `createBusiness` and other mutations; the auth model enforced on every REST route is bypassed on this one route.
 **What to do instead:** Run the route through `createAuthMiddleware` and pass the real request headers into the resolver context.
 **Severity:** High
@@ -29,9 +31,9 @@ what was found, why it's wrong, and what to do instead.
 ## 2. Regex-based GraphQL execution
 **Project:** root (Next.js)
 **Location:** `src/app/api/graphql/route.ts`, `src/lib/graphql/`
-**Evidence:** Queries are parsed with regex over the raw query string; the declared `graphql` and `@graphql-tools/schema` dependencies are never imported.
-**Why it's wrong:** Fragile parsing, broken `variables` handling (only inline literals work), no schema validation, and the declared deps are dead weight that misleads readers about the real stack.
-**What to do instead:** Use the already-declared `graphql` package with a real executor and resolvers, or drop the deps if GraphQL is being retired.
+**Evidence:** Queries are parsed with regex over the raw query string; `variables` are mostly ignored; `schema.ts` declares more operations (`submitVerification`, `updateBusiness`) than the executor implements. (The once-declared `graphql`/`@graphql-tools/schema` deps have since been removed from `package.json`.)
+**Why it's wrong:** Fragile parsing, broken `variables` handling (only inline literals work), no schema validation, and the schema file misleads readers about what actually executes.
+**What to do instead:** Use a real executor with resolvers, or retire the GraphQL surface entirely.
 **Severity:** Medium
 
 ## 3. Unauthenticated, host-published worker endpoints
@@ -54,7 +56,7 @@ what was found, why it's wrong, and what to do instead.
 **Project:** root (Next.js) → bw-scraper (Rust)
 **Location:** `src/app/api/admin/enrichment/route.ts` → `bw-scraper/src/api.rs`
 **Evidence:** The TS proxy sends camelCase `businessIds`; `EnrichRequest` deserializes snake_case `business_ids`, so serde silently drops the field.
-**Why it's wrong:** A targeted "enrich these businesses" call degrades into an unfiltered full-table run — wasted SearXNG/Nominatim quota and unexpected writes.
+**Why it's wrong:** A targeted "enrich these businesses" call degrades into an unfiltered enrichment run — wasted SearXNG/Nominatim quota and unexpected writes.
 **What to do instead:** Add `#[serde(alias = "businessIds")]` (or normalize one side) and add a regression test asserting a targeted request touches only the requested ids.
 **Severity:** Medium
 
@@ -66,12 +68,12 @@ what was found, why it's wrong, and what to do instead.
 **What to do instead:** Either publish work to a consumer that actually runs it, or execute in-process and drop the queue-status pretense.
 **Severity:** Medium
 
-## 7. Orphan Rust crates
+## 7. Orphan Rust crates carrying dead auth and duplicate consumers
 **Project:** bw-api, bw-ingestion (Rust libraries)
 **Location:** `bw-api/`, `bw-ingestion/`
-**Evidence:** No binary or compose service runs either crate. bw-ingestion defines NATS consumers (`chat.message`, `email.send`, `image.process`, `cache.invalidate`) nothing hosts, and pins drifted versions (async-nats 0.40, redis 0.27) vs bw-scraper (0.33, 0.24). bw-api's CI exclusion ("pre-existing compile errors, task #71") is stale — `cargo check` now passes.
-**Why it's wrong:** Unused code, longer builds, CI confusion, and a second `cache.invalidate` consumer that invites "who handles this?" ambiguity.
-**What to do instead:** Decide per crate: reactivate with a running consumer, or delete/quarantine with a documented rationale.
+**Evidence:** No binary or compose service runs either crate. bw-ingestion defines NATS consumers (`chat.message`, `email.send`, `image.process`) nothing hosts, and duplicates the TS `cache.invalidate` consumer, with drifted crate pins (async-nats 0.40, redis 0.27) vs bw-scraper. bw-api's `router()` returns an empty Router: its `jsonwebtoken` tower middleware never serves a request, and its async-graphql mutations parse bearer tokens as raw UUIDs (`Uuid::parse_str`) without signature verification. CI excludes bw-api with a stale "compile errors (task #71)" comment — `cargo check` passes today.
+**Why it's wrong:** Unused code, longer builds, CI confusion, "which side handles cache.invalidate?" ambiguity, and — worst — readers may cite bw-api's fake auth as prior art.
+**What to do instead:** Decide per crate: reactivate with a running consumer, or delete/quarantine with a documented rationale. Never build new auth on bw-api.
 **Severity:** Medium
 
 ## 8. Two parallel NATS clients
@@ -90,26 +92,42 @@ what was found, why it's wrong, and what to do instead.
 **What to do instead:** Push search/category/rating filters and LIMIT into SQL; give suggest a dedicated `SELECT DISTINCT name … WHERE name ILIKE $1 LIMIT 5`.
 **Severity:** Medium
 
-## 10. Dead test infrastructure at root
+## 10. Dead test-config surface
 **Project:** root (Next.js)
-**Location:** `vitest.config.ts`, `vitest.setup.ts`, `src/app/performance.test.ts`, `jest.config.components.js`
-**Evidence:** Vitest config is tracked but vitest is not installed at root; `performance.test.ts` and `clickhouse/*.test.ts` cannot run; `jest.config.components.js` references a missing `__mocks__/file-mock.js`; the only working vitest lives in `packages/ui` (not a workspace member).
-**Why it's wrong:** `npm test` can pass while meaningful suites silently never run; config misleads about which runner owns which file.
-**What to do instead:** Install vitest at root or delete the root config and relocate those specs; make `packages/ui` a workspace member if it stays.
+**Location:** `tsconfig.json`, `jest.config.components.js`, `jest.setup.js`, `src/app/performance.test.ts`
+**Evidence:** Root vitest configs were deleted, but `tsconfig.json` still references them and `performance.test.ts` still imports vitest (not installed; Jest-excluded). `jest.config.components.js` maps images to a missing `__mocks__/file-mock.js` and dies on run. `jest.setup.js` is dead next to the live `jest.setup.ts`. The only working vitest lives in `packages/ui`, which is not a workspace member.
+**Why it's wrong:** `npm test` can pass while meaningful suites silently never run; configs mislead about which runner owns which file.
+**What to do instead:** Delete the stale tsconfig entries and `jest.setup.js`; either restore `file-mock.js` or delete the components config; make `packages/ui` a workspace member if it stays.
 **Severity:** Low
 
 ## 11. Environment-variable drift
 **Project:** root (Next.js) + bw-scraper (Rust)
 **Location:** `docker-compose.yml`, `.env.example`, `bw-scraper/src/config.rs`, `bw-scraper/tests/connectors_test.rs`
-**Evidence:** Compose supplies `MINIO_ROOT_*` while the app reads `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`; compose host MinIO port is 9002 while the app default is `MINIO_PORT=9000`; CI exports `VALKEY_URL` while the Rust connector test reads `REDIS_URL` (falling back to localhost).
+**Evidence:** Compose supplies `MINIO_ROOT_*` while the app reads `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`; compose host MinIO port is 9002 while the app default is `MINIO_PORT=9000`; `.env.example` tracks only a handful of vars — `NATS_URL`, `CLICKHOUSE_URL`, `SEARXNG_URL`, `MINIO_*` exist in code but not in the template. The connector test now prefers `VALKEY_URL` (matching CI), but `Config::from_env` keeps the opposite order (`REDIS_URL` first).
 **Why it's wrong:** Local/dev failures that depend on which env file happens to set the right name; CI "connectivity" tests pass with every service down.
 **What to do instead:** One canonical env name per service, documented in `.env.example`; make connector tests fail (not pass) when a service is unreachable.
 **Severity:** Low
 
-## 12. Hardcoded LAN default in product code
+## 12. Committed JWT signing keys as silent fallback
+**Project:** root (Next.js)
+**Location:** `config/jwt/private.pem`, `config/jwt/public.pem`, `src/lib/auth/auth-service.ts`
+**Evidence:** The RS256 keypair is tracked in Git and the auth service uses it whenever `JWT_PRIVATE_KEY`/`JWT_PRIVATE_KEY_PATH` are unset — no warning at boot.
+**Why it's wrong:** Anyone with repo read access can forge valid tokens (including admin) against any deployment that ships without the env override; the fallback makes the misconfiguration invisible.
+**What to do instead:** Per-environment keys injected via env, gitignored key files, fail startup when no key material is configured, rotate the committed pair.
+**Severity:** High
+
+## 13. Client-side-only admin section guard
+**Project:** root (Next.js)
+**Location:** `src/app/admin/*/page.tsx` (`:148-153`)
+**Evidence:** Admin pages check `getSession().user.role !== 'admin'` in the browser and clear the session on API 401; the server renders the admin HTML to anyone.
+**Why it's wrong:** UI-hiding is not access control; the admin surface leaks structure to anonymous users, and safety rests on a single enforcement point (the API routes) with no defense in depth.
+**What to do instead:** Enforce the admin role server-side (middleware or layout check) in addition to the existing API-route guards.
+**Severity:** Medium
+
+## 14. Test binary mutates process-global proxy env
 **Project:** bw-scraper (Rust)
-**Location:** `bw-scraper/src/config.rs`
-**Evidence:** `SEARXNG_URL` defaults to `http://192.168.68.50:8888` — a developer's LAN address.
-**Why it's wrong:** Deployment-specific address leaks into defaults; any environment without an override silently points discovery at one machine's LAN.
-**What to do instead:** Default to an empty value and fail fast with a clear "SEARXNG_URL not configured" error.
-**Severity:** Low
+**Location:** `bw-scraper/src/api.rs` test module (`:558`)
+**Evidence:** A `LazyLock` stub-server fixture calls `std::env::set_var("http_proxy"/"HTTP_PROXY")` for the whole test binary, and an accumulating `Mutex<HashSet>` of stub paths has no reset between tests.
+**Why it's wrong:** Any other test in that binary that issues real HTTP after the stub initializes is silently routed through it; new tests touching the stub race unless they know to take the stub lock.
+**What to do instead:** Scope interception per-test (inject the proxy into the client under test rather than process env), or split the stub-dependent tests into their own integration-test binary.
+**Severity:** Medium

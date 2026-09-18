@@ -5,7 +5,9 @@ luke-repo-init.py — scaffold and sync Luke's Claude Code configuration.
 Supports three flows via --target:
 
   repo      (default)  Scaffold <repo-root>/.claude/ — creates .gitignore,
-                       settings.json, hooks/, skills/, memory/, codebase/.
+                       settings.json, hooks/, skills/, memory/, codebase/,
+                       handoffs/session/ (the only repo-scoped handoff type),
+                       and seeds .claude/repo-profile.json.
                        Use when initialising a repo for the first time,
                        or refreshing after a Luke re-survey.
 
@@ -44,6 +46,7 @@ Exit codes: 0 executed · 1 usage/validation · 4 not found
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -109,6 +112,7 @@ backups/
 # Transient working files
 *.tmp
 *.bak
+tmp/
 
 # plans/ — uncomment to exclude planning files from version control
 # plans/
@@ -411,6 +415,25 @@ def init_repo(repo_root: Path, stack: str, dry_run: bool):
     ensure_dir(dot_claude / "memory", log, dry_run)
     ensure_dir(dot_claude / "codebase", log, dry_run)
 
+    # handoffs/ — only session is repo-scoped (luke handoffs land here when a
+    # repo_root hint is passed). Pipeline handoffs belong in the developer's
+    # global ~/.claude/handoffs/, never in the repo.
+    ensure_dir(dot_claude / "handoffs" / "session", log, dry_run)
+    write_new(dot_claude / "handoffs" / "session" / ".gitkeep", "", log, dry_run)
+
+    # Initial repo profile — delegated to luke-copy-assets --profile-only so
+    # detection lives in ONE implementation. survey-finalize refreshes it later.
+    if not (dot_claude / "repo-profile.json").exists():
+        copier = Path(__file__).resolve().parent / "luke-copy-assets.py"
+        if copier.is_file():
+            cmd = [sys.executable, str(copier), "--repo-root", str(repo_root),
+                   "--profile-only"]
+            if dry_run:
+                cmd.append("--dry-run")
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            log.append(("profile-seed" if r.returncode == 0 else "profile-seed-failed",
+                        str(dot_claude / "repo-profile.json")))
+
     # Root .gitignore check
     w = check_root_gitignore(repo_root)
     if w:
@@ -589,9 +612,9 @@ def handle(v):
         audit_append(base, "luke-repo-init", target, key=str(repo_root), result=status)
 
     nexts = {
-        "repo": "Next: Luke will write .claude/skills/luke/SKILL.md and CLAUDE.md content.",
+        "repo": "Next: Luke writes .claude/skills/luke/SKILL.md; CLAUDE.md carries only repo identity + the Luke-artifact protocol (facts live in .claude/codebase/).",
         "local": "Next: Open a new Claude Code session in this repo — your global settings now include it.",
-        "repo-from": "Next: Luke will write .claude/skills/luke/SKILL.md and CLAUDE.md content for the new repo.",
+        "repo-from": "Next: Luke writes .claude/skills/luke/SKILL.md for the new repo; CLAUDE.md stays identity + Luke-artifact protocol only.",
     }
     return {
         "status": status,
@@ -607,8 +630,8 @@ def handle(v):
 
 TOOL = Tool(
     name="luke-repo-init",
-    version="1.1",
-    summary="Scaffold and sync Luke's Claude Code configuration (.claude/ scaffold, local settings sync, cross-repo propagation).",
+    version="1.2",
+    summary="Scaffold and sync Luke's Claude Code configuration (.claude/ scaffold — gitignore incl. tmp/, settings, hooks, repo-scoped handoffs/session, seeded repo profile; local settings sync; cross-repo propagation).",
     flags={
         "--repo-root": {"required": True, "type": "path",
                         "description": "Path to the target repo root (must exist)."},

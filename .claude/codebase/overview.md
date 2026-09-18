@@ -1,6 +1,6 @@
 <!--
-surveyed_at: 2026-09-05T19:45:00Z
-commit: 1d809d37d45d649844f979496e7d7ea1d47a40ce
+surveyed_at: 2026-09-18T15:38:00Z
+commit: 6067387c5757ff143d3b99eaa000af16f4b1d143
 relevant_paths:
   - package.json
   - Cargo.toml
@@ -32,7 +32,7 @@ REST + GraphQL API surface.
 [ASSUMED — inferred from code layout and service boundaries]
 
 - **Next.js App Router doubles as the API host.** The product is a web directory, so
-  the UI and the ~50 REST/GraphQL routes live in one `src/app` codebase. There is no
+  the UI and all 33 REST routes + the GraphQL route live in one `src/app` codebase. There is no
   separate BFF: server components and route handlers (`src/app/api/**/route.ts`) share
   the same `pg` pool and auth middleware.
 - **Heavy discovery lives in Rust.** SearXNG paged discovery, rate-limited enrichment,
@@ -72,12 +72,14 @@ npm run dev                 # Next.js on :3000
 
 Optional seed: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/seed/seed_test_data.sql`.
 
-Key env vars (source of truth = local `.env`, template = `.env.example`):
-`DATABASE_URL` (or `POSTGRES_HOST/PORT/DB/USER/PASSWORD` + `POSTGRES_SCHEMA`),
-`JWT_SECRET` (HS256) or `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH` (RS256),
-`VALKEY_HOST`/`VALKEY_PORT`, `NATS_URL`, `NEXT_PUBLIC_NATS_WS_URL`, `CLICKHOUSE_URL`,
-`SEARXNG_URL`, `MINIO_ENDPOINT`/`MINIO_PORT`/`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`/
-`MINIO_DEFAULT_BUCKET`.
+Key env vars — the tracked `.env.example` template covers only `DATABASE_URL`
+(or `POSTGRES_HOST/PORT/DB/USER/PASSWORD`), `VALKEY_HOST`/`VALKEY_PORT`,
+`JWT_SECRET`, and `SCRAPER_BASE_URL`. Everything else exists in code only
+(compose injects service URLs into the bw-scraper container; host-side runs
+must set their own): `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH` (RS256),
+`NATS_URL`, `NEXT_PUBLIC_NATS_WS_URL`, `CLICKHOUSE_URL`, `NOMINATIM_URL`,
+`SEARXNG_URL` (no default — empty means discovery cannot reach metasearch), and
+the `MINIO_*` set.
 
 ## Running Modes
 
