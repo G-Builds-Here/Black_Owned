@@ -20,7 +20,7 @@ Paths: use absolute paths. Git can use `~`. Never `cd <dir> && <command>` — `c
 
 | | |
 |---|---|
-| **What** | Generate a handoff via `$UB make-handoff` before routing to another skill. Then `$UB talia "/compact" --next "/[next-skill]" --skill "<SkillName>"` to auto-inject `/compact` followed by the next skill. If talia reports ERROR, tell the user: "Talia couldn't fire — type `/compact` manually, then run `/[next-skill]`." |
+| **What** | Generate a handoff via `$UB make-handoff` before routing to another skill. Then `$UB talia --command /compact --next "/[next-skill]" --skill "<SkillName>"` to auto-inject `/compact` followed by the next skill. If talia reports ERROR, tell the user: "Talia couldn't fire — type `/compact` manually, then run `/[next-skill]`." |
 | **Why** | Handoffs survive session boundaries. `/compact` between skills sheds accumulated tool results — the primary source of context bloat. |
 
 ---

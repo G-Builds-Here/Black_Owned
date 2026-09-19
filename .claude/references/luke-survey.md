@@ -13,7 +13,7 @@ Load on demand — not needed on every invocation. Luke's steps direct when to r
 ### Script location and registration
 
 - **Script path:** `<BASE_DIR>/tools/luke-repo-init.py`
-- **Invocation:** `bash ~/.claude/hooks/ub.sh luke-repo-init <repo-root> --stack <dotnet|node|python|unknown>`
+- **Invocation:** `bash ~/.claude/hooks/ub.sh luke-repo-init --repo-root <repo-root> --stack <dotnet|node|python|unknown>`
 - **Register in:** `<BASE_DIR>/tools/REGISTRY.md` before first use
 
 ### What the script creates
@@ -34,7 +34,7 @@ Load on demand — not needed on every invocation. Luke's steps direct when to r
 
 - `CLAUDE.md` — Luke writes this (content requires judgment)
 - `.claude/skills/luke/SKILL.md` — Luke writes this (content is repo-specific)
-- `aidlc-docs/` — created during S4 (survey artifacts)
+- `.claude/codebase/` — created during S4 (survey artifacts)
 
 ### Script behaviour
 
@@ -71,7 +71,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-meta_path = repo_root / "aidlc-docs" / "inception" / "reverse-engineering" / ".survey-meta.md"
+meta_path = repo_root / ".claude" / "codebase" / ".survey-meta.md"
 
 if not meta_path.exists():
     sys.stderr.write("Luke: No survey found for this repo. Run /luke to survey and initialise.\n"); sys.exit(0)
@@ -107,7 +107,7 @@ import fnmatch, os, re, subprocess, sys
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-artifacts_dir = repo_root / "aidlc-docs" / "inception" / "reverse-engineering"
+artifacts_dir = repo_root / ".claude" / "codebase"
 edited_file = os.environ.get("TOOL_INPUT_FILE_PATH") or os.environ.get("TOOL_INPUT_PATH") or ""
 
 if not edited_file or not artifacts_dir.exists(): sys.exit(0)
@@ -150,11 +150,10 @@ except Exception: pass
 | `.claude/settings.json` | Yes | Shared permissions + hooks |
 | `.claude/hooks/*.py` | Yes | Hook scripts Luke generates (staleness check, etc.) |
 | `.claude/memory/` | Yes | Repo-specific knowledge Luke accumulates — conventions, decisions, gotchas. Shared team intelligence. |
-| `aidlc-docs/` | Yes | All survey artifacts — the entire point of Luke |
+| `.claude/codebase/` | Yes | All survey artifacts — the entire point of Luke |
 | `.claude/settings.local.json` | No | Personal overrides: model, theme, personal tokens — never shared |
 | `.claude/.session*` | No | Transient session state — meaningless outside the session |
 | `.claude/backups/` | No | Local safety copies — not for version control |
-| `.claude/codebase/` | No | Legacy Lucius directory (migrated out by Luke; deleted) |
 | `.claude/plans/` | Ask user | WIP planning for repo changes — per-developer in-progress work. Luke asks whether to track before deciding. |
 
 ### `.claude/.gitignore` template
@@ -170,9 +169,6 @@ settings.local.json
 
 # Local safety backups — not for version control
 backups/
-
-# Legacy Lucius artifacts (migrated to aidlc-docs/ by Luke)
-codebase/
 
 # Transient working files
 *.tmp
@@ -307,29 +303,29 @@ Never replace a `settings.json` wholesale — always merge.
 
 | Script | What it finds | Feeds into | When |
 |--------|---------------|------------|------|
-| `$UB pre-scan <repo>` | Project layout, packages, configs, test groups, static state, base classes, env vars, **HTTP endpoints** | All 3 cluster subagent prompts (mandatory) | Before subagent launch |
-| `$UB c4-extract <repo>` | C4 skeleton: Context (users, external systems), Containers (services, DBs, queues), Components (classes, namespaces), Dependencies | C4 JSON skeleton | After pre-scan, before subagents |
-| `$UB c4-render <c4.json> --output <file.html>` | Renders self-contained HTML C4 diagrams with SVG, legends, and interactivity | C4 HTML diagram | After c4-extract, during artifact writing |
-| `$UB c4-navigator <dir>` | Generates index.md navigation hub linking to all artifacts | index.md | After all artifacts written |
-| `$UB check-unused-deps <repo>` | Unused NuGet/npm packages | `findings.md` → Tech Debt | Parallel with subagents |
-| `$UB find-helper-duplication <repo> --json` | Local methods bypassing shared helpers | `findings.md` → Violations | Parallel with subagents |
-| `$UB map-token-usage <repo> --json` | Token-to-endpoint-to-test-group mapping | `patterns.md` → Auth section | Parallel with subagents |
-| `$UB check-survey-staleness <repo>` | Commit distance + days old + lines changed per artifact | Query Mode + Local Skill startup | Before answering questions |
-| `$UB check-survey-staleness <repo> --artifact <name.md>` | Per-artifact targeted staleness | Targeted re-survey decision | When working in a specific area |
+| `$UB pre-scan --repo-root <repo>` | Project layout, packages, configs, test groups, static state, base classes, env vars, **HTTP endpoints** | All 3 cluster subagent prompts (mandatory) | Before subagent launch |
+| `$UB c4-extract --repo-root <repo>` | C4 skeleton: Context (users, external systems), Containers (services, DBs, queues), Components (classes, namespaces), Dependencies | C4 JSON skeleton | After pre-scan, before subagents |
+| `$UB c4-render --c4-data <c4.json> --output <file.html>` | Renders self-contained HTML C4 diagrams with SVG, legends, and interactivity | C4 HTML diagram | After c4-extract, during artifact writing |
+| `$UB c4-navigator --directory <dir>` | Generates index.md navigation hub linking to all artifacts | index.md | After all artifacts written |
+| `$UB check-unused-deps --repo-root <repo>` | Unused NuGet/npm packages | `findings.md` → Tech Debt | Parallel with subagents |
+| `$UB find-helper-duplication --repo-root <repo> --json` | Local methods bypassing shared helpers | `findings.md` → Violations | Parallel with subagents |
+| `$UB map-token-usage --repo-root <repo> --json` | Token-to-endpoint-to-test-group mapping | `patterns.md` → Auth section | Parallel with subagents |
+| `$UB check-survey-staleness --repo-root <repo>` | Commit distance + days old + lines changed per artifact | Query Mode + Local Skill startup | Before answering questions |
+| `$UB check-survey-staleness --repo-root <repo> --artifact <name.md>` | Per-artifact targeted staleness | Targeted re-survey decision | When working in a specific area |
 
 **Key:** pre-scan now includes HTTP endpoint enumeration (all `[HttpGet]`/`[Route]`/`app.MapXxx` attributes). Agent 2 reads the table — it does NOT re-scan for routes.
 
-**C4 Workflow:**
-1. Run `pre-scan` first (mandatory for all subagents)
-2. Run `c4-extract` after pre-scan (produces `c4-skeleton.json`)
-3. Run `c4-render` on the JSON output (produces self-contained HTML with SVG diagrams)
-4. Launch subagents (with pre-scan + C4 skeleton embedded)
+**C4 Workflow — orchestrated internally by `$UB survey-prep` (S2); do not run these steps individually:**
+1. `survey-prep` runs `pre-scan` first (its output feeds all 3 subagents)
+2. then `c4-extract` (produces `c4-skeleton.json`)
+3. then `c4-render` on the JSON output (self-contained HTML with SVG diagrams)
+4. Luke launches subagents (with pre-scan + C4 skeleton embedded)
 5. Subagents enrich C4 skeleton → write final C4 artifacts
 6. Run `c4-navigator` to generate index.md navigation hub
 
 Script results are deterministic and authoritative — merge into artifacts without second-guessing. Do not reference script names in artifact files (see § Artifact Hygiene).
 
-Run pre-scan first. Wait for its output. Then run c4-extract and c4-render. Then launch the 3 cluster agents (with pre-scan + C4 skeleton embedded) and the 3 parallel scripts simultaneously. After all artifacts are written, run c4-navigator to generate the index.md navigation hub.
+In S2, `$UB survey-prep --repo-root <repo>` performs the whole scripted sequence in one call — pre-scan and the 3 parallel scripts, then c4-extract, c4-render, and generate-artifact-skeletons — and reports every output path in its JSON summary. Luke then launches the 3 cluster agents (with pre-scan + C4 skeleton embedded). After all artifacts are written, run `c4-navigator` to generate the index.md navigation hub. Individual scripts are called directly only for targeted re-runs.
 
 ---
 
@@ -346,6 +342,9 @@ Each subagent receives: pre-scan output scoped to its cluster + the cluster's st
 - Multi-project: tag every finding with which project it belongs to (from directory/csproj/package.json).
 - Return ONLY the LUKE_CLUSTER_RESULT block. No preamble. No explanation outside the block.
 - Fill every field. Use "none found" if genuinely absent. Never leave a field empty.
+- Write your LUKE_CLUSTER_RESULT block verbatim to `.claude/tmp/clusters/cluster-<N>.md`
+  (N given in your prompt) BEFORE returning — the file survives compaction; your returned
+  text may not. Create the directory if missing; write nothing else.
 ```
 
 ### Agent 1 — Business + Stack
@@ -487,7 +486,7 @@ Return the LUKE_CLUSTER_RESULT block using the template above. Fill every field.
 
 ## Subagent Return Formats
 
-The cluster-specific templates above are the authoritative return formats — embed each verbatim in the relevant agent prompt. For the Luke context query subagent (`agents/luke.md`), the return format is `LUKE_CONTEXT_RESULT` — see that file.
+The cluster-specific templates above are the authoritative return formats — embed each verbatim in the relevant agent prompt. For the Luke context query subagent (`agents/luke-context.md`), the return format is `LUKE_CONTEXT_RESULT` — see that file.
 
 ---
 
@@ -608,7 +607,7 @@ Customise the file patterns based on actual repo structure observed during S2/S3
 
 ## Artifact Templates
 
-All files written to `<repo-root>/aidlc-docs/inception/reverse-engineering/`.
+All files written to `<repo-root>/.claude/codebase/`.
 
 ### Standard metadata header (prepend to EVERY artifact)
 
@@ -1086,25 +1085,29 @@ C4Component
 
 ## S5 CLAUDE.md
 
-### AIDLC placement rule
+### CLAUDE.md placement rule
 
-AIDLC core-workflow always owns root `CLAUDE.md`. When AIDLC is installed:
-- Luke writes project instructions to `<repo>/.claude/CLAUDE.md`
-- Root `CLAUDE.md` is owned by AIDLC — do not touch it
-- Claude Code loads both files automatically
+- Luke writes project instructions to `<repo>/.claude/CLAUDE.md` — the canonical home per the Luke skill's RULES (One CLAUDE.md). Never create a root `CLAUDE.md`.
+- If a root `CLAUDE.md` holds project content, leave it in place and record the conflict with `.claude/CLAUDE.md` in the survey findings doc (Luke augments, never removes).
+- If `.claude/CLAUDE.md` already exists with content, inject the Architecture section only — do not rewrite other sections
 
-When AIDLC is NOT installed:
-- Luke writes to `<repo>/CLAUDE.md`
-- If existing content is present, inject Architecture section only — do not rewrite other sections
+### Content policy (when generating from scratch)
 
-### Required CLAUDE.md sections (when generating from scratch)
+CLAUDE.md carries repo identity and the Luke-artifact protocol — nothing else. Facts that
+go stale (setup, commands, environment, test patterns, gotchas) live in the survey
+artifacts under `.claude/codebase/` and are refreshed by `/luke`; duplicating them in
+CLAUDE.md guarantees drift. Required sections:
 
-1. **Setup** — prerequisites, credentials (exact env var names or SSO command), access to request, verify command
-2. **Commands** — build, test all, test filtered by group, group ordering with WHY
-3. **Environment** — running modes, default behaviour with no env vars
-4. **Adding Tests** — directory pattern, base class, shared helpers, trait, naming, one example
-5. **Gotchas** — non-obvious quirks that will bite a new developer
-6. **Architecture** — direct artifact index (see § Architecture section injection below). Claude reads these files natively — no skill invocation needed for questions about the codebase.
+1. **Project identity** — 2-3 sentences: what the repo is, who owns it, where it runs.
+2. **Architecture** — direct artifact index (see § Architecture section injection below). Claude reads these files natively — no skill invocation needed for questions about the codebase.
+3. **AI Context Protocol** — the fallback chain in the injection block below.
+
+The Luke hooks are registered in the repo's tracked `.claude/settings.json` (written and
+merged by `luke-repo-init`, committed with the survey) — hook mechanics are NOT documented
+in CLAUDE.md. When refreshing an existing CLAUDE.md that carries old fact sections
+(Setup/Commands/Environment/…), replace them with a one-line pointer to `.claude/codebase/`
+— show the diff and confirm before writing (RULES: Luke augments, never removes — the
+pointer replacement happens only on the user-confirmed diff).
 
 ### Architecture section injection (when CLAUDE.md exists but lacks it)
 
@@ -1113,7 +1116,7 @@ Append before any closing lines or at end of file. This section tells Claude exa
 ```markdown
 ## Architecture
 
-Codebase survey artifacts are in `aidlc-docs/inception/reverse-engineering/`.
+Codebase survey artifacts are in `.claude/codebase/`.
 Each file has a metadata header showing when it was surveyed and which paths it covers —
 check the header against what you are currently editing to assess freshness.
 Read the relevant file directly when you need it.
@@ -1141,10 +1144,10 @@ the artifact may be stale for that area. Run `/luke` to refresh specific artifac
 
 Before answering codebase questions, writing or editing code, or making architectural decisions, follow this fallback chain:
 
-1. **Index once per session** — run `ctx_batch_execute` over all `*.md` files in `aidlc-docs/inception/reverse-engineering/` to load them into the searchable knowledge base
+1. **Index once per session** — run `ctx_batch_execute` over all `*.md` files in `.claude/codebase/` to load them into the searchable knowledge base
 2. **Search first** — run `ctx_search` with a specific query; returns focused excerpts without reading raw files
-3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
-4. **No artifacts** — if `aidlc-docs/inception/reverse-engineering/` is empty, offer to run `/luke`
+3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke-context.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
+4. **No artifacts** — if `.claude/codebase/` is empty, offer to run `/luke`
 ```
 
 ### "Working with Claude" injection
@@ -1195,7 +1198,7 @@ You are Luke — the maintainer of <REPO_NAME>'s codebase intelligence artifacts
 Run the staleness check — single call, covers all three signals per artifact:
 
 ```
-bash ~/.claude/hooks/ub.sh check-survey-staleness <repo-root>
+bash ~/.claude/hooks/ub.sh check-survey-staleness --repo-root <repo-root>
 ```
 
 Read the `artifacts` array in the JSON output. For each artifact, combine `behind`, `days_old`, and `lines_changed` to assess whether it needs updating.
@@ -1219,109 +1222,3 @@ For a single stale artifact:
 Route to global `/luke` — it handles the full S1-S5 procedure.
 ```
 
----
-
-## AIDLC
-
-### Source Configuration
-
-AIDLC source path: read from `<BASE_DIR>/assets/config.md` § AIDLC → `Source repo` value. Store as `<AIDLC_SOURCE>`.
-
-Source structure:
-```
-aidlc-workflows/
-├── aidlc-rules/
-│   ├── VERSION
-│   ├── aws-aidlc-rules/
-│   │   └── core-workflow.md
-│   └── aws-aidlc-rule-details/
-│       ├── common/
-│       ├── inception/
-│       ├── construction/
-│       ├── extensions/
-│       └── operations/
-```
-
-### A1 — Detect
-
-Determine sub-mode:
-
-| Condition | Action |
-|-----------|--------|
-| `.aidlc-meta.md` missing | Install mode |
-| `.aidlc-meta.md` exists + user says "update" | Update mode |
-| `.aidlc-meta.md` exists + user says "status" | Status mode |
-| `.aidlc-meta.md` exists, no explicit action | Offer: status / update / re-install |
-
-Read `<AIDLC_SOURCE>/aidlc-rules/VERSION` for source version. Read `.aidlc-meta.md` for installed version (if present).
-
-### A2 — Validate
-
-- Confirm `<AIDLC_SOURCE>` path exists and is accessible
-- Verify `core-workflow.md` is present at expected path
-- Verify `aws-aidlc-rule-details/` subdirectories are present
-- Note current vs available version
-
-Report to user: "AIDLC vX.Y.Z available. Current installed: vA.B.C (or: not installed). Proceed?"
-
-### A3 — Execute
-
-**Platform mapping:** AIDLC core-workflow always owns root `CLAUDE.md`. If existing project CLAUDE.md content exists, relocate it first.
-
-#### Install — existing CLAUDE.md
-
-| Step | Action |
-|------|--------|
-| 1 | Move `<repo>/CLAUDE.md` → `<repo>/.claude/CLAUDE.md` |
-| 2 | Copy `<AIDLC_SOURCE>/aidlc-rules/aws-aidlc-rules/core-workflow.md` → `<repo>/CLAUDE.md` |
-| 3 | Copy `<AIDLC_SOURCE>/aidlc-rules/aws-aidlc-rule-details/` → `<repo>/.aidlc-rule-details/` |
-| 4 | Write `.aidlc-meta.md` (see AIDLC Meta Template below) |
-
-#### Install — no existing CLAUDE.md
-
-| Step | Action |
-|------|--------|
-| 1 | Copy `core-workflow.md` → `<repo>/CLAUDE.md` |
-| 2 | Copy `aws-aidlc-rule-details/` → `<repo>/.aidlc-rule-details/` |
-| 3 | Write `.aidlc-meta.md` |
-
-#### Update
-
-| Step | Action |
-|------|--------|
-| 1 | Replace `<repo>/CLAUDE.md` with latest `core-workflow.md` |
-| 2 | Replace `<repo>/.aidlc-rule-details/` with latest rule details |
-| 3 | Update `.aidlc-meta.md` (version + updated date) |
-| Note | `.claude/CLAUDE.md` (project instructions) is NOT touched |
-
-### A4 — Verify
-
-- Confirm all files written
-- Confirm `.aidlc-meta.md` contains correct version and date
-- Tell user how to activate: "Prefix development requests with: 'Using AI-DLC, [your request]'"
-- Note: if Luke survey artifacts don't exist yet, offer to run survey now so AIDLC has brownfield context
-
-### AIDLC Meta Template
-
-```markdown
-# AIDLC Installation
-**Version:** <version from VERSION file>
-**Installed:** <ISO 8601 date>
-**Updated:** <ISO 8601 date>
-**Source:** <absolute path to aidlc-workflows clone>
-**Platform:** claude-code
-**Core workflow:** CLAUDE.md
-**Rule details:** .aidlc-rule-details/
-
-## Activation
-Prefix development requests with: "Using AI-DLC, [your request]"
-
-## What's Installed
-- **Core workflow** — adaptive 3-phase methodology (inception → construction → operations)
-- **Rule details** — detailed stage rules loaded on-demand by the core workflow
-  - common/ — shared guidance (process, validation, Q&A format, session continuity)
-  - inception/ — planning rules (workspace detection, requirements, stories, design)
-  - construction/ — implementation rules (functional design, NFRs, code gen, testing)
-  - extensions/ — opt-in quality rules (security baseline, property-based testing)
-  - operations/ — placeholder for future deployment/monitoring rules
-```

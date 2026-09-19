@@ -5,7 +5,9 @@ luke-repo-init.py — scaffold and sync Luke's Claude Code configuration.
 Supports three flows via --target:
 
   repo      (default)  Scaffold <repo-root>/.claude/ — creates .gitignore,
-                       settings.json, hooks/, skills/, memory/.
+                       settings.json, hooks/, skills/, memory/, codebase/,
+                       handoffs/session/ (the only repo-scoped handoff type),
+                       and seeds .claude/repo-profile.json.
                        Use when initialising a repo for the first time,
                        or refreshing after a Luke re-survey.
 
@@ -21,28 +23,36 @@ Supports three flows via --target:
                        settings.json structure, and hook scripts. Does NOT copy
                        skills/luke/SKILL.md or memory/ — those are repo-specific.
 
-Usage:
-  $UB luke-repo-init <repo-root> [--target repo|local|repo-from] [--src <src-repo>]
-                     [--stack dotnet|node|python|unknown] [--dry-run]
+Contract:  python luke-repo-init.py --help   (JSON)
+Standard:  references/tooling-standards.md
+
+Usage (flags only):
+  $UB luke-repo-init --repo-root <repo-root> [--target repo|local|repo-from]
+                     [--src <src-repo>] [--stack dotnet|node|python|unknown] [--dry-run]
 
 Examples:
-  # Initialise a repo (global → repo):
-  $UB luke-repo-init /path/to/myrepo --stack dotnet
+  # Initialise a repo (global -> repo):
+  $UB luke-repo-init --repo-root /path/to/myrepo --stack dotnet
 
-  # New dev syncs their local after cloning (repo → local):
-  $UB luke-repo-init /path/to/myrepo --target local
+  # New dev syncs their local after cloning (repo -> local):
+  $UB luke-repo-init --repo-root /path/to/myrepo --target local
 
-  # Propagate setup from one repo to another (repo → repo):
-  $UB luke-repo-init /path/to/new-repo --target repo-from --src /path/to/existing-repo
+  # Propagate setup from one repo to another (repo -> repo):
+  $UB luke-repo-init --repo-root /path/to/new-repo --target repo-from --src /path/to/existing-repo
+
+Exit codes: 0 executed · 1 usage/validation · 4 not found
 """
 
-import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
+from toolkit import Tool, UsageError, NotFound, audit_append
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 HOME = Path.home()
 
 # ---------------------------------------------------------------------------
@@ -99,18 +109,16 @@ settings.local.json
 # Local safety backups — not for version control
 backups/
 
-# Legacy Lucius artifacts (migrated to aidlc-docs/ by Luke)
-codebase/
-
 # Transient working files
 *.tmp
 *.bak
+tmp/
 
 # plans/ — uncomment to exclude planning files from version control
 # plans/
 
-# Python bytecode from hooks — auto-generated, never commit
-hooks/__pycache__/
+# Python bytecode — auto-generated, never commit (any subdir: hooks/, tools/, …)
+__pycache__/
 
 # memory/ is intentionally tracked — repo-specific knowledge shared across the team
 """
@@ -128,7 +136,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-meta_path = repo_root / "aidlc-docs" / "inception" / "reverse-engineering" / ".survey-meta.md"
+meta_path = repo_root / ".claude" / "codebase" / ".survey-meta.md"
 
 if not meta_path.exists():
     sys.stderr.write("Luke: No survey found for this repo. Run /luke to survey and initialise.\\n")
@@ -179,7 +187,7 @@ import sys
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-artifacts_dir = repo_root / "aidlc-docs" / "inception" / "reverse-engineering"
+artifacts_dir = repo_root / ".claude" / "codebase"
 flag_file = repo_root / ".claude" / ".session-artifacts-indexed"
 
 # Only index once per session
@@ -216,7 +224,7 @@ import sys
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-artifacts_dir = repo_root / "aidlc-docs" / "inception" / "reverse-engineering"
+artifacts_dir = repo_root / ".claude" / "codebase"
 edited_file = os.environ.get("TOOL_INPUT_FILE_PATH") or os.environ.get("TOOL_INPUT_PATH") or ""
 
 if not edited_file or not artifacts_dir.exists():
@@ -345,7 +353,7 @@ def init_repo(repo_root: Path, stack: str, dry_run: bool):
     if stack == "unknown":
         detected = detect_stack(repo_root)
         if detected != "unknown":
-            print(f"Auto-detected stack: {detected}")
+            print(f"Auto-detected stack: {detected}", file=sys.stderr)
             stack = detected
 
     permissions = BASE_PERMISSIONS + STACK_PERMISSIONS.get(stack, STACK_PERMISSIONS["unknown"])
@@ -402,9 +410,29 @@ def init_repo(repo_root: Path, stack: str, dry_run: bool):
     write_new(hooks_dir / "luke-edit-staleness-check.py", EDIT_STALENESS_HOOK_PY, log, dry_run)
     write_new(hooks_dir / "luke-auto-index-check.py", AUTO_INDEX_HOOK_PY, log, dry_run)
 
-    # skills/ and memory/ directories
+    # skills/, memory/, and codebase/ (survey artifacts destination) directories
     ensure_dir(dot_claude / "skills", log, dry_run)
     ensure_dir(dot_claude / "memory", log, dry_run)
+    ensure_dir(dot_claude / "codebase", log, dry_run)
+
+    # handoffs/ — only session is repo-scoped (luke handoffs land here when a
+    # repo_root hint is passed). Pipeline handoffs belong in the developer's
+    # global ~/.claude/handoffs/, never in the repo.
+    ensure_dir(dot_claude / "handoffs" / "session", log, dry_run)
+    write_new(dot_claude / "handoffs" / "session" / ".gitkeep", "", log, dry_run)
+
+    # Initial repo profile — delegated to luke-copy-assets --profile-only so
+    # detection lives in ONE implementation. survey-finalize refreshes it later.
+    if not (dot_claude / "repo-profile.json").exists():
+        copier = Path(__file__).resolve().parent / "luke-copy-assets.py"
+        if copier.is_file():
+            cmd = [sys.executable, str(copier), "--repo-root", str(repo_root),
+                   "--profile-only"]
+            if dry_run:
+                cmd.append("--dry-run")
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            log.append(("profile-seed" if r.returncode == 0 else "profile-seed-failed",
+                        str(dot_claude / "repo-profile.json")))
 
     # Root .gitignore check
     w = check_root_gitignore(repo_root)
@@ -540,99 +568,100 @@ def init_repo_from(repo_root: Path, src_root: Path, stack: str, dry_run: bool):
 
 
 # ---------------------------------------------------------------------------
-# Report
+# GPTS CLI
 # ---------------------------------------------------------------------------
 
-def print_report(repo_root: Path, target: str, log: list, warnings: list, dry_run: bool):
-    prefix = "[DRY RUN] " if dry_run else ""
-    print(f"\n{prefix}luke-repo-init — target: {target}")
-    print(f"Repo: {repo_root}\n")
-
-    icons = {"create": "+", "merge": "~", "skip": "=",
-             "add": "+", "copy": "->", "merge-from-src": "~"}
-
-    if log:
-        for action, desc in log:
-            print(f"  {icons.get(action, '?')} [{action}] {desc}")
-    else:
-        print("  (nothing to do)")
-
-    if warnings:
-        print("\nWarnings:")
-        for w in warnings:
-            print(f"  ! {w}")
-
-    print()
-    if target == "repo":
-        print("Next: Luke will write .claude/skills/luke/SKILL.md and CLAUDE.md content.")
-    elif target == "local":
-        print("Next: Open a new Claude Code session in this repo — your global settings now include it.")
-    elif target == "repo-from":
-        print("Next: Luke will write .claude/skills/luke/SKILL.md and CLAUDE.md content for the new repo.")
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Scaffold and sync Luke's Claude Code configuration.",
-    )
-    parser.add_argument("repo_root", help="Absolute path to the target repo root")
-    parser.add_argument(
-        "--target",
-        choices=["repo", "local", "repo-from"],
-        default="repo",
-        help=(
-            "repo: scaffold <repo-root>/.claude/ (default). "
-            "local: sync repo config into user's ~/.claude/settings.json. "
-            "repo-from: copy scaffold from --src repo into <repo-root>/.claude/. "
-        )
-    )
-    parser.add_argument(
-        "--src",
-        help="Source repo root (required when --target repo-from)"
-    )
-    parser.add_argument(
-        "--stack",
-        choices=["dotnet", "node", "python", "unknown"],
-        default="unknown",
-        help="Tech stack for permissions (auto-detected if omitted)"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print what would happen without writing anything"
-    )
-    args = parser.parse_args()
-
-    repo_root = Path(args.repo_root).resolve()
+def handle(v):
+    repo_root = Path(v["--repo-root"]).resolve()
     if not repo_root.exists():
-        print(f"ERROR: repo root not found: {repo_root}", file=sys.stderr)
-        sys.exit(1)
+        raise NotFound(
+            f"repo root not found: {repo_root}",
+            "pass an existing repository directory: $UB luke-repo-init --repo-root <repo-root>",
+        )
 
-    if args.target == "repo-from":
-        if not args.src:
-            print("ERROR: --target repo-from requires --src <source-repo-root>", file=sys.stderr)
-            sys.exit(1)
-        src_root = Path(args.src).resolve()
+    target = v["--target"]
+    stack = v["--stack"]
+    dry_run = bool(v.get("--dry-run", False))
+    base = Path(v["--base"])
+
+    if target == "repo-from":
+        if not v.get("--src"):
+            raise UsageError(
+                "--target repo-from requires --src <source-repo-root>",
+                "pass the source repo: $UB luke-repo-init --repo-root <repo> --target repo-from --src <src>",
+            )
+        src_root = Path(v["--src"]).resolve()
         if not src_root.exists():
-            print(f"ERROR: source repo not found: {src_root}", file=sys.stderr)
-            sys.exit(1)
-        log, warnings = init_repo_from(repo_root, src_root, args.stack, args.dry_run)
-
-    elif args.target == "local":
-        log, warnings = sync_to_local(repo_root, args.dry_run)
-
+            raise NotFound(
+                f"source repo not found: {src_root}",
+                "pass an existing source repository directory via --src: $UB luke-repo-init --repo-root <repo> --target repo-from --src <src>",
+            )
+        log, warnings = init_repo_from(repo_root, src_root, stack, dry_run)
+        status = "copied"
+    elif target == "local":
+        log, warnings = sync_to_local(repo_root, dry_run)
+        status = "synced"
     else:  # repo (default)
-        log, warnings = init_repo(repo_root, args.stack, args.dry_run)
+        log, warnings = init_repo(repo_root, stack, dry_run)
+        status = "scaffolded"
 
-    print_report(repo_root, args.target, log, warnings, args.dry_run)
+    if dry_run:
+        status = "dry_run"
 
-    if warnings and not args.dry_run:
-        sys.exit(1 if any("ERROR" in w for w in warnings) else 0)
+    if not dry_run:
+        audit_append(base, "luke-repo-init", target, key=str(repo_root), result=status)
+
+    nexts = {
+        "repo": "Next: Luke writes .claude/skills/luke/SKILL.md; CLAUDE.md carries only repo identity + the Luke-artifact protocol (facts live in .claude/codebase/).",
+        "local": "Next: Open a new Claude Code session in this repo — your global settings now include it.",
+        "repo-from": "Next: Luke writes .claude/skills/luke/SKILL.md for the new repo; CLAUDE.md stays identity + Luke-artifact protocol only.",
+    }
+    return {
+        "status": status,
+        "target": target,
+        "repo_root": str(repo_root),
+        "stack": stack,
+        "dry_run": dry_run,
+        "actions": [{"action": action, "path": where} for action, where in log],
+        "warnings": warnings,
+        "next": nexts[target],
+    }
+
+
+TOOL = Tool(
+    name="luke-repo-init",
+    version="1.2",
+    summary="Scaffold and sync Luke's Claude Code configuration (.claude/ scaffold — gitignore incl. tmp/, settings, hooks, repo-scoped handoffs/session, seeded repo profile; local settings sync; cross-repo propagation).",
+    flags={
+        "--repo-root": {"required": True, "type": "path",
+                        "description": "Path to the target repo root (must exist)."},
+        "--target": {"required": False, "type": "choice",
+                     "choices": ["repo", "local", "repo-from"], "default": "repo",
+                     "description": "repo: scaffold <repo-root>/.claude/ (default). "
+                                    "local: sync repo config into the user's ~/.claude/settings.json. "
+                                    "repo-from: copy scaffold from --src repo into <repo-root>/.claude/."},
+        "--src": {"required": False, "type": "path",
+                  "description": "Source repo root (required when --target repo-from)."},
+        "--stack": {"required": False, "type": "choice",
+                    "choices": ["dotnet", "node", "python", "unknown"], "default": "unknown",
+                    "description": "Tech stack for permissions (auto-detected from repo files if unknown)."},
+        "--dry-run": {"required": False, "type": "bool",
+                      "description": "Report what would happen without writing anything."},
+    },
+    exit_codes={
+        "0": "target executed (dry-run, no-op merges, and warnings report state in the payload)",
+        "1": "usage or validation error (e.g. --target repo-from without --src)",
+        "4": "not found (repo root or --src does not exist)",
+    },
+    examples=[
+        "$UB luke-repo-init --repo-root /path/to/myrepo --stack dotnet",
+        "$UB luke-repo-init --repo-root /path/to/myrepo --target local",
+        "$UB luke-repo-init --repo-root /path/to/new-repo --target repo-from --src /path/to/existing-repo --dry-run",
+    ],
+    idempotent="Re-running the repo target re-merges settings.json and re-scaffolds missing files; existing files are preserved (merge, never overwrite).",
+    base_default=BASE_DIR,
+)
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

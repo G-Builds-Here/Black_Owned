@@ -1,12 +1,11 @@
-#!/usr/bin/env python3
-"""Map authentication token/credential usage to endpoints and test groups.
+"""
+map-token-usage.py — Map authentication token/credential usage to endpoints
+and test groups (GPTS).
 
 Finds all distinct token/credential variables used in a codebase, then maps
 each to the test files, test classes, and URL patterns where it appears.
-Useful for survey artifacts that need to document "which token for which endpoint."
-
-Usage:
-    python map-token-usage.py <repo_root> [--json]
+Useful for survey artifacts that need to document "which token for which
+endpoint."
 
 Auto-detection:
     Searches for token/credential patterns:
@@ -14,36 +13,31 @@ Auto-detection:
     - Config references: CLIENT_ID, CLIENT_SECRET, TOKEN, API_KEY
     - OAuth helper classes: *TokenHelper*, *AuthHelper*, *CredentialHelper*
 
-Output (JSON):
-    {
-        "tokens": [
-            {
-                "name": "CognitoToken",
-                "source": "CognitoTokenHelper.cs:15",
-                "env_vars": ["PPG_CLIENT_ID", "PPG_CLIENT_SECRET"],
-                "scope": "integration-service-resource-server/payments_scope",
-                "used_in": [
-                    {"file": "Transactions_POST_Tests.cs", "line": 25, "context": "this.cognitoToken = CognitoTokenHelper.CognitoToken"},
-                    ...
-                ],
-                "endpoint_families": ["transactions", "refunds", "payors"],
-                "test_groups": ["Txn", "TxnDependent", "Main"]
-            }
-        ],
-        "summary": {
-            "tokens_found": 4,
-            "files_scanned": 80,
-            "unmapped_endpoints": []
-        }
-    }
-"""
+Output (envelope payload; field shapes unchanged from the legacy --json
+output — consumers: survey-prep token_usage artifact, luke survey docs):
+    tokens: [{name, source, env_vars, scope, used_in,
+              endpoint_families, test_groups}]
+    summary: {tokens_found, files_scanned}
 
-import argparse
+    With --json omitted, a "report" field additionally carries the legacy
+    human-readable text.
+
+Contract:  python map-token-usage.py --help   (JSON)
+Standard:  references/tooling-standards.md
+
+Exit codes: 0 mapped (including zero tokens found — payload reports state) ·
+             1 usage or validation error
+"""
 import json
 import os
 import re
-import sys
 from pathlib import Path
+
+from toolkit import Tool
+
+
+def _posix(p):
+    return str(p).replace("\\", "/")
 
 
 # Patterns for finding token declarations (C#)
@@ -77,7 +71,7 @@ URL_PATTERN = re.compile(r'["\'](?:/rest/)?(?:merchants/\w+/)?(\w+)(?:/|["\'])')
 TRAIT_PATTERN = re.compile(r'\[Trait\s*\(\s*"Grouping"\s*,\s*"(\w+)"\s*\)\]')
 
 
-def find_cs_files(repo_root, skip_dirs=('bin', 'obj', 'node_modules', '.git', 'packages')):
+def find_cs_files(repo_root, skip_dirs=('bin', 'obj', 'node_modules', '.git', 'packages', '.worktrees')):
     """Find all .cs files in repo."""
     files = []
     for root, dirs, filenames in os.walk(repo_root):
@@ -141,7 +135,7 @@ def find_env_vars_for_token(cs_files, repo_root, token_name):
 
 
 def find_scope_for_token(cs_files, repo_root, token_name):
-    """Find OAuth scope associated with a token."""
+    """Find OAuth scope associated with the token."""
     for filepath in cs_files:
         try:
             content = open(filepath, 'r', encoding='utf-8-sig').read()
@@ -186,19 +180,6 @@ def find_token_usage(cs_files, repo_root, token_name):
                     'context': line.strip()[:120]
                 })
 
-        # Find the test groups (Traits) for this file
-        groups = set()
-        for match in TRAIT_PATTERN.finditer(content):
-            groups.add(match.group(1))
-
-        # Find URL patterns in files that use this token
-        endpoints = set()
-        if token_name in content:
-            for match in URL_PATTERN.finditer(content):
-                endpoint = match.group(1).lower()
-                if endpoint not in ('merchantid', 'rest', 'merchants', 'string', 'http', 'https'):
-                    endpoints.add(endpoint)
-
     return usages
 
 
@@ -239,10 +220,6 @@ def analyze(repo_root):
     # For each token, find its env vars, scope, and usage
     for name, token_info in tokens.items():
         # Find associated env vars (look in the token helper's source file)
-        source_file = token_info['source'].split(':')[0]
-        source_dir = os.path.dirname(os.path.join(repo_root, source_file))
-        helper_files = [f for f in cs_files if os.path.dirname(f) == source_dir or
-                        os.path.basename(f).replace('.cs', '') in source_file]
         token_info['env_vars'] = find_env_vars_for_token(cs_files, repo_root, name)
         token_info['scope'] = find_scope_for_token(cs_files, repo_root, name)
 
@@ -257,7 +234,6 @@ def analyze(repo_root):
         token_info['endpoint_families'] = sorted(endpoints)
         token_info['test_groups'] = sorted(groups)
 
-    # Convert sets to sorted lists for JSON serialization
     result = {
         'tokens': sorted(tokens.values(), key=lambda t: t['name']),
         'summary': {
@@ -291,19 +267,40 @@ def format_human(result):
     return '\n'.join(lines)
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Map token/credential usage to endpoints')
-    parser.add_argument('repo_root', help='Path to repository root')
-    parser.add_argument('--json', action='store_true', help='Output as JSON')
-    args = parser.parse_args()
+def handle(v):
+    repo_root = Path(v["--repo-root"])
+    result = analyze(os.path.abspath(str(repo_root)))
 
-    result = analyze(os.path.abspath(args.repo_root))
+    payload = {
+        "status": "mapped",
+        "repo_root": _posix(os.path.abspath(str(repo_root))),
+        "tokens": result["tokens"],
+        "summary": result["summary"],
+    }
+    if not v.get("--json", False):
+        payload["report"] = format_human(result)
+    return payload
 
-    if args.json:
-        print(json.dumps(result, indent=2))
-    else:
-        print(format_human(result))
+
+TOOL = Tool(
+    name="map-token-usage",
+    version="1.0",
+    summary="Map authentication token/credential usage to endpoints and test groups (C# repos).",
+    flags={
+        "--repo-root": {"required": True, "type": "path",
+                        "description": "Repository root to scan (absolute or CWD-relative)."},
+        "--json": {"required": False, "type": "bool",
+                   "description": "Machine-only payload: omit the legacy human-readable 'report' field. Output is always the JSON envelope."},
+    },
+    exit_codes={"0": "mapped — tokens/summary at top level (zero tokens found is a valid state, see summary.tokens_found)",
+                "1": "usage or validation error"},
+    examples=[
+        "python map-token-usage.py --repo-root C:/repos/my-service --json",
+        "python map-token-usage.py --repo-root C:/repos/my-service",
+    ],
+    idempotent="Read-only scan; repeated runs with the same repo state are byte-identical.",
+)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    TOOL.run(handle)

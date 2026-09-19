@@ -1,24 +1,24 @@
 """
-Generic handoff maker — all skill handoff types in one script.
-Takes a JSON blob with handoff type and fields, produces the markdown file.
+Generic handoff maker — all skill handoff types in one script (GPTS).
+Takes a JSON payload with handoff type and fields, writes the markdown file.
 Designed for fire-and-forget via `run_in_background: true`.
 
 Also handles self-evolution check (formerly a separate script + gate hook).
 When "self_evolution" is present in the JSON, the script triages them inline:
-  - Empty list → no issues, routing proceeds
-  - Non-empty list → prints issues for user triage, sets state to pending
+  - Empty list → no issues, routing proceeds (status cleared)
+  - Non-empty list → triage menu on stderr, status pending
 
-Usage: $UB make-handoff <<'HANDOFF'  (preferred — stdin)
-       python make-handoff.py '<json>' (legacy — argv)
+Usage (flags only; --help prints this contract as JSON):
+  $UB make-handoff --json - <<'HANDOFF'
+  {"type": "bruce", "ticket_key": "LOC-0076", "fields": {...}}
+  HANDOFF
 
-JSON args:
-{
-  "base_dir": "/path/to/commands",
-  "type": "<handoff type>",
-  "ticket_key": "PAY-6670",
-  "self_evolution": [],
-  "fields": { ... type-specific fields ... }
-}
+JSON payload keys:
+  "base_dir": base directory (optional — defaults to the self-located base)
+  "type": handoff type (required)
+  "ticket_key": ticket key (required; "STORY/AC2" form allowed for dupin types)
+  "self_evolution": list of user corrections (optional)
+  "fields": type-specific fields (or flat top-level keys, which are promoted)
 
 Handoff types and their output paths:
   oracle          → handoffs/oracle/Oracle-<key>.md
@@ -68,7 +68,10 @@ Fields are written as **Key:** value lines. Special fields:
   - "_queue_entry": which Oracle queue file spawned this work.
   - "_files_map": (deprecated — use flat `files_changed` field)
 
-Exits 0 on success, 1 on error (stderr).
+Output: one JSON document on stdout:
+  {"ok": true, "status": "written", "type": ..., "ticket": ..., "path": ..., "self_evolution": ...}
+Exit codes: 0 = written · 1 = usage error (bad JSON, missing type/ticket_key,
+unknown type, required session fields missing, gherkin pointer detected)
 """
 import os
 import re
@@ -83,7 +86,14 @@ from dupin_shared import (
     _DUPIN_PREFIX,
     _DUPIN_TYPES,
     build_ac_handoff_path,
+    build_story_handoff_path,
+    resolve_handoff_base,
+    sanitize_handoff_key,
 )
+
+from toolkit import Tool, UsageError
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 HEADERS = {
     "oracle":         "## Oracle Handoff",
@@ -105,10 +115,10 @@ HEADERS = {
     "session":          "## Session Checkpoint",
     "dupin":              "## Dupin Handoff",
     "phase-state":        "## Dupin Phase State",
-    "dup-ac-implement":   "## Implementation Handoff — Dupin",
-    "dup-ac-commit":      "## Commit Handoff — Dupin",
-    "dup-ac-qa":          "## QA Handoff — Dupin",
-    "dup-ac-pr":          "## PR Handoff — Dupin",
+    "dup-implement":   "## Implementation Handoff — Dupin",
+    "dup-commit":      "## Commit Handoff — Dupin",
+    "dup-qa":          "## QA Handoff — Dupin",
+    "dup-pr":          "## PR Handoff — Dupin",
 }
 
 # Standard field order shared by all pipeline handoff types.
@@ -138,17 +148,17 @@ SKILL_FIELDS = {
     "harvey":         ["PR", "A/C Selected (this session)", "Has Fix List",
                        "Fix List Details", "Skipped"],
     "harvey-session": ["PR", "Repo"],
-    "luke":           ["Survey Mode", "Artifacts Written", "AIDLC Mode", "Anti-Patterns Found", "Staleness"],
+    "luke":           ["Survey Mode", "Artifacts Written", "Anti-Patterns Found", "Staleness"],
     "dupin":              ["Phase", "Total Phases", "Stories", "Current Story", "ACs In Progress", "ACs Done", "ACs Merged", "Stories Merged to Epic"],
     "phase-state":        ["Phase", "Total Phases", "Stories", "Current Story", "ACs In Progress", "ACs Done", "ACs Merged", "Stories Merged to Epic"],
-    "dup-ac-implement":   ["Local ticket", "Partial", "A/C Selected (this session)", "Dev Style",
+    "dup-implement":   ["Local ticket", "Partial", "A/C Selected (this session)", "Dev Style",
                            "TDD Classification", "TDD Red-Green Cycles", "Test Summary",
                            "Build Final", "Files Changed", "Components Created"],
-    "dup-ac-commit":      ["PR Comments", "Files Changed", "Review Findings", "Commit Hash"],
-    "dup-ac-qa":          ["QA Result", "Test Types Run", "A/C Selected (this session)",
+    "dup-commit":      ["PR Comments", "Files Changed", "Review Findings", "Commit Hash"],
+    "dup-qa":          ["QA Result", "Test Types Run", "A/C Selected (this session)",
                            "Test Summary", "QA Summary", "Files Changed",
                            "Failing Tests", "Gaps Addressed", "Gaps Deferred"],
-    "dup-ac-pr":          ["PR", "A/C Selected (this session)", "Has Fix List"],
+    "dup-pr":          ["PR", "A/C Selected (this session)", "Has Fix List"],
 }
 
 # Non-pipeline types have their own field orders (no standard block).
@@ -232,7 +242,6 @@ ALIASES = {
     "epic_summary":          "Epic Summary",
     "target_directories":    "Target Directories",
     # luke
-    "aidlc_mode":            "AIDLC Mode",
     "anti_patterns_found":   "Anti-Patterns Found",
 }
 
@@ -257,13 +266,13 @@ _TRULY_REQUIRED = {
     "bruce":             ["QA Result", "Branch", "Repo Root", "QA Summary",
                           "Files Changed"],
     "harvey":            ["PR", "Has Fix List"],
-    "dup-ac-implement":  ["A/C Selected (this session)", "Dev Style", "Branch",
+    "dup-implement":  ["A/C Selected (this session)", "Dev Style", "Branch",
                           "Repo Root", "Files Changed", "Components Created"],
-    "dup-ac-commit":     ["Branch", "Repo Root", "Files Changed", "Commit Hash",
+    "dup-commit":     ["Branch", "Repo Root", "Files Changed", "Commit Hash",
                           "Review Findings"],
-    "dup-ac-qa":         ["A/C Selected (this session)", "QA Result", "Branch",
+    "dup-qa":         ["A/C Selected (this session)", "QA Result", "Branch",
                           "Repo Root", "QA Summary", "Files Changed", "Failing Tests"],
-    "dup-ac-pr":         ["A/C Selected (this session)", "PR"],
+    "dup-pr":         ["A/C Selected (this session)", "PR"],
 }
 
 
@@ -316,8 +325,8 @@ PIPELINE_NAMES = {
     "bruce-case": "Bruce", "harvey": "Harvey", "harvey-session": "Harvey",
     "luke": "Luke",
     "dupin": "Dupin", "phase-state": "Dupin",
-    "dup-ac-implement": "Dupin", "dup-ac-commit": "Dupin",
-    "dup-ac-qa": "Dupin", "dup-ac-pr": "Dupin",
+    "dup-implement": "Dupin", "dup-commit": "Dupin",
+    "dup-qa": "Dupin", "dup-pr": "Dupin",
 }
 
 
@@ -352,11 +361,11 @@ def _enforce_required_fields(htype: str, fields: dict) -> None:
     missing = [f for f in required
                if f not in na_exempt and _is_missing(fields.get(f))]
     if missing:
-        print(f"ERROR: '{htype}' handoff is missing required session fields.", file=sys.stderr)
-        print("These fields cannot be defaulted — they carry real session state:", file=sys.stderr)
-        for f in missing:
-            print(f"  missing: {f}", file=sys.stderr)
-        sys.exit(1)
+        raise UsageError(
+            f"'{htype}' handoff is missing required session fields: "
+            + ", ".join(f"missing: {f}" for f in missing),
+            "these fields cannot be defaulted — they carry real session state; add them to the JSON payload",
+        )
 
 
 # Phrases that indicate the model pointed at Jira instead of writing the actual
@@ -393,25 +402,25 @@ def _enforce_alfred_gherkin(fields: dict) -> None:
     lower = ac_text.lower()
 
     if not ac_text.strip():
-        print("ERROR: 'alfred' handoff is missing '_blocks.Acceptance Criteria' — "
-              "the full refined Gherkin must be written into the handoff, not left "
-              "for the reader to fetch from Jira.", file=sys.stderr)
-        sys.exit(1)
+        raise UsageError(
+            "'alfred' handoff is missing '_blocks.Acceptance Criteria' — the full "
+            "refined Gherkin must be written into the handoff, not left for the reader to fetch from Jira",
+            "write the full Given/When/Then scenarios into _blocks['Acceptance Criteria']",
+        )
 
     for pattern in _AC_POINTER_PATTERNS:
         if pattern in lower:
-            print(f"ERROR: 'alfred' handoff's Acceptance Criteria contains a Jira "
-                  f"pointer phrase ('{pattern}') instead of the actual Gherkin. "
-                  f"Write the full Given/When/Then scenarios inline in the handoff.",
-                  file=sys.stderr)
-            sys.exit(1)
+            raise UsageError(
+                f"'alfred' handoff's Acceptance Criteria contains a Jira pointer phrase "
+                f"('{pattern}') instead of the actual Gherkin",
+                "write the full Given/When/Then scenarios inline in the handoff",
+            )
 
     if "given" not in lower or "when" not in lower or "then" not in lower:
-        print("ERROR: 'alfred' handoff's Acceptance Criteria has no Given/When/Then "
-              "content. Write the full refined Gherkin scenarios into the handoff "
-              "so Bruce/Damian don't have to open the Jira ticket to read the AC.",
-              file=sys.stderr)
-        sys.exit(1)
+        raise UsageError(
+            "'alfred' handoff's Acceptance Criteria has no Given/When/Then content",
+            "write the full refined Gherkin scenarios into the handoff so Bruce/Damian don't have to open the Jira ticket",
+        )
 
 
 def _make_table(rows: list[dict]) -> str:
@@ -602,25 +611,37 @@ def _strip_surrogates(obj):
     return obj
 
 
-def main():
-    raw = None
-    if not sys.stdin.isatty():
+def handle(v):
+    raw = v["--json"]
+    if raw == "-":
         raw = sys.stdin.read().strip()
-    if not raw and len(sys.argv) >= 2:
-        raw = sys.argv[1]
     if not raw:
-        print("Usage: pipe JSON via stdin or pass as argv[1]", file=sys.stderr)
-        sys.exit(1)
-
+        raise UsageError(
+            "empty JSON payload",
+            "pipe the payload via stdin: $UB make-handoff --json - <<'HANDOFF' ... HANDOFF",
+        )
     try:
         args = json.loads(raw)
     except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise UsageError(f"invalid JSON payload: {e}", "fix the JSON and re-run")
+    if not isinstance(args, dict):
+        raise UsageError(
+            "JSON payload must be an object",
+            "use {\"type\": ..., \"ticket_key\": ..., \"fields\": {...}}",
+        )
 
-    base = Path(args["base_dir"])
-    htype = args["type"]
-    key = args["ticket_key"]
+    htype = args.get("type")
+    key = args.get("ticket_key")
+    if not htype:
+        raise UsageError("'type' is required in the JSON payload", "add \"type\": \"<handoff type>\"")
+    if not key:
+        raise UsageError("'ticket_key' is required in the JSON payload", "add \"ticket_key\": \"<KEY>\"")
+
+    # Scope routing: repo-scoped types (session, luke) land in the repo's
+    # .claude when there is one; pipeline types go to the developer's global
+    # store even when this tool runs from a repo-local copy.
+    base = resolve_handoff_base(htype, args.get("base_dir") or v["--base"],
+                               args.get("repo_root"))
 
     # --- Flat interface: lift top-level keys into fields, apply aliases + defaults ---
     _promote_flat_keys(args)
@@ -642,15 +663,19 @@ def main():
             fields[sk] = args[sk]
 
     if htype not in HANDOFF_PATHS:
-        print(f"Unknown handoff type: {htype}. Valid: {', '.join(HANDOFF_PATHS.keys())}", file=sys.stderr)
-        sys.exit(1)
+        raise UsageError(
+            f"unknown handoff type: {htype}. Valid: {', '.join(HANDOFF_PATHS.keys())}",
+            "use one of the valid handoff types listed in the error",
+        )
 
     # Dupin epic/phase state is per-EPIC — never per-AC. An AC-suffixed key here
     # produced top-level handoffs/dupin/<STORY>-AC<n>.md files the scanner doesn't
-    # read; per-AC state belongs in the dup-ac-* stage files.
+    # read; per-AC state belongs in the dup-* stage files.
     if htype in ("dupin", "phase-state") and re.search(r"-AC\d+$", key):
-        print(f"ERROR: '{htype}' is epic/phase state — key {key!r} has an AC suffix. Use the dup-ac-* types for per-AC handoffs (they write handoffs/dupin/<STORY>/<stage>-<STORY>-AC<n>.md).", file=sys.stderr)
-        sys.exit(1)
+        raise UsageError(
+            f"'{htype}' is epic/phase state — key {key!r} has an AC suffix",
+            "use the dup-* stage types for stage handoffs (they write handoffs/dupin/<STORY>/<stage>-<STORY>.md)",
+        )
 
     _normalize_field_names(htype, fields)
     _apply_field_defaults(htype, fields, key)
@@ -661,6 +686,8 @@ def main():
     folder, filename_template = HANDOFF_PATHS[htype]
     out_dir = base / folder
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    se_status = "skipped"
 
     if htype == "session":
         completed_dir = out_dir / "completed"
@@ -677,10 +704,12 @@ def main():
         if re.search(r"-AC\d+$", story_key):
             # Doubled per-AC dir (handoffs/dupin/<STORY>-AC<n>/<stage>-<STORY>-AC<n>-AC<n>.md)
             # is scanner-invisible. The story key itself must not carry an AC suffix.
-            print(f"ERROR: story key {story_key!r} still carries an AC suffix — pass ticket_key as <STORY> or <STORY>/AC<n> so the file lands in handoffs/dupin/<STORY>/.", file=sys.stderr)
-            sys.exit(1)
-        # Extract AC ID from ac_selected (handles "AC1", "LOC-0001-AC1", "pr-STORY")
-        if htype == "dup-ac-pr" and ac_selected.startswith("pr-"):
+            raise UsageError(
+                f"story key {story_key!r} still carries an AC suffix",
+                "pass ticket_key as <STORY> or <STORY>/AC<n> so the file lands in handoffs/dupin/<STORY>/",
+            )
+        # Extract unit from ac_selected (story key, legacy per-AC key, or "pr-<STORY>" for PRs)
+        if htype == "dup-pr" and ac_selected.startswith("pr-"):
             ac_id_for_path = ac_selected
         elif "/" in key:
             _, ac_id_for_path = key.rsplit("/", 1)
@@ -690,17 +719,31 @@ def main():
         # build_ac_handoff_path appends "handoffs/dupin/<story>" itself, so the
         # base must be BASE_DIR (~/.claude) — passing out_dir.parent produced a
         # nested handoffs/handoffs/dupin/ tree the scanner never reads.
-        out_path = build_ac_handoff_path(base, htype, story_key, ac_id_for_path)
+        # Story-level dispatch (dupin plan §3.3): ac_selected carries a bare
+        # story key (no AC suffix) → deterministic story handoff path
+        # {stage}-{STORY}.md. Everything else keeps the legacy per-AC path.
+        if htype != "dup-pr" and re.fullmatch(r"[A-Z][A-Z0-9]*-\d{3,4}", ac_id_for_path):
+            out_path = build_story_handoff_path(base, htype, story_key)
+        else:
+            out_path = build_ac_handoff_path(base, htype, story_key, ac_id_for_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         fields = _strip_surrogates(fields)
         content = build_handoff(htype, key, dict(fields))
         out_path.write_text(content, encoding="utf-8")
-        repo_root = fields.get("Repo Root") or args.get("repo_root")
-        _post_write(base, htype, key, str(out_path), repo_root,
+        _post_write(base, htype, key, str(out_path),
                     agent_id=fields.get("_agent_id"))
-        return
-    else:
-        base_filename = filename_template.replace("{key}", key).replace("{ac_id}", key.split("/")[-1] if "/" in key else key)
+        return {
+            "status": "written",
+            "type": htype,
+            "ticket": key,
+            "path": str(out_path),
+            "self_evolution": se_status,
+        }
+
+    # Sanitize non-dupin keys: "N/A" must not create nested handoffs/<type>/X-N/A.md
+    # dirs. Dupin STORY/AC forms returned earlier via the dupin branch.
+    key = sanitize_handoff_key(key)
+    base_filename = filename_template.replace("{key}", key).replace("{ac_id}", key.split("/")[-1] if "/" in key else key)
 
     out_path = out_dir / base_filename
 
@@ -718,57 +761,69 @@ def main():
         if p.exists():
             p.unlink()
 
-    # Audit + AIDLC post-write
-    repo_root = fields.get("Repo Root") or args.get("repo_root")
-    _post_write(base, htype, key, str(out_path), repo_root)
+    # Audit post-write
+    _post_write(base, htype, key, str(out_path))
 
     # Self-evolution check — runs inline after handoff write
+    # A plain string is one correction, not a char list — wrap it.
     se_items = args.get("self_evolution")
+    if isinstance(se_items, str):
+        se_items = [se_items]
     if se_items is not None:
-        _run_self_evolution(se_items)
+        se_status = _run_self_evolution(se_items)
+
+    return {
+        "status": "written",
+        "type": htype,
+        "ticket": key,
+        "path": str(out_path),
+        "self_evolution": se_status,
+    }
 
 
-MIRROR_SKILLS = {"alfred", "damian", "bruce", "gordon", "lucius", "luke"}
-MIRROR_SKILL_ARG = {
-    "alfred": "alfred",
-    "damian": "damian",
-    "bruce": "bruce",
-    "gordon": "gordon",
-    "lucius": "lucius-design",
-    "luke": "luke",
-}
-STAGE_MAP = {
-    "alfred": "requirements-analysis",
-    "damian": "code-generation",
-    "bruce": "code-generation",
-    "gordon": "build-and-test",
-    "lucius": "application-design",
-    "luke": "repo-intelligence",
-}
+TOOL = Tool(
+    name="make-handoff",
+    version="1.0",
+    summary="Write a pipeline handoff markdown file from a JSON payload (all skill types, GPTS).",
+    flags={
+        "--json": {"required": True, "type": "str",
+                   "description": "JSON payload blob, or '-' to read the payload from stdin (heredoc)."},
+    },
+    exit_codes={
+        "0": "handoff written — payload: type, ticket, path, self_evolution (cleared|pending|skipped)",
+        "1": "usage error — bad JSON, missing type/ticket_key, unknown type, required session fields missing, or gherkin pointer detected",
+    },
+    examples=[
+        "$UB make-handoff --json - <<'HANDOFF'\n"
+        "{\"type\": \"bruce\", \"ticket_key\": \"LOC-0076\", \"fields\": {\"Status\": \"pass\"}}\n"
+        "HANDOFF",
+    ],
+    idempotent="Overwrites the target handoff file; re-running with the same payload is safe.",
+    base_default=BASE_DIR,
+)
 
 
-_SUBAGENT_ID_RE = re.compile(r"^dup-ac-(implement|commit|qa|pr)-[0-9a-f]{4,}$")
+_SUBAGENT_ID_RE = re.compile(r"^dup-(implement|commit|qa|pr)-[0-9a-f]{4,}$")
 
 
-def _post_write(base_dir, htype, key, out_path, repo_root, agent_id=None):
-    """Audit log always; AIDLC mirror/state when mode >= 2."""
-    # dup-ac-* types must not collapse to "dup" — keep the full type as the
+def _post_write(base_dir, htype, key, out_path, agent_id=None):
+    """Audit log always (background append to audits/<ticket>/audit.md)."""
+    # dup-* types must not collapse to "dup" — keep the full type as the
     # default audit role so audit-log query can filter by stage.
     base_type = htype if htype in _DUPIN_TYPES else htype.split("-")[0]
     tools_dir = Path(__file__).resolve().parent
-    base_str = str(base_dir).replace("\\", "/")
     devnull = subprocess.DEVNULL
 
     # --- Audit: always write to audits/<ticket>/ ---
-    # NOTE: audit-log.py's CLI takes (command, ticket, ...) — it resolves its
-    # own BASE_DIR. Passing base_dir first made args[0] the "command" and every
-    # append silently failed ("Unknown command"), starving the audit log.
+    # audit-log.py is GPTS: flags-only CLI (--op append --ticket K --role R
+    # --type T --text "..."). The old positional (command, ticket) form is gone.
     audit_script = tools_dir / "audit-log.py"
     if audit_script.exists():
         subprocess.Popen(
             [sys.executable, str(audit_script),
-             "append", key, "--role", base_type, "--type", "context",
-             f"Handoff written: {htype} for {key}"],
+             "--op", "append", "--ticket", key, "--role", base_type,
+             "--type", "context",
+             "--text", f"Handoff written: {htype} for {key}"],
             stdout=devnull, stderr=devnull,
         )
         # --- Dupin subagent stages: machine-readable RESULT line so
@@ -779,54 +834,11 @@ def _post_write(base_dir, htype, key, out_path, repo_root, agent_id=None):
             stage = _DUPIN_PREFIX.get(htype, htype)
             subprocess.Popen(
                 [sys.executable, str(audit_script),
-                 "append", key, "--role", role, "--type", "progress",
-                 f"RESULT: {stage} stage handoff for {key} — {out_path}"],
+                 "--op", "append", "--ticket", key, "--role", role,
+                 "--type", "progress",
+                 "--text", f"RESULT: {stage} stage handoff for {key} — {out_path}"],
                 stdout=devnull, stderr=devnull,
             )
-
-    # --- AIDLC mirror + state: only for mirrorable types with a repo root ---
-    if base_type not in MIRROR_SKILLS or not repo_root:
-        return
-
-    detect_script = tools_dir / "aidlc-detect.py"
-    if not detect_script.exists():
-        return
-
-    try:
-        result = subprocess.run(
-            [sys.executable, str(detect_script), repo_root],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode != 0:
-            return
-        mode_data = json.loads(result.stdout)
-    except Exception:
-        return
-
-    mode = mode_data.get("mode", 1)
-    if mode < 2:
-        return
-
-    mirror_script = tools_dir / "aidlc-mirror.py"
-    state_script = tools_dir / "aidlc-state-update.py"
-    mirror_arg = MIRROR_SKILL_ARG.get(base_type, base_type)
-
-    if mirror_script.exists():
-        subprocess.Popen(
-            [sys.executable, str(mirror_script), mirror_arg, out_path, repo_root],
-            stdout=devnull, stderr=devnull,
-        )
-
-    if mode >= 3 and state_script.exists():
-        stage = STAGE_MAP.get(base_type)
-        if stage:
-            subprocess.Popen(
-                [sys.executable, str(state_script), repo_root,
-                 stage, "in_progress", "--skill", base_type],
-                stdout=devnull, stderr=devnull,
-            )
-
-    print(f"AIDLC mode {mode}: mirror + state dispatched for {htype}/{key}")
 
 
 def _run_self_evolution(corrections):
@@ -851,21 +863,23 @@ def _run_self_evolution(corrections):
         if not corrections:
             data["status"] = "cleared"
             data["corrections"] = []
-            print("Self-evolution check: no corrections noted. Routing cleared.")
+            print("Self-evolution check: no corrections noted. Routing cleared.", file=sys.stderr)
+            return "cleared"
         else:
             data["status"] = "pending"
             data["corrections"] = corrections
             data["resolved"] = False
-            print("=" * 60)
-            print("SELF-EVOLUTION — User corrections noted this session:")
-            print("=" * 60)
+            print("=" * 60, file=sys.stderr)
+            print("SELF-EVOLUTION — User corrections noted this session:", file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
             for i, c in enumerate(corrections, 1):
-                print(f"  {i}. {c}")
-            print()
-            print("Present these to the user:")
-            print("  (a) Fix now — invoke /skill-creator")
-            print("  (b) Defer  — add to pipeline-notes.md")
+                print(f"  {i}. {c}", file=sys.stderr)
+            print(file=sys.stderr)
+            print("Present these to the user:", file=sys.stderr)
+            print("  (a) Fix now — edit the skill file directly", file=sys.stderr)
+            print("  (b) Defer  — add to pipeline-notes.md", file=sys.stderr)
+            return "pending"
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

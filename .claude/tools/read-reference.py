@@ -1,33 +1,37 @@
 """
-read-reference.py -- Read sections from a skill reference file.
+read-reference.py -- Read sections from a skill reference file (GPTS).
 
 Reference files use markdown headings (## Section Name) as section boundaries.
-This script extracts sections by name, returning only the content between
+This tool extracts sections by name, returning only the content between
 that heading and the next heading of equal or higher level.
 
 Usage:
-    python read-reference.py <file_path> --section "Section Name"
-    python read-reference.py <file_path> --section "Name1,Name2,Name3"
-    python read-reference.py <file_path> --sections
-    python read-reference.py <file_path> --toc
+    python read-reference.py --path <file_path> --section "Section Name"
+    python read-reference.py --path <file_path> --section "Name1,Name2,Name3"
+    python read-reference.py --path <file_path> --sections
+    python read-reference.py --path <file_path> --toc
 
-Output: JSON to stdout
-  --section "Name"        → {"exists": true, "section": "Name", "content": "..."}
-  --section "A,B,C"       → {"exists": true, "results": [{"section": "A", "content": "..."}, ...], "not_found": []}
+Contract:  python read-reference.py --help   (JSON)
+Standard:  references/tooling-standards.md
+
+Output: JSON envelope to stdout
+  --section "Name"        → {"ok": true, "exists": true, "section": "Name", "content": "..."}
+  --section "A,B,C"       → {"ok": true, "exists": true, "results": [{"section": "A", "content": "..."}, ...], "not_found": []}
                             (multi-section mode when comma-separated names are provided)
-  --sections              → {"exists": true, "sections": ["Name1", "Name2", ...]}
-  --toc                   → {"exists": true, "toc": [{"level": 2, "name": "...", "line": N}, ...]}
+  --sections              → {"ok": true, "exists": true, "sections": ["Name1", "Name2", ...]}
+  --toc                   → {"ok": true, "exists": true, "toc": [{"level": 2, "name": "...", "line": N}, ...]}
 
 Section matching is case-insensitive and supports partial prefix match.
 "Epic Creation" matches "## Epic Creation Flow".
 
-Exit codes: 0 = success, 1 = error (file not found, bad args)
+Exit codes: 0 = success (including exists:false for a missing file) ·
+            1 = usage or validation error
 """
 
-import json
-import os
 import re
-import sys
+from pathlib import Path
+
+from toolkit import Tool, UsageError
 
 
 def parse_headings(path):
@@ -96,75 +100,104 @@ def extract_section(path, section_name):
     return matched["name"], content
 
 
-def main():
-    if len(sys.argv) < 3:
-        print("Usage: python read-reference.py <file_path> --section \"Name\" | --sections | --toc",
-              file=sys.stderr)
-        sys.exit(1)
+def handle(v):
+    file_path = Path(v["--path"]).expanduser()
 
-    file_path = os.path.expanduser(sys.argv[1])
+    requested = [flag for flag in ("--section", "--sections", "--toc")
+                 if v.get(flag) not in (None, False)]
+    if len(requested) != 1:
+        raise UsageError(
+            "exactly one mode flag is required: --section, --sections, or --toc",
+            "e.g. --path <file> --section \"Section Name\"",
+        )
 
-    if not os.path.isfile(file_path):
-        print(json.dumps({"exists": False, "error": f"File not found: {file_path}"}))
-        sys.exit(1)
+    if not file_path.is_file():
+        return {
+            "status": "not_found",
+            "exists": False,
+            "path": str(file_path),
+            "reason": "file not found",
+        }
 
-    mode = sys.argv[2] if len(sys.argv) > 2 else None
-
-    if mode == "--sections":
-        headings = parse_headings(file_path)
-        print(json.dumps({
+    if requested[0] == "--sections":
+        headings = parse_headings(str(file_path))
+        return {
+            "status": "ok",
             "exists": True,
             "sections": [h["name"] for h in headings],
-        }))
+        }
 
-    elif mode == "--toc":
-        headings = parse_headings(file_path)
-        print(json.dumps({
+    if requested[0] == "--toc":
+        headings = parse_headings(str(file_path))
+        return {
+            "status": "ok",
             "exists": True,
             "toc": headings,
-        }))
+        }
 
-    elif mode == "--section":
-        if len(sys.argv) < 4:
-            print("Usage: --section requires a section name", file=sys.stderr)
-            sys.exit(1)
-        raw = sys.argv[3]
-        names = [n.strip() for n in raw.split(",") if n.strip()]
+    raw = v["--section"]
+    names = [n.strip() for n in raw.split(",") if n.strip()]
+    if not names:
+        raise UsageError(
+            "--section value is empty",
+            'pass --section "Section Name" (comma-separated names for multi-section)',
+        )
 
-        if len(names) == 1:
-            matched_name, content = extract_section(file_path, names[0])
-            if matched_name:
-                print(json.dumps({
-                    "exists": True,
-                    "section": matched_name,
-                    "content": content,
-                }))
-            else:
-                headings = parse_headings(file_path)
-                print(json.dumps({
-                    "exists": True,
-                    "section": names[0],
-                    "content": None,
-                    "available": [h["name"] for h in headings],
-                }))
+    if len(names) == 1:
+        matched_name, content = extract_section(str(file_path), names[0])
+        if matched_name:
+            return {
+                "status": "ok",
+                "exists": True,
+                "section": matched_name,
+                "content": content,
+            }
+        headings = parse_headings(str(file_path))
+        return {
+            "status": "ok",
+            "exists": True,
+            "section": names[0],
+            "content": None,
+            "available": [h["name"] for h in headings],
+        }
+
+    results = []
+    not_found = []
+    for name in names:
+        matched_name, content = extract_section(str(file_path), name)
+        if matched_name:
+            results.append({"section": matched_name, "content": content})
         else:
-            results = []
-            not_found = []
-            for name in names:
-                matched_name, content = extract_section(file_path, name)
-                if matched_name:
-                    results.append({"section": matched_name, "content": content})
-                else:
-                    not_found.append(name)
-            output = {"exists": True, "results": results, "not_found": not_found}
-            if not_found:
-                headings = parse_headings(file_path)
-                output["available"] = [h["name"] for h in headings]
-            print(json.dumps(output))
-    else:
-        print(f"Unknown mode: {mode}", file=sys.stderr)
-        sys.exit(1)
+            not_found.append(name)
+    payload = {"status": "ok", "exists": True, "results": results, "not_found": not_found}
+    if not_found:
+        headings = parse_headings(str(file_path))
+        payload["available"] = [h["name"] for h in headings]
+    return payload
+
+
+TOOL = Tool(
+    name="read-reference",
+    version="1.0",
+    summary="Read a section (or list of sections / TOC) from a markdown reference file.",
+    flags={
+        "--path": {"required": True, "type": "path",
+                   "description": "Resolved path of the reference file (utility-belt resolves bare filenames before exec)."},
+        "--section": {"required": False, "type": "str",
+                      "description": "Section name, or comma-separated names for multi-section mode (case-insensitive prefix match)."},
+        "--sections": {"required": False, "type": "bool",
+                       "description": "List all section names in the file."},
+        "--toc": {"required": False, "type": "bool",
+                  "description": "List the full table of contents with levels and line numbers."},
+    },
+    exit_codes={"0": "success — including exists:false for a missing file",
+                "1": "usage or validation error"},
+    examples=["$UB read-reference gotham-reference.md --section \"Subagent delegation\"",
+              "python read-reference.py --path ~/.claude/references/gotham-reference.md --section \"Gates\"",
+              "python read-reference.py --path ~/.claude/references/gotham-reference.md --toc"],
+    idempotent="Read-only; repeated calls return identical output.",
+)
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

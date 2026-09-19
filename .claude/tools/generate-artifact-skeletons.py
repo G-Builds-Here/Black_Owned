@@ -2,7 +2,7 @@
 """generate-artifact-skeletons.py — Pre-fill deterministic sections of survey artifacts.
 
 Runs after pre-scan, check-unused-deps, and find-helper-duplication.
-Writes skeleton .md files to aidlc-docs/inception/reverse-engineering/ with:
+Writes skeleton .md files to .claude/codebase/ with:
   - Auto-extracted tables (endpoints, classes, packages, test groups)
   - Deterministic .survey-meta.md (git SHA + date — no model needed)
   - Header comment marking what the model must still fill in
@@ -11,22 +11,23 @@ Cluster agents receive these skeletons as starting context. They add the WHY,
 fill non-mechanical sections, and complete any gaps — they do not transcribe
 raw script output from scratch.
 
-Usage:
-    python generate-artifact-skeletons.py <repo_root>
-        [--pre-scan <pre_scan_json>]
-        [--unused-deps <unused_deps_json>]
-        [--duplication <duplication_json>]
+Contract:  python generate-artifact-skeletons.py --help   (JSON)
+Standard:  references/tooling-standards.md
+
+Usage (flags only):
+    $UB generate-artifact-skeletons --repo-root <repo-root>
+        [--pre-scan <pre_scan_json>] [--unused-deps <json>]
+        [--duplication <json>] [--force]
 
     All JSON inputs are optional. If omitted, that artifact section is left
     with a placeholder comment for the model to fill.
 
-Output:
-    Writes/overwrites skeleton files in <repo_root>/aidlc-docs/inception/reverse-engineering/.
-    Existing files with non-skeleton content are NOT overwritten (preserves model work).
-    Prints a summary of what was written/skipped.
+Output: JSON envelope; payload carries per-file results, counts, and the
+    legacy human report text under "report".
+
+Exit codes: 0 generated · 1 usage/validation · 4 not found (repo root)
 """
 
-import argparse
 import json
 import re
 import subprocess
@@ -34,7 +35,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ARTIFACTS_DIR_PARTS = ("aidlc-docs", "inception", "reverse-engineering")
+from toolkit import Tool, NotFound, audit_append
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+ARTIFACTS_DIR_PARTS = (".claude", "codebase")
 SKELETON_MARKER = "<!-- AUTO-GENERATED SKELETON"
 PLACEHOLDER = "<!-- TODO: fill in this section -->"
 
@@ -336,43 +341,42 @@ def safe_write(path, content, results, force=False):
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate deterministic artifact skeletons.")
-    parser.add_argument("repo_root", nargs="?", default=".")
-    parser.add_argument("--pre-scan", dest="pre_scan", help="Path to pre-scan JSON output")
-    parser.add_argument("--unused-deps", dest="unused_deps", help="Path to check-unused-deps JSON output")
-    parser.add_argument("--duplication", dest="duplication", help="Path to find-helper-duplication JSON output")
-    parser.add_argument("--force", action="store_true",
-                        help="Overwrite even if model content exists (use carefully)")
-    args = parser.parse_args()
+def handle(v):
+    repo_root = Path(v["--repo-root"]).resolve()
+    if not repo_root.is_dir():
+        raise NotFound(
+            f"repo root not found: {repo_root}",
+            "pass an existing repository directory: $UB generate-artifact-skeletons --repo-root <repo>",
+        )
+    force = bool(v.get("--force", False))
+    base = Path(v["--base"])
 
-    repo_root = Path(args.repo_root).resolve()
     artifacts_dir = repo_root.joinpath(*ARTIFACTS_DIR_PARTS)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     commit = get_head_sha(repo_root)
     now = get_now_iso()
 
-    pre_scan = load_json_file(args.pre_scan)
-    unused_deps = load_json_file(args.unused_deps)
-    duplication = load_json_file(args.duplication)
+    pre_scan = load_json_file(v.get("--pre-scan"))
+    unused_deps = load_json_file(v.get("--unused-deps"))
+    duplication = load_json_file(v.get("--duplication"))
 
     results = []
 
     safe_write(artifacts_dir / "api-documentation.md",
-               make_api_documentation(pre_scan, commit, now), results, args.force)
+               make_api_documentation(pre_scan, commit, now), results, force)
 
     safe_write(artifacts_dir / "component-inventory.md",
-               make_component_inventory(pre_scan, commit, now), results, args.force)
+               make_component_inventory(pre_scan, commit, now), results, force)
 
     safe_write(artifacts_dir / "dependencies.md",
-               make_dependencies(pre_scan, unused_deps, commit, now), results, args.force)
+               make_dependencies(pre_scan, unused_deps, commit, now), results, force)
 
     safe_write(artifacts_dir / "test-infrastructure.md",
-               make_test_infrastructure(pre_scan, commit, now), results, args.force)
+               make_test_infrastructure(pre_scan, commit, now), results, force)
 
     safe_write(artifacts_dir / "anti-patterns.md",
-               make_anti_patterns(duplication, commit, now), results, args.force)
+               make_anti_patterns(duplication, commit, now), results, force)
 
     # .survey-meta.md is always safe to write — it's deterministic
     (artifacts_dir / ".survey-meta.md").write_text(
@@ -380,19 +384,65 @@ def main():
     )
     results.append(("write", ".survey-meta.md", f"commit={commit[:12]}, date={now[:10]}"))
 
-    # Report
-    print(f"\ngenerate-artifact-skeletons — {repo_root}")
-    print(f"Artifacts dir: {artifacts_dir}\n")
-    icons = {"write": "+", "skip": "="}
-    for action, name, note in results:
-        print(f"  {icons.get(action, '?')} [{action}] {name}  — {note}")
-
     written = sum(1 for a, _, _ in results if a == "write")
     skipped = sum(1 for a, _, _ in results if a == "skip")
-    print(f"\nDone: {written} written, {skipped} skipped.")
+
+    icons = {"write": "+", "skip": "="}
+    report_lines = [
+        f"\ngenerate-artifact-skeletons — {repo_root}",
+        f"Artifacts dir: {artifacts_dir}\n",
+    ]
+    for action, name, note in results:
+        report_lines.append(f"  {icons.get(action, '?')} [{action}] {name}  — {note}")
+    report_lines.append(f"\nDone: {written} written, {skipped} skipped.")
     if skipped:
-        print("  (skipped files have model content — use --force to overwrite)")
+        report_lines.append("  (skipped files have model content — use --force to overwrite)")
+    report = "\n".join(report_lines)
+
+    audit_append(base, "generate-artifact-skeletons", "generate",
+                 key=str(repo_root), result="generated")
+
+    return {
+        "status": "generated",
+        "repo_root": str(repo_root),
+        "artifacts_dir": str(artifacts_dir),
+        "results": [{"action": a, "file": n, "note": note} for a, n, note in results],
+        "written": written,
+        "skipped": skipped,
+        "report": report,
+    }
+
+
+TOOL = Tool(
+    name="generate-artifact-skeletons",
+    version="1.0",
+    summary="Pre-fill deterministic sections of survey artifacts (endpoints, classes, packages, "
+            "test groups) and write a git-SHA-stamped .survey-meta.md; model work is never overwritten without --force.",
+    flags={
+        "--repo-root": {"required": False, "type": "path", "default": ".",
+                        "description": "Path to the repository root (default: current directory)."},
+        "--pre-scan": {"required": False, "type": "path",
+                       "description": "Path to pre-scan JSON output."},
+        "--unused-deps": {"required": False, "type": "path",
+                          "description": "Path to check-unused-deps JSON output."},
+        "--duplication": {"required": False, "type": "path",
+                          "description": "Path to find-helper-duplication JSON output."},
+        "--force": {"required": False, "type": "bool",
+                    "description": "Overwrite even if model content exists (use carefully)."},
+    },
+    exit_codes={
+        "0": "generated — payload carries per-file results, counts, and the report",
+        "1": "usage or validation error",
+        "4": "not found: repo root does not exist",
+    },
+    examples=[
+        "$UB generate-artifact-skeletons --repo-root . --pre-scan survey_tmp/pre-scan.json --duplication survey_tmp/duplication.json",
+        "$UB generate-artifact-skeletons --repo-root . --force",
+    ],
+    idempotent="Re-running regenerates skeleton files only where they are still skeleton-only; .survey-meta.md is rewritten with the current SHA/date.",
+    base_default=BASE_DIR,
+)
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

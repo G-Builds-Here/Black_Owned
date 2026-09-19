@@ -59,7 +59,7 @@ beforeAll(async () => {
     psql(`SELECT COUNT(*) FROM pending_import_businesses WHERE status='pending_review'`),
     10
   );
-  await warmRoutes(['/admin/reviews']);
+  await warmRoutes(['/admin/reviews'], admin);
 }, 120_000);
 
 afterAll(() => {
@@ -85,9 +85,21 @@ test('search narrows the queue by name', async ({ page }) => {
   await seedSession(page, admin);
   await page.goto(`${BASE_URL}/admin/reviews`);
 
-  await page.getByPlaceholder('Search by name, address, or source...').fill('Alpha');
+  // The search box is a controlled client-side filter: a fill that lands
+  // before React hydration completes (observed deterministically on webkit
+  // dev-mode, 2026-09-19) updates the DOM value but never the component
+  // state, so retrying the assertion alone can never pass -- the FILL must
+  // be re-run. Playwright's documented toPass pattern; asserted behavior
+  // (search hides the non-matching row, count drops to 1) is unchanged.
+  await expect(async () => {
+    // Anchor on the unfiltered state INSIDE the loop: while the client list
+    // is still loading, the reject row is absent and a bare count-0 check is
+    // vacuously true -- the fill would never be re-run after hydration.
+    await expect(page.getByRole('heading', { name: names.reject })).toBeVisible({ timeout: 2_000 });
+    await page.getByPlaceholder('Search by name, address, or source...').fill('Alpha');
+    await expect(page.getByRole('heading', { name: names.reject })).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: names.approve })).toBeVisible();
-  await expect(page.getByRole('heading', { name: names.reject })).toHaveCount(0);
   await expect(page.getByText('1 businesses pending review')).toBeVisible();
 });
 

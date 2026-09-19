@@ -7,28 +7,24 @@ Three signals combined into a single staleness verdict:
   3. Lines changed    — lines added+deleted in relevant_paths since survey commit
                         (parsed from per-artifact metadata headers in each .md file)
 
-Usage:
-    python check-survey-staleness.py <repo_root>
-    python check-survey-staleness.py <repo_root> --artifact <name>
+Contract:  python check-survey-staleness.py --help   (JSON)
+Standard:  references/tooling-standards.md
+
+Usage (flags only):
+    $UB check-survey-staleness --repo-root <repo_root>
+    $UB check-survey-staleness --repo-root <repo_root> --artifact <name>
         e.g. --artifact api-documentation.md
 
     Without --artifact: reports overall staleness from .survey-meta.md
     With --artifact:    reports per-artifact staleness using the file's
                         own metadata header (surveyed_at / commit / relevant_paths)
 
-Output: JSON to stdout
-    {
-        "exists": true,
-        "commit": "abc123...",
-        "head": "def456...",
-        "behind": 12,
-        "days_old": 42,
-        "lines_changed": 318,
-        "date": "2026-04-04",
-        "status": "fresh|stale|very_stale|absent",
-        "message": "Survey is 12 commits behind, 42 days old, 318 lines changed in relevant paths"
-        "artifacts": [...]   // present when --artifact not specified
-    }
+Output: JSON envelope on stdout
+    {"ok": true, "status": "fresh|stale|very_stale|absent",
+     "exists", "commit", "head", "behind", "days_old", "lines_changed",
+     "date", "message", "artifacts" (when --artifact not specified)}
+
+Exit codes: 0 inspected (state reported in payload) · 1 usage or validation error
 
 Status thresholds (worst of the three signals wins):
     fresh:      <10 commits AND <30 days AND <500 lines changed
@@ -40,11 +36,11 @@ Status thresholds (worst of the three signals wins):
 import json
 import re
 import subprocess
-import sys
 from datetime import date, datetime
 from pathlib import Path
 
-ARTIFACTS_DIR_PARTS = ("aidlc-docs", "inception", "reverse-engineering")
+from toolkit import Tool
+ARTIFACTS_DIR_PARTS = (".claude", "codebase")
 
 
 def run_git(args, cwd):
@@ -175,57 +171,48 @@ def check_all_artifacts(artifacts_dir, repo_root):
     return results
 
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Check survey artifact staleness")
-    parser.add_argument("repo_root", nargs="?", default=".")
-    parser.add_argument("--artifact", help="Check a specific artifact file (e.g. api-documentation.md)")
-    args = parser.parse_args()
-
-    repo_root = Path(args.repo_root)
+def handle(v):
+    repo_root = Path(v["--repo-root"])
     artifacts_dir = repo_root.joinpath(*ARTIFACTS_DIR_PARTS)
     meta_path = artifacts_dir / ".survey-meta.md"
 
-    if args.artifact:
-        result = check_artifact(artifacts_dir / args.artifact, repo_root)
-        print(json.dumps(result, indent=2))
-        return
+    if v.get("--artifact"):
+        return check_artifact(artifacts_dir / v["--artifact"], repo_root)
 
     # Overall check from .survey-meta.md
     if not meta_path.exists():
-        print(json.dumps({
+        return {
+            "status": "absent",
             "exists": False, "commit": None, "head": None,
             "behind": None, "days_old": None, "lines_changed": None,
-            "date": None, "status": "absent",
-            "message": "No survey found at aidlc-docs/inception/reverse-engineering/.survey-meta.md"
-        }))
-        return
+            "date": None,
+            "message": "No survey found at .claude/codebase/.survey-meta.md"
+        }
 
     content = meta_path.read_text(encoding="utf-8")
     commit_match = re.search(r"\*\*Commit:\*\*\s*([a-f0-9]+)", content)
     date_match = re.search(r"\*\*Date:\*\*\s*(.+)", content)
 
     if not commit_match:
-        print(json.dumps({
+        return {
+            "status": "absent",
             "exists": True, "commit": None, "head": None,
             "behind": None, "days_old": None, "lines_changed": None,
             "date": date_match.group(1).strip() if date_match else None,
-            "status": "absent",
             "message": "Survey meta exists but has no commit hash"
-        }))
-        return
+        }
 
     survey_commit = commit_match.group(1).strip()
     survey_date = date_match.group(1).strip() if date_match else None
     head = run_git(["rev-parse", "HEAD"], repo_root)
     if not head:
-        print(json.dumps({
+        return {
+            "status": "absent",
             "exists": True, "commit": survey_commit, "head": None,
             "behind": None, "days_old": None, "lines_changed": None,
-            "date": survey_date, "status": "absent",
+            "date": survey_date,
             "message": "Not a git repository"
-        }))
-        return
+        }
 
     behind = commits_behind(survey_commit, repo_root)
     days = days_since(survey_date)
@@ -233,7 +220,8 @@ def main():
     status = classify(behind, days, lines)
     artifacts = check_all_artifacts(artifacts_dir, repo_root)
 
-    print(json.dumps({
+    return {
+        "status": status,
         "exists": True,
         "commit": survey_commit,
         "head": head,
@@ -241,11 +229,32 @@ def main():
         "days_old": days,
         "lines_changed": lines,
         "date": survey_date,
-        "status": status,
         "message": build_message(behind, days, lines),
         "artifacts": artifacts,
-    }, indent=2))
+    }
+
+
+TOOL = Tool(
+    name="check-survey-staleness",
+    version="1.0",
+    summary="Check survey artifact staleness against current HEAD — commit distance, date age, and lines changed in relevant paths.",
+    flags={
+        "--repo-root": {"required": False, "type": "path", "default": ".",
+                        "description": "Path to the repository root (default: current directory)."},
+        "--artifact": {"required": False, "type": "str",
+                       "description": "Check a specific artifact file (e.g. api-documentation.md) using its own metadata header instead of .survey-meta.md."},
+    },
+    exit_codes={
+        "0": "inspected — status is fresh, stale, very_stale, or absent (state reported in payload)",
+        "1": "usage or validation error",
+    },
+    examples=[
+        "$UB check-survey-staleness --repo-root /path/to/myrepo",
+        "$UB check-survey-staleness --repo-root /path/to/myrepo --artifact api-documentation.md",
+    ],
+    idempotent="Read-only: re-running gives the same result for the same repo state.",
+)
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

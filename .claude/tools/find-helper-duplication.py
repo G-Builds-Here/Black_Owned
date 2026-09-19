@@ -6,15 +6,17 @@ duplicate functionality available in shared helper classes.
 Flags cases where private/protected methods bypass shared infrastructure,
 potentially missing cross-cutting concerns (logging, error handling).
 
-Usage:
-    python find-helper-duplication.py <repo_root> [--helpers <glob>] [--consumers <glob>] [--threshold <0-100>] [--json]
+Contract:  python find-helper-duplication.py --help   (JSON)
+Standard:  references/tooling-standards.md
 
-Args:
-    repo_root       Path to the repository root
-    --helpers       Glob pattern for shared helper files (default: auto-detect)
-    --consumers     Glob pattern for consumer/test files (default: auto-detect)
-    --threshold     Name similarity threshold 0-100 (default: 70)
-    --json          Output as JSON (default: human-readable)
+Usage (flags only):
+    $UB find-helper-duplication --repo-root <repo_root>
+        [--helpers <glob1,glob2,...>] [--consumers <glob1,glob2,...>]
+        [--threshold <0-100>] [--json]
+
+Output: JSON envelope; "data" carries the legacy analysis document
+    (helpers, duplicates, summary — see below).
+    Without --json the payload also carries "report" (legacy human text).
 
 Auto-detection strategy:
     Helpers:  **/Helpers/**/*.cs, **/Shared/**/*.cs, **/Common/**/*.cs,
@@ -33,13 +35,14 @@ Output (JSON):
     }
 """
 
-import argparse
 import glob
 import json
 import os
 import re
-import sys
 from difflib import SequenceMatcher
+from pathlib import Path
+
+from toolkit import Tool, UsageError, NotFound
 
 
 # --- Method extraction (C#) ---
@@ -242,7 +245,7 @@ def find_files(repo_root, patterns):
         for f in glob.glob(full_pattern, recursive=True):
             # Skip bin/obj/node_modules
             rel = os.path.relpath(f, repo_root)
-            skip_dirs = ('bin', 'obj', 'node_modules', '.git', 'packages')
+            skip_dirs = ('bin', 'obj', 'node_modules', '.git', 'packages', '.worktrees')
             if not any(part in rel.split(os.sep) for part in skip_dirs):
                 files.add(f)
     return sorted(files)
@@ -498,30 +501,64 @@ def format_human(result):
     return '\n'.join(lines)
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Find local methods that duplicate shared helpers')
-    parser.add_argument('repo_root', help='Path to repository root')
-    parser.add_argument('--helpers', nargs='*', help='Glob patterns for helper files')
-    parser.add_argument('--consumers', nargs='*', help='Glob patterns for consumer/test files')
-    parser.add_argument('--threshold', type=int, default=70, help='Name similarity threshold 0-100 (default: 70)')
-    parser.add_argument('--json', action='store_true', help='Output as JSON')
-    args = parser.parse_args()
-
-    repo_root = os.path.abspath(args.repo_root)
+def handle(v):
+    repo_root = os.path.abspath(v["--repo-root"])
     if not os.path.isdir(repo_root):
-        print(f"Error: {repo_root} is not a directory", file=sys.stderr)
-        sys.exit(1)
+        raise NotFound(
+            f"{repo_root} is not a directory",
+            "pass an existing repository directory: $UB find-helper-duplication --repo-root <repo>",
+        )
 
-    helper_globs = args.helpers or HELPER_PATTERNS
-    consumer_globs = args.consumers or CONSUMER_PATTERNS
+    threshold = int(v["--threshold"])
+    if not 0 <= threshold <= 100:
+        raise UsageError(
+            f"--threshold must be between 0 and 100, got {threshold}",
+            "pass --threshold <0-100> (default: 70)",
+        )
 
-    result = analyze(repo_root, helper_globs, consumer_globs, args.threshold)
+    helper_globs = v.get("--helpers") or HELPER_PATTERNS
+    consumer_globs = v.get("--consumers") or CONSUMER_PATTERNS
 
-    if args.json:
-        print(json.dumps(result, indent=2))
-    else:
-        print(format_human(result))
+    result = analyze(repo_root, helper_globs, consumer_globs, threshold)
+
+    payload = {"status": "scanned", "repo_root": repo_root, "data": result}
+    if not v.get("--json", False):
+        payload["report"] = format_human(result)
+    return payload
 
 
-if __name__ == '__main__':
-    main()
+TOOL = Tool(
+    name="find-helper-duplication",
+    version="1.0",
+    summary="Detect local (private/protected) methods in test/consumer classes that duplicate shared helper "
+            "methods, plus wrappers that bypass shared cross-cutting infrastructure (logging, auth, "
+            "error handling, throttling).",
+    flags={
+        "--repo-root": {"required": True, "type": "path",
+                        "description": "Path to the repository root (must exist)."},
+        "--helpers": {"required": False, "type": "list",
+                      "description": "Comma-separated glob patterns for shared helper files "
+                                     "(default: auto-detect **/Helpers|Shared|Common|Utilities|Infrastructure|Extensions/**/*.cs)."},
+        "--consumers": {"required": False, "type": "list",
+                        "description": "Comma-separated glob patterns for consumer/test files "
+                                       "(default: **/*Tests.cs, **/*Test.cs, **/*Spec.cs)."},
+        "--threshold": {"required": False, "type": "int", "default": 70,
+                        "description": "Name similarity threshold 0-100 (default: 70)."},
+        "--json": {"required": False, "type": "bool",
+                   "description": "Emit only 'data' (no 'report'). Accepted for back-compat; JSON is the only stdout mode."},
+    },
+    exit_codes={
+        "0": "scanned — payload carries 'data' (helpers, duplicates, summary) and 'report' unless --json",
+        "1": "usage or validation error (threshold outside 0-100)",
+        "4": "not found: repo root is not a directory",
+    },
+    examples=[
+        "$UB find-helper-duplication --repo-root . --json",
+        "$UB find-helper-duplication --repo-root . --threshold 80 --helpers 'src/**/Helpers/**/*.cs'",
+    ],
+    idempotent="Read-only: re-running on the same repo state returns identical results.",
+)
+
+
+if __name__ == "__main__":
+    TOOL.run(handle)

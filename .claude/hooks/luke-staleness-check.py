@@ -10,7 +10,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-meta_path = repo_root / "aidlc-docs" / "inception" / "reverse-engineering" / ".survey-meta.md"
+meta_path = repo_root / ".claude" / "codebase" / ".survey-meta.md"
 
 if not meta_path.exists():
     sys.stderr.write("Luke: No survey found for this repo. Run /luke to survey and initialise.\n")

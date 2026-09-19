@@ -1,63 +1,30 @@
 """
-Read a handoff markdown file and return structured JSON of its fields.
+Read a handoff markdown file and return structured JSON of its fields (GPTS).
 
-Usage:
-  python read-handoff.py <file_path>
-  python read-handoff.py <file_path> --fields Status,Branch,Mode
-  python read-handoff.py <base_dir> --type bruce --key PAY-6670
-  python read-handoff.py <base_dir> --type bruce --key PAY-6670 --exists
-  python read-handoff.py <base_dir> --key PAY-6670 --scan
-  python read-handoff.py <base_dir> --key PAY-6670 --scan --fields Status,Branch,Route To,Mode
-  python read-handoff.py <base_dir> --type damian --key PAY-6670 --section "Conversation Context"
-  python read-handoff.py <base_dir> --type damian --key PAY-6670 --sections
-  python read-handoff.py <base_dir> --type damian --key PAY-6670 --raw
+Usage (flags only; --help prints this contract as JSON):
+  $UB read-handoff --path <file.md> [--fields F1,F2] [--section Name] [--sections] [--raw] [--exists]
+  $UB read-handoff --type <type> --key <key> [--unit <AC>] [same modes]
+  $UB read-handoff --key <key> --scan [--fields F1,F2]
+  $UB read-handoff --key <key> --route [--repo-root <path>]
 
-Output: JSON to stdout
-  {
-    "exists": true,
-    "complete": false,
-    "path": "/path/to/Damian-PAY-6670.md",
-    "fields": {"Status": "ready", "Branch": "quality/PAY-6670_foo", "Mode": "standard"},
-    "header": "## Damian Handoff"
-  }
+Positional shorthand still accepted through $UB:
+  $UB read-handoff <type> <key> [flags]
+  $UB read-handoff <file.md> [flags]
 
---exists mode: just check existence + complete status (no field parsing)
-  {"exists": true, "complete": false, "path": "..."}
+Output: one JSON document {ok, status, ...payload} to stdout.
+  - read mode (default): status=read, payload = exists/complete/path/header/fields
+  - --exists: status=exists, payload = exists/complete/path/handoff_age_minutes
+  - --raw: status=raw, payload = exists/complete/path/raw
+  - --sections: status=sections, payload = exists/sections (list of names)
+  - --section <name>: status=section, payload = exists/section/content/available
+  - --scan: status=scan, payload = newest non-complete handoff across all types
+    (exists/type/all_complete/scanned/fields) or exists=false when none active.
+  - --route: status=route, payload = ticket_key/active/handoffs/all_complete/survey.
+    active is null when no non-complete handoff exists. handoff values:
+    "active"|"complete"|"absent"|"incomplete". survey: "missing"|"pending-review"|"complete".
 
---fields: only return named fields (comma-separated), skip full parse
-
---section <name>: return the full multi-line content of a named section.
-  Sections start with **Name:** and include all lines until the next **Key:**
-  or end of file. Returns {"exists": true, "section": "Name", "content": "..."}.
-
---sections: list all section names found in the file.
-  Returns {"exists": true, "sections": ["Status", "Branch", "Conversation Context", ...]}.
-
---raw: return the entire file content as a string.
-  Returns {"exists": true, "complete": <bool>, "path": "...", "raw": "..."}.
-
---scan mode: check ALL non-Oracle handoff types for a key, return the newest
-  non-complete file (by mtime). Returns type + scanned list.
-  {"exists": true, "complete": false, "type": "lucius", "all_complete": false,
-   "scanned": ["lucius", "damian", "alfred"], "path": "...", "fields": {...}}
-  If all complete: {"exists": false, "all_complete": true, "scanned": [...]}
-
---route mode: deterministic routing scan. Returns per-type state map, active
-  handoff routing fields, and survey status. One call, no follow-up reads needed.
-  python read-handoff.py <base_dir> --key PAY-6611 --route --repo-root /path/to/repo
-  {
-    "ticket_key": "PAY-6611",
-    "active": {"type": "alfred", "status": "in-progress", "route_to": "Damian",
-               "mode": "standard", "complexity": null, "pr_comments": null},
-    "handoffs": {"alfred": "active", "damian": "complete", "gordon": "absent", ...},
-    "all_complete": false,
-    "survey": "complete"
-  }
-  active is null when no non-complete handoff exists.
-  handoff values: "active", "complete", "absent", "incomplete" (older non-complete).
-  survey values: "missing", "pending-review", "complete".
-
-Exits 0 always. exists=false if file not found.
+Exit codes: 0 = read/scan/route completed (exists=false is NOT an error) ·
+1 = usage error (no --path and no --type/--key; unknown --type; --scan/--route without --key)
 """
 import os
 import sys
@@ -80,8 +47,17 @@ from dupin_shared import (
     _DUPIN_STAGES,
     _DUPIN_PREFIX,
     build_ac_handoff_path,
+    build_story_handoff_path,
     is_handoff_complete,
+    discover_repo_base,
+    HOME_CLAUDE,
+    REPO_SCOPED_TYPES,
+    sanitize_handoff_key,
 )
+
+from toolkit import Tool, UsageError
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 FIELD_RE = re.compile(r"^\*\*([^*]+):\*\*\s*(.*)")
 
@@ -103,13 +79,15 @@ def _glob_ac_files(base: Path, folder: str, template: str, key: str) -> list[Pat
 
 
 def _glob_dupin_files(base: Path, ticket: str) -> list[Path]:
-    """Find dupin handoff files using deterministic path: handoffs/dupin/{ticket}/{stage}-{ticket}-{ac}.md"""
+    """Find dupin handoff files under handoffs/dupin/{ticket}/:
+       {stage}-{ticket}-{ac}.md (legacy per-AC) or {stage}-{ticket}.md
+       (story-level, dupin plan §3.3). Exact match only — no partials."""
     dupin_dir = base / "handoffs/dupin" / ticket
     if not dupin_dir.exists():
         return []
-    # Exact match: {stage}-{ticket}-{ac_id}.md — no partial matches
+    # Exact match: {stage}-{ticket}-{unit}.md — no partial matches
     stages = "|".join(_DUPIN_STAGES.values())
-    exact_re = re.compile(rf"^({stages})-{re.escape(ticket)}-.+\.md$")
+    exact_re = re.compile(rf"^({stages})-{re.escape(ticket)}(-.+)?\.md$")
     return [f for f in dupin_dir.iterdir() if f.is_file() and exact_re.match(f.name)]
 
 
@@ -270,38 +248,56 @@ def route_scan(base: Path, key: str, repo_root: Path | None = None) -> dict:
     return result
 
 
-def resolve_path(args) -> Path:
-    """Resolve file path from args — either direct path or base_dir + type + key."""
-    if "--type" in args:
-        # Check if --key is present
-        try:
-            key_idx = args.index("--key")
-        except ValueError:
-            # --type provided but no --key: treat first arg as direct path
-            return Path(args[0])
-        htype = args[args.index("--type") + 1]
-        key = args[key_idx + 1]
-        base = Path(args[0])
-        if htype not in HANDOFF_PATHS:
-            return None
-        
-        # Check for --ac_id option
-        ac_id = None
-        if "--ac_id" in args:
-            ac_id_idx = args.index("--ac_id")
-            ac_id = args[ac_id_idx + 1]
-        
-        # Deterministic path for dupin sub-types when ac_id provided
-        if htype in _DUPIN_TYPES and ac_id:
-            return build_ac_handoff_path(base, htype, key, ac_id)
+def _locate(base: Path, htype: str, key: str, unit, path, repo_root):
+    """If the handoff isn't at its home base, search sibling locations: the
+    repo's .claude (session/luke handoffs from repo runs) and the developer-
+    global store — plus sanitized-key variants written by newer make-handoff
+    (e.g. Luke-N-A.md for key 'N/A'). Returns the original path when nothing
+    is found, preserving absent semantics."""
+    alt_keys = [k for k in (sanitize_handoff_key(key),) if k != key]
+    rb = discover_repo_base(str(repo_root) if repo_root else None)
+    if htype in REPO_SCOPED_TYPES and rb:
+        # Repo-scoped types are written into the repo — check the repo first so
+        # a stale global copy can't shadow the live one.
+        for k in [key, *alt_keys]:
+            p = resolve_path(rb, htype, k, unit)
+            if p and p.exists():
+                return p
+    if path.exists():
+        return path
+    bases = [base]
+    if rb and rb not in bases:
+        bases.append(rb)
+    if HOME_CLAUDE.is_dir() and HOME_CLAUDE not in bases:
+        bases.append(HOME_CLAUDE)
+    for b in bases:
+        for k in [key, *alt_keys]:
+            p = resolve_path(b, htype, k, unit)
+            if p and p.exists():
+                return p
+    return path
 
-        folder, template = HANDOFF_PATHS[htype]
-        # Backward compat: parse slash-separated key for dupin types
-        if htype in _DUPIN_PREFIX and "/" in key:
-            story, ac = key.rsplit("/", 1)
-            key = f"{story}/{_DUPIN_PREFIX[htype]}-{ac}"
-        return base / folder / template.format(key=key)
-    return Path(args[0])
+
+def resolve_path(base: Path, htype: str, key: str, unit: str | None = None) -> Path | None:
+    """Resolve handoff file path from base + type + key (+ optional AC unit)."""
+    if htype not in HANDOFF_PATHS:
+        return None
+    # Deterministic path for dupin sub-types when unit provided
+    if htype in _DUPIN_TYPES and unit:
+        return build_ac_handoff_path(base, htype, key, unit)
+    # Story-level fallback: dupin stage type without unit resolves to the
+    # story handoff {stage}-{key}.md (dupin plan §3.3) when that file exists;
+    # otherwise fall through to legacy resolution below.
+    if htype in _DUPIN_TYPES:
+        story_path = build_story_handoff_path(base, htype, key)
+        if story_path.exists():
+            return story_path
+    folder, template = HANDOFF_PATHS[htype]
+    # Backward compat: parse slash-separated key for dupin types
+    if htype in _DUPIN_PREFIX and "/" in key:
+        story, ac = key.rsplit("/", 1)
+        key = f"{story}/{_DUPIN_PREFIX[htype]}-{ac}"
+    return base / folder / template.format(key=key)
 
 
 def _check_complete(content: str, lines: list[str]) -> bool:
@@ -387,83 +383,53 @@ def parse_sections(path: Path) -> dict:
     return sections
 
 
-def main():
-    raw_args = sys.argv[1:]
-    if not raw_args:
-        print("Usage: python read-handoff.py <path> | <base_dir> --type <type> --key <key> "
-              "[--exists] [--fields F1,F2] [--section Name] [--sections] [--raw]",
-              file=sys.stderr)
-        sys.exit(1)
-
-    route_mode = "--route" in raw_args
-    scan_mode = "--scan" in raw_args
-    exists_only = "--exists" in raw_args
-    raw_mode = "--raw" in raw_args
-    sections_list = "--sections" in raw_args
-    section_name = None
-    if "--section" in raw_args:
-        sec_idx = raw_args.index("--section")
-        section_name = raw_args[sec_idx + 1]
-
-    clean_args = [a for a in raw_args
-                  if a not in ("--exists", "--scan", "--route", "--raw", "--sections")]
-    # Remove --section and its value from clean_args
-    if "--section" in clean_args:
-        sec_idx = clean_args.index("--section")
-        clean_args = clean_args[:sec_idx] + clean_args[sec_idx + 2:]
+def handle(v):
+    base = Path(v["--base"])
+    htype = v.get("--type")
+    key = v.get("--key")
+    unit = v.get("--unit")
 
     only_fields = None
-    if "--fields" in clean_args:
-        idx = clean_args.index("--fields")
-        raw_fields = clean_args[idx + 1].split(",")
-        # Normalize each field name through ALIASES so snake_case keys
-        # (e.g. "commit_hash", "acs_done") resolve to canonical names
+    if v.get("--fields"):
         normalized = set()
-        for f in raw_fields:
+        for f in v["--fields"]:
             f_stripped = f.strip()
             canonical = _FIELDS_ALIASES.get(f_stripped.lower(), f_stripped)
             normalized.add(canonical)
         only_fields = normalized
-        clean_args = clean_args[:idx] + clean_args[idx + 2:]
 
-    # Handle --repo-root (used by --route for survey check)
-    repo_root = None
-    if "--repo-root" in clean_args:
-        rr_idx = clean_args.index("--repo-root")
-        repo_root = Path(clean_args[rr_idx + 1])
-        clean_args = clean_args[:rr_idx] + clean_args[rr_idx + 2:]
+    section_name = v.get("--section")
+    repo_root = Path(v["--repo-root"]) if v.get("--repo-root") else None
 
-    path = resolve_path(clean_args)
-    if path is None:
-        print(json.dumps({"exists": False, "error": "unknown handoff type"}))
-        return
-
-    if route_mode:
-        if "--key" not in clean_args:
-            print(json.dumps({"error": "--route requires --key <key>"}))
-            return
-        key_idx = clean_args.index("--key")
-        key = clean_args[key_idx + 1]
-        base = Path(clean_args[0])
+    if v.get("--route"):
+        if not key:
+            raise UsageError("--route requires --key <key>", "pass --key <ticket>")
         result = route_scan(base, key, repo_root)
-        print(json.dumps(result))
-        return
+        return {"status": "route", **result}
 
-    if scan_mode:
-        if "--key" not in clean_args:
-            print(json.dumps({"error": "--scan requires --key <key>"}))
-            return
-        key_idx = clean_args.index("--key")
-        key = clean_args[key_idx + 1]
-        base = Path(clean_args[0])
+    if v.get("--scan"):
+        if not key:
+            raise UsageError("--scan requires --key <key>", "pass --key <ticket>")
         result = scan_for_active(base, key, only_fields)
-        print(json.dumps(result))
-        return
+        return {"status": "scan", **result}
 
-    if exists_only:
+    if v.get("--path"):
+        path = Path(v["--path"])
+    elif htype and key:
+        path = resolve_path(base, htype, key, unit)
+        if path is None:
+            raise UsageError(f"unknown handoff type: {htype}", "pass a valid --type, or use --path")
+        path = _locate(base, htype, key, unit, path, repo_root)
+    else:
+        raise UsageError(
+            "no target: pass --path <file> or --type <type> --key <key>",
+            "example: $UB read-handoff --type bruce --key LOC-0076",
+        )
+
+    if v.get("--exists"):
         exists = path.exists()
         complete = False
-        handoff_age_minutes = 9999  # sentinel: unknown age treated as old (safe for < comparisons)
+        handoff_age_minutes = 9999
         if exists:
             try:
                 mtime = path.stat().st_mtime
@@ -472,53 +438,81 @@ def main():
                 complete = "status: complete" in text
             except Exception:
                 pass
-        print(json.dumps({"exists": exists, "complete": complete, "path": str(path), "handoff_age_minutes": handoff_age_minutes}))
-        return
+        return {"status": "exists", "exists": exists, "complete": complete,
+                "path": str(path), "handoff_age_minutes": handoff_age_minutes}
 
-    if raw_mode:
+    if v.get("--raw"):
         try:
             content = path.read_text(encoding="utf-8")
             lines = content.split("\n")
-            print(json.dumps({
-                "exists": True,
-                "complete": _check_complete(content, lines),
-                "path": str(path),
-                "raw": content,
-            }))
+            return {"status": "raw", "exists": True, "complete": _check_complete(content, lines),
+                    "path": str(path), "raw": content}
         except FileNotFoundError:
-            print(json.dumps({"exists": False, "path": str(path)}))
-        return
+            return {"status": "raw", "exists": False, "path": str(path)}
 
-    if sections_list:
+    if v.get("--sections"):
         sections = parse_sections(path)
-        print(json.dumps({
-            "exists": bool(sections) or path.exists(),
-            "sections": list(sections.keys()),
-        }))
-        return
+        return {"status": "sections", "exists": bool(sections) or path.exists(),
+                "sections": list(sections.keys())}
 
     if section_name:
         sections = parse_sections(path)
         if not path.exists():
-            print(json.dumps({"exists": False, "path": str(path)}))
+            return {"status": "section", "exists": False, "path": str(path)}
         elif section_name in sections:
-            print(json.dumps({
-                "exists": True,
-                "section": section_name,
-                "content": sections[section_name],
-            }))
+            return {"status": "section", "exists": True, "section": section_name,
+                    "content": sections[section_name]}
         else:
-            print(json.dumps({
-                "exists": True,
-                "section": section_name,
-                "content": None,
-                "available": list(sections.keys()),
-            }))
-        return
+            return {"status": "section", "exists": True, "section": section_name,
+                    "content": None, "available": list(sections.keys())}
 
     result = parse_handoff(path, only_fields)
-    print(json.dumps(result))
+    return {"status": "read", **result}
+
+
+TOOL = Tool(
+    name="read-handoff",
+    version="1.0",
+    summary="Read a pipeline handoff markdown file as structured JSON (GPTS).",
+    flags={
+        "--path": {"required": False, "type": "path",
+                   "description": "Direct path to a handoff file."},
+        "--type": {"required": False, "type": "str",
+                   "description": "Handoff type (bruce, damian, gordon, dup-impl, ...) — with --key."},
+        "--key": {"required": False, "type": "str",
+                  "description": "Ticket key; STORY/AC2 form or --unit for per-AC handoffs."},
+        "--unit": {"required": False, "type": "str",
+                   "description": "AC unit for deterministic dupin sub-type paths."},
+        "--scan": {"required": False, "type": "bool",
+                   "description": "All non-Oracle types for a key; return the newest non-complete handoff."},
+        "--route": {"required": False, "type": "bool",
+                    "description": "Deterministic routing scan: per-type state, active routing fields, survey."},
+        "--exists": {"required": False, "type": "bool",
+                     "description": "Existence + complete status only (no field parsing)."},
+        "--raw": {"required": False, "type": "bool",
+                   "description": "Return the entire file content as a string."},
+        "--sections": {"required": False, "type": "bool",
+                       "description": "List all section names found in the file."},
+        "--section": {"required": False, "type": "str",
+                      "description": "Return the full multi-line content of a named section."},
+        "--fields": {"required": False, "type": "list",
+                     "description": "Only return named fields (alias-normalized)."},
+        "--repo-root": {"required": False, "type": "path",
+                        "description": "Repo root (used by --route for the survey check)."},
+    },
+    exit_codes={
+        "0": "read/scan/route complete — exists=false is a valid result, not an error",
+        "1": "usage error — missing target, unknown --type, or --scan/--route without --key",
+    },
+    examples=[
+        "$UB read-handoff --type bruce --key LOC-0076 --fields Status,Route To",
+        "$UB read-handoff --key LOC-0076 --route --repo-root /path/to/repo",
+        "$UB read-handoff --path /path/to/Damian-LOC-0076.md --raw",
+    ],
+    idempotent="Pure read. No side effects.",
+    base_default=BASE_DIR,
+)
 
 
 if __name__ == "__main__":
-    main()
+    TOOL.run(handle)

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-artifacts_dir = repo_root / "aidlc-docs" / "inception" / "reverse-engineering"
+artifacts_dir = repo_root / ".claude" / "codebase"
 flag_file = repo_root / ".claude" / ".session-artifacts-indexed"
 
 # Only index once per session

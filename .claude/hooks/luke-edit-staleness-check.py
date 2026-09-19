@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT") or os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd())
-artifacts_dir = repo_root / "aidlc-docs" / "inception" / "reverse-engineering"
+artifacts_dir = repo_root / ".claude" / "codebase"
 edited_file = os.environ.get("TOOL_INPUT_FILE_PATH") or os.environ.get("TOOL_INPUT_PATH") or ""
 
 if not edited_file or not artifacts_dir.exists():

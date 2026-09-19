@@ -20,17 +20,14 @@ Examples:
   $UB make-handoff <<'HANDOFF'
   {"type":"oracle","ticket_key":"KEY","self_evolution":[],"fields":{}}
   HANDOFF
-  $UB stamp-handoffs <<'STAMP'
-  {"ticket_key":"KEY","mode":"standard","committed_ac":["AC1"]}
-  STAMP
+  $UB stamp-handoffs --ticket PAY-123 --mode standard --committed-ac AC1
   $UB preflight-check
-  $UB clean-temp signal
-  $UB read-reference oracle-reference.md --section "AIDLC"
-  $UB aidlc-detect /path/to/repo
-  $UB confirm-passphrase mypin
+  $UB clean-temp --skill signal
+  $UB read-reference oracle-reference.md --section "Handoff Template"
+  $UB confirm-passphrase --passphrase mypin
   $UB archive-ticket --key PAY-123
-  $UB claim-ac PAY-123 AC1 damian-a3f7
-  $UB audit-skill ~/.claude/skills/oracle/SKILL.md
+  $UB claim-unit --ticket PAY-123 --unit PAY-0042 --agent-id dup-implement-a3f7
+  $UB audit-skill --skill ~/.claude/skills/oracle/SKILL.md
 """
 import ast
 import json
@@ -55,11 +52,11 @@ def _posix(p):
     return str(p).replace("\\", "/")
 
 
-# Tools where BASE_DIR is always prepended as arg 1.
-PREPEND_BASE = {"read-pipeline-notes", "pipeline-notes"}  # Tools that take base_dir as first positional arg
+# Tools where BASE_DIR is always passed as --base (GPTS flag-only tools).
+BASE_FLAG = {"read-pipeline-notes", "pipeline-notes"}
 
-# Tools where a JSON arg gets base_dir auto-injected.
-JSON_INJECT = {"make-handoff", "stamp-handoffs"}
+# Tools where a JSON payload gets base_dir auto-injected (heredoc on stdin).
+JSON_INJECT = {"make-handoff"}
 
 # Marker file for handoff guard — write-guard.py checks this to allow
 # legitimate tool-mediated writes to handoffs/.
@@ -186,10 +183,6 @@ def main():
     tool = sys.argv[1]
     args = sys.argv[2:]
 
-    # Intercept --help on downstream tools — usage is inline in skill docs.
-    if "--help" in args or "-h" in args:
-        print(f"{tool}: usage is inline in your skill instructions. If needed: $UB read-reference REGISTRY.md --section \"{tool}\"")
-        sys.exit(0)
 
     # Auto-substitute <BASE_DIR>/<base_dir> and <HOME_DIR>/<home_dir> in any
     # argument so the model never needs to resolve these at call time.
@@ -207,13 +200,21 @@ def main():
         print(f"Unknown tool: {tool}. Use --list to see available tools.", file=sys.stderr)
         sys.exit(1)
 
-    # --- oracle-startup: always pass HOME_DIR ---
+    # GPTS tools (declared with a TOOL spec) print their JSON contract on
+    # --help/-h; legacy tools keep the skill-doc pointer.
+    if "--help" in args or "-h" in args:
+        if 'TOOL = Tool(' in script.read_text(encoding="utf-8"):
+            run(script, args)
+        print(f"{tool}: usage is inline in your skill instructions. If needed: $UB read-reference REGISTRY.md --section \"{tool}\"")
+        sys.exit(0)
+
+    # --- oracle-startup: always pass HOME_DIR as --home (GPTS) ---
     if tool == "oracle-startup":
-        run(script, [_posix(HOME_DIR)] + args)
+        run(script, ["--home", _posix(HOME_DIR)] + args)
 
     # --- preflight-check: inject base_dir, platform, home, cache ---
     elif tool == "preflight-check":
-        full = [_posix(BASE_DIR), "--platform", PLATFORM, "--home", _posix(HOME_DIR)]
+        full = ["--base", _posix(BASE_DIR), "--platform", PLATFORM, "--home", _posix(HOME_DIR)]
         if "--write-cache" not in args:
             cache = BASE_DIR / "handoffs" / "oracle" / "preflight-cache.md"
             full += ["--write-cache", _posix(cache)]
@@ -221,7 +222,7 @@ def main():
 
     # --- read-reference: resolve short filenames to references/ then skills/ ---
     # Optional --repo-root <path> extends the search to repo artifact and audit dirs.
-    # Resolution order: references/ → tools/ → skills/ → aidlc-docs/ → audits/
+    # Resolution order: references/ → tools/ → commands/ → .claude/codebase/ → audits/
     elif tool == "read-reference":
         # Extract --repo-root <path> from args before passing to script
         repo_root = None
@@ -231,62 +232,54 @@ def main():
                 repo_root = Path(os.path.expanduser(args[rr_idx + 1]))
                 args = args[:rr_idx] + args[rr_idx + 2:]  # strip flag + value
 
+        def _resolve_short(p):
+            # Resolution chain per REGISTRY: references/ -> tools/ -> commands/ -> repo dirs
+            resolved = BASE_DIR / "references" / p.name
+            if not resolved.exists():
+                resolved = BASE_DIR / "references" / p
+            if not resolved.exists():
+                resolved = BASE_DIR / "tools" / p.name
+            if not resolved.exists():
+                resolved = BASE_DIR / "commands" / p.name
+            # Repo-scoped fallbacks when --repo-root supplied
+            if not resolved.exists() and repo_root:
+                resolved = repo_root / ".claude" / "codebase" / p.name
+            if not resolved.exists() and repo_root:
+                # audit.md lives at audits/<ticket>/audit.md — pass ticket as name
+                resolved = repo_root / "audits" / p
+            return resolved
+
         if args and not args[0].startswith("-"):
             p = Path(os.path.expanduser(args[0]))
             if not p.is_absolute():
-                resolved = BASE_DIR / "references" / p.name
-                if not resolved.exists():
-                    resolved = BASE_DIR / "references" / p
-                if not resolved.exists():
-                    resolved = BASE_DIR / "tools" / p.name
-                if not resolved.exists():
-                    resolved = BASE_DIR / "commands" / p.name
-                # Repo-scoped fallbacks when --repo-root supplied
-                if not resolved.exists() and repo_root:
-                    resolved = repo_root / "aidlc-docs" / "inception" / "reverse-engineering" / p.name
-                if not resolved.exists() and repo_root:
-                    # audit.md lives at audits/<ticket>/audit.md — pass ticket as name
-                    resolved = repo_root / "audits" / p
-                args[0] = _posix(resolved)
+                args = ["--path", _posix(_resolve_short(p))] + args[1:]
             else:
-                args[0] = _posix(p)
+                args = ["--path", _posix(p)] + args[1:]
+        elif "--path" in args:
+            # Flag form: a bare/relative --path value gets the same resolution as
+            # the positional form. Absolute or cwd-existing paths pass through.
+            pi = args.index("--path")
+            if pi + 1 < len(args):
+                p = Path(os.path.expanduser(args[pi + 1]))
+                if not p.is_absolute() and not p.exists():
+                    args = args[:pi + 1] + [_posix(_resolve_short(p))] + args[pi + 2:]
         run(script, args)
 
-    # --- read-handoff: prepend BASE_DIR in type/key mode ---
-    # Supports positional shorthand: $UB read-handoff <type> <key> [flags...]
-    # rewrites to: read-handoff.py BASE_DIR --type <type> --key <key> [flags...]
-    # Also handles: $UB read-handoff <type> without --key (scan mode)
+    # --- read-handoff: positional shorthand → GPTS flags ---
+    # $UB read-handoff <file.md> [flags]    → --path <file.md> [flags]
+    # $UB read-handoff <type> <key> [flags] → --type <type> --key <key> [flags]
+    # Flag-form calls ($UB read-handoff --type T --key K ...) pass through.
     elif tool == "read-handoff":
-        # Check if --type is provided
-        type_idx = -1
-        try:
-            type_idx = args.index("--type")
-        except ValueError:
-            pass
-
-        if type_idx >= 0:
-            # --type was provided
-            if "--key" not in args:
-                # No --key: scan mode for active handoff of this type
-                run(script, [_posix(BASE_DIR)] + args)
-            else:
-                # Both --type and --key: standard mode
-                run(script, [_posix(BASE_DIR)] + args)
-        elif args and not args[0].startswith("-"):
+        if args and not args[0].startswith("-"):
             p = Path(os.path.expanduser(args[0]))
             if p.is_file():
-                args[0] = _posix(p)
-                run(script, args)
+                args = ["--path", _posix(p)] + args[1:]
             elif (len(args) >= 2 and not args[1].startswith("-")
                   and "/" not in args[0] and "\\" not in args[0]):
                 args = ["--type", args[0], "--key", args[1]] + args[2:]
-                run(script, [_posix(BASE_DIR)] + args)
-            else:
-                run(script, [_posix(BASE_DIR)] + args)
-        else:
-            run(script, [_posix(BASE_DIR)] + args)
+        run(script, args)
 
-    # --- JSON injection: read from stdin (heredoc), inject base_dir ---
+    # --- JSON injection (make-handoff): read from stdin (heredoc), inject base_dir ---
     # Always heredoc — no inline arg path. One way to call it, no choices.
     # Pipes JSON to the downstream script via stdin (not argv) to avoid
     # Windows CreateProcess quote corruption on long or special-char payloads.
@@ -312,56 +305,44 @@ def main():
         _HANDOFF_MARKER.parent.mkdir(parents=True, exist_ok=True)
         _HANDOFF_MARKER.write_text(str(time.time()))
         try:
-            rc = run(script, args, stdin_data=json.dumps(data), _return=True)
+            rc = run(script, ["--json", "-"] + args, stdin_data=json.dumps(data), _return=True)
         finally:
             _HANDOFF_MARKER.unlink(missing_ok=True)
         sys.exit(rc)
 
-    # --- write-temp: reads JSON from stdin (heredoc) or --from-file <path> ---
-    elif tool == "write-temp":
-        # Support: $UB write-temp <skill> <filename> --from-file <path>
-        # This avoids heredoc quoting issues with large/complex JSON payloads.
-        if len(args) == 4 and args[2] == "--from-file":
-            from pathlib import Path as _Path
-            import os as _os
-            # Normalize POSIX paths (/tmp/...) to Windows paths on Windows
-            _raw_path = args[3]
-            if _raw_path.startswith("/") and _os.name == "nt":
-                import tempfile as _tempfile
-                _tmp = _tempfile.gettempdir()
-                # /tmp/foo → <TEMP>\foo
-                _raw_path = _os.path.join(_tmp, _raw_path.lstrip("/tmp/").lstrip("/"))
-            src = _Path(_os.path.expandvars(_raw_path)).resolve()
-            if not src.exists():
-                print(f"--from-file: file not found: {src}", file=sys.stderr)
-                sys.exit(1)
-            raw = src.read_text(encoding="utf-8")
-        elif sys.stdin.isatty():
-            print(f"write-temp reads JSON from stdin or a file. Use a heredoc:\n"
-                  f"  $UB write-temp <skill> <filename> <<'JSON'\n"
-                  f"  {{\"key\": \"value\"}}\n"
-                  f"  JSON\n"
-                  f"Or use --from-file for large payloads:\n"
-                  f"  $UB write-temp <skill> <filename> --from-file <path>", file=sys.stderr)
-            sys.exit(1)
-        else:
-            raw = sys.stdin.read()
+    # --- stamp-handoffs: GPTS flag-only — pass flags straight through.
+    # The marker grants write-guard.py its 30s handoffs/ write window. ---
+    elif tool == "stamp-handoffs":
+        _HANDOFF_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        _HANDOFF_MARKER.write_text(str(time.time()))
         try:
-            json.loads(raw)
-        except json.JSONDecodeError as e:
-            print(f"Invalid JSON: {e}", file=sys.stderr)
+            run(script, args)
+        finally:
+            _HANDOFF_MARKER.unlink(missing_ok=True)
+
+    # --- write-temp: GPTS flag-only — pass flags straight through.
+    # Body comes via stdin (heredoc, inherited by the child) or --from-file
+    # (write-temp.py reads it itself). Marker grants write-guard.py its 30s
+    # handoffs/ write window.
+    elif tool == "write-temp":
+        if sys.stdin.isatty() and not any(a == "--from-file" for a in args):
+            print("write-temp reads JSON from stdin or a file. Use a heredoc:\n"
+                  "  $UB write-temp --skill <skill> --filename <name> <<'JSON'\n"
+                  "  {\"key\": \"value\"}\n"
+                  "  JSON\n"
+                  "Or use --from-file for large payloads:\n"
+                  "  $UB write-temp --skill <skill> --filename <name> --from-file <path>", file=sys.stderr)
             sys.exit(1)
         _HANDOFF_MARKER.parent.mkdir(parents=True, exist_ok=True)
         _HANDOFF_MARKER.write_text(str(time.time()))
         try:
-            rc = run(script, [_posix(BASE_DIR)] + args, stdin_data=raw, _return=True)
+            run(script, ["--base", _posix(BASE_DIR)] + args)
         finally:
             _HANDOFF_MARKER.unlink(missing_ok=True)
-        sys.exit(rc)
 
-    # --- base_dir-first tools: always prepend ---
-    elif tool in PREPEND_BASE:
-        run(script, [_posix(BASE_DIR)] + args)
+    # --- base-scoped tools: always pass --base (GPTS flag-only) ---
+    elif tool in BASE_FLAG:
+        run(script, ["--base", _posix(BASE_DIR)] + args)
 
     # --- remember: passthrough (argparse handles everything, reads stdin) ---
     elif tool == "remember":
