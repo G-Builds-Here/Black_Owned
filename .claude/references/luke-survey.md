@@ -26,7 +26,7 @@ Load on demand — not needed on every invocation. Luke's steps direct when to r
     ├── hooks/
     │   ├── luke-staleness-check.py
     │   └── luke-edit-staleness-check.py
-    ├── skills/                 (directory only — Luke writes luke.md content after)
+    ├── skills/                 (created empty — copy-assets adds utility skills; S5 writes luke/SKILL.md)
     └── memory/                 (directory only — tracked in git, populated over time)
 ```
 

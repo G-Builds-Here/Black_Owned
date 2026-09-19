@@ -37,5 +37,5 @@ Before answering codebase questions, writing or editing code, or making architec
 
 1. **Index once per session** — run `ctx_batch_execute` over all `*.md` files in `.claude/codebase/` to load them into the searchable knowledge base
 2. **Search first** — run `ctx_search` with a specific query; returns focused excerpts without reading raw files
-3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
+3. **Agent fallback** — if `ctx_search` returns nothing useful, spawn `.claude/agents/luke-context.md` with `QUESTION`, `REPO_ROOT`, and `ARTIFACT_DIR`
 4. **No artifacts** — if `.claude/codebase/` is empty, offer to run `/luke`
