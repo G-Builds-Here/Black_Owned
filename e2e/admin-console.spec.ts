@@ -29,7 +29,9 @@ beforeAll(async () => {
   admin = await newSession('e2e-admin-console');
   promoteAdmin(admin.email);
   admin = await loginUser(admin.email, E2E_PASSWORD);
-  await warmRoutes(['/admin', '/admin/users', '/admin/scrape', '/admin/reviews']);
+  // session carries the server-minted bw-session cookie (admin role) so the
+  // Edge guard lets warm-up requests through and the routes actually compile.
+  await warmRoutes(['/admin', '/admin/users', '/admin/scrape', '/admin/reviews'], admin);
 }, 120_000);
 
 afterAll(() => {
@@ -94,7 +96,11 @@ test('active jobs tab shows pending and running jobs, auto-refreshes, and links 
     await expect(page.getByText(`Query: ${qC}`)).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Review Results' }).click();
-    await expect(page).toHaveURL(/\/admin\/reviews\/?$/);
+    // 15s like every other expect in this test: the first client transition to
+    // /admin/reviews can pay dev-mode first-flight work >5s (firefox measured
+    // failing at the 5s default when cold, committing in ~190ms warm — probe
+    // 2026-09-18). Behavior asserted is unchanged: navigation must occur.
+    await expect(page).toHaveURL(/\/admin\/reviews\/?$/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Business Review Queue' })).toBeVisible({ timeout: 15_000 });
   } finally {
     psql(`DELETE FROM scrape_jobs WHERE query IN ('${qA}', '${qB}', '${qC}')`);

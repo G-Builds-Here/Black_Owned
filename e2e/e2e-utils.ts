@@ -23,6 +23,10 @@ export interface E2ESession {
   role: string;
   accessToken: string;
   refreshToken: string;
+  /** Server-minted `bw-session` cookie value captured from the login
+   *  response's Set-Cookie header (LOC-0092: the Edge guard reads this
+   *  cookie; localStorage alone no longer satisfies /admin). */
+  sessionCookie?: string;
 }
 
 /**
@@ -43,6 +47,8 @@ export function psql(sql: string): string {
 export interface ApiResult {
   status: number;
   body: Record<string, any>;
+  /** Raw Set-Cookie header values from the response (server-minted state). */
+  setCookie: string[];
 }
 
 export async function apiJson(
@@ -64,7 +70,24 @@ export async function apiJson(
   } catch {
     body = { raw: text };
   }
-  return { status: res.status, body };
+  const setCookie =
+    typeof res.headers.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : (res.headers.get('set-cookie')?.split(/,\s*(?=[^;]+?=)/) ?? []);
+  return { status: res.status, body, setCookie };
+}
+
+/** Pull the `bw-session` value out of captured Set-Cookie header values. */
+function extractSessionCookie(setCookie: string[]): string | undefined {
+  for (const raw of setCookie) {
+    const pair = raw.split(';')[0];
+    const eq = pair.indexOf('=');
+    if (eq >= 0 && pair.slice(0, eq).trim() === 'bw-session') {
+      const value = pair.slice(eq + 1).trim();
+      if (value) return value;
+    }
+  }
+  return undefined;
 }
 
 export async function registerUser(name: string, email: string, password: string): Promise<void> {
@@ -78,21 +101,22 @@ export async function registerUser(name: string, email: string, password: string
 }
 
 export async function loginUser(email: string, password: string): Promise<E2ESession> {
-  const { status, body } = await apiJson('/api/auth/login', {
+  const res = await apiJson('/api/auth/login', {
     method: 'POST',
     body: { email, password },
   });
-  if (status >= 400 || !body?.tokens?.accessToken) {
-    throw new Error(`login ${email} failed: ${status} ${JSON.stringify(body).slice(0, 300)}`);
+  if (res.status >= 400 || !res.body?.tokens?.accessToken) {
+    throw new Error(`login ${email} failed: ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
   }
   return {
     email,
     password,
-    name: body.user?.name ?? email,
-    id: body.user?.id ?? '',
-    role: body.user?.role ?? 'user',
-    accessToken: body.tokens.accessToken,
-    refreshToken: body.tokens.refreshToken,
+    name: res.body.user?.name ?? email,
+    id: res.body.user?.id ?? '',
+    role: res.body.user?.role ?? 'user',
+    accessToken: res.body.tokens.accessToken,
+    refreshToken: res.body.tokens.refreshToken,
+    sessionCookie: extractSessionCookie(res.setCookie),
   };
 }
 
@@ -137,7 +161,14 @@ export async function claimBusiness(
   return { id: biz.id, status: biz.status ?? '' };
 }
 
-/** Write the client session into localStorage so the app sees the user as signed in. */
+/**
+ * Sign the browser in as `session`: client state in localStorage (what the
+ * app UI reads) PLUS the server-minted `bw-session` cookie replayed into the
+ * browser context (what the Edge guard on /admin reads since LOC-0092).
+ * The cookie value comes from the real login response's Set-Cookie header --
+ * E2E auth state must be server-minted, never client-fabricated
+ * (test-writing-standards.md, Mock Fidelity Ladder corollary).
+ */
 export async function seedSession(page: Page, session: E2ESession): Promise<void> {
   await page.goto(BASE_URL);
   await page.evaluate(
@@ -150,18 +181,40 @@ export async function seedSession(page: Page, session: E2ESession): Promise<void
     },
     [SESSION_KEY, session] as const
   );
+  if (session.sessionCookie) {
+    // Flags mirror src/lib/auth/session-cookie.ts SESSION_COOKIE_FLAGS.
+    // addCookies takes either url OR domain+path (never both) -- domain+path
+    // mirrors the server's flags exactly (path=/ applies to the whole origin).
+    await page.context().addCookies([{
+      name: 'bw-session',
+      value: session.sessionCookie,
+      domain: new URL(BASE_URL).hostname,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+    }]);
+  }
 }
 
 /**
  * Trigger Next dev route compilation for these paths so the first in-browser
  * visit doesn't race a cold compile (>15s on first hit, observed in #56).
+ *
+ * Pass `session` for guarded paths (/admin/** since LOC-0092): the request
+ * carries the server-minted cookie so the guard lets it through and the route
+ * actually compiles. A middleware redirect (307/308) is NOT warm -- the
+ * redirect short-circuits before compilation, and counting it warm is what
+ * re-introduced the #56 cold-compile timeout for /admin.
  */
-export async function warmRoutes(paths: string[]): Promise<void> {
+export async function warmRoutes(paths: string[], session?: E2ESession): Promise<void> {
+  const headers = session?.sessionCookie
+    ? { Cookie: `bw-session=${session.sessionCookie}` }
+    : undefined;
   for (const p of paths) {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
-        const res = await fetch(`${BASE_URL}${p}`);
-        if (res.status < 500) return;
+        const res = await fetch(`${BASE_URL}${p}`, headers ? { headers } : undefined);
+        if (res.status < 500 && res.status !== 307 && res.status !== 308) return;
       } catch {
         /* server not ready yet */
       }

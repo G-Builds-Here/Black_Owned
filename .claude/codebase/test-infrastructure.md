@@ -112,6 +112,13 @@ Traced from code (Next.js has no startup credential check — resolution is lazy
 | Rust integration file | `cargo test -p bw_scraper --test connectors_test` | live services for meaningful signal |
 | What CI runs | `cargo test -p bw_scraper -p bw-types --all-targets` | Postgres/NATS/Valkey services (no ClickHouse) |
 
+> **Jest output trap (proven 2026-09-18, LOC-0092 pilot):** Jest writes its run
+> summary (pass/fail counts, test names) to **stderr**, not stdout. A wrapper or
+> pipe that captures only stdout sees empty output on a fully-green run and can
+> read as "no tests ran". When capturing Jest output, capture both streams (or
+> run via `npm test --silent`, which still reports on stderr — read stderr).
+> `$UB test-summary` is dotnet-runsettings-only and does NOT parse Jest output.
+
 ## Test Groups and Ordering
 
 **Ordering that matters:** compose up → migrate → app/e2e. Migrations must precede
