@@ -9,6 +9,11 @@
  * cleared cookie is asserted THROUGH the guard -- the scenario's And clause
  * feeds the exact Set-Cookie value logout issued into middleware and
  * requires /login. The cookie, not the endpoint, is the door.
+ *
+ * LOC-0094's AC3 "Sign out then guarded page" scenario folds in here as the
+ * second shape: a browser that applies the expiry sends no bw-session cookie
+ * at all on its next /admin visit, so the composition is parameterized over
+ * both post-logout request shapes (expired value replayed vs cookie absent).
  */
 
 import { NextRequest } from "next/server";
@@ -34,7 +39,14 @@ describe("POST /api/auth/logout", () => {
     expect(setCookie).toContain("SameSite=Lax");
   });
 
-  it("ClearedCookie_ThenMiddleware_RedirectsToLogin", async () => {
+  // Post-logout, the next /admin request carries either the expired cookie
+  // value replayed (what the Set-Cookie literally instructs) or -- once the
+  // browser applies the expiry -- no bw-session cookie at all. The guard
+  // must bounce both shapes to /login.
+  it.each([
+    ["ExpiredValueReplayed", "cleared"],
+    ["CookieOmitted", "absent"],
+  ])("PostLogout_%s_Middleware_RedirectsToLogin", async (_label, shape) => {
     const res = await POST(logoutRequest());
 
     // Hand the guard exactly what the client now holds after logout
@@ -42,7 +54,7 @@ describe("POST /api/auth/logout", () => {
     const clearedCookie = setCookie.split(";")[0]; // "bw-session=" (cleared value)
 
     const adminReq = new NextRequest("http://localhost/admin", {
-      headers: { cookie: clearedCookie },
+      headers: shape === "cleared" ? { cookie: clearedCookie } : {},
     });
     const guard = await middleware(adminReq);
 

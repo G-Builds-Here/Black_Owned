@@ -6,7 +6,8 @@
  * (200 + { success: true } with the bw-session expiry), and the server-side
  * half -- real logout route expiring the cookie, then the real guard
  * bouncing a signed-out /admin visit -- is asserted without any mocks in
- * src/qa/loc-0094-signout-guard.spec.ts (node env; jose's ESM browser build
+ * the PostLogout_*_Middleware_RedirectsToLogin pair in
+ * src/app/api/auth/logout/route.spec.ts (node env; jose's ESM browser build
  * cannot load under jsdom, so the server seam lives there, not here).
  */
 
