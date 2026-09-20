@@ -1,6 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvers } from '@/lib/graphql/resolvers';
 import { businessTypeDefs } from '@/lib/graphql/business-schema';
+import {
+  verifySessionCookie,
+  SESSION_COOKIE_NAME,
+  type SessionUser,
+} from '@/lib/auth/session-cookie';
+
+/**
+ * Per-request resolver context (LOC-0093). Identity comes from the caller's
+ * real `bw-session` cookie, verified with the shared session semantics in
+ * lib/auth/session-cookie -- never a fabricated header. The shape follows the
+ * resolver convention in lib/graphql/resolvers: private resolvers read
+ * `context.user.id`, so the route hands them the real claims (survey HIGH
+ * finding 1: every resolver used to run unauthenticated).
+ */
+export interface GraphQLRequestContext {
+  user: SessionUser | null;
+  headers: { authorization?: string };
+}
+
+/**
+ * Build the resolver context from request headers. Fails closed: a missing,
+ * garbage, or foreignly-signed cookie yields `user: null` (verifySessionCookie
+ * never throws). The raw Authorization header is carried through for
+ * resolvers that expect the header convention (updateBusiness).
+ */
+export async function buildGraphQLContext(
+  request: NextRequest
+): Promise<GraphQLRequestContext> {
+  const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const user = cookie ? await verifySessionCookie(cookie) : null;
+  const authorization = request.headers.get('authorization');
+  return {
+    user,
+    headers: { authorization: authorization ?? undefined },
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +50,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Per-request identity: context is built from this request's headers.
+    const context = await buildGraphQLContext(request);
+
     // Simple GraphQL execution
-    const result = await executeGraphQL(query, variables);
+    const result = await executeGraphQL(query, variables, context);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -34,7 +73,11 @@ export async function GET(request: NextRequest) {
   );
 }
 
-async function executeGraphQL(query: string, variables: Record<string, unknown>) {
+async function executeGraphQL(
+  query: string,
+  variables: Record<string, unknown>,
+  context: GraphQLRequestContext
+) {
   // Simple parser for basic GraphQL queries
   // This is a minimal implementation - for production, use graphql-js
 
@@ -110,9 +153,23 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
       return result;
     }
 
-    // Handle createBusiness mutation
+    // Handle createBusiness mutation (private: requires the caller's identity)
     const createMatch = query.match(/createBusiness\s*\(\s*input:\s*\{\s*name:\s*"([^"]+)"\s*,\s*description:\s*"([^"]*)"\s*,\s*categoryId:\s*"([^"]+)"\s*\}\s*\)/);
     if (createMatch) {
+      if (!context.user) {
+        // Fail closed at the route: the resolver is never consulted without
+        // a verified caller. GraphQL error envelope -- the private field's
+        // data stays null, nothing leaks.
+        return {
+          data: { createBusiness: null },
+          errors: [
+            {
+              message: 'Authentication required',
+              extensions: { code: 'UNAUTHENTICATED' },
+            },
+          ],
+        };
+      }
       const result = await resolvers.Mutation.createBusiness(
         undefined,
         {
@@ -122,9 +179,9 @@ async function executeGraphQL(query: string, variables: Record<string, unknown>)
             categoryId: createMatch[3],
           },
         },
-        { headers: { authorization: 'Bearer token' } }
+        context
       );
-      return result;
+      return { data: { createBusiness: result } };
     }
 
     return { data: null, errors: [{ message: 'Query not implemented' }] };
