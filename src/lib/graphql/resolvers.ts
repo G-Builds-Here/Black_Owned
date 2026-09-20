@@ -25,6 +25,7 @@ import {
   PresignedUrlResult,
 } from "../minio/minio-service";
 import {
+  createBusiness as createBusinessRow,
   findBusinessById,
   updateNameById,
   findSiteReviewStats,
@@ -679,7 +680,7 @@ export async function createBusinessResolver(
 
   const client = await getPool().connect();
   try {
-    const business = await createBusinessInDb(
+    const business = await createBusinessRow(
       client,
       userId,
       input.name.trim(),
@@ -707,26 +708,6 @@ export async function createBusinessResolver(
  * specs and direct consumers can `import { createBusiness } from "./resolvers"`.
  */
 export const createBusiness = createBusinessResolver;
-
-/**
- * Internal function to create a business in the database
- */
-async function createBusinessInDb(
-  client: import("pg").PoolClient,
-  ownerId: string,
-  name: string,
-  description: string | undefined,
-  categoryId: string
-): Promise<Business> {
-  const tableName = "businesses";
-  const result = await client.query<Business>(
-    `INSERT INTO ${tableName} (owner_id, name, description, category_id, verification_status)
-     VALUES ($1, $2, $3, $4, 'unverified')
-     RETURNING *`,
-    [ownerId, name, description || null, categoryId]
-  );
-  return result.rows[0];
-}
 
 /**
  * Resolvers object

@@ -17,6 +17,40 @@ jest.mock("../db/user-repository", () => ({
   })),
 }));
 
+/**
+ * The resolver runs the INSERT ... RETURNING * through
+ * business-repository.rowToBusiness, so the mocked client.query must hand back
+ * the raw DB row (snake_case columns, JS Date timestamps) exactly as
+ * node-postgres would — not the mapped Business object.
+ */
+function dbBusinessRow(fields: {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string | null;
+  category_id: string;
+  created_at: Date;
+  updated_at: Date;
+}) {
+  return {
+    verification_status: "unverified",
+    location: null,
+    rating: null,
+    review_count: null,
+    website: null,
+    image_url: null,
+    card_image_url: null,
+    lat: null,
+    lng: null,
+    tags: null,
+    social_urls: null,
+    phone: null,
+    menu_url: null,
+    rating_source: null,
+    ...fields,
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -31,19 +65,17 @@ describe("createBusiness mutation", () => {
     const mockBusinessId = "business-id-456";
     const mockDate = new Date("2026-07-19T10:00:00Z");
 
-    // Return the Business type format (camelCase) that the resolver expects
-    const mockBusiness = {
+    const mockBusinessRow = dbBusinessRow({
       id: mockBusinessId,
-      ownerId: mockUserId,
+      owner_id: mockUserId,
       name: "Ace Cafe",
       description: "Coffee shop",
-      categoryId: "cat-1",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
-    };
+      category_id: "cat-1",
+      created_at: mockDate,
+      updated_at: mockDate,
+    });
 
-    mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    mockQuery.mockResolvedValue({ rows: [mockBusinessRow] });
 
     const context = {
       user: {
@@ -196,18 +228,17 @@ describe("createBusiness mutation", () => {
     const mockBusinessId = "business-id-777";
     const mockDate = new Date("2026-07-19T10:00:00Z");
 
-    const mockBusiness = {
+    const mockBusinessRow = dbBusinessRow({
       id: mockBusinessId,
-      ownerId: mockUserId,
+      owner_id: mockUserId,
       name: "Business With Description",
       description: "This is a detailed description of the business",
-      categoryId: "cat-2",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
-    };
+      category_id: "cat-2",
+      created_at: mockDate,
+      updated_at: mockDate,
+    });
 
-    mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    mockQuery.mockResolvedValue({ rows: [mockBusinessRow] });
 
     const context = {
       user: {
@@ -236,18 +267,17 @@ describe("createBusiness mutation", () => {
     const mockBusinessId = "business-id-888";
     const mockDate = new Date("2026-07-19T10:00:00Z");
 
-    const mockBusiness = {
+    const mockBusinessRow = dbBusinessRow({
       id: mockBusinessId,
-      ownerId: mockUserId,
+      owner_id: mockUserId,
       name: "Business Without Description",
       description: null,
-      categoryId: "cat-3",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
-    };
+      category_id: "cat-3",
+      created_at: mockDate,
+      updated_at: mockDate,
+    });
 
-    mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    mockQuery.mockResolvedValue({ rows: [mockBusinessRow] });
 
     const context = {
       user: {
@@ -274,18 +304,17 @@ describe("createBusiness mutation", () => {
     const mockBusinessId = "business-id-999";
     const mockDate = new Date("2026-07-19T10:00:00Z");
 
-    const mockBusiness = {
+    const mockBusinessRow = dbBusinessRow({
       id: mockBusinessId,
-      ownerId: mockUserId,
+      owner_id: mockUserId,
       name: "Trimmed Business Name",
       description: null,
-      categoryId: "cat-4",
-      verificationStatus: "unverified",
-      createdAt: mockDate,
-      updatedAt: mockDate,
-    };
+      category_id: "cat-4",
+      created_at: mockDate,
+      updated_at: mockDate,
+    });
 
-    mockQuery.mockResolvedValue({ rows: [mockBusiness] });
+    mockQuery.mockResolvedValue({ rows: [mockBusinessRow] });
 
     const context = {
       user: {
