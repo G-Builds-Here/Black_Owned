@@ -148,7 +148,7 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
         <button class="tab-btn" data-target="c2">2. Containers</button>
         <button class="tab-btn" data-target="c3">3. Components</button>
         <button class="tab-btn" data-target="c3-5">3.5 Types</button>
-        <button class="tab-btn " data-target="delta">Δ Delta</button>
+        <button class="tab-btn has-delta" data-target="delta">Δ Delta</button>
     </div>
     <div class="legend" id="legend">
         <div class="legend-section">
@@ -183,6 +183,12 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
             <span class="shape-item"><span class="shape" style="border-style:dashed;border-color:#22c55e;width:14px;height:10px;"></span> Consumes it</span>
         </div>
         
+        <div class="legend-section">
+            <span class="legend-title">Changes:</span>
+            <span class="legend-item"><span class="dot new"></span> New</span>
+            <span class="legend-item"><span class="dot modified"></span> Modified</span>
+            <span class="legend-item"><span class="dot removed"></span> Removed</span>
+        </div>
     </div>
 </div>
 
@@ -510,35 +516,37 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 <defs>
 <clipPath id="clip-0"><rect x="116" y="64" width="208" height="88"/></clipPath>
 <clipPath id="clip-1"><rect x="350" y="64" width="208" height="88"/></clipPath>
-<clipPath id="clip-2"><rect x="116" y="192" width="208" height="88"/></clipPath>
-<clipPath id="clip-3"><rect x="350" y="192" width="208" height="88"/></clipPath>
-<clipPath id="clip-4"><rect x="584" y="192" width="208" height="88"/></clipPath>
-<clipPath id="clip-5"><rect x="818" y="192" width="208" height="88"/></clipPath>
-<clipPath id="clip-6"><rect x="116" y="320" width="208" height="88"/></clipPath>
-<clipPath id="clip-7"><rect x="350" y="320" width="208" height="88"/></clipPath>
-<clipPath id="clip-8"><rect x="584" y="320" width="208" height="88"/></clipPath>
-<clipPath id="clip-9"><rect x="818" y="320" width="208" height="88"/></clipPath>
-<clipPath id="clip-10"><rect x="116" y="448" width="208" height="88"/></clipPath>
-<clipPath id="clip-11"><rect x="350" y="448" width="208" height="88"/></clipPath>
-<clipPath id="clip-12"><rect x="584" y="448" width="208" height="88"/></clipPath>
-<clipPath id="clip-13"><rect x="818" y="448" width="208" height="88"/></clipPath>
-<clipPath id="clip-14"><rect x="116" y="576" width="208" height="88"/></clipPath>
-<clipPath id="clip-15"><rect x="350" y="576" width="208" height="88"/></clipPath>
-<clipPath id="clip-16"><rect x="116" y="704" width="208" height="88"/></clipPath>
-<clipPath id="clip-17"><rect x="350" y="704" width="208" height="88"/></clipPath>
-<clipPath id="clip-18"><rect x="584" y="704" width="208" height="88"/></clipPath>
-<clipPath id="clip-19"><rect x="818" y="704" width="208" height="88"/></clipPath>
-<clipPath id="clip-20"><rect x="1052" y="704" width="208" height="88"/></clipPath>
-<clipPath id="clip-21"><rect x="116" y="804" width="208" height="88"/></clipPath>
-<clipPath id="clip-22"><rect x="350" y="804" width="208" height="88"/></clipPath>
-<clipPath id="clip-23"><rect x="584" y="804" width="208" height="88"/></clipPath>
-<clipPath id="clip-24"><rect x="818" y="804" width="208" height="88"/></clipPath>
-<clipPath id="clip-25"><rect x="1052" y="804" width="208" height="88"/></clipPath>
-<clipPath id="clip-26"><rect x="116" y="904" width="208" height="88"/></clipPath>
-<clipPath id="clip-27"><rect x="350" y="904" width="208" height="88"/></clipPath>
+<clipPath id="clip-2"><rect x="584" y="64" width="208" height="88"/></clipPath>
+<clipPath id="clip-3"><rect x="116" y="192" width="208" height="88"/></clipPath>
+<clipPath id="clip-4"><rect x="350" y="192" width="208" height="88"/></clipPath>
+<clipPath id="clip-5"><rect x="584" y="192" width="208" height="88"/></clipPath>
+<clipPath id="clip-6"><rect x="818" y="192" width="208" height="88"/></clipPath>
+<clipPath id="clip-7"><rect x="116" y="320" width="208" height="88"/></clipPath>
+<clipPath id="clip-8"><rect x="350" y="320" width="208" height="88"/></clipPath>
+<clipPath id="clip-9"><rect x="584" y="320" width="208" height="88"/></clipPath>
+<clipPath id="clip-10"><rect x="818" y="320" width="208" height="88"/></clipPath>
+<clipPath id="clip-11"><rect x="116" y="448" width="208" height="88"/></clipPath>
+<clipPath id="clip-12"><rect x="350" y="448" width="208" height="88"/></clipPath>
+<clipPath id="clip-13"><rect x="584" y="448" width="208" height="88"/></clipPath>
+<clipPath id="clip-14"><rect x="818" y="448" width="208" height="88"/></clipPath>
+<clipPath id="clip-15"><rect x="116" y="576" width="208" height="88"/></clipPath>
+<clipPath id="clip-16"><rect x="350" y="576" width="208" height="88"/></clipPath>
+<clipPath id="clip-17"><rect x="116" y="704" width="208" height="88"/></clipPath>
+<clipPath id="clip-18"><rect x="350" y="704" width="208" height="88"/></clipPath>
+<clipPath id="clip-19"><rect x="584" y="704" width="208" height="88"/></clipPath>
+<clipPath id="clip-20"><rect x="818" y="704" width="208" height="88"/></clipPath>
+<clipPath id="clip-21"><rect x="1052" y="704" width="208" height="88"/></clipPath>
+<clipPath id="clip-22"><rect x="116" y="804" width="208" height="88"/></clipPath>
+<clipPath id="clip-23"><rect x="350" y="804" width="208" height="88"/></clipPath>
+<clipPath id="clip-24"><rect x="584" y="804" width="208" height="88"/></clipPath>
+<clipPath id="clip-25"><rect x="818" y="804" width="208" height="88"/></clipPath>
+<clipPath id="clip-26"><rect x="1052" y="804" width="208" height="88"/></clipPath>
+<clipPath id="clip-27"><rect x="116" y="904" width="208" height="88"/></clipPath>
+<clipPath id="clip-28"><rect x="350" y="904" width="208" height="88"/></clipPath>
+<clipPath id="clip-29"><rect x="584" y="904" width="208" height="88"/></clipPath>
 </defs>
 <rect x="0" y="21" width="1300" height="999" rx="14" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="6,3"/>
-<text x="24" y="34" fill="#64748b" font-size="11" font-family="system-ui">black-owned-frontend - Components (28)</text>
+<text x="24" y="34" fill="#64748b" font-size="11" font-family="system-ui">black-owned-frontend - Components (30)</text>
 <rect x="14" y="50" width="1272" height="116" rx="6" fill="#f9731618" stroke="#f9731644" stroke-width="1"/>
 <text x="69" y="108" text-anchor="middle" dominant-baseline="middle" fill="#f97316" font-size="11" font-weight="600" font-family="system-ui" transform="rotate(-90 69 108)">Middleware</text>
 <line x1="120" y1="56" x2="120" y2="160" stroke="#f9731655" stroke-width="1"/>
@@ -556,33 +564,48 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 <text x="352" y="97" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">createAuthMiddleware role-check</tspan><tspan x="352" dy="13">guard wrapper for protected REST</tspan></text>
 <text x="352" y="134" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
+<g class="element component delta-new" data-id="admin-route-guard" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js middleware (TypeScript)">
+<rect x="578" y="64" width="220" height="88" rx="5" fill="#1e293b" stroke="#f97316" stroke-width="1.5"/>
+<g class="delta-badge">
+<rect x="754" y="68" width="40" height="14" rx="3" fill="#d946ef22" stroke="#d946ef" stroke-width="1"/>
+<text x="774" y="78" text-anchor="middle" fill="#d946ef" font-size="7" font-weight="bold" font-family="system-ui">NEW</text>
+</g>
+<g clip-path="url(#clip-2)">
+<text x="586" y="81" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">Admin Route Guard (server-side)</text>
+<text x="586" y="97" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">Server-side role enforcement for</tspan><tspan x="586" dy="13">/admin routes (middleware/layout</tspan></text>
+<text x="586" y="134" fill="#64748b" font-size="8" font-family="system-ui">[Next.js middleware (TypeScript)]</text>
+</g></g>
 <rect x="14" y="178" width="1272" height="116" rx="6" fill="#22d3ee18" stroke="#22d3ee44" stroke-width="1"/>
 <text x="69" y="236" text-anchor="middle" dominant-baseline="middle" fill="#22d3ee" font-size="11" font-weight="600" font-family="system-ui" transform="rotate(-90 69 236)">Handlers</text>
 <line x1="120" y1="184" x2="120" y2="288" stroke="#22d3ee55" stroke-width="1"/>
-<g class="element component " data-id="api-graphql-route" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js route handler / TypeScript">
+<g class="element component delta-modified" data-id="api-graphql-route" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js route handler / TypeScript">
 <rect x="110" y="192" width="220" height="88" rx="5" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
-<g clip-path="url(#clip-2)">
+<g class="delta-badge">
+<rect x="286" y="196" width="40" height="14" rx="3" fill="#fbbf2422" stroke="#fbbf24" stroke-width="1"/>
+<text x="306" y="206" text-anchor="middle" fill="#fbbf24" font-size="7" font-weight="bold" font-family="system-ui">MODIFIED</text>
+</g>
+<g clip-path="url(#clip-3)">
 <text x="118" y="209" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/api/graphql</text>
-<text x="118" y="225" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">POST /api/graphql HTTP entry.</tspan><tspan x="118" dy="13">Per-request context; no</tspan></text>
+<text x="118" y="225" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">POST /api/graphql HTTP entry.</tspan><tspan x="118" dy="13">Modified: per-request context</tspan></text>
 <text x="118" y="262" fill="#64748b" font-size="8" font-family="system-ui">[Next.js route handler / TypeScript]</text>
 </g></g>
 <g class="element component " data-id="api-auth-login-route" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js route handler / TypeScript">
 <rect x="344" y="192" width="220" height="88" rx="5" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
-<g clip-path="url(#clip-3)">
+<g clip-path="url(#clip-4)">
 <text x="352" y="209" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/api/auth/login</text>
 <text x="352" y="225" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">POST /api/auth/login - credential</tspan><tspan x="352" dy="13">check, JWT issue, cookie set.</tspan></text>
 <text x="352" y="262" fill="#64748b" font-size="8" font-family="system-ui">[Next.js route handler / TypeScript]</text>
 </g></g>
 <g class="element component " data-id="api-auth-logout-route" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js route handler / TypeScript">
 <rect x="578" y="192" width="220" height="88" rx="5" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
-<g clip-path="url(#clip-4)">
+<g clip-path="url(#clip-5)">
 <text x="586" y="209" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/api/auth/logout</text>
 <text x="586" y="225" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">POST /api/auth/logout - clears</tspan><tspan x="586" dy="13">cookie; server-side revocation is</tspan></text>
 <text x="586" y="262" fill="#64748b" font-size="8" font-family="system-ui">[Next.js route handler / TypeScript]</text>
 </g></g>
 <g class="element component " data-id="api-auth-register-route" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js route handler / TypeScript">
 <rect x="812" y="192" width="220" height="88" rx="5" fill="#1e293b" stroke="#22d3ee" stroke-width="1.5"/>
-<g clip-path="url(#clip-5)">
+<g clip-path="url(#clip-6)">
 <text x="820" y="209" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/api/auth/register</text>
 <text x="820" y="225" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="820" dy="0">POST /api/auth/register - account</tspan><tspan x="820" dy="13">creation.</tspan></text>
 <text x="820" y="262" fill="#64748b" font-size="8" font-family="system-ui">[Next.js route handler / TypeScript]</text>
@@ -592,28 +615,28 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 <line x1="120" y1="312" x2="120" y2="416" stroke="#10b98155" stroke-width="1"/>
 <g class="element component " data-id="lib-auth-auth-service" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="110" y="320" width="220" height="88" rx="5" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
-<g clip-path="url(#clip-6)">
+<g clip-path="url(#clip-7)">
 <text x="118" y="337" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">auth-service</text>
 <text x="118" y="353" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">JWT issue/verify (jsonwebtoken</tspan><tspan x="118" dy="13">RS256). Silently falls back to the</tspan></text>
 <text x="118" y="390" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-auth-client-session" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="344" y="320" width="220" height="88" rx="5" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
-<g clip-path="url(#clip-7)">
+<g clip-path="url(#clip-8)">
 <text x="352" y="337" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">client-session</text>
 <text x="352" y="353" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">Client-side session-read helper.</tspan><tspan x="352" dy="13">Consumers (Navigation,</tspan></text>
 <text x="352" y="390" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-graphql-graphql-client" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="578" y="320" width="220" height="88" rx="5" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
-<g clip-path="url(#clip-8)">
+<g clip-path="url(#clip-9)">
 <text x="586" y="337" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">graphql-client</text>
 <text x="586" y="353" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">Server-side GraphQL fetch helper</tspan><tspan x="586" dy="13">for internal queries.</tspan></text>
 <text x="586" y="390" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-valkey-valkey-client" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="812" y="320" width="220" height="88" rx="5" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
-<g clip-path="url(#clip-9)">
+<g clip-path="url(#clip-10)">
 <text x="820" y="337" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">valkey-client</text>
 <text x="820" y="353" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="820" dy="0">ioredis client + cache helpers.</tspan><tspan x="820" dy="13">Also the sole store of refresh</tspan></text>
 <text x="820" y="390" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
@@ -623,28 +646,28 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 <line x1="120" y1="440" x2="120" y2="544" stroke="#a855f755" stroke-width="1"/>
 <g class="element component " data-id="lib-db-business-repository" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="110" y="448" width="220" height="88" rx="5" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
-<g clip-path="url(#clip-10)">
+<g clip-path="url(#clip-11)">
 <text x="118" y="465" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">business-repository</text>
 <text x="118" y="481" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">Postgres data access for</tspan><tspan x="118" dy="13">businesses (read/write, claim,</tspan></text>
 <text x="118" y="518" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-db-user-repository" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="344" y="448" width="220" height="88" rx="5" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
-<g clip-path="url(#clip-11)">
+<g clip-path="url(#clip-12)">
 <text x="352" y="465" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">user-repository</text>
 <text x="352" y="481" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">Postgres data access for users.</tspan></text>
 <text x="352" y="518" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-db-user-management-repository" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="578" y="448" width="220" height="88" rx="5" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
-<g clip-path="url(#clip-12)">
+<g clip-path="url(#clip-13)">
 <text x="586" y="465" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">user-management-repository</text>
 <text x="586" y="481" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">Postgres data access for the admin</tspan><tspan x="586" dy="13">user-management surface.</tspan></text>
 <text x="586" y="518" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-db-pending-import-business-repository" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="812" y="448" width="220" height="88" rx="5" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
-<g clip-path="url(#clip-13)">
+<g clip-path="url(#clip-14)">
 <text x="820" y="465" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">pending-import-business-repository</text>
 <text x="820" y="481" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="820" dy="0">Postgres data access for</tspan><tspan x="820" dy="13">pending-import businesses. Its</tspan></text>
 <text x="820" y="518" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
@@ -654,14 +677,14 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 <line x1="120" y1="568" x2="120" y2="672" stroke="#e91e6355" stroke-width="1"/>
 <g class="element component " data-id="lib-graphql-schema" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="110" y="576" width="220" height="88" rx="5" fill="#1e293b" stroke="#e91e63" stroke-width="1.5"/>
-<g clip-path="url(#clip-14)">
+<g clip-path="url(#clip-15)">
 <text x="118" y="593" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">schema</text>
 <text x="118" y="609" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">GraphQL schema SDL strings.</tspan></text>
 <text x="118" y="646" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-graphql-business-schema" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="344" y="576" width="220" height="88" rx="5" fill="#1e293b" stroke="#e91e63" stroke-width="1.5"/>
-<g clip-path="url(#clip-15)">
+<g clip-path="url(#clip-16)">
 <text x="352" y="593" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">business-schema</text>
 <text x="352" y="609" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">Business-domain schema fragment.</tspan></text>
 <text x="352" y="646" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
@@ -671,87 +694,102 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 <line x1="120" y1="696" x2="120" y2="1000" stroke="#64748b55" stroke-width="1"/>
 <g class="element component " data-id="lib-auth-session-cookie" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="110" y="704" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-16)">
+<g clip-path="url(#clip-17)">
 <text x="118" y="721" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">session-cookie</text>
 <text x="118" y="737" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">Helpers that set/clear the session</tspan><tspan x="118" dy="13">cookie used by the auth route</tspan></text>
 <text x="118" y="774" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
-<g class="element component " data-id="lib-graphql-resolvers" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
+<g class="element component delta-modified" data-id="lib-graphql-resolvers" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="344" y="704" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-17)">
+<g class="delta-badge">
+<rect x="520" y="708" width="40" height="14" rx="3" fill="#fbbf2422" stroke="#fbbf24" stroke-width="1"/>
+<text x="540" y="718" text-anchor="middle" fill="#fbbf24" font-size="7" font-weight="bold" font-family="system-ui">MODIFIED</text>
+</g>
+<g clip-path="url(#clip-18)">
 <text x="352" y="721" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">resolvers</text>
 <text x="352" y="737" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">Query/mutation resolvers incl.</tspan><tspan x="352" dy="13">createBusiness/updateBusiness.</tspan></text>
 <text x="352" y="774" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-graphql-query-cache" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="578" y="704" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-18)">
+<g clip-path="url(#clip-19)">
 <text x="586" y="721" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">query-cache</text>
 <text x="586" y="737" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">Valkey-backed GraphQL query result</tspan><tspan x="586" dy="13">cache.</tspan></text>
 <text x="586" y="774" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="lib-graphql-login-resolvers" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript module">
 <rect x="812" y="704" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-19)">
+<g clip-path="url(#clip-20)">
 <text x="820" y="721" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">login-resolvers</text>
 <text x="820" y="737" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="820" dy="0">Login mutation: credential check,</tspan><tspan x="820" dy="13">JWT pair issue, refresh token</tspan></text>
 <text x="820" y="774" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
 </g></g>
 <g class="element component " data-id="components-ui-navigation" data-type="Component" data-container-type="component" data-path="" data-tech="React component / TypeScript">
 <rect x="1046" y="704" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-20)">
+<g clip-path="url(#clip-21)">
 <text x="1054" y="721" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">Navigation</text>
 <text x="1054" y="737" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="1054" dy="0">Header navigation. Sign</tspan><tspan x="1054" dy="13">in/Register are raw <a> anchors</tspan></text>
 <text x="1054" y="774" fill="#64748b" font-size="8" font-family="system-ui">[React component / TypeScript]</text>
 </g></g>
 <g class="element component " data-id="components-businessdetail" data-type="Component" data-container-type="component" data-path="" data-tech="React component / TypeScript">
 <rect x="110" y="804" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-21)">
+<g clip-path="url(#clip-22)">
 <text x="118" y="821" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">BusinessDetail</text>
 <text x="118" y="837" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">Business detail view component;</tspan><tspan x="118" dy="13">own session-read mount effect +</tspan></text>
 <text x="118" y="874" fill="#64748b" font-size="8" font-family="system-ui">[React component / TypeScript]</text>
 </g></g>
 <g class="element component " data-id="business-claim-page" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js page / React component">
 <rect x="344" y="804" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-22)">
+<g clip-path="url(#clip-23)">
 <text x="352" y="821" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/business/claim</text>
 <text x="352" y="837" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">/business/claim flow page; own</tspan><tspan x="352" dy="13">session-read mount effect.</tspan></text>
 <text x="352" y="874" fill="#64748b" font-size="8" font-family="system-ui">[Next.js page / React component]</text>
 </g></g>
 <g class="element component " data-id="admin-page" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js page / React component">
 <rect x="578" y="804" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-23)">
+<g clip-path="url(#clip-24)">
 <text x="586" y="821" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/admin</text>
 <text x="586" y="837" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">Admin dashboard page. Access is</tspan><tspan x="586" dy="13">enforced client-side only via</tspan></text>
 <text x="586" y="874" fill="#64748b" font-size="8" font-family="system-ui">[Next.js page / React component]</text>
 </g></g>
 <g class="element component " data-id="admin-users-page" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js page / React component">
 <rect x="812" y="804" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-24)">
+<g clip-path="url(#clip-25)">
 <text x="820" y="821" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/admin/users</text>
 <text x="820" y="837" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="820" dy="0">Admin user-management page.</tspan><tspan x="820" dy="13">Client-side-only role check.</tspan></text>
 <text x="820" y="874" fill="#64748b" font-size="8" font-family="system-ui">[Next.js page / React component]</text>
 </g></g>
 <g class="element component " data-id="admin-reviews-page" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js page / React component">
 <rect x="1046" y="804" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-25)">
+<g clip-path="url(#clip-26)">
 <text x="1054" y="821" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/admin/reviews</text>
 <text x="1054" y="837" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="1054" dy="0">Admin review-moderation page.</tspan><tspan x="1054" dy="13">Client-side-only role check.</tspan></text>
 <text x="1054" y="874" fill="#64748b" font-size="8" font-family="system-ui">[Next.js page / React component]</text>
 </g></g>
 <g class="element component " data-id="admin-scrape-page" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js page / React component">
 <rect x="110" y="904" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-26)">
+<g clip-path="url(#clip-27)">
 <text x="118" y="921" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/admin/scrape</text>
 <text x="118" y="937" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="118" dy="0">Admin scrape-jobs page.</tspan><tspan x="118" dy="13">Client-side-only role check.</tspan></text>
 <text x="118" y="974" fill="#64748b" font-size="8" font-family="system-ui">[Next.js page / React component]</text>
 </g></g>
 <g class="element component " data-id="admin-businesses-[id]-content-page" data-type="Component" data-container-type="component" data-path="" data-tech="Next.js page / React component">
 <rect x="344" y="904" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
-<g clip-path="url(#clip-27)">
+<g clip-path="url(#clip-28)">
 <text x="352" y="921" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/admin/businesses/[id]/content</text>
 <text x="352" y="937" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="352" dy="0">Admin business-content editor</tspan><tspan x="352" dy="13">page. Client-side-only role check.</tspan></text>
 <text x="352" y="974" fill="#64748b" font-size="8" font-family="system-ui">[Next.js page / React component]</text>
+</g></g>
+<g class="element component delta-new" data-id="graphql-guard" data-type="Component" data-container-type="component" data-path="" data-tech="TypeScript">
+<rect x="578" y="904" width="220" height="88" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<g class="delta-badge">
+<rect x="754" y="908" width="40" height="14" rx="3" fill="#d946ef22" stroke="#d946ef" stroke-width="1"/>
+<text x="774" y="918" text-anchor="middle" fill="#d946ef" font-size="7" font-weight="bold" font-family="system-ui">NEW</text>
+</g>
+<g clip-path="url(#clip-29)">
+<text x="586" y="921" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">GraphQL Guard Layer</text>
+<text x="586" y="937" fill="#94a3b8" font-size="8.5" font-family="system-ui"><tspan x="586" dy="0">Canonical requireUser/requireRole</tspan><tspan x="586" dy="13">guards consumed by all resolvers;</tspan></text>
+<text x="586" y="974" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript]</text>
 </g></g>
 <defs><marker id="arrow-c3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
 
@@ -917,6 +955,26 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 
         <g class="relationship " data-from="lib-graphql-resolvers" data-to="lib-valkey-valkey-client" data-label="imports">
             <path d="M 507,704 Q 660,521 868,408"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-c3)"/>
+        </g>
+
+        <g class="relationship delta-new" data-from="api-graphql-route" data-to="graphql-guard" data-label="delegates auth to">
+            <path d="M 248,280 Q 490,567 659,904"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-c3)"/>
+        </g>
+
+        <g class="relationship delta-new" data-from="graphql-guard" data-to="lib-auth-auth-service" data-label="verifies session cookie via">
+            <path d="M 652,904 Q 488,628 255,408"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-c3)"/>
+        </g>
+
+        <g class="relationship delta-new" data-from="admin-route-guard" data-to="lib-auth-auth-service" data-label="verifies admin role via">
+            <path d="M 607,152 Q 432,197 300,320"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-c3)"/>
+        </g>
+
+        <g class="relationship delta-new" data-from="lib-graphql-resolvers" data-to="graphql-guard" data-label="guarded by">
+            <path d="M 505,792 Q 591,824 636,904"
                   fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-c3)"/>
         </g>
 </svg></div>
@@ -2470,7 +2528,101 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #
 
     </div>
     <div class="panel" id="delta">
-        <div class="no-data">No changes detected - compare against a baseline with --baseline.</div>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 334" width="100%" style="background: transparent;">
+<defs>
+    <marker id="arrow-delta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    
+<style>
+    @keyframes delta-pulse { 0%,100% { filter: drop-shadow(0 0 3px currentColor); } 50% { filter: drop-shadow(0 0 8px currentColor); } }
+    .delta-badge rect { animation: delta-pulse 1.5s ease-in-out infinite; }
+    /* No !important here on stroke: click-highlight rules (hl-feeder /
+       hl-consumer / hl-selected, !important, in the main stylesheet) must win
+       when a delta box is also a feeds/consumes relation of the selection. */
+    .element.delta-new rect, .element.delta-new ellipse { stroke: #d946ef; stroke-width: 3; fill: #d946ef44; }
+    .delta-new.type-element rect { stroke: #d946ef; stroke-width: 3; fill: #d946ef66; }
+    .element.delta-modified rect, .element.delta-modified ellipse { stroke: #fbbf24; stroke-width: 3; fill: #fbbf2444; }
+    .type-element.delta-modified rect { stroke: #fbbf24; stroke-width: 3; fill: #fbbf2444; }
+    .element.delta-removed rect, .element.delta-removed ellipse { stroke: #ef4444; stroke-width: 2.5; opacity: 0.5; filter: grayscale(0.5); }
+    .context rect { filter: opacity(0.7); }
+    /* Delta styling targets element boxes only — relationship arrows render
+       exactly as in the normal C4 views (same colour, size, hidden-until-click). */
+</style>
+</defs>
+<rect x="10" y="10" width="940" height="314" rx="8" fill="transparent" stroke="#d946ef22" stroke-width="1" stroke-dasharray="6,3"/>
+<text x="40" y="56" fill="#d946ef" font-size="15" font-weight="700" font-family="system-ui">Δ DELTA CHANGES</text>
+<text x="40" y="100" fill="#94a3b8" font-size="13" font-weight="600" font-family="system-ui">Components — black-owned-frontend</text>
+<g class="element component delta-new" data-id="graphql-guard" data-type="Component" data-tech="TypeScript" style="cursor: pointer;">
+<rect x="40" y="130" width="190" height="54" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<g class="delta-badge">
+<rect x="186" y="134" width="40" height="14" rx="3" fill="#d946ef22" stroke="#d946ef" stroke-width="1"/>
+<text x="206" y="144" text-anchor="middle" fill="#d946ef" font-size="7" font-weight="bold" font-family="system-ui">NEW</text>
+</g>
+<text x="48" y="146" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">GraphQL Guard Layer</text>
+<text x="48" y="160" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript]</text>
+</g>
+<g class="element component delta-new" data-id="admin-route-guard" data-type="Component" data-tech="Next.js middleware (TypeScript)" style="cursor: pointer;">
+<rect x="266" y="130" width="190" height="54" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<g class="delta-badge">
+<rect x="412" y="134" width="40" height="14" rx="3" fill="#d946ef22" stroke="#d946ef" stroke-width="1"/>
+<text x="432" y="144" text-anchor="middle" fill="#d946ef" font-size="7" font-weight="bold" font-family="system-ui">NEW</text>
+</g>
+<text x="274" y="146" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">Admin Route Guard (server-si</text>
+<text x="274" y="160" fill="#64748b" font-size="8" font-family="system-ui">[Next.js middleware (TypeScript)]</text>
+</g>
+<g class="element component delta-modified" data-id="lib-graphql-resolvers" data-type="Component" data-tech="TypeScript module" style="cursor: pointer;">
+<rect x="492" y="130" width="190" height="54" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<g class="delta-badge">
+<rect x="638" y="134" width="40" height="14" rx="3" fill="#fbbf2422" stroke="#fbbf24" stroke-width="1"/>
+<text x="658" y="144" text-anchor="middle" fill="#fbbf24" font-size="7" font-weight="bold" font-family="system-ui">MODIFIED</text>
+</g>
+<text x="500" y="146" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">resolvers</text>
+<text x="500" y="160" fill="#64748b" font-size="8" font-family="system-ui">[TypeScript module]</text>
+</g>
+<g class="element component delta-modified" data-id="api-graphql-route" data-type="Component" data-tech="Next.js route handler / TypeScript" style="cursor: pointer;">
+<rect x="718" y="130" width="190" height="54" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<g class="delta-badge">
+<rect x="864" y="134" width="40" height="14" rx="3" fill="#fbbf2422" stroke="#fbbf24" stroke-width="1"/>
+<text x="884" y="144" text-anchor="middle" fill="#fbbf24" font-size="7" font-weight="bold" font-family="system-ui">MODIFIED</text>
+</g>
+<text x="726" y="146" fill="#e2e8f0" font-size="10" font-weight="bold" font-family="system-ui">/api/graphql</text>
+<text x="726" y="160" fill="#64748b" font-size="8" font-family="system-ui">[Next.js route handler / TypeScript]</text>
+</g>
+<g class="element context" data-id="lib-auth-auth-service" data-type="Container" data-container-type="component" style="cursor: pointer; opacity: 0.65;">
+<rect x="40" y="208" width="150" height="44" rx="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+<text x="115" y="226" text-anchor="middle" fill="#e2e8f0" font-size="9" font-weight="500" font-family="system-ui">auth-service</text>
+<text x="115" y="239" text-anchor="middle" fill="#64748b" font-size="8" font-family="system-ui">TypeScript module</text>
+</g>
+
+        <g class="relationship delta-new" data-from="lib-graphql-resolvers" data-to="graphql-guard" data-label="guarded by">
+            <path d="M 492,157 Q 361,113 230,157"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-delta)"/>
+            <rect x="326" y="121" width="70" height="13" fill="#0a1628" rx="2" opacity="0.92"/>
+            <text x="361" y="131" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-family="system-ui">guarded by</text>
+        </g>
+
+        <g class="relationship delta-new" data-from="graphql-guard" data-to="lib-auth-auth-service" data-label="verifies session cookie via">
+            <path d="M 127,184 Q 118,194 121,208"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-delta)"/>
+            <rect x="35" y="110" width="172" height="13" fill="#0a1628" rx="2" opacity="0.92"/>
+            <text x="121" y="120" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-family="system-ui">verifies session cookie via</text>
+        </g>
+
+        <g class="relationship delta-new" data-from="admin-route-guard" data-to="lib-auth-auth-service" data-label="verifies admin role via">
+            <path d="M 270,184 Q 225,181 189,208"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-delta)"/>
+            <rect x="153" y="110" width="148" height="13" fill="#0a1628" rx="2" opacity="0.92"/>
+            <text x="227" y="120" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-family="system-ui">verifies admin role via</text>
+        </g>
+
+        <g class="relationship delta-new" data-from="api-graphql-route" data-to="graphql-guard" data-label="delegates auth to">
+            <path d="M 718,157 Q 474,113 230,157"
+                  fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-delta)"/>
+            <rect x="418" y="121" width="112" height="13" fill="#0a1628" rx="2" opacity="0.92"/>
+            <text x="474" y="131" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-family="system-ui">delegates auth to</text>
+        </g>
+</svg>
     </div>
 </div>
 
@@ -2504,9 +2656,9 @@ const tooltip = document.getElementById('tooltip');
 
 const c1Edges = [{"source": "user", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "business-owner", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "admin", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "super-admin", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "moderator", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "unknown", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "business-owner", "target": "black-owned", "label": "Uses", "technology": ""}, {"source": "black-owned", "target": "redis", "label": "Uses", "technology": "In-memory Store"}];
 const c2Edges = [{"source": "bw-ingestion", "target": "valkey", "label": "Reads/Writes", "technology": "Redis/Valkey"}, {"source": "bw-scraper", "target": "clickhouse", "label": "Reads/Writes", "technology": "ClickHouse"}, {"source": "bw-scraper", "target": "valkey", "label": "Reads/Writes", "technology": "Redis/Valkey"}, {"source": "bw-ingestion", "target": "nats", "label": "Publishes/Subscribes", "technology": "NATS"}, {"source": "bw-scraper", "target": "nats", "label": "Publishes/Subscribes", "technology": "NATS"}, {"source": "bw-api", "target": "bw-types", "label": "Depends on", "technology": "Cargo dependency"}, {"source": "bw-ingestion", "target": "bw-types", "label": "Depends on", "technology": "Cargo dependency"}, {"source": "bw-ingestion", "target": "clickhouse", "label": "Depends on", "technology": "Cargo dependency"}, {"source": "bw-scraper", "target": "clickhouse", "label": "Depends on", "technology": "Cargo dependency"}, {"source": "black-owned-frontend", "target": "minio", "label": "Depends on", "technology": "Package reference"}, {"source": "black-owned-frontend", "target": "nats", "label": "Depends on", "technology": "Package reference"}, {"source": "bw-ingestion", "target": "nats", "label": "Depends on", "technology": "Package reference"}, {"source": "bw-ingestion", "target": "minio", "label": "Depends on", "technology": "Package reference"}, {"source": "bw-scraper", "target": "nats", "label": "Depends on", "technology": "Package reference"}, {"source": "black-owned-frontend", "target": "nats", "label": "Connects to", "technology": "NATS WebSocket"}];
-const c3Edges = [{"source": "submitreviewresult", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "scrapejobstats", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "scrapejob", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "image-upload", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageuploadrequest", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageuploadresponse", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageprocessingpayload", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "chatpersistenceservice", "target": "chatconsumer", "label": "Calls", "technology": "Method call"}, {"source": "cacheservice", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "cacheserviceconfig", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "cacheentry", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "rawcacheentry", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailpublisherconfig", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "imagepublisherconfig", "target": "imageprocessrequest", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "smtpconfig", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "natsemailpayload", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "emailtemplate", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "admin-businesses-[id]-content-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-businesses-[id]-content-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-reviews-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-reviews-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-scrape-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-scrape-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-users-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "api-auth-login-route", "target": "lib-auth-session-cookie", "label": "imports", "technology": "import"}, {"source": "api-auth-login-route", "target": "lib-graphql-login-resolvers", "label": "imports", "technology": "import"}, {"source": "api-auth-logout-route", "target": "lib-auth-session-cookie", "label": "imports", "technology": "import"}, {"source": "api-auth-register-route", "target": "lib-graphql-resolvers", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "lib-auth-session-cookie", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "lib-graphql-business-schema", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "lib-graphql-resolvers", "label": "imports", "technology": "import"}, {"source": "business-claim-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "business-claim-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "components-businessdetail", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "components-businessdetail", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "components-ui-navigation", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "lib-auth-jwt-middleware", "target": "lib-auth-auth-service", "label": "imports", "technology": "import"}, {"source": "lib-db-pending-import-business-repository", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-db-user-management-repository", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-login-resolvers", "target": "lib-auth-auth-service", "label": "imports", "technology": "import"}, {"source": "lib-graphql-login-resolvers", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-login-resolvers", "target": "lib-valkey-valkey-client", "label": "imports", "technology": "import"}, {"source": "lib-graphql-query-cache", "target": "lib-valkey-valkey-client", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-auth-auth-service", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-db-business-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-graphql-query-cache", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-valkey-valkey-client", "label": "imports", "technology": "import"}];
+const c3Edges = [{"source": "submitreviewresult", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "scrapejobstats", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "scrapejob", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "image-upload", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageuploadrequest", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageuploadresponse", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageprocessingpayload", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "chatpersistenceservice", "target": "chatconsumer", "label": "Calls", "technology": "Method call"}, {"source": "cacheservice", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "cacheserviceconfig", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "cacheentry", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "rawcacheentry", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailpublisherconfig", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "imagepublisherconfig", "target": "imageprocessrequest", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "smtpconfig", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "natsemailpayload", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "emailtemplate", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "admin-businesses-[id]-content-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-businesses-[id]-content-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-reviews-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-reviews-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-scrape-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "admin-scrape-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "admin-users-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "api-auth-login-route", "target": "lib-auth-session-cookie", "label": "imports", "technology": "import"}, {"source": "api-auth-login-route", "target": "lib-graphql-login-resolvers", "label": "imports", "technology": "import"}, {"source": "api-auth-logout-route", "target": "lib-auth-session-cookie", "label": "imports", "technology": "import"}, {"source": "api-auth-register-route", "target": "lib-graphql-resolvers", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "lib-auth-session-cookie", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "lib-graphql-business-schema", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "lib-graphql-resolvers", "label": "imports", "technology": "import"}, {"source": "business-claim-page", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "business-claim-page", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "components-businessdetail", "target": "components-ui-navigation", "label": "imports", "technology": "import"}, {"source": "components-businessdetail", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "components-ui-navigation", "target": "lib-auth-client-session", "label": "imports", "technology": "import"}, {"source": "lib-auth-jwt-middleware", "target": "lib-auth-auth-service", "label": "imports", "technology": "import"}, {"source": "lib-db-pending-import-business-repository", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-db-user-management-repository", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-login-resolvers", "target": "lib-auth-auth-service", "label": "imports", "technology": "import"}, {"source": "lib-graphql-login-resolvers", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-login-resolvers", "target": "lib-valkey-valkey-client", "label": "imports", "technology": "import"}, {"source": "lib-graphql-query-cache", "target": "lib-valkey-valkey-client", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-auth-auth-service", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-db-business-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-db-user-repository", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-graphql-query-cache", "label": "imports", "technology": "import"}, {"source": "lib-graphql-resolvers", "target": "lib-valkey-valkey-client", "label": "imports", "technology": "import"}, {"source": "api-graphql-route", "target": "graphql-guard", "label": "delegates auth to", "technology": "function call"}, {"source": "graphql-guard", "target": "lib-auth-auth-service", "label": "verifies session cookie via", "technology": "function call"}, {"source": "admin-route-guard", "target": "lib-auth-auth-service", "label": "verifies admin role via", "technology": "function call"}, {"source": "lib-graphql-resolvers", "target": "graphql-guard", "label": "guarded by", "technology": "function call"}];
 const c35Edges = [{"source": "submitreviewresult", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "scrapejobstats", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "scrapejob", "target": "businessconnection", "label": "Calls", "technology": "Method call"}, {"source": "image-upload", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageuploadrequest", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageuploadresponse", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "imageprocessingpayload", "target": "apiresponse", "label": "Calls", "technology": "Method call"}, {"source": "chatpersistenceservice", "target": "chatconsumer", "label": "Calls", "technology": "Method call"}, {"source": "cacheservice", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "cacheserviceconfig", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "cacheentry", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "rawcacheentry", "target": "serviceconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "emailservice", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "smtpconfig", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumer", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailconsumerconfig", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailretryrecord", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "emailpublisherconfig", "target": "natsemailpayload", "label": "Calls", "technology": "Method call"}, {"source": "imagepublisherconfig", "target": "imageprocessrequest", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "appstate", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "businessstate", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "scraperequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "enrichrequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "locationsrequest", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "rowsnapshot", "target": "searxngclient", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "ratelimiter", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "ratelimiterconfig", "label": "Calls", "technology": "Method call"}, {"source": "enrichresult", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "businessrow", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "socialurl", "target": "searxngresult", "label": "Calls", "technology": "Method call"}, {"source": "smtpconfig", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "natsemailpayload", "target": "message", "label": "Calls", "technology": "Method call"}, {"source": "emailtemplate", "target": "message", "label": "Calls", "technology": "Method call"}];
-const deltaEdges = [];
+const deltaEdges = [{"source": "lib-graphql-resolvers", "target": "graphql-guard", "label": "guarded by"}, {"source": "graphql-guard", "target": "lib-auth-auth-service", "label": "verifies session cookie via"}, {"source": "admin-route-guard", "target": "lib-auth-auth-service", "label": "verifies admin role via"}, {"source": "api-graphql-route", "target": "graphql-guard", "label": "delegates auth to"}];
 
 // =============================================================================
 // UTILITY HELPERS

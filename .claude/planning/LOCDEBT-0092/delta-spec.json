@@ -1,0 +1,35 @@
+{
+  "c3_components": {
+    "containers": {
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {"id": "use-client-session", "name": "useClientSession", "c4_type": "Component",
+             "description": "Shared client hook owning the session-read mount effect; replaces three duplicated implementations (BusinessDetail, claim page, Navigation).",
+             "technology": "React hook (TypeScript)", "path": "src/lib/auth/useClientSession.ts"},
+            {"id": "session-repository", "name": "Session Repository (DB-backed refresh tokens)", "c4_type": "Component",
+             "description": "Postgres sessions table + dual-write/read-through over Valkey; revocation survives cache flush.",
+             "technology": "TypeScript / pg", "path": "src/lib/db/session-repository.ts"}
+          ],
+          "modify": [
+            {"id": "components-ui-navigation",
+             "description": "Header navigation. Modified: reads session via useClientSession hook; handleSignOut gains catch + error state; Sign in/Register switch to next/link."},
+            {"id": "lib-auth-auth-service",
+             "description": "JWT issue/verify (jsonwebtoken RS256). Modified: fails startup without env key material — committed config/jwt fallback deleted; delegates refresh-token persistence/revocation to Session Repository (Postgres system of record, Valkey read-through)."}
+          ]
+        }
+      }
+    }
+  },
+  "relationships": {
+    "c3": {
+      "add": [
+        {"source": "components-ui-navigation", "target": "use-client-session", "label": "reads session via", "technology": "React hook call"},
+        {"source": "lib-auth-auth-service", "target": "session-repository", "label": "persists/revokes refresh tokens in", "technology": "SQL"}
+      ],
+      "remove": [
+        {"source": "components-ui-navigation", "target": "lib-auth-client-session"}
+      ]
+    }
+  }
+}

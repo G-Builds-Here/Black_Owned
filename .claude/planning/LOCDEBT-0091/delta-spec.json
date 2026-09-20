@@ -1,0 +1,23 @@
+{
+  "c3_components": {
+    "containers": {
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {"id": "jest-test-harness", "name": "Jest Dual-Lane Harness", "c4_type": "Component",
+             "description": "Unit lane (zero services, mocked I/O) + integration lane (compose stack + next build artifacts); baseline-green contract. Also folds the LOC-0092 duplicate test (TD-8).",
+             "technology": "Jest projects config", "path": "jest.config.js"}
+          ]
+        }
+      }
+    }
+  },
+  "relationships": {
+    "c3": {
+      "add": [
+        {"source": "jest-test-harness", "target": "api-graphql-route", "label": "tests (unit lane, mocked)", "technology": "Jest"},
+        {"source": "jest-test-harness", "target": "components-ui-navigation", "label": "tests (unit lane)", "technology": "Jest"}
+      ]
+    }
+  }
+}

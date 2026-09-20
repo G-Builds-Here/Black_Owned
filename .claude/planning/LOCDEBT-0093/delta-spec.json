@@ -1,0 +1,34 @@
+{
+  "c3_components": {
+    "containers": {
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {"id": "graphql-guard", "name": "GraphQL Guard Layer", "c4_type": "Component",
+             "description": "Canonical requireUser/requireRole guards consumed by all resolvers; replaces per-operation hand-rolled checks.",
+             "technology": "TypeScript", "path": "src/lib/graphql/guard.ts"},
+            {"id": "admin-route-guard", "name": "Admin Route Guard (server-side)", "c4_type": "Component",
+             "description": "Server-side role enforcement for /admin routes (middleware/layout check); client-side check becomes presentation only.",
+             "technology": "Next.js middleware (TypeScript)", "path": "src/middleware.ts"}
+          ],
+          "modify": [
+            {"id": "api-graphql-route",
+             "description": "POST /api/graphql HTTP entry. Modified: per-request context retained; auth delegated to GraphQL Guard Layer before resolver dispatch."},
+            {"id": "lib-graphql-resolvers",
+             "description": "Query/mutation resolvers incl. createBusiness/updateBusiness. Modified: canonical requireUser/requireRole guard calls replace hand-rolled per-op checks; envelope {success,data,error} shape documented as an external client contract."}
+          ]
+        }
+      }
+    }
+  },
+  "relationships": {
+    "c3": {
+      "add": [
+        {"source": "api-graphql-route", "target": "graphql-guard", "label": "delegates auth to", "technology": "function call"},
+        {"source": "graphql-guard", "target": "lib-auth-auth-service", "label": "verifies session cookie via", "technology": "function call"},
+        {"source": "admin-route-guard", "target": "lib-auth-auth-service", "label": "verifies admin role via", "technology": "function call"},
+        {"source": "lib-graphql-resolvers", "target": "graphql-guard", "label": "guarded by", "technology": "function call"}
+      ]
+    }
+  }
+}

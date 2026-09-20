@@ -1,0 +1,440 @@
+{
+  "c3_components": {
+    "containers": {
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {
+              "id": "lib-auth-auth-service",
+              "name": "auth-service",
+              "c4_type": "Component",
+              "description": "JWT issue/verify (jsonwebtoken RS256). Silently falls back to the committed config/jwt keypair when env key material is absent; issues refresh tokens stored Valkey-only — no DB record.",
+              "technology": "TypeScript module",
+              "path": "src/lib/auth/auth-service.ts"
+            },
+            {
+              "id": "lib-auth-jwt-middleware",
+              "name": "jwt-middleware",
+              "c4_type": "Component",
+              "description": "JWT verification helper for server-side callers; key resolution includes the committed-keypair fallback.",
+              "technology": "TypeScript module",
+              "path": "src/lib/auth/jwt-middleware.ts"
+            },
+            {
+              "id": "lib-auth-auth-middleware",
+              "name": "auth-middleware",
+              "c4_type": "Component",
+              "description": "createAuthMiddleware role-check guard wrapper for protected REST route handlers.",
+              "technology": "TypeScript module",
+              "path": "src/lib/auth/auth-middleware.ts"
+            },
+            {
+              "id": "lib-auth-session-cookie",
+              "name": "session-cookie",
+              "c4_type": "Component",
+              "description": "Helpers that set/clear the session cookie used by the auth route handlers.",
+              "technology": "TypeScript module",
+              "path": "src/lib/auth/session-cookie.ts"
+            },
+            {
+              "id": "lib-auth-client-session",
+              "name": "client-session",
+              "c4_type": "Component",
+              "description": "Client-side session-read helper. Consumers (Navigation, BusinessDetail, claim page) each hand-roll their own mount effect — triplicated logic.",
+              "technology": "TypeScript module",
+              "path": "src/lib/auth/client-session.ts"
+            },
+            {
+              "id": "lib-graphql-resolvers",
+              "name": "resolvers",
+              "c4_type": "Component",
+              "description": "Query/mutation resolvers incl. createBusiness/updateBusiness. Per-operation hand-rolled role checks; envelope {success,data,error} response shape is externally visible.",
+              "technology": "TypeScript module",
+              "path": "src/lib/graphql/resolvers.ts"
+            },
+            {
+              "id": "lib-graphql-schema",
+              "name": "schema",
+              "c4_type": "Component",
+              "description": "GraphQL schema SDL strings.",
+              "technology": "TypeScript module",
+              "path": "src/lib/graphql/schema.ts"
+            },
+            {
+              "id": "lib-graphql-business-schema",
+              "name": "business-schema",
+              "c4_type": "Component",
+              "description": "Business-domain schema fragment.",
+              "technology": "TypeScript module",
+              "path": "src/lib/graphql/business-schema.ts"
+            },
+            {
+              "id": "lib-graphql-query-cache",
+              "name": "query-cache",
+              "c4_type": "Component",
+              "description": "Valkey-backed GraphQL query result cache.",
+              "technology": "TypeScript module",
+              "path": "src/lib/graphql/query-cache.ts"
+            },
+            {
+              "id": "lib-graphql-login-resolvers",
+              "name": "login-resolvers",
+              "c4_type": "Component",
+              "description": "Login mutation: credential check, JWT pair issue, refresh token stored in Valkey only.",
+              "technology": "TypeScript module",
+              "path": "src/lib/graphql/login-resolvers.ts"
+            },
+            {
+              "id": "lib-graphql-graphql-client",
+              "name": "graphql-client",
+              "c4_type": "Component",
+              "description": "Server-side GraphQL fetch helper for internal queries.",
+              "technology": "TypeScript module",
+              "path": "src/lib/graphql/graphql-client.ts"
+            },
+            {
+              "id": "api-graphql-route",
+              "name": "/api/graphql",
+              "c4_type": "Component",
+              "description": "POST /api/graphql HTTP entry. Per-request context; no entry-level guard layer — auth is decided per resolver.",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/graphql/route.ts"
+            },
+            {
+              "id": "api-auth-login-route",
+              "name": "/api/auth/login",
+              "c4_type": "Component",
+              "description": "POST /api/auth/login — credential check, JWT issue, cookie set.",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/auth/login/route.ts"
+            },
+            {
+              "id": "api-auth-logout-route",
+              "name": "/api/auth/logout",
+              "c4_type": "Component",
+              "description": "POST /api/auth/logout — clears cookie; server-side revocation is Valkey-only and lost on cache flush.",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/auth/logout/route.ts"
+            },
+            {
+              "id": "api-auth-register-route",
+              "name": "/api/auth/register",
+              "c4_type": "Component",
+              "description": "POST /api/auth/register — account creation.",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/auth/register/route.ts"
+            },
+            {
+              "id": "components-ui-navigation",
+              "name": "Navigation",
+              "c4_type": "Component",
+              "description": "Header navigation. Sign in/Register are raw <a> anchors (repo convention is next/link); handleSignOut has no error path; reads session via its own mount effect.",
+              "technology": "React component / TypeScript",
+              "path": "src/components/ui/Navigation.tsx"
+            },
+            {
+              "id": "components-businessdetail",
+              "name": "BusinessDetail",
+              "c4_type": "Component",
+              "description": "Business detail view component; own session-read mount effect + GraphQL fetches.",
+              "technology": "React component / TypeScript",
+              "path": "src/components/BusinessDetail.tsx"
+            },
+            {
+              "id": "business-claim-page",
+              "name": "/business/claim",
+              "c4_type": "Component",
+              "description": "/business/claim flow page; own session-read mount effect.",
+              "technology": "Next.js page / React component",
+              "path": "src/app/business/claim/page.tsx"
+            },
+            {
+              "id": "admin-page",
+              "name": "/admin",
+              "c4_type": "Component",
+              "description": "Admin dashboard page. Access is enforced client-side only via client-session role check — no server-side guard.",
+              "technology": "Next.js page / React component",
+              "path": "src/app/admin/page.tsx"
+            },
+            {
+              "id": "admin-users-page",
+              "name": "/admin/users",
+              "c4_type": "Component",
+              "description": "Admin user-management page. Client-side-only role check.",
+              "technology": "Next.js page / React component",
+              "path": "src/app/admin/users/page.tsx"
+            },
+            {
+              "id": "admin-reviews-page",
+              "name": "/admin/reviews",
+              "c4_type": "Component",
+              "description": "Admin review-moderation page. Client-side-only role check.",
+              "technology": "Next.js page / React component",
+              "path": "src/app/admin/reviews/page.tsx"
+            },
+            {
+              "id": "admin-scrape-page",
+              "name": "/admin/scrape",
+              "c4_type": "Component",
+              "description": "Admin scrape-jobs page. Client-side-only role check.",
+              "technology": "Next.js page / React component",
+              "path": "src/app/admin/scrape/page.tsx"
+            },
+            {
+              "id": "admin-businesses-[id]-content-page",
+              "name": "/admin/businesses/[id]/content",
+              "c4_type": "Component",
+              "description": "Admin business-content editor page. Client-side-only role check.",
+              "technology": "Next.js page / React component",
+              "path": "src/app/admin/businesses/[id]/content/page.tsx"
+            },
+            {
+              "id": "lib-db-business-repository",
+              "name": "business-repository",
+              "c4_type": "Component",
+              "description": "Postgres data access for businesses (read/write, claim, views).",
+              "technology": "TypeScript module",
+              "path": "src/lib/db/business-repository.ts"
+            },
+            {
+              "id": "lib-db-user-repository",
+              "name": "user-repository",
+              "c4_type": "Component",
+              "description": "Postgres data access for users.",
+              "technology": "TypeScript module",
+              "path": "src/lib/db/user-repository.ts"
+            },
+            {
+              "id": "lib-db-user-management-repository",
+              "name": "user-management-repository",
+              "c4_type": "Component",
+              "description": "Postgres data access for the admin user-management surface.",
+              "technology": "TypeScript module",
+              "path": "src/lib/db/user-management-repository.ts"
+            },
+            {
+              "id": "lib-db-pending-import-business-repository",
+              "name": "pending-import-business-repository",
+              "c4_type": "Component",
+              "description": "Postgres data access for pending-import businesses. Its jest spec calls real getPool() and fails at baseline without a live database.",
+              "technology": "TypeScript module",
+              "path": "src/lib/db/pending-import-business-repository.ts"
+            },
+            {
+              "id": "lib-valkey-valkey-client",
+              "name": "valkey-client",
+              "c4_type": "Component",
+              "description": "ioredis client + cache helpers. Also the sole store of refresh tokens today.",
+              "technology": "TypeScript module",
+              "path": "src/lib/valkey/valkey-client.ts"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "relationships": {
+    "c3": {
+      "add": [
+        {
+          "source": "admin-businesses-[id]-content-page",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-businesses-[id]-content-page",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-page",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-page",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-reviews-page",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-reviews-page",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-scrape-page",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-scrape-page",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "admin-users-page",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-auth-login-route",
+          "target": "lib-auth-session-cookie",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-auth-login-route",
+          "target": "lib-graphql-login-resolvers",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-auth-logout-route",
+          "target": "lib-auth-session-cookie",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-auth-register-route",
+          "target": "lib-graphql-resolvers",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-graphql-route",
+          "target": "lib-auth-session-cookie",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-graphql-route",
+          "target": "lib-graphql-business-schema",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "api-graphql-route",
+          "target": "lib-graphql-resolvers",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "business-claim-page",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "business-claim-page",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "components-businessdetail",
+          "target": "components-ui-navigation",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "components-businessdetail",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "components-ui-navigation",
+          "target": "lib-auth-client-session",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-auth-jwt-middleware",
+          "target": "lib-auth-auth-service",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-db-pending-import-business-repository",
+          "target": "lib-db-user-repository",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-db-user-management-repository",
+          "target": "lib-db-user-repository",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-login-resolvers",
+          "target": "lib-auth-auth-service",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-login-resolvers",
+          "target": "lib-db-user-repository",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-login-resolvers",
+          "target": "lib-valkey-valkey-client",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-query-cache",
+          "target": "lib-valkey-valkey-client",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-resolvers",
+          "target": "lib-auth-auth-service",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-resolvers",
+          "target": "lib-db-business-repository",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-resolvers",
+          "target": "lib-db-user-repository",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-resolvers",
+          "target": "lib-graphql-query-cache",
+          "label": "imports",
+          "technology": "import"
+        },
+        {
+          "source": "lib-graphql-resolvers",
+          "target": "lib-valkey-valkey-client",
+          "label": "imports",
+          "technology": "import"
+        }
+      ]
+    }
+  }
+}

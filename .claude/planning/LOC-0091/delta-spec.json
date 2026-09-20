@@ -1,0 +1,87 @@
+{
+  "c3_components": {
+    "containers": {
+      "black-owned-frontend": {
+        "components": {
+          "add": [
+            {
+              "id": "next-auth-middleware",
+              "name": "NextAuthMiddleware",
+              "c4_type": "Component",
+              "description": "Edge middleware guarding /admin/** — verifies the httpOnly bw-session cookie (RS256 JWT) and admin role; redirects anonymous and non-admin visitors to /login. NEW (loc: anti-pattern 13 / finding 8).",
+              "technology": "Next.js middleware / TypeScript",
+              "path": "src/middleware.ts"
+            },
+            {
+              "id": "auth-session-cookie",
+              "name": "AuthSessionCookie",
+              "c4_type": "Component",
+              "description": "Helpers to set/clear/verify the httpOnly bw-session cookie carrying the access token; shared by login route, logout route, and middleware. NEW.",
+              "technology": "TypeScript",
+              "path": "src/lib/auth/session-cookie.ts"
+            },
+            {
+              "id": "login-route",
+              "name": "LoginRoute",
+              "c4_type": "Component",
+              "description": "POST /api/auth/login — existing; MODIFIED to set the httpOnly bw-session cookie on successful login alongside the JSON token pair.",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/auth/login/route.ts"
+            },
+            {
+              "id": "logout-route",
+              "name": "LogoutRoute",
+              "c4_type": "Component",
+              "description": "POST /api/auth/logout — NEW; clears the httpOnly bw-session cookie (client clears localStorage session).",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/auth/logout/route.ts"
+            },
+            {
+              "id": "navigation-component",
+              "name": "Navigation",
+              "c4_type": "Component",
+              "description": "Site header — existing; MODIFIED to be session-aware: Sign in / Register when unauthenticated, user name + Sign out when authenticated (calls /api/auth/logout then clearSession).",
+              "technology": "React / TypeScript",
+              "path": "src/components/ui/Navigation.tsx"
+            },
+            {
+              "id": "graphql-route",
+              "name": "GraphQLRoute",
+              "c4_type": "Component",
+              "description": "POST /api/graphql — existing; MODIFIED to run through createAuthMiddleware with real request headers into the resolver context; hardcoded 'Bearer token' removed (finding 1, HIGH).",
+              "technology": "Next.js route handler / TypeScript",
+              "path": "src/app/api/graphql/route.ts"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "c3_5_types": {
+    "containers": {
+      "black-owned-frontend": {
+        "types": { "add": [
+          {"id": "middleware-fn", "name": "middleware", "type_kind": "function", "description": "Edge middleware entry: verifies bw-session cookie + admin role for /admin/**, redirects otherwise", "source_kind": "TypeScript"},
+          {"id": "setsessioncookie", "name": "setSessionCookie", "type_kind": "function", "description": "Sets httpOnly bw-session cookie (access token) on login response", "source_kind": "TypeScript"},
+          {"id": "clearsessioncookie", "name": "clearSessionCookie", "type_kind": "function", "description": "Expires the bw-session cookie on logout", "source_kind": "TypeScript"},
+          {"id": "verify-session-cookie", "name": "verifySessionCookie", "type_kind": "function", "description": "Verifies + decodes the bw-session JWT (RS256) for middleware and server checks", "source_kind": "TypeScript"},
+          {"id": "login-handler", "name": "LoginRoute POST", "type_kind": "handler", "description": "POST /api/auth/login — verifies credentials, issues tokens, sets bw-session cookie", "source_kind": "TypeScript"},
+          {"id": "logout-handler", "name": "LogoutRoute POST", "type_kind": "handler", "description": "POST /api/auth/logout — clears the session cookie, returns success envelope", "source_kind": "TypeScript"}
+        ] }
+      }
+    }
+  },
+  "relationships": {
+    "c3": { "add": [
+      {"source": "next-auth-middleware", "target": "auth-session-cookie", "label": "verifies bw-session JWT", "technology": "function call"},
+      {"source": "login-route", "target": "auth-session-cookie", "label": "sets bw-session cookie", "technology": "Set-Cookie"},
+      {"source": "logout-route", "target": "auth-session-cookie", "label": "clears bw-session cookie", "technology": "Set-Cookie"},
+      {"source": "navigation-component", "target": "logout-route", "label": "signs out", "technology": "fetch POST"}
+    ] }
+  },
+  "type_relationships": { "add": [
+    {"source": "login-handler", "target": "setsessioncookie", "label": "Calls", "technology": "Function call"},
+    {"source": "logout-handler", "target": "clearsessioncookie", "label": "Calls", "technology": "Function call"},
+    {"source": "middleware-fn", "target": "verify-session-cookie", "label": "Calls", "technology": "Function call"}
+  ] }
+}
