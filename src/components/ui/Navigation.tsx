@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Button from './Button';
+import { clearSession, getSession, type ClientSession } from '@/lib/auth/client-session';
 
 export interface NavigationProps {
   onNavigate?: (section: 'directory' | 'admin' | 'user' | 'home') => void;
@@ -10,6 +12,15 @@ export interface NavigationProps {
 
 export function Navigation({ onNavigate = () => {} }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Session is read client-side only (the httpOnly bw-session cookie is not
+  // readable here); initial null keeps SSR and first paint identical, and
+  // the effect syncs from the client session store the login flow writes.
+  const [session, setSession] = useState<ClientSession | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    setSession(getSession());
+  }, []);
 
   const navItems = [
     { label: 'Home', href: '/', section: 'home' as const },
@@ -21,12 +32,53 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
     setMobileMenuOpen(false);
   };
 
-  // Sign In has no per-page handler, so the nav routes it itself. The login
-  // page redirects to /owner when a session already exists.
-  const handleSignIn = () => {
-    handleNavClick('user');
-    window.location.assign('/login');
+  // Sign out shuts both halves of the session: the server-side guard's door
+  // (POST clears bw-session, LOC-0092 route) and the client store the header
+  // itself reads. Then the user lands on /. The client half completes in a
+  // finally: a failed POST (offline) must not strand the signed-in header
+  // with an unhandled rejection -- with the network down there is nothing
+  // to send the cookie anywhere, and the user's intent is still to sign out.
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      clearSession();
+      setSession(null);
+      router.replace('/');
+    }
   };
+
+  // One fragment shared by desktop and mobile: signed-in shows the name and
+  // Sign out; anonymous shows the Sign in / Register links (AC1/AC2).
+  const userActions = session ? (
+    <>
+      <span className="text-neutral-300 font-medium">{session.user.name}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleSignOut}
+        className="text-neutral-300 hover:text-white"
+      >
+        Sign out
+      </Button>
+    </>
+  ) : (
+    <>
+      <a
+        href="/login"
+        onClick={() => handleNavClick('user')}
+        className="text-neutral-300 hover:text-white transition-colors font-medium"
+      >
+        Sign in
+      </a>
+      <a
+        href="/register"
+        className="text-neutral-300 hover:text-white transition-colors font-medium"
+      >
+        Register
+      </a>
+    </>
+  );
 
   return (
     <nav className="bg-neutral-900 text-white sticky top-0 z-50 shadow-lg" role="navigation" aria-label="Main navigation">
@@ -64,13 +116,7 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
             >
               Admin Console
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSignIn}
-            >
-              Sign In
-            </Button>
+            {userActions}
           </div>
 
           {/* Mobile Menu Button */}
@@ -128,14 +174,7 @@ export function Navigation({ onNavigate = () => {} }: NavigationProps) {
                 >
                   Admin Console
                 </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleSignIn}
-                  className="justify-center"
-                >
-                  Sign In
-                </Button>
+                {userActions}
               </div>
             </div>
           </div>
