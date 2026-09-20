@@ -1,6 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import AnalyticsPage from './page';
 
+// The page renders the session-aware Navigation (LOC-0094), which reads the
+// app router -- same mock pattern the other page specs use.
+const mockRouter = { replace: jest.fn(), push: jest.fn() };
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 

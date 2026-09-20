@@ -9,6 +9,13 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 
+// Navigation reads the router for sign-out; this suite never triggers it.
+const mockRouter = { replace: jest.fn(), push: jest.fn() };
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+}));
+
 describe('Accessibility Standards - WCAG AA Compliance', () => {
   describe('Navigation Component', () => {
     it('has proper landmark role', () => {
@@ -38,13 +45,14 @@ describe('Accessibility Standards - WCAG AA Compliance', () => {
       expect(directoryLink).toHaveProperty('tabIndex', 0);
     });
 
-    it('admin and sign in buttons are accessible', () => {
+    // LOC-0094 AC1: Sign In became a Sign in link in the anonymous header.
+    it('admin button and sign in link are accessible', () => {
       render(<Navigation onNavigate={jest.fn()} />);
       const adminButton = screen.getByRole('button', { name: /admin console/i });
-      const signInButton = screen.getByRole('button', { name: /sign in/i });
+      const signInLink = screen.getByRole('link', { name: /sign in/i });
 
       expect(adminButton).toBeInTheDocument();
-      expect(signInButton).toBeInTheDocument();
+      expect(signInLink).toBeInTheDocument();
     });
   });
 

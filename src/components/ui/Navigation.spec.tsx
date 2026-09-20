@@ -4,6 +4,12 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Navigation } from './Navigation';
 
+const mockRouter = { replace: jest.fn(), push: jest.fn() };
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+}));
+
 describe('Navigation', () => {
   it('renders navigation container', () => {
     render(<Navigation />);
@@ -33,9 +39,10 @@ describe('Navigation', () => {
     expect(screen.getByRole('button', { name: /admin console/i })).toBeInTheDocument();
   });
 
-  it('renders sign in button', () => {
+  // LOC-0094 AC1: the signed-out Sign In button became a Sign in link.
+  it('renders sign in link', () => {
     render(<Navigation />);
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
   });
 
   it('calls onNavigate when home is clicked', () => {
@@ -59,10 +66,12 @@ describe('Navigation', () => {
     expect(handleNavigate).toHaveBeenCalledWith('admin');
   });
 
+  // Same intent as before LOC-0094 (click routes the user section); the
+  // control is now the AC1 Sign in link instead of a button.
   it('calls onNavigate when sign in is clicked', () => {
     const handleNavigate = jest.fn();
     render(<Navigation onNavigate={handleNavigate} />);
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    fireEvent.click(screen.getByRole('link', { name: /sign in/i }));
     expect(handleNavigate).toHaveBeenCalledWith('user');
   });
 
