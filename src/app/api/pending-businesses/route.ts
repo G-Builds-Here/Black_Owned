@@ -3,11 +3,17 @@
  *
  * Returns businesses with "pending_review" status for the admin review page.
  * Response includes: name, address, source, rating
+ *
+ * Query params (LOC-0100): ?prioritize=quality reorders items in memory by
+ * listing-quality score ascending (weakest first, ties oldest-first). Only
+ * that exact value does anything — the unflagged order, envelope, and item
+ * shape are unchanged, and prioritization never persists.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/db/user-repository";
 import { findPendingByStatus } from "@/lib/db/pending-import-business-repository";
+import { prioritizePendingByQuality } from "@/lib/quality/pending-import-priority";
 import {
   createAuthMiddleware,
   createAuthErrorResponse,
@@ -27,6 +33,10 @@ export interface PendingBusinessResponse {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Opt-in quality-first ordering (LOC-0100): only the exact value "quality"
+  // reorders; absent or any other value keeps today's behavior (blueprint DR-3).
+  const prioritize = request.nextUrl.searchParams.get("prioritize");
+
   const requireAdmin = createAuthMiddleware(["admin"]);
   const authResult = await requireAdmin(request);
   if (!authResult.authenticated) {
@@ -54,7 +64,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       };
     });
 
-    return NextResponse.json({ success: true, data: result });
+    const data =
+      prioritize === "quality" ? prioritizePendingByQuality(result) : result;
+
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error("Error fetching pending businesses:", error);
     return NextResponse.json(
